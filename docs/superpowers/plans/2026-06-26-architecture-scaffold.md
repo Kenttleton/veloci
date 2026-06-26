@@ -7,10 +7,10 @@
 **Architecture:** Monorepo under `services/`. Each service is independently buildable and deployable via Docker. Postgres migrations run at container init. `veloci-auth` issues JWTs; `veloci-api` validates them locally on each request without calling auth. The frontend talks to both auth (login) and api (everything else).
 
 **Tech Stack:**
-- Go 1.22 — `chi/v5` router, `pgx/v5` Postgres driver, `amqp091-go` RabbitMQ client, `golang-jwt/jwt/v5`, `golang.org/x/crypto` bcrypt
-- Rust 1.77 — `tokio` async runtime, `sqlx` Postgres, `lapin` RabbitMQ, `serde`/`serde_json`, `anyhow`, `tracing`
-- React 18 + Vite 5 + TypeScript 5
-- Postgres 16, RabbitMQ 3.13-alpine
+- Go 1.25 — `chi/v5` router, `pgx/v5` Postgres driver, `amqp091-go` RabbitMQ client, `golang-jwt/jwt/v5`, `golang.org/x/crypto` bcrypt
+- Rust 1.87 — `tokio` async runtime, `sqlx` Postgres, `lapin` RabbitMQ, `serde`/`serde_json`, `anyhow`, `tracing`
+- React 19 + Vite 6 + TypeScript 5.8
+- Postgres 17, RabbitMQ 4.0-alpine
 
 ## Global Constraints
 - All financial data rows must include `entity_id UUID NOT NULL` (enforced in data model spec — scaffolded here as a contract)
@@ -197,7 +197,7 @@ version: '3.9'
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -213,7 +213,7 @@ services:
       retries: 5
 
   rabbitmq:
-    image: rabbitmq:3.13-alpine
+    image: rabbitmq:4.0-alpine
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
@@ -683,14 +683,14 @@ func main() {
 
 ```dockerfile
 # services/auth/Dockerfile
-FROM golang:1.22-alpine AS build
+FROM golang:1.25-alpine AS build
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 RUN go build -o auth .
 
-FROM alpine:3.19
+FROM alpine:3.21
 COPY --from=build /app/auth /auth
 ENTRYPOINT ["/auth"]
 ```
@@ -1037,14 +1037,14 @@ func main() {
 
 ```dockerfile
 # services/api/Dockerfile
-FROM golang:1.22-alpine AS build
+FROM golang:1.25-alpine AS build
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 RUN go build -o api .
 
-FROM alpine:3.19
+FROM alpine:3.21
 COPY --from=build /app/api /api
 ENTRYPOINT ["/api"]
 ```
@@ -1094,7 +1094,7 @@ edition = "2021"
 [dependencies]
 tokio = { version = "1", features = ["full"] }
 lapin = "2"
-sqlx = { version = "0.7", features = ["postgres", "runtime-tokio", "uuid", "chrono"] }
+sqlx = { version = "0.8", features = ["postgres", "runtime-tokio", "uuid", "chrono"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 anyhow = "1"
@@ -1294,7 +1294,7 @@ async fn main() -> Result<()> {
 
 ```dockerfile
 # services/engine/Dockerfile
-FROM rust:1.77-alpine AS build
+FROM rust:1.87-alpine AS build
 RUN apk add --no-cache musl-dev
 WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
@@ -1302,7 +1302,7 @@ RUN mkdir src && echo "fn main() {}" > src/main.rs && cargo build --release && r
 COPY src ./src
 RUN touch src/main.rs && cargo build --release
 
-FROM alpine:3.19
+FROM alpine:3.21
 COPY --from=build /app/target/release/veloci-engine /veloci-engine
 ENTRYPOINT ["/veloci-engine"]
 ```
@@ -1341,9 +1341,10 @@ git commit -m "feat: veloci-engine scaffolding with RabbitMQ consumer and job di
 
 ```bash
 cd services/web
-npm create vite@latest . -- --template react-ts
+npm create vite@6 . -- --template react-ts
 npm install
 npm install axios
+# Vite 6 scaffolds React 19 + TypeScript 5.8 by default
 ```
 
 - [ ] **Step 2: Configure Vite with API proxy**
@@ -1551,7 +1552,7 @@ server {
 
 ```dockerfile
 # services/web/Dockerfile
-FROM node:20-alpine AS build
+FROM node:22-alpine AS build
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
@@ -1623,7 +1624,7 @@ Expected:
 First generate a real bcrypt hash for 'testpassword':
 ```bash
 # Requires htpasswd (brew install httpd) or use the Go one-liner:
-docker run --rm golang:1.22-alpine sh -c \
+docker run --rm golang:1.25-alpine sh -c \
   'go run -e "import (\"fmt\";\"golang.org/x/crypto/bcrypt\"); func main() { h,_:=bcrypt.GenerateFromPassword([]byte(\"testpassword\"),12); fmt.Println(string(h)) }"'
 ```
 
