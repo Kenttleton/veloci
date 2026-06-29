@@ -17,9 +17,9 @@ Veloci is a local-first personal finance application targeting the self-hosting 
 | Service | Language | Responsibility |
 |---|---|---|
 | `veloci-web` | TypeScript / React | Static SPA — UI only, no server-side logic |
-| `veloci-api` | Go | REST API, all CRUD, JWT validation, job publishing |
-| `veloci-engine` | Rust | Pattern clustering, rule evaluation, rate/slope calculations |
-| `veloci-auth` | Go | Credential validation, JWT issuance, entity membership, RBAC |
+| `veloci-api` | Go + Cobra + Viper | REST API, all CRUD, JWT validation, job publishing. Cobra subcommands: `serve`, `migrate` |
+| `veloci-engine` | Rust | Pattern clustering, rule evaluation, rate/slope calculations. Health via CLI subcommand |
+| `veloci-auth` | Go + Cobra + Viper | Credential validation, JWT issuance, entity membership, RBAC. Cobra subcommands: `serve` |
 | `postgres` | — | All persistent data |
 | `rabbitmq` | — | Durable job queue between api and engine |
 
@@ -39,6 +39,8 @@ Asynchronous via RabbitMQ. `veloci-api` publishes jobs to a queue. `veloci-engin
 - `account.analyze` — recompute rates and slopes for an account
 
 **Engine reads Postgres directly** for large dataset analysis (rate/slope calculations over full transaction history). Writing results back to Postgres directly avoids routing large payloads through the API.
+
+**Engine health check:** The engine binary supports a `health` subcommand — `veloci-engine health` — that independently connects to Postgres and RabbitMQ and exits `0` or `1`. Docker runs this as a separate short-lived process for its healthcheck. No HTTP server is added to the engine; it remains a pure queue consumer.
 
 ### API ↔ Auth
 Auth is called once at login. It issues a signed JWT. All subsequent requests carry the JWT — `veloci-api` validates the signature locally without calling `veloci-auth` on each request. This keeps per-request latency low.

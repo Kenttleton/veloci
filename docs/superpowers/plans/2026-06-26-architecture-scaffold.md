@@ -7,8 +7,8 @@
 **Architecture:** Monorepo under `services/`. Each service is independently buildable and deployable via Docker. Postgres migrations run at container init. `veloci-auth` issues JWTs; `veloci-api` validates them locally on each request without calling auth. The frontend talks to both auth (login) and api (everything else).
 
 **Tech Stack:**
-- Go 1.26 — `chi/v5` router, `pgx/v5` Postgres driver, `amqp091-go` RabbitMQ client, `golang-jwt/jwt/v5`, `golang.org/x/crypto` bcrypt
-- Rust 1.95 — `tokio` async runtime, `sqlx` Postgres, `lapin` RabbitMQ, `serde`/`serde_json`, `anyhow`, `tracing`
+- Go 1.26 — `chi/v5` router, `pgx/v5` Postgres driver, `amqp091-go` RabbitMQ client, `golang-jwt/jwt/v5`, `golang.org/x/crypto` bcrypt, `cobra` CLI, `viper` config
+- Rust 1.95 — `tokio` async runtime, `sqlx` Postgres, `lapin` RabbitMQ, `serde`/`serde_json`, `anyhow`, `tracing`, `backon` retry, `chrono` date/time
 - React 19 + Vite 8 + TypeScript 6.0
 - Postgres 18, RabbitMQ 4.3-alpine
 
@@ -67,6 +67,7 @@ veloci/
     │       ├── main.rs
     │       ├── consumer.rs
     │       ├── db.rs
+    │       ├── health.rs
     │       └── jobs/
     │           └── mod.rs
     └── web/
@@ -335,6 +336,8 @@ go get github.com/go-chi/chi/v5
 go get github.com/jackc/pgx/v5
 go get github.com/golang-jwt/jwt/v5
 go get golang.org/x/crypto
+go get github.com/spf13/cobra
+go get github.com/spf13/viper
 ```
 
 - [ ] **Step 2: Write failing tests for JWT**
@@ -651,31 +654,53 @@ package main
 
 import (
     "context"
+    "fmt"
     "log"
     "net/http"
-    "os"
     "github.com/go-chi/chi/v5"
+    "github.com/spf13/cobra"
+    "github.com/spf13/viper"
     "github.com/veloci/auth/internal/db"
     "github.com/veloci/auth/internal/handlers"
 )
 
-func main() {
+var rootCmd = &cobra.Command{
+    Use:   "veloci-auth",
+    Short: "Veloci authentication service",
+}
+
+var serveCmd = &cobra.Command{
+    Use:   "serve",
+    Short: "Start the auth HTTP server",
+    RunE:  runServe,
+}
+
+func init() {
+    rootCmd.AddCommand(serveCmd)
+    viper.AutomaticEnv()
+    viper.SetDefault("PORT", "8081")
+}
+
+func runServe(_ *cobra.Command, _ []string) error {
     ctx := context.Background()
-    database, err := db.New(ctx, os.Getenv("DATABASE_URL"))
+    database, err := db.New(ctx, viper.GetString("DATABASE_URL"))
     if err != nil {
-        log.Fatalf("db: %v", err)
+        return fmt.Errorf("db: %w", err)
     }
-    secret := []byte(os.Getenv("JWT_SECRET"))
-    port := os.Getenv("PORT")
-    if port == "" {
-        port = "8081"
-    }
+    secret := []byte(viper.GetString("JWT_SECRET"))
+    port := viper.GetString("PORT")
 
     r := chi.NewRouter()
     r.Post("/login", handlers.NewLogin(database, secret).ServeHTTP)
 
     log.Printf("veloci-auth listening on :%s", port)
-    log.Fatal(http.ListenAndServe(":"+port, r))
+    return http.ListenAndServe(":"+port, r)
+}
+
+func main() {
+    if err := rootCmd.Execute(); err != nil {
+        log.Fatal(err)
+    }
 }
 ```
 
@@ -738,6 +763,8 @@ go get github.com/go-chi/chi/v5
 go get github.com/jackc/pgx/v5
 go get github.com/rabbitmq/amqp091-go
 go get github.com/golang-jwt/jwt/v5
+go get github.com/spf13/cobra
+go get github.com/spf13/viper
 ```
 
 Note: copy `tokens` package from `services/auth` — or extract to a shared module. For v1, duplicate it in `services/api/internal/tokens/` to keep services independently deployable.
@@ -1005,19 +1032,40 @@ func Health(w http.ResponseWriter, r *http.Request) {
 package main
 
 import (
+    "fmt"
     "log"
     "net/http"
-    "os"
     "github.com/go-chi/chi/v5"
+    "github.com/spf13/cobra"
+    "github.com/spf13/viper"
     "github.com/veloci/api/internal/handlers"
     "github.com/veloci/api/internal/middleware"
+    "github.com/veloci/api/internal/queue"
 )
 
-func main() {
-    secret := []byte(os.Getenv("JWT_SECRET"))
-    port := os.Getenv("PORT")
-    if port == "" {
-        port = "8080"
+var rootCmd = &cobra.Command{
+    Use:   "veloci-api",
+    Short: "Veloci API service",
+}
+
+var serveCmd = &cobra.Command{
+    Use:   "serve",
+    Short: "Start the API HTTP server",
+    RunE:  runServe,
+}
+
+func init() {
+    rootCmd.AddCommand(serveCmd)
+    viper.AutomaticEnv()
+    viper.SetDefault("PORT", "8080")
+}
+
+func runServe(_ *cobra.Command, _ []string) error {
+    secret := []byte(viper.GetString("JWT_SECRET"))
+    port := viper.GetString("PORT")
+
+    if _, err := queue.NewPublisher(viper.GetString("RABBITMQ_URL")); err != nil {
+        return fmt.Errorf("queue: %w", err)
     }
 
     r := chi.NewRouter()
@@ -1029,7 +1077,13 @@ func main() {
     })
 
     log.Printf("veloci-api listening on :%s", port)
-    log.Fatal(http.ListenAndServe(":"+port, r))
+    return http.ListenAndServe(":"+port, r)
+}
+
+func main() {
+    if err := rootCmd.Execute(); err != nil {
+        log.Fatal(err)
+    }
 }
 ```
 
@@ -1065,6 +1119,7 @@ git commit -m "feat: veloci-api scaffolding with JWT middleware and RabbitMQ pub
 - Create: `services/engine/src/main.rs`
 - Create: `services/engine/src/consumer.rs`
 - Create: `services/engine/src/db.rs`
+- Create: `services/engine/src/health.rs`
 - Create: `services/engine/src/jobs/mod.rs`
 - Create: `services/engine/Dockerfile`
 
@@ -1100,6 +1155,9 @@ serde_json = "1"
 anyhow = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+backon = "1"
+chrono = { version = "0.4", features = ["serde"] }
+futures-lite = "2"
 ```
 
 - [ ] **Step 3: Write test for job dispatch routing**
@@ -1204,6 +1262,7 @@ test result: ok. 2 passed
 ```rust
 // services/engine/src/consumer.rs
 use anyhow::Result;
+use backon::{ExponentialBuilder, Retryable};
 use lapin::{
     Connection, ConnectionProperties,
     options::{BasicAckOptions, BasicConsumeOptions, QueueDeclareOptions},
@@ -1214,7 +1273,14 @@ use crate::jobs::{self, Job};
 const QUEUE: &str = "veloci.jobs";
 
 pub async fn run(rabbitmq_url: &str) -> Result<()> {
-    let conn = Connection::connect(rabbitmq_url, ConnectionProperties::default()).await?;
+    let conn = {
+        let url = rabbitmq_url.to_string();
+        (|| async {
+            Connection::connect(&url, ConnectionProperties::default()).await
+        })
+        .retry(ExponentialBuilder::default().with_max_times(10))
+        .await?
+    };
     let channel = conn.create_channel().await?;
 
     channel.queue_declare(
@@ -1251,7 +1317,7 @@ pub async fn run(rabbitmq_url: &str) -> Result<()> {
 }
 ```
 
-Add `futures-lite = "2"` to `Cargo.toml` dependencies.
+`futures-lite` is already in `Cargo.toml` from Step 2.
 
 - [ ] **Step 8: Implement `db.rs` and `main.rs`**
 
@@ -1270,6 +1336,7 @@ pub async fn connect(database_url: &str) -> Result<PgPool> {
 // services/engine/src/main.rs
 mod consumer;
 mod db;
+mod health;
 mod jobs;
 
 use anyhow::Result;
@@ -1283,10 +1350,32 @@ async fn main() -> Result<()> {
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL required");
     let rabbitmq_url = std::env::var("RABBITMQ_URL").expect("RABBITMQ_URL required");
 
-    let _pool = db::connect(&database_url).await?;
-    tracing::info!("veloci-engine connected to postgres");
+    match std::env::args().nth(1).as_deref() {
+        Some("health") => health::check(&database_url, &rabbitmq_url).await,
+        _ => {
+            let _pool = db::connect(&database_url).await?;
+            tracing::info!("veloci-engine connected to postgres");
+            consumer::run(&rabbitmq_url).await
+        }
+    }
+}
+```
 
-    consumer::run(&rabbitmq_url).await
+- [ ] **Step 8b: Implement `health.rs`**
+
+```rust
+// services/engine/src/health.rs
+use anyhow::Result;
+
+pub async fn check(database_url: &str, rabbitmq_url: &str) -> Result<()> {
+    sqlx::PgPool::connect(database_url).await
+        .map_err(|e| anyhow::anyhow!("postgres unreachable: {}", e))?;
+
+    lapin::Connection::connect(rabbitmq_url, lapin::ConnectionProperties::default()).await
+        .map_err(|e| anyhow::anyhow!("rabbitmq unreachable: {}", e))?;
+
+    println!("ok");
+    Ok(())
 }
 ```
 
@@ -1304,6 +1393,8 @@ RUN touch src/main.rs && cargo build --release
 
 FROM alpine:3.24
 COPY --from=build /app/target/release/veloci-engine /veloci-engine
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+    CMD ["/veloci-engine", "health"]
 ENTRYPOINT ["/veloci-engine"]
 ```
 
