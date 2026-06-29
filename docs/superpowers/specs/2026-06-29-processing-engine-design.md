@@ -315,7 +315,69 @@ Prior snapshots for the same `(entity_id, node_id)` are retained — they form t
 
 ---
 
-## 11. Full Data Model
+## 11. Entity Isolation
+
+### Design
+
+Every financial table carries `entity_id` as a non-nullable foreign key. No query in `veloci-api` or `veloci-engine` ever returns rows without a `WHERE entity_id = $1` clause. The engine receives exactly one `entity_id` per job message and scopes every read and write to that value.
+
+This is sufficient for v1 (single entity per deployment). For v2 (SaaS, many entities per deployment), Postgres Row-Level Security is layered on top — no schema changes required.
+
+### v2: Row-Level Security
+
+A single RLS policy on each financial table enforces isolation at the database layer, making it impossible for a query to leak cross-entity data even if application code has a bug:
+
+```sql
+-- Applied to every financial table (accounts, raw_transactions, entries, etc.)
+ALTER TABLE <table> ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY entity_isolation ON <table>
+  USING (entity_id = current_setting('app.current_entity_id')::uuid);
+```
+
+The Go API sets the session variable on every connection before executing queries:
+
+```sql
+SET LOCAL app.current_entity_id = '<entity_id_from_jwt>';
+```
+
+The Rust engine sets it per job, immediately after acquiring a connection from the pool:
+
+```sql
+SET LOCAL app.current_entity_id = '<entity_id_from_job_message>';
+```
+
+### Super Admin Access (v2)
+
+A super admin is a user with the `super_admin` system role (stored on the `users` table, not on `entity_users`). Super admins do not bypass RLS — they impersonate a specific entity:
+
+```sql
+-- Support session: admin sets entity context to the customer's entity
+SET LOCAL app.current_entity_id = '<target_entity_id>';
+-- All subsequent queries see exactly what that entity sees, nothing more
+```
+
+This means:
+
+- A super admin accessing entity A cannot see entity B's data in the same session
+- Support access is scoped and auditable — each support action is tied to a specific entity
+- No `BYPASSRLS` role ever exists in production; the policy cannot be disabled at runtime
+
+### entities Table
+
+```sql
+CREATE TABLE entities (
+  id          UUID PRIMARY KEY,
+  name        TEXT NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+All financial tables reference `entities(id)`. In v1 this table has one row. In v2 it has one row per customer.
+
+---
+
+## 12. Full Data Model
 
 ### accounts
 
