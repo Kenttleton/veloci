@@ -654,7 +654,62 @@ These invariants are structural constraints on the system, not implementation de
 
 ---
 
-## 13. RabbitMQ Job Message Shape
+## 13. Execution Model
+
+The engine is built for speed at two levels: parallelism within a single job (intra-job), and parallelism across multiple entities' jobs running simultaneously (inter-job).
+
+### Intra-Job Parallelism
+
+Each stage has a defined parallelism strategy. The stage order is a hard dependency chain — Stage N's output feeds Stage N+1 — but within each stage the work is independent wherever possible.
+
+| Stage | Strategy | Rust primitive |
+| --- | --- | --- |
+| 0 — CSV norm + dedup | Normalize all rows in parallel; dedup lookups in parallel; batch INSERT sequentially at end | `rayon::par_iter` for normalization; `FuturesUnordered` for concurrent Postgres dedup reads |
+| 1 — Rule matching | Each transaction evaluated independently; shard transactions across threads | `rayon::par_iter` over transaction slice |
+| 2 — Pattern detection | Global clustering pass is sequential (must see all unmatched at once); cluster scoring is parallel | Sequential LCS clustering → `rayon::par_iter` over candidate clusters for confidence scoring |
+| 3 — Rate computation | Each entry's rate computed from its own transactions only; fully independent | `rayon::par_iter` over active entries |
+| 4 — DAG aggregation | Topological sort is sequential; nodes within each level of the DAG are independent | Sequential toposort → level-parallel: `rayon::par_iter` over each level's node set |
+| 5 — Slope + drift | Each node's regression reads only its own snapshot history; fully independent | `rayon::par_iter` over all nodes |
+| 6 — Snapshot write | Data serialization parallel; single atomic `INSERT` at the end is sequential | `rayon::par_iter` to build row structs → single `sqlx` batch execute |
+
+**Why rayon over Tokio for CPU work:** Tokio is async I/O — its threads are optimized for waiting, not computing. Rayon is a work-stealing CPU thread pool. Stages 1, 3, 4, and 5 are pure computation (no I/O mid-stage); rayon saturates all cores without blocking the async runtime. Stages 0 and 2 mix I/O and CPU — those use `spawn_blocking` to hand rayon work off without blocking Tokio's executor.
+
+### Inter-Job Parallelism
+
+Every job is entity-scoped and stateless. Multiple engine processes consume from the same RabbitMQ queue simultaneously. Each consumer locks one job at a time (via RabbitMQ acknowledgment); no coordination or shared mutable state exists between consumers.
+
+```text
+RabbitMQ queue
+  ├── Consumer 1 (engine instance): entity_A → import.process  ─┐
+  ├── Consumer 2 (engine instance): entity_B → account.analyze  ├── fully parallel, zero contention
+  └── Consumer 3 (engine instance): entity_C → rules.reprocess ─┘
+```
+
+For v1, a single engine container is sufficient. For v2, scaling is horizontal: add engine containers and throughput increases linearly. No code changes required — RabbitMQ handles distribution.
+
+### What Cannot Be Parallelized
+
+- **Stage ordering** — Stages 3 → 4 → 5 → 6 are a strict dependency chain. Stage 4 (DAG aggregation) cannot start until all per-entry rates from Stage 3 are complete.
+- **Stage 2 clustering** — The LCS similarity pass must see all unmatched transactions before any cluster can be formed. The global scan is sequential.
+- **Stage 6 commit** — The final snapshot INSERT must be a single Postgres transaction. The commit point is inherently sequential.
+- **Same-entity concurrent jobs** — Two jobs for the same `entity_id` must not run simultaneously; they would produce conflicting snapshot writes. The Go API enforces a per-entity job lock before publishing. If a job for entity X is already in `processing` state, a new job for entity X is queued and deferred until the current one completes.
+
+### Connection Pool Sizing
+
+Each engine instance maintains one `sqlx` async connection pool. The pool size should be set to match the number of Tokio worker threads (`TOKIO_WORKER_THREADS`, default = CPU count). Rayon `spawn_blocking` tasks each acquire a connection for their batch I/O phase; the pool prevents connection exhaustion under parallel load.
+
+Recommended pool configuration per engine instance:
+
+```toml
+min_connections = 2
+max_connections = TOKIO_WORKER_THREADS + 2   # headroom for health check and job ack
+acquire_timeout = 5s
+idle_timeout    = 10m
+```
+
+---
+
+## 14. RabbitMQ Job Message Shape
 
 The Go API publishes JSON to RabbitMQ. The engine deserializes this into its job context.
 
