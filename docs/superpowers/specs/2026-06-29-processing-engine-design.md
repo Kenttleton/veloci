@@ -1,8 +1,10 @@
 # Veloci — Processing Engine & Data Model Design
 
 **Date:** 2026-06-29
-**Status:** Approved
-**Scope:** Rust processing engine pipeline, full financial data model, review queue flow, import deduplication algorithm
+**Status:** Approved — data model revised 2026-06-30 by veloci-api spec
+**Scope:** Rust processing engine pipeline, financial data model, review queue flow, import deduplication algorithm
+
+> **Data model supersession:** `entries` and `entry_rules` are replaced by `rules` (defined in `2026-06-30-veloci-api-design.md`). `groups` and `group_members` are replaced by `labels`, `label_members`, and `label_rules`. `transaction_entry_assignments` is renamed `transaction_rule_assignments`. `computed_snapshots.node_type` values change from `entry|group` to `rule|label`. `entities` lives in `veloci_app` — FK constraints on `entity_id` are valid throughout.
 
 ---
 
@@ -27,10 +29,10 @@ Every job type runs a contiguous suffix of these seven stages. No branching, no 
 
 ```
 Stage 0  CSV normalization + 4-pass dedup     →  raw_transactions
-Stage 1  Rule matching (pre/post, boolean)    →  transaction_entry_assignments
-Stage 2  Pattern detection (unmatched only)   →  entries (status: pending_review)
-Stage 3  Rate computation + smoothing         →  per-entry rates  [active only]
-Stage 4  DAG aggregation (set-union)          →  per-group rates  [active only]
+Stage 1  Rule matching (pre/post, boolean)    →  transaction_rule_assignments
+Stage 2  Pattern detection (unmatched only)   →  rules (status: pending_review)
+Stage 3  Rate computation + smoothing         →  per-rule rates   [active only]
+Stage 4  DAG aggregation (set-union)          →  per-label rates  [active only]
 Stage 5  Slope + drift (linear regression)    →  trends           [active only]
 Stage 6  Snapshot write (batch INSERT)        →  computed_snapshots
 ```
@@ -41,7 +43,7 @@ Stage 6  Snapshot write (batch INSERT)        →  computed_snapshots
 |---|---|---|
 | `import.process` | 0 → 1 → 2 → 3 → 4 → 5 → 6 | New CSV uploaded |
 | `rules.reprocess` | 1 → 2 → 3 → 4 → 5 → 6 | Rule created, modified, or deleted |
-| `account.analyze` | 3 → 4 → 5 → 6 | Entry approved from review queue; manual recalculate |
+| `account.analyze` | 3 → 4 → 5 → 6 | Rule approved from review queue; manual recalculate |
 
 `import.process` is the only job that writes to `raw_transactions`. All other jobs read from it.
 
@@ -49,20 +51,21 @@ Stage 6  Snapshot write (batch INSERT)        →  computed_snapshots
 
 ## 3. Review Queue Gate
 
-New entries detected in Stage 2 start in `status: pending_review`. Stages 3–6 filter exclusively on `status = 'active'`. Until the user approves a pending entry, it does not contribute to any rate, slope, or snapshot calculation.
+New rules detected in Stage 2 start in `status: pending_review`. Stages 3–6 filter exclusively on `status = 'active'`. Until the user approves a pending rule, it does not contribute to any rate, slope, or snapshot calculation.
 
 ```
-Stage 2 detects pattern → entry created with status: pending_review
-User sees review queue in UI → entry shown with:
+Stage 2 detects pattern → rule created with status: pending_review
+User sees review queue in UI → rule shown with:
   - suggested name
   - suggested entry_type
+  - suggested match conditions (transparent + editable before approving)
   - sample merchants that triggered it
   - calculated rate preview (what it would be if approved)
 
-User approves → entry.status = 'active'
-                 → job published: account.analyze
-                 → engine runs stages 3–6
-                 → Pulse view updates with new Margin impact
+User approves → rule.status = 'active'
+                → job published: account.analyze
+                → engine runs stages 3–6
+                → Pulse view updates with new Margin impact
 ```
 
 This makes the review queue the live preview: the engine has already done the work, the user sees the full picture before committing. No dry-run mode needed in the Go API.
@@ -112,11 +115,11 @@ The date range query is bounded to `pending_import.date_range_start - 7 days` th
 
 **Input:** `raw_transactions` (new rows from Stage 0, or all rows for `rules.reprocess`)
 
-**Output:** `transaction_entry_assignments` rows
+**Output:** `transaction_rule_assignments` rows
 
 ### Rule Structure
 
-Each `entry_rule` contains a boolean expression tree stored as JSONB:
+Each `rule` contains a boolean expression tree stored as JSONB in `rules.conditions`:
 
 ```jsonb
 {
@@ -147,10 +150,10 @@ Rules have a `stage` field (`pre` or `post`). Pre-stage rules run first in prior
 
 ### Matching Algorithm
 
-1. For each transaction, build a candidate set from rules ordered by `stage ASC, priority ASC`.
+1. For each transaction, build a candidate set from `rules` ordered by `stage ASC, priority ASC`.
 2. Evaluate each rule's condition tree recursively.
-3. A transaction may match more than one rule (multiple entry assignments are valid — e.g., Netflix under "Streaming" and under "Kent's expenses").
-4. Each match produces one `transaction_entry_assignments` row with the `rule_id` and a `confidence` of 1.0.
+3. A transaction may match more than one rule (multiple assignments are valid — e.g., a Netflix charge matched by both a Netflix rule and a standing subscription rule).
+4. Each match produces one `transaction_rule_assignments` row with the `rule_id` and a `confidence` of 1.0.
 5. Unmatched transactions pass through to Stage 2.
 
 ---
@@ -159,11 +162,11 @@ Rules have a `stage` field (`pre` or `post`). Pre-stage rules run first in prior
 
 **Input:** Transactions from Stage 1 that produced no assignments
 
-**Output:** Candidate `entries` with `status: pending_review`, linked `review_queue` records
+**Output:** Candidate `rules` with `status: pending_review`, `source: engine`; linked `review_queue` records
 
 ### Clustering Algorithm
 
-The engine clusters unmatched transactions into candidate entries using three signals:
+The engine clusters unmatched transactions into candidate rules using three signals:
 
 1. **Merchant similarity** — transactions with `merchant_normalized` values sharing ≥70% LCS ratio are grouped together. This catches "AMZ*PRIME", "AMAZON PRIME", "AMZN/BILL" as one cluster.
 
@@ -184,17 +187,18 @@ Clusters below 0.3 confidence are not surfaced to the user — they remain unmat
 ### Output
 
 For each cluster above 0.3 confidence:
-- Create one `entries` row with `status: pending_review`, `created_by: 'engine'`
-- Create one `review_queue` row with the suggested name, type, rate preview, sample merchants, and confidence
-- Create `transaction_entry_assignments` rows for each matched transaction with the confidence score (no `rule_id` — these are engine-detected, not rule-matched)
+
+- Create one `rules` row with `status: pending_review`, `source: 'engine'`, with auto-generated `conditions` JSONB
+- Create one `review_queue` row with the suggested name, type, conditions, rate preview, sample merchants, and confidence
+- Create `transaction_rule_assignments` rows for each matched transaction with the confidence score
 
 ---
 
 ## 7. Stage 3: Rate Computation
 
-**Input:** `transaction_entry_assignments` joined to `entries` WHERE `entries.status = 'active'`
+**Input:** `transaction_rule_assignments` joined to `rules` WHERE `rules.status = 'active'`
 
-**Output:** Per-entry `{actual_rate_per_day, projected_rate_per_day, window_days_used, transaction_count}`
+**Output:** Per-rule `{actual_rate_per_day, projected_rate_per_day, window_days_used, transaction_count}`
 
 ### Rate Computation by Entry Type
 
@@ -202,12 +206,12 @@ For each cluster above 0.3 confidence:
 ```
 actual_rate = amount_cents / detected_period_days
 ```
-Period is derived from the median inter-transaction interval. If only one transaction exists, period defaults to the `smoothing_window_days` on the entry.
+Period is derived from the median inter-transaction interval. If only one transaction exists, period defaults to the `smoothing_window_days` on the rule.
 
 **Variable**
 - If `variable_method = 'avg'`: `actual_rate = rolling_window_total_cents / window_days`
 - If `variable_method = 'max'`: `actual_rate = max_transaction_cents / window_days`
-- Rolling window width = `entry.smoothing_window_days`
+- Rolling window width = `rule.smoothing_window_days`
 
 **Single, Hit, Boost**
 ```
@@ -217,41 +221,42 @@ For a $150 car repair with `smoothing_window_days = 30`: `actual_rate = 150_00 /
 
 **Projected Rate**
 
-If the entry has a user-set `projected_rate_per_day`, use it directly.
-If no projected rate is set, the engine uses the `actual_rate` from the most recent prior `computed_snapshot` for that entry as the projection baseline. For brand-new entries (no prior snapshot), `projected_rate = actual_rate` (drift = 0 on first appearance).
+If the rule has a user-set `projected_rate_per_day`, use it directly.
+If no projected rate is set, the engine uses the `actual_rate` from the most recent prior `computed_snapshot` for that rule as the projection baseline. For brand-new rules (no prior snapshot), `projected_rate = actual_rate` (drift = 0 on first appearance).
 
 ### Adaptive Window Width
 
-For entries with fewer transactions than the window would normally expect, the window narrows to the actual data span. This prevents an entry with one transaction from being treated as a near-zero rate across a 365-day window. The `window_days_used` column records the actual window applied.
+For rules with fewer transactions than the window would normally expect, the window narrows to the actual data span. This prevents a rule with one transaction from being treated as a near-zero rate across a 365-day window. The `window_days_used` column records the actual window applied.
 
 ---
 
 ## 8. Stage 4: DAG Aggregation
 
-**Input:** Per-entry rates from Stage 3; `groups` and `group_members` tables
+**Input:** Per-rule rates from Stage 3; `labels` and `label_members` tables
 
-**Output:** Per-group `{actual_rate_per_day, projected_rate_per_day, contributing_entry_count}`
+**Output:** Per-label `{actual_rate_per_day, projected_rate_per_day, contributing_rule_count}`
 
 ### The Deduplication Problem
 
-An entry can belong to multiple groups. Example:
-- Netflix → Streaming (group)
-- Netflix → Kent's Expenses (group)
-- Both groups → Total Expenses (root group)
+A rule can belong to multiple labels. Example:
+
+- Netflix rule → Streaming (label)
+- Netflix rule → Kent's Expenses (label)
+- Both labels → Total Expenses (root label)
 
 Naively summing rates through all paths would count Netflix twice at Total Expenses. The engine prevents this with memoized set-union rollup.
 
 ### Algorithm
 
-1. **Build the DAG** from `group_members` (member_type = 'entry' or 'group').
+1. **Build the DAG** from `label_members` (member_type = 'rule' or 'label').
 2. **Topological sort** (Kahn's algorithm). If a cycle is detected, the job fails with an error — cycles are a data integrity violation.
 3. **Process bottom-up** (leaves to root):
-   - For each leaf entry node: `reachable_entry_set = {entry_id}`
-   - For each group node: `reachable_entry_set = UNION(children's reachable_entry_sets)`
-   - Group rate = `SUM of actual_rate_per_day for all entries in reachable_entry_set`
-4. **Memoize** each node's `reachable_entry_set` — each set is computed once.
+   - For each leaf rule node: `reachable_rule_set = {rule_id}`
+   - For each label node: `reachable_rule_set = UNION(children's reachable_rule_sets)`
+   - Label rate = `SUM of actual_rate_per_day for all rules in reachable_rule_set`
+4. **Memoize** each node's `reachable_rule_set` — each set is computed once.
 
-Because a set can only contain each `entry_id` once, Netflix contributes exactly once to Total Expenses regardless of how many groups it belongs to.
+Because a set can only contain each `rule_id` once, Netflix contributes exactly once to Total Expenses regardless of how many labels it belongs to.
 
 ---
 
@@ -267,7 +272,7 @@ Because a set can only contain each `entry_id` once, Netflix contributes exactly
 drift_per_day = actual_rate_per_day - projected_rate_per_day
 ```
 
-Computed at every node (entry and group). Positive = spending more than projected. Negative = spending less than projected. Applies equally to income entries (positive = earning more than projected).
+Computed at every node (rule and label). Positive = spending more than projected. Negative = spending less than projected. Applies equally to income rules (positive = earning more than projected).
 
 ### Slope (Rate of Change)
 
@@ -328,7 +333,7 @@ This is sufficient for v1 (single entity per deployment). For v2 (SaaS, many ent
 A single RLS policy on each financial table enforces isolation at the database layer, making it impossible for a query to leak cross-entity data even if application code has a bug:
 
 ```sql
--- Applied to every financial table (accounts, raw_transactions, entries, etc.)
+-- Applied to every financial table (accounts, raw_transactions, rules, labels, etc.)
 ALTER TABLE <table> ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY entity_isolation ON <table>
@@ -474,41 +479,31 @@ CREATE INDEX ON raw_transactions (entity_id, account_id, date);
 CREATE INDEX ON raw_transactions (entity_id, date);
 ```
 
-### entries
+### rules
 
-The atomic financial unit. Each income source or expense is one entry.
-
-```sql
-CREATE TABLE entries (
-  id                   UUID PRIMARY KEY,
-  entity_id            UUID NOT NULL REFERENCES entities(id),
-  name                 TEXT NOT NULL,
-  direction            TEXT NOT NULL CHECK (direction IN ('income','expense')),
-  entry_type           TEXT NOT NULL CHECK (entry_type IN ('standing','single','hit','boost','variable')),
-  smoothing_window_days INTEGER NOT NULL DEFAULT 30,
-  variable_method      TEXT CHECK (variable_method IN ('avg','max')),  -- variable entries only
-  projected_rate_per_day NUMERIC(12,4),                                -- null = derive from history
-  status               TEXT NOT NULL DEFAULT 'pending_review' CHECK (status IN ('pending_review','active','inactive')),
-  confidence           NUMERIC(4,3),                                   -- engine-assigned; null if user-created
-  created_by           TEXT NOT NULL CHECK (created_by IN ('user','engine'))
-);
-```
-
-### entry_rules
-
-Boolean expression tree for matching transactions to entries.
+Permanent match configuration. Replaces `entries` + `entry_rules` from the original spec. Full definition in `2026-06-30-veloci-api-design.md`; reproduced here for engine reference.
 
 ```sql
-CREATE TABLE entry_rules (
-  id          UUID PRIMARY KEY,
-  entity_id   UUID NOT NULL REFERENCES entities(id),
-  entry_id    UUID NOT NULL REFERENCES entries(id),
-  stage       TEXT NOT NULL CHECK (stage IN ('pre','post')),
-  priority    INTEGER NOT NULL DEFAULT 100,
-  conditions  JSONB NOT NULL   -- boolean expression tree; see Section 5
+CREATE TABLE rules (
+  id                     UUID PRIMARY KEY,
+  entity_id              UUID NOT NULL REFERENCES entities(id),
+  name                   TEXT NOT NULL,
+  direction              TEXT NOT NULL CHECK (direction IN ('income','expense')),
+  entry_type             TEXT NOT NULL CHECK (entry_type IN ('standing','single','hit','boost','variable')),
+  smoothing_window_days  INTEGER NOT NULL DEFAULT 30,
+  variable_method        TEXT CHECK (variable_method IN ('avg','max')),
+  projected_rate_per_day NUMERIC(12,4),
+  conditions             JSONB NOT NULL,
+  stage                  TEXT NOT NULL DEFAULT 'pre' CHECK (stage IN ('pre','post')),
+  priority               INTEGER NOT NULL DEFAULT 100,
+  status                 TEXT NOT NULL DEFAULT 'pending_review'
+                         CHECK (status IN ('pending_review','active','inactive')),
+  source                 TEXT NOT NULL DEFAULT 'user' CHECK (source IN ('user','engine')),
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX ON entry_rules (entity_id, entry_id);
+CREATE INDEX ON rules (entity_id, status);
+CREATE INDEX ON rules (entity_id, priority);
 ```
 
 **Condition tree shape (JSONB):**
@@ -520,66 +515,82 @@ Leaf:  { "type": "<leaf_type>", "value": <string|number|array|{min,max}> }
 
 `NOT` and `XOR` nodes require exactly 1 and exactly 2 children respectively. `AND` / `OR` accept 1 or more.
 
-### transaction_entry_assignments
+### transaction_rule_assignments
 
-Many-to-many join between transactions and entries. A transaction can match multiple entries (legitimate — see DAG deduplication in Stage 4).
+Many-to-many join between transactions and rules. A transaction can match multiple rules (legitimate — see DAG deduplication in Stage 4).
 
 ```sql
-CREATE TABLE transaction_entry_assignments (
-  transaction_id  UUID NOT NULL REFERENCES raw_transactions(id),
-  entry_id        UUID NOT NULL REFERENCES entries(id),
-  rule_id         UUID REFERENCES entry_rules(id),   -- null if engine-detected (Stage 2)
-  confidence      NUMERIC(4,3) NOT NULL DEFAULT 1.0,
-  assigned_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  PRIMARY KEY (transaction_id, entry_id)
+CREATE TABLE transaction_rule_assignments (
+  transaction_id UUID NOT NULL REFERENCES raw_transactions(id),
+  rule_id        UUID NOT NULL REFERENCES rules(id),
+  confidence     NUMERIC(4,3) NOT NULL DEFAULT 1.0,
+  assigned_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (transaction_id, rule_id)
 );
 ```
 
-### groups
+### labels
 
-User-defined grouping nodes in the DAG. Contain entries and/or other groups.
+Named DAG nodes. Replaces `groups`. Full definition in `2026-06-30-veloci-api-design.md`.
 
 ```sql
-CREATE TABLE groups (
-  id          UUID PRIMARY KEY,
-  entity_id   UUID NOT NULL REFERENCES entities(id),
-  name        TEXT NOT NULL,
-  created_by  UUID NOT NULL REFERENCES users(id)
+CREATE TABLE labels (
+  id         UUID PRIMARY KEY,
+  entity_id  UUID NOT NULL REFERENCES entities(id),
+  name       TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ```
 
-### group_members
+### label_members
 
-DAG edges. `member_type` distinguishes entry leaves from group nodes.
+DAG edges. `member_type` distinguishes rule leaves from label nodes.
 
 ```sql
-CREATE TABLE group_members (
-  group_id     UUID NOT NULL REFERENCES groups(id),
-  member_id    UUID NOT NULL,
-  member_type  TEXT NOT NULL CHECK (member_type IN ('entry','group')),
-  PRIMARY KEY (group_id, member_id)
+CREATE TABLE label_members (
+  label_id    UUID NOT NULL REFERENCES labels(id),
+  member_id   UUID NOT NULL,
+  member_type TEXT NOT NULL CHECK (member_type IN ('rule','label')),
+  PRIMARY KEY (label_id, member_id)
 );
 ```
 
 Cycle prevention is enforced at the application layer in `veloci-api` before publishing a job. The engine will error on cycle detection as a safeguard.
 
+### label_rules
+
+Automated conditions for applying a label to matching rules. Full definition in `2026-06-30-veloci-api-design.md`.
+
+```sql
+CREATE TABLE label_rules (
+  id         UUID PRIMARY KEY,
+  label_id   UUID NOT NULL REFERENCES labels(id),
+  entity_id  UUID NOT NULL REFERENCES entities(id),
+  conditions JSONB NOT NULL,
+  priority   INTEGER NOT NULL DEFAULT 100,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
 ### review_queue
 
-One record per engine-detected candidate entry awaiting user review.
+One record per engine-detected candidate rule awaiting user review. The suggested `conditions` JSONB is transparent and editable before the user approves.
 
 ```sql
 CREATE TABLE review_queue (
   id                        UUID PRIMARY KEY,
   entity_id                 UUID NOT NULL REFERENCES entities(id),
-  entry_id                  UUID NOT NULL REFERENCES entries(id),
+  rule_id                   UUID NOT NULL REFERENCES rules(id),
   job_id                    UUID NOT NULL REFERENCES processing_jobs(id),
   suggested_name            TEXT NOT NULL,
   suggested_entry_type      TEXT NOT NULL,
+  suggested_conditions      JSONB NOT NULL,
   suggested_rate_per_day    NUMERIC(12,4) NOT NULL,
   matched_transaction_count INTEGER NOT NULL,
   confidence                NUMERIC(4,3) NOT NULL,
-  sample_merchants          TEXT[] NOT NULL,           -- up to 5 examples
-  status                    TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected','modified')),
+  sample_merchants          TEXT[] NOT NULL,
+  status                    TEXT NOT NULL DEFAULT 'pending'
+                            CHECK (status IN ('pending','approved','rejected','modified')),
   reviewed_by               UUID REFERENCES users(id),
   reviewed_at               TIMESTAMPTZ
 );
@@ -593,8 +604,8 @@ Rebuildable output from the engine. Safe to truncate and recompute at any time.
 CREATE TABLE computed_snapshots (
   id                     UUID PRIMARY KEY,
   entity_id              UUID NOT NULL REFERENCES entities(id),
-  node_id                UUID NOT NULL,        -- entry_id or group_id
-  node_type              TEXT NOT NULL CHECK (node_type IN ('entry','group')),
+  node_id                UUID NOT NULL,        -- rule_id or label_id
+  node_type              TEXT NOT NULL CHECK (node_type IN ('rule','label')),
   computed_as_of         DATE NOT NULL,        -- MAX(raw_transaction.date) for this entity
   job_id                 UUID NOT NULL REFERENCES processing_jobs(id),
   actual_rate_per_day    NUMERIC(12,4) NOT NULL,
@@ -632,7 +643,7 @@ CREATE TABLE processing_jobs (
 
 ---
 
-## 12. Key Invariants
+## 13. Key Invariants
 
 These invariants are structural constraints on the system, not implementation details. Violations are bugs.
 
@@ -640,7 +651,7 @@ These invariants are structural constraints on the system, not implementation de
 
 2. **`raw_transactions` is immutable** — the engine never UPDATE or DELETE rows in this table. All re-runs read the same source data.
 
-3. **Stages 3–6 filter on `status = 'active'`** — entries in `pending_review` or `inactive` are invisible to all calculation stages.
+3. **Stages 3–6 filter on `status = 'active'`** — rules in `pending_review` or `inactive` are invisible to all calculation stages.
 
 4. **Snapshot writes are atomic** — all snapshots for a given job commit in one transaction or not at all.
 
@@ -654,7 +665,7 @@ These invariants are structural constraints on the system, not implementation de
 
 ---
 
-## 13. Execution Model
+## 14. Execution Model
 
 The engine is built for speed at two levels: parallelism within a single job (intra-job), and parallelism across multiple entities' jobs running simultaneously (inter-job).
 
@@ -667,7 +678,7 @@ Each stage has a defined parallelism strategy. The stage order is a hard depende
 | 0 — CSV norm + dedup | Normalize all rows in parallel; dedup lookups in parallel; batch INSERT sequentially at end | `rayon::par_iter` for normalization; `FuturesUnordered` for concurrent Postgres dedup reads |
 | 1 — Rule matching | Each transaction evaluated independently; shard transactions across threads | `rayon::par_iter` over transaction slice |
 | 2 — Pattern detection | Global clustering pass is sequential (must see all unmatched at once); cluster scoring is parallel | Sequential LCS clustering → `rayon::par_iter` over candidate clusters for confidence scoring |
-| 3 — Rate computation | Each entry's rate computed from its own transactions only; fully independent | `rayon::par_iter` over active entries |
+| 3 — Rate computation | Each rule's rate computed from its own transactions only; fully independent | `rayon::par_iter` over active rules |
 | 4 — DAG aggregation | Topological sort is sequential; nodes within each level of the DAG are independent | Sequential toposort → level-parallel: `rayon::par_iter` over each level's node set |
 | 5 — Slope + drift | Each node's regression reads only its own snapshot history; fully independent | `rayon::par_iter` over all nodes |
 | 6 — Snapshot write | Data serialization parallel; single atomic `INSERT` at the end is sequential | `rayon::par_iter` to build row structs → single `sqlx` batch execute |
@@ -709,7 +720,7 @@ idle_timeout    = 10m
 
 ---
 
-## 14. RabbitMQ Job Message Shape
+## 15. RabbitMQ Job Message Shape
 
 The Go API publishes JSON to RabbitMQ. The engine deserializes this into its job context.
 
@@ -728,10 +739,10 @@ For `rules.reprocess` and `account.analyze`, `metadata` is empty. The engine use
 
 ---
 
-## 14. Out of Scope for This Spec
+## 16. Out of Scope for This Spec
 
-- Go API endpoints for importing, reviewing, and approving entries (covered in import pipeline spec)
+- Go API endpoints for importing, reviewing, and approving rules (covered in import pipeline spec)
 - UI views: Pulse, Stack, Horizon (covered in UI spec)
 - Transfer detection (two debits/credits that cancel at the budget level — deferred to v1.1)
 - Debt account rate calculations (APR-adjusted payoff projections — deferred to v1.1)
-- Projected-only entries (entries in the Projection lane with no transaction history — deferred to v1.1)
+- Projected-only rules (rules in the Projection lane with no transaction history — deferred to v1.1)
