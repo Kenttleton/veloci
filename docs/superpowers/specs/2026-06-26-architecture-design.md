@@ -17,9 +17,9 @@ Veloci is a local-first personal finance application targeting the self-hosting 
 | Service | Language | Responsibility |
 |---|---|---|
 | `veloci-web` | TypeScript / React | Static SPA — UI only, no server-side logic |
-| `veloci-api` | Go + Cobra + Viper | REST API, all CRUD, JWT validation, job publishing. Cobra subcommands: `serve`, `migrate` |
+| `veloci-api` | Go + Cobra + Viper | REST API, auth proxy, RBAC enforcement, all CRUD, job publishing. Cobra subcommands: `serve`, `migrate` |
 | `veloci-engine` | Rust | Pattern clustering, rule evaluation, rate/slope calculations. Health via CLI subcommand |
-| `veloci-auth` | Go + Cobra + Viper | Credential validation, JWT issuance, entity membership, RBAC. Cobra subcommands: `serve` |
+| `veloci-auth` | Go + Cobra + Viper | Credential validation, token minting and validation, invite lifecycle. Cobra subcommands: `serve` |
 | `postgres` | — | All persistent data |
 | `rabbitmq` | — | Durable job queue between api and engine |
 
@@ -43,26 +43,34 @@ Asynchronous via RabbitMQ. `veloci-api` publishes jobs to a queue. `veloci-engin
 **Engine health check:** The engine binary supports a `health` subcommand — `veloci-engine health` — that independently connects to Postgres and RabbitMQ and exits `0` or `1`. Docker runs this as a separate short-lived process for its healthcheck. No HTTP server is added to the engine; it remains a pure queue consumer.
 
 ### API ↔ Auth
-Auth is called once at login. It issues a signed JWT. All subsequent requests carry the JWT — `veloci-api` validates the signature locally without calling `veloci-auth` on each request. This keeps per-request latency low.
+`veloci-auth` is an internal service — not exposed outside the Docker network. `veloci-api` is its only caller.
+
+At login, `veloci-api` validates credentials via `veloci-auth`, then mints a token with full claims (entity_id, roles). On every subsequent protected request, `veloci-api` calls `veloci-auth POST /tokens/validate` to verify the token is signed, unexpired, and not revoked. Claims are returned verbatim from the auth DB.
+
+**Two Postgres databases:**
+
+- `veloci_auth` — `auth_credentials`, `tokens`, `invite_tokens`. Owned exclusively by `veloci-auth`.
+- `veloci_app` — all financial data, RBAC, entity and user management. Owned by `veloci-api` and `veloci-engine`. No cross-database queries between the two.
 
 ---
 
 ## 4. Financial Entity Model
 
-A **financial entity** is the unit of financial ownership. It owns all accounts, transactions, entries, and rules. A family, household, or individual is one entity. All financial data in Postgres is keyed by `entity_id`.
+A **financial entity** is the unit of financial ownership. A family, household, or individual is one entity. All financial data in `veloci_app` is keyed by `entity_id`.
 
 ```
 entity
   └── users (via entity_users)
-        └── role → permissions
+        └── entity_role → permissions
   └── accounts
-  └── transactions
-  └── entries
+  └── raw_transactions
   └── rules
+  └── labels (via label_members)
+  └── computed_snapshots  (transient — rebuilt by engine)
 ```
 
 **v1:** One entity per self-hosted deployment. Multiple users (family members) per entity.
-**v2:** Multiple entities per deployment. Auth service gains multi-entity management.
+**v2:** Multiple entities per deployment. API gains multi-entity admin routes; auth service is unchanged.
 
 ---
 
@@ -71,29 +79,42 @@ entity
 ### JWT Payload
 ```json
 {
-  "user_id": "u_abc",
-  "entity_id": "e_xyz",
-  "role": "admin"
+  "sub": "user_id",
+  "email": "user@example.com",
+  "system_role": "user",
+  "entity_id": "entity_uuid",
+  "entity_role": "entity_admin"
 }
 ```
 
-Every API request carries this JWT. `veloci-api` validates the signature and extracts `entity_id` to scope all queries, and `role` to enforce permissions.
+`veloci-api` receives claims back from `veloci-auth /tokens/validate` on every request. It uses `entity_id` to scope all queries and `entity_role` to enforce permissions. `system_role` gates `/admin/*` routes — only `server_admin` may access them.
+
+`system_role` is a credential-level concern owned by `veloci-auth`. `entity_role` and all RBAC is owned by `veloci-api`.
 
 ### RBAC Schema
 
 ```
-roles             — named roles (admin, member in v1; custom in v2)
+roles             — named roles (entity_admin, entity_user in v1; custom in v2)
 permissions       — named permission strings (accounts:write, import:create, ...)
 role_permissions  — join: role → [permissions]
-entity_users      — join: user → entity → role
+entity_users      — join: user → entity → entity_role
 ```
+
+Seeded by `veloci-api migrate`. The role→permission mapping is cached at startup — no per-request DB lookup.
 
 ### v1 Seeded Roles
 
-| Role | Permissions |
-|---|---|
-| `admin` | `accounts:write`, `accounts:read`, `import:create`, `rules:write`, `entries:write`, `reports:read`, `users:manage` |
-| `member` | `accounts:read`, `entries:write`, `reports:read` |
+| Permission | `entity_admin` | `entity_user` |
+| --- | --- | --- |
+| `accounts:read` | ✓ | ✓ |
+| `accounts:write` | ✓ | — |
+| `import:create` | ✓ | TBD |
+| `rules:write` | ✓ | TBD |
+| `labels:write` | ✓ | ✓ |
+| `entries:write` | ✓ | TBD |
+| `reports:read` | ✓ | ✓ |
+| `users:manage` | ✓ | — |
+| `entity:configure` | ✓ | — |
 
 ### v2 Expansion
 Custom role creation, additional permissions, per-user permission overrides. No schema changes required — the tables already support it.
@@ -102,12 +123,24 @@ Custom role creation, additional permissions, per-user permission overrides. No 
 
 ## 6. Auth Flow
 
-1. User POSTs credentials to `veloci-auth`
-2. Auth validates against the users table, checks entity membership
-3. Auth returns a signed JWT containing `user_id`, `entity_id`, `role`
-4. Client stores JWT and sends it as `Authorization: Bearer <token>` on all requests
-5. `veloci-api` validates JWT signature — no round-trip to auth service per request
-6. API scopes all queries by `entity_id`, checks permissions for write/admin operations
+### Login
+
+1. Client POSTs credentials to `veloci-api POST /auth/login`
+2. `veloci-api` calls `veloci-auth POST /credentials/validate` — returns `credential_id` + `system_role`
+3. `veloci-api` looks up `entity_id` + `entity_role` for that user in `veloci_app`
+4. `veloci-api` calls `veloci-auth POST /tokens/mint` with the full claims object
+5. `veloci-auth` signs the JWT, stores it, returns the token to `veloci-api`
+6. `veloci-api` returns the token to the client
+
+### Per-Request Validation
+
+1. Client sends `Authorization: Bearer <token>` on every request
+2. `veloci-api` calls `veloci-auth POST /tokens/validate` — verifies signature, DB presence, and expiry; returns claims
+3. `veloci-api` extracts `entity_id` to scope all queries and `entity_role` to enforce permissions
+
+### Token Refresh
+
+Active sessions auto-refresh: with 15 minutes remaining, `veloci-api` mints a replacement token and revokes the old one. Expired tokens force re-login.
 
 ---
 
@@ -134,8 +167,8 @@ Persistent volumes: one for Postgres data, one for RabbitMQ data.
 | Concern | v1 | v2 |
 |---|---|---|
 | Entities | One per deployment | Many per deployment |
-| Auth | Single-tenant JWT | Multi-tenant JWT, entity selection |
-| Postgres | One schema, `entity_id` scoping | Row-level security or schema-per-entity |
+| Auth | Single-tenant JWT | Multi-tenant JWT, entity selection; auth service unchanged |
+| Postgres | One schema, `entity_id` scoping | Row-level security (already designed in; enabled for v2) |
 | Engine | Single consumer | Horizontal scaling — add consumers |
 | API | Unchanged | Unchanged |
 
