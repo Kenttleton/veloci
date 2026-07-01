@@ -2,37 +2,47 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Stand up the six-service architecture (veloci-api, veloci-auth, veloci-engine, veloci-web, Postgres, RabbitMQ) with working auth flow, JWT validation middleware, RabbitMQ job publishing/consuming, and entity-scoped API scaffolding.
+**Goal:** Stand up the six-service architecture with working auth flow, per-request token validation, RabbitMQ job publishing/consuming, and entity-scoped API scaffolding.
 
-**Architecture:** Monorepo under `services/`. Each service is independently buildable and deployable via Docker. Postgres migrations run at container init. `veloci-auth` issues JWTs; `veloci-api` validates them locally on each request without calling auth. The frontend talks to both auth (login) and api (everything else).
+**Architecture:** Monorepo under `services/`. Two isolated Postgres databases (`veloci_auth`, `veloci_app`) with separate DB users. `veloci-auth` is internal-only — never exposed to the frontend. `veloci-api` owns all client-facing routes including login; it calls `veloci-auth` HTTP endpoints to validate credentials and mint/validate tokens on every protected request.
 
 **Tech Stack:**
-- Go 1.26 — `chi/v5` router, `pgx/v5` Postgres driver, `amqp091-go` RabbitMQ client, `golang-jwt/jwt/v5`, `golang.org/x/crypto` bcrypt, `cobra` CLI, `viper` config
-- Rust 1.95 — `tokio` async runtime, `sqlx` Postgres, `lapin` RabbitMQ, `serde`/`serde_json`, `anyhow`, `tracing`, `backon` retry, `chrono` date/time
+
+- Go 1.26 — `chi/v5` router, `pgx/v5` Postgres driver, `amqp091-go` RabbitMQ client, `golang-jwt/jwt/v5`, `golang.org/x/crypto` bcrypt, `cobra`, `viper`
+- Rust 1.95 — `tokio`, `sqlx`, `lapin`, `serde`/`serde_json`, `anyhow`, `tracing`, `backon`, `chrono`, `futures-lite`
 - React 19 + Vite 8 + TypeScript 6.0
 - Postgres 18, RabbitMQ 4.3-alpine
 
 ## Global Constraints
-- All financial data rows must include `entity_id UUID NOT NULL` (enforced in data model spec — scaffolded here as a contract)
-- JWT payload always carries exactly: `user_id`, `entity_id`, `role`
-- Passwords stored as bcrypt hashes, cost 12
-- All Go services use `chi/v5` for routing
-- All Rust async code uses `tokio` multi-thread runtime
-- No Postgres or RabbitMQ ports exposed externally in docker-compose
-- All secrets via environment variables — zero hardcoded credentials
-- `veloci-engine` is internal only — no exposed port
+
+- Two Postgres databases: `veloci_auth` (owned by `veloci_auth_user`) and `veloci_app` (owned by `veloci_app_user`) — no cross-database queries
+- `veloci-auth` is Docker-network-internal only — no exposed host port
+- JWT payload carries: `sub`, `email`, `system_role`, `entity_id`, `entity_role` — claims are opaque JSONB in `veloci-auth`
+- Passwords: bcrypt cost 12
+- All Go services use `chi/v5`; all Rust async uses tokio multi-thread runtime
+- `veloci-auth` reads `veloci-auth.yaml` via Viper for `server_admin` credentials and `jwt_secret`
+- `veloci-api` calls `veloci-auth POST /tokens/validate` on every protected request — no local JWT parsing
+- All financial table rows carry `entity_id UUID NOT NULL`
+- No Postgres or RabbitMQ ports exposed externally
 
 ---
 
 ## File Map
 
-```
+```text
 veloci/
 ├── docker-compose.yml
 ├── .env.example
+├── config/
+│   └── veloci-auth.yaml.example
+├── scripts/
+│   └── init-db.sh
 ├── migrations/
-│   ├── 001_auth_schema.sql
-│   └── 002_rbac_seed.sql
+│   ├── auth/
+│   │   └── 001_auth_schema.sql
+│   └── app/
+│       ├── 001_app_schema.sql
+│       └── 002_rbac_seed.sql
 └── services/
     ├── auth/
     │   ├── go.mod
@@ -44,14 +54,21 @@ veloci/
     │       │   └── jwt_test.go
     │       ├── db/
     │       │   └── db.go
+    │       ├── sync/
+    │       │   └── admin.go
     │       └── handlers/
-    │           ├── login.go
-    │           └── login_test.go
+    │           ├── credentials.go
+    │           ├── credentials_test.go
+    │           ├── tokens.go
+    │           └── tokens_test.go
     ├── api/
     │   ├── go.mod
     │   ├── main.go
     │   ├── Dockerfile
     │   └── internal/
+    │       ├── authclient/
+    │       │   ├── client.go
+    │       │   └── client_test.go
     │       ├── middleware/
     │       │   ├── auth.go
     │       │   └── auth_test.go
@@ -59,6 +76,8 @@ veloci/
     │       │   ├── publisher.go
     │       │   └── publisher_test.go
     │       └── handlers/
+    │           ├── auth.go
+    │           ├── auth_test.go
     │           └── health.go
     ├── engine/
     │   ├── Cargo.toml
@@ -89,16 +108,21 @@ veloci/
 
 ---
 
-## Task 1: Project Scaffold + Infrastructure
+## Task 1: Infrastructure
 
 **Files:**
-- Create: `docker-compose.yml`
+
 - Create: `.env.example`
-- Create: `migrations/001_auth_schema.sql`
-- Create: `migrations/002_rbac_seed.sql`
+- Create: `config/veloci-auth.yaml.example`
+- Create: `scripts/init-db.sh`
+- Create: `migrations/auth/001_auth_schema.sql`
+- Create: `migrations/app/001_app_schema.sql`
+- Create: `migrations/app/002_rbac_seed.sql`
+- Create: `docker-compose.yml`
 
 **Interfaces:**
-- Produces: running Postgres with auth schema and seeded roles/permissions; running RabbitMQ; environment contract for all services
+
+- Produces: two isolated Postgres databases with correct schemas and seeded roles; RabbitMQ; environment contract for all services
 
 ---
 
@@ -106,110 +130,219 @@ veloci/
 
 ```bash
 # .env.example
-POSTGRES_USER=veloci
+POSTGRES_USER=postgres
 POSTGRES_PASSWORD=changeme
-POSTGRES_DB=veloci
-JWT_SECRET=change-this-to-a-long-random-secret
+
+VELOCI_AUTH_DB=veloci_auth
+VELOCI_AUTH_DB_USER=veloci_auth_user
+VELOCI_AUTH_DB_PASSWORD=changeme_auth
+
+VELOCI_APP_DB=veloci_app
+VELOCI_APP_DB_USER=veloci_app_user
+VELOCI_APP_DB_PASSWORD=changeme_app
+
 RABBITMQ_USER=veloci
 RABBITMQ_PASSWORD=changeme
 ```
 
-Copy to `.env` and fill in real values before running:
+Copy to `.env` before running:
+
 ```bash
 cp .env.example .env
 ```
 
-- [ ] **Step 2: Create `migrations/001_auth_schema.sql`**
+- [ ] **Step 2: Create `config/veloci-auth.yaml.example`**
+
+```yaml
+# config/veloci-auth.yaml.example
+# Copy to config/veloci-auth.yaml and fill in values.
+# This file is bind-mounted into the veloci-auth container.
+# server_admin password is stored in plaintext here so self-hosters
+# can recover it without CLI access. Only the bcrypt hash is stored in DB.
+server_admin:
+  email: admin@veloci.local
+  password: changeme
+jwt_secret: change-this-to-a-long-random-string-at-least-32-chars
+port: 8081
+```
+
+```bash
+mkdir -p config
+cp config/veloci-auth.yaml.example config/veloci-auth.yaml
+```
+
+- [ ] **Step 3: Create `scripts/init-db.sh`**
+
+```bash
+#!/usr/bin/env bash
+# scripts/init-db.sh
+# Runs inside the postgres container as the superuser.
+# Creates both databases and their dedicated users.
+set -euo pipefail
+
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname postgres <<-EOSQL
+  CREATE USER ${VELOCI_AUTH_DB_USER} WITH PASSWORD '${VELOCI_AUTH_DB_PASSWORD}';
+  CREATE DATABASE ${VELOCI_AUTH_DB} OWNER ${VELOCI_AUTH_DB_USER};
+
+  CREATE USER ${VELOCI_APP_DB_USER} WITH PASSWORD '${VELOCI_APP_DB_PASSWORD}';
+  CREATE DATABASE ${VELOCI_APP_DB} OWNER ${VELOCI_APP_DB_USER};
+EOSQL
+
+psql -v ON_ERROR_STOP=1 \
+  --username "${VELOCI_AUTH_DB_USER}" \
+  --dbname "${VELOCI_AUTH_DB}" \
+  -f /migrations/auth/001_auth_schema.sql
+
+psql -v ON_ERROR_STOP=1 \
+  --username "${VELOCI_APP_DB_USER}" \
+  --dbname "${VELOCI_APP_DB}" \
+  -f /migrations/app/001_app_schema.sql
+
+psql -v ON_ERROR_STOP=1 \
+  --username "${VELOCI_APP_DB_USER}" \
+  --dbname "${VELOCI_APP_DB}" \
+  -f /migrations/app/002_rbac_seed.sql
+```
+
+```bash
+chmod +x scripts/init-db.sh
+```
+
+- [ ] **Step 4: Create `migrations/auth/001_auth_schema.sql`**
 
 ```sql
--- migrations/001_auth_schema.sql
+-- migrations/auth/001_auth_schema.sql
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
-CREATE TABLE users (
-    id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    email         TEXT        UNIQUE NOT NULL,
-    password_hash TEXT        NOT NULL,
-    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+CREATE TABLE auth_credentials (
+  id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  email         TEXT        NOT NULL UNIQUE,
+  password_hash TEXT        NOT NULL,
+  system_role   TEXT        NOT NULL DEFAULT 'user'
+                            CHECK (system_role IN ('server_admin', 'user')),
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE tokens (
+  id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    UUID        NOT NULL REFERENCES auth_credentials(id) ON DELETE CASCADE,
+  jti        TEXT        NOT NULL UNIQUE,
+  claims     JSONB       NOT NULL,
+  issued_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX ON tokens (jti);
+CREATE INDEX ON tokens (user_id);
+CREATE INDEX ON tokens (expires_at);
+
+CREATE TABLE invite_tokens (
+  id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  token_hash  TEXT        NOT NULL UNIQUE,
+  created_by  UUID        NOT NULL REFERENCES auth_credentials(id),
+  claims      JSONB       NOT NULL,
+  expires_at  TIMESTAMPTZ NOT NULL,
+  accepted_at TIMESTAMPTZ
+);
+
+CREATE INDEX ON invite_tokens (token_hash);
+```
+
+- [ ] **Step 5: Create `migrations/app/001_app_schema.sql`**
+
+```sql
+-- migrations/app/001_app_schema.sql
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
 CREATE TABLE entities (
-    id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    name       TEXT        NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  name       TEXT        NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE users (
+  id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  auth_credential_id UUID       NOT NULL UNIQUE,
+  email             TEXT        NOT NULL UNIQUE,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE roles (
-    id   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT UNIQUE NOT NULL
+  id   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL UNIQUE
 );
 
 CREATE TABLE permissions (
-    id   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT UNIQUE NOT NULL
+  id   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL UNIQUE
 );
 
 CREATE TABLE role_permissions (
-    role_id       UUID NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
-    permission_id UUID NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
-    PRIMARY KEY (role_id, permission_id)
+  role_id       UUID NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+  permission_id UUID NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
+  PRIMARY KEY (role_id, permission_id)
 );
 
 CREATE TABLE entity_users (
-    user_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    entity_id UUID NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-    role_id   UUID NOT NULL REFERENCES roles(id),
-    PRIMARY KEY (user_id, entity_id)
+  user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  entity_id   UUID NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+  entity_role TEXT NOT NULL CHECK (entity_role IN ('entity_admin', 'entity_user')),
+  PRIMARY KEY (user_id, entity_id)
 );
 ```
 
-- [ ] **Step 3: Create `migrations/002_rbac_seed.sql`**
+- [ ] **Step 6: Create `migrations/app/002_rbac_seed.sql`**
 
 ```sql
--- migrations/002_rbac_seed.sql
-INSERT INTO roles (name) VALUES ('admin'), ('member');
+-- migrations/app/002_rbac_seed.sql
+INSERT INTO roles (name) VALUES ('entity_admin'), ('entity_user');
 
 INSERT INTO permissions (name) VALUES
-    ('accounts:read'),
-    ('accounts:write'),
-    ('import:create'),
-    ('rules:write'),
-    ('entries:write'),
-    ('reports:read'),
-    ('users:manage');
+  ('accounts:read'),
+  ('accounts:write'),
+  ('import:create'),
+  ('rules:write'),
+  ('labels:write'),
+  ('entries:write'),
+  ('reports:read'),
+  ('users:manage'),
+  ('entity:configure');
 
--- admin gets every permission
+-- entity_admin gets all permissions
 INSERT INTO role_permissions (role_id, permission_id)
-SELECT r.id, p.id
-FROM roles r CROSS JOIN permissions p
-WHERE r.name = 'admin';
+SELECT r.id, p.id FROM roles r CROSS JOIN permissions p
+WHERE r.name = 'entity_admin';
 
--- member gets read + entries + reports
+-- entity_user gets read + labels + reports
 INSERT INTO role_permissions (role_id, permission_id)
-SELECT r.id, p.id
-FROM roles r
-JOIN permissions p ON p.name IN ('accounts:read', 'entries:write', 'reports:read')
-WHERE r.name = 'member';
+SELECT r.id, p.id FROM roles r
+JOIN permissions p ON p.name IN ('accounts:read', 'labels:write', 'reports:read')
+WHERE r.name = 'entity_user';
 ```
 
-- [ ] **Step 4: Create `docker-compose.yml`**
+- [ ] **Step 7: Create `docker-compose.yml`**
 
 ```yaml
-version: '3.9'
-
 services:
   postgres:
     image: postgres:18-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      VELOCI_AUTH_DB: ${VELOCI_AUTH_DB}
+      VELOCI_AUTH_DB_USER: ${VELOCI_AUTH_DB_USER}
+      VELOCI_AUTH_DB_PASSWORD: ${VELOCI_AUTH_DB_PASSWORD}
+      VELOCI_APP_DB: ${VELOCI_APP_DB}
+      VELOCI_APP_DB_USER: ${VELOCI_APP_DB_USER}
+      VELOCI_APP_DB_PASSWORD: ${VELOCI_APP_DB_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./migrations:/docker-entrypoint-initdb.d
+      - ./scripts/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+      - ./migrations:/migrations
     networks:
       - veloci
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 5s
       retries: 5
 
@@ -230,22 +363,22 @@ services:
   veloci-auth:
     build: ./services/auth
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      JWT_SECRET: ${JWT_SECRET}
-      PORT: "8081"
+      DATABASE_URL: postgres://${VELOCI_AUTH_DB_USER}:${VELOCI_AUTH_DB_PASSWORD}@postgres:5432/${VELOCI_AUTH_DB}
+      CONFIG_PATH: /etc/veloci-auth/veloci-auth.yaml
+    volumes:
+      - ./config/veloci-auth.yaml:/etc/veloci-auth/veloci-auth.yaml:ro
     depends_on:
       postgres:
         condition: service_healthy
     networks:
       - veloci
-    ports:
-      - "8081:8081"
+    # No external ports — internal only
 
   veloci-api:
     build: ./services/api
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: postgres://${VELOCI_APP_DB_USER}:${VELOCI_APP_DB_PASSWORD}@postgres:5432/${VELOCI_APP_DB}
+      VELOCI_AUTH_URL: http://veloci-auth:8081
       RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
       PORT: "8080"
     depends_on:
@@ -253,6 +386,8 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      veloci-auth:
+        condition: service_started
     networks:
       - veloci
     ports:
@@ -261,7 +396,7 @@ services:
   veloci-engine:
     build: ./services/engine
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      DATABASE_URL: postgres://${VELOCI_APP_DB_USER}:${VELOCI_APP_DB_PASSWORD}@postgres:5432/${VELOCI_APP_DB}
       RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
     depends_on:
       postgres:
@@ -270,6 +405,11 @@ services:
         condition: service_healthy
     networks:
       - veloci
+    healthcheck:
+      test: ["/veloci-engine", "health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
   veloci-web:
     build: ./services/web
@@ -286,20 +426,11 @@ networks:
   veloci:
 ```
 
-- [ ] **Step 5: Verify migrations are ordered correctly**
+- [ ] **Step 8: Commit**
 
 ```bash
-ls migrations/
-```
-Expected: `001_auth_schema.sql  002_rbac_seed.sql`
-
-Postgres init runs files in alphabetical order — the `00N_` prefix guarantees this.
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add docker-compose.yml .env.example migrations/
-git commit -m "feat: project scaffold, docker-compose, postgres migrations"
+git add docker-compose.yml .env.example config/ scripts/ migrations/
+git commit -m "feat: project scaffold — two-database postgres, migrations, docker-compose"
 ```
 
 ---
@@ -307,29 +438,34 @@ git commit -m "feat: project scaffold, docker-compose, postgres migrations"
 ## Task 2: veloci-auth Service
 
 **Files:**
+
 - Create: `services/auth/go.mod`
-- Create: `services/auth/main.go`
 - Create: `services/auth/internal/tokens/jwt.go`
 - Create: `services/auth/internal/tokens/jwt_test.go`
 - Create: `services/auth/internal/db/db.go`
-- Create: `services/auth/internal/handlers/login.go`
-- Create: `services/auth/internal/handlers/login_test.go`
+- Create: `services/auth/internal/sync/admin.go`
+- Create: `services/auth/internal/handlers/credentials.go`
+- Create: `services/auth/internal/handlers/credentials_test.go`
+- Create: `services/auth/internal/handlers/tokens.go`
+- Create: `services/auth/internal/handlers/tokens_test.go`
+- Create: `services/auth/main.go`
 - Create: `services/auth/Dockerfile`
 
 **Interfaces:**
-- Consumes: Postgres `users`, `entities`, `entity_users`, `roles` tables from Task 1
+
 - Produces:
-  - `POST /login` → `{"token": "<jwt>"}` where JWT payload is `{"user_id": "...", "entity_id": "...", "role": "..."}`
-  - `tokens.Issue(secret []byte, userID, entityID, role string) (string, error)`
-  - `tokens.Parse(secret []byte, tokenStr string) (*tokens.Claims, error)`
-  - `tokens.Claims` struct with fields `UserID string`, `EntityID string`, `Role string`
+  - `POST /credentials/validate` → `{credential_id, system_role}` or 401
+  - `POST /credentials/create` → `{credential_id}` or 409
+  - `POST /tokens/mint` → `{token, jti, expires_at}`
+  - `POST /tokens/validate` → `{jti, credential_id, claims}` or 401
+  - `DELETE /tokens/:jti` → 204
 
 ---
 
 - [ ] **Step 1: Initialize Go module**
 
 ```bash
-mkdir -p services/auth/internal/{tokens,db,handlers}
+mkdir -p services/auth/internal/{tokens,db,sync,handlers}
 cd services/auth
 go mod init github.com/veloci/auth
 go get github.com/go-chi/chi/v5
@@ -338,6 +474,7 @@ go get github.com/golang-jwt/jwt/v5
 go get golang.org/x/crypto
 go get github.com/spf13/cobra
 go get github.com/spf13/viper
+go get github.com/google/uuid
 ```
 
 - [ ] **Step 2: Write failing tests for JWT**
@@ -347,36 +484,52 @@ go get github.com/spf13/viper
 package tokens_test
 
 import (
+    "encoding/json"
     "testing"
+    "time"
     "github.com/veloci/auth/internal/tokens"
 )
 
-func TestIssueAndParse(t *testing.T) {
-    secret := []byte("test-secret")
-    tok, err := tokens.Issue(secret, "user-1", "entity-1", "admin")
+func TestMintAndVerify(t *testing.T) {
+    secret := []byte("test-secret-at-least-32-characters!!")
+    claims := json.RawMessage(`{"sub":"user-1","entity_id":"ent-1","entity_role":"entity_admin"}`)
+    jti := "test-jti-1"
+    exp := time.Now().Add(time.Hour)
+
+    tok, err := tokens.Mint(secret, jti, claims, exp)
     if err != nil {
-        t.Fatalf("Issue: %v", err)
+        t.Fatalf("Mint: %v", err)
     }
-    claims, err := tokens.Parse(secret, tok)
+
+    gotJTI, gotClaims, err := tokens.Verify(secret, tok)
     if err != nil {
-        t.Fatalf("Parse: %v", err)
+        t.Fatalf("Verify: %v", err)
     }
-    if claims.UserID != "user-1" {
-        t.Errorf("UserID: got %q, want %q", claims.UserID, "user-1")
+    if gotJTI != jti {
+        t.Errorf("jti: got %q want %q", gotJTI, jti)
     }
-    if claims.EntityID != "entity-1" {
-        t.Errorf("EntityID: got %q, want %q", claims.EntityID, "entity-1")
-    }
-    if claims.Role != "admin" {
-        t.Errorf("Role: got %q, want %q", claims.Role, "admin")
+
+    var m map[string]interface{}
+    json.Unmarshal(gotClaims, &m)
+    if m["sub"] != "user-1" {
+        t.Errorf("sub: got %v want user-1", m["sub"])
     }
 }
 
-func TestParseRejectsWrongSecret(t *testing.T) {
-    tok, _ := tokens.Issue([]byte("secret-a"), "u", "e", "admin")
-    _, err := tokens.Parse([]byte("secret-b"), tok)
+func TestVerifyRejectsExpired(t *testing.T) {
+    secret := []byte("test-secret-at-least-32-characters!!")
+    tok, _ := tokens.Mint(secret, "j", json.RawMessage(`{}`), time.Now().Add(-time.Minute))
+    _, _, err := tokens.Verify(secret, tok)
     if err == nil {
-        t.Error("expected error with wrong secret, got nil")
+        t.Error("expected error for expired token")
+    }
+}
+
+func TestVerifyRejectsWrongSecret(t *testing.T) {
+    tok, _ := tokens.Mint([]byte("secret-a-at-least-32-characters!!"), "j", json.RawMessage(`{}`), time.Now().Add(time.Hour))
+    _, _, err := tokens.Verify([]byte("secret-b-at-least-32-characters!!"), tok)
+    if err == nil {
+        t.Error("expected error for wrong secret")
     }
 }
 ```
@@ -384,9 +537,10 @@ func TestParseRejectsWrongSecret(t *testing.T) {
 - [ ] **Step 3: Run tests — verify they fail**
 
 ```bash
-cd services/auth && go test ./internal/tokens/...
+cd services/auth && go test ./internal/tokens/... 2>&1 | head -5
 ```
-Expected: `cannot find package "github.com/veloci/auth/internal/tokens"`
+
+Expected: compile error — package not found.
 
 - [ ] **Step 4: Implement `tokens/jwt.go`**
 
@@ -395,46 +549,47 @@ Expected: `cannot find package "github.com/veloci/auth/internal/tokens"`
 package tokens
 
 import (
+    "encoding/json"
     "fmt"
     "time"
     "github.com/golang-jwt/jwt/v5"
 )
 
-type Claims struct {
-    UserID   string `json:"user_id"`
-    EntityID string `json:"entity_id"`
-    Role     string `json:"role"`
-    jwt.RegisteredClaims
-}
-
-func Issue(secret []byte, userID, entityID, role string) (string, error) {
-    claims := Claims{
-        UserID:   userID,
-        EntityID: entityID,
-        Role:     role,
-        RegisteredClaims: jwt.RegisteredClaims{
-            ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
-            IssuedAt:  jwt.NewNumericDate(time.Now()),
-        },
+// Mint signs a JWT. Claims are opaque — veloci-auth embeds them as-is.
+// jti, iat, exp are added by this function; callers must not include them in claims.
+func Mint(secret []byte, jti string, claims json.RawMessage, expiresAt time.Time) (string, error) {
+    var m map[string]interface{}
+    if err := json.Unmarshal(claims, &m); err != nil {
+        return "", fmt.Errorf("invalid claims JSON: %w", err)
     }
-    return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(secret)
+    m["jti"] = jti
+    m["iat"] = time.Now().Unix()
+    m["exp"] = expiresAt.Unix()
+    return jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims(m)).SignedString(secret)
 }
 
-func Parse(secret []byte, tokenStr string) (*Claims, error) {
-    token, err := jwt.ParseWithClaims(tokenStr, &Claims{}, func(t *jwt.Token) (interface{}, error) {
+// Verify validates signature and expiry. Returns jti and the original claims
+// (jti/iat/exp stripped). Does NOT check the token DB — that is the caller's job.
+func Verify(secret []byte, tokenStr string) (jti string, claims json.RawMessage, err error) {
+    token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
         if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
             return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
         }
         return secret, nil
     })
     if err != nil {
-        return nil, err
+        return "", nil, err
     }
-    claims, ok := token.Claims.(*Claims)
+    mc, ok := token.Claims.(jwt.MapClaims)
     if !ok || !token.Valid {
-        return nil, fmt.Errorf("invalid token")
+        return "", nil, fmt.Errorf("invalid token")
     }
-    return claims, nil
+    jtiVal, _ := mc["jti"].(string)
+    delete(mc, "jti")
+    delete(mc, "iat")
+    delete(mc, "exp")
+    raw, err := json.Marshal(map[string]interface{}(mc))
+    return jtiVal, raw, err
 }
 ```
 
@@ -443,12 +598,8 @@ func Parse(secret []byte, tokenStr string) (*Claims, error) {
 ```bash
 cd services/auth && go test ./internal/tokens/... -v
 ```
-Expected:
-```
---- PASS: TestIssueAndParse (0.00s)
---- PASS: TestParseRejectsWrongSecret (0.00s)
-PASS
-```
+
+Expected: all 3 tests PASS.
 
 - [ ] **Step 6: Implement `db/db.go`**
 
@@ -458,16 +609,17 @@ package db
 
 import (
     "context"
+    "encoding/json"
+    "time"
     "github.com/jackc/pgx/v5/pgxpool"
 )
 
 type DB struct{ pool *pgxpool.Pool }
 
-type UserRow struct {
+type Credential struct {
     ID           string
     PasswordHash string
-    EntityID     string
-    RoleName     string
+    SystemRole   string
 }
 
 func New(ctx context.Context, dsn string) (*DB, error) {
@@ -478,175 +630,468 @@ func New(ctx context.Context, dsn string) (*DB, error) {
     return &DB{pool: pool}, nil
 }
 
-func (d *DB) FindUserByEmail(ctx context.Context, email string) (*UserRow, error) {
-    row := &UserRow{}
-    err := d.pool.QueryRow(ctx, `
-        SELECT u.id, u.password_hash, eu.entity_id, r.name
-        FROM users u
-        JOIN entity_users eu ON eu.user_id = u.id
-        JOIN roles r ON r.id = eu.role_id
-        WHERE u.email = $1
-        LIMIT 1
-    `, email).Scan(&row.ID, &row.PasswordHash, &row.EntityID, &row.RoleName)
-    if err != nil {
-        return nil, err
-    }
-    return row, nil
+func (d *DB) FindCredentialByEmail(ctx context.Context, email string) (*Credential, error) {
+    c := &Credential{}
+    err := d.pool.QueryRow(ctx,
+        `SELECT id, password_hash, system_role FROM auth_credentials WHERE email = $1`,
+        email,
+    ).Scan(&c.ID, &c.PasswordHash, &c.SystemRole)
+    return c, err
+}
+
+func (d *DB) CreateCredential(ctx context.Context, id, email, hash, role string) error {
+    _, err := d.pool.Exec(ctx,
+        `INSERT INTO auth_credentials (id, email, password_hash, system_role) VALUES ($1,$2,$3,$4)`,
+        id, email, hash, role,
+    )
+    return err
+}
+
+func (d *DB) UpsertCredential(ctx context.Context, id, email, hash, role string) error {
+    _, err := d.pool.Exec(ctx, `
+        INSERT INTO auth_credentials (id, email, password_hash, system_role)
+        VALUES ($1,$2,$3,$4)
+        ON CONFLICT (email) DO UPDATE
+          SET password_hash = EXCLUDED.password_hash,
+              system_role   = EXCLUDED.system_role
+    `, id, email, hash, role)
+    return err
+}
+
+func (d *DB) StoreToken(ctx context.Context, id, userID, jti string, claims json.RawMessage, expiresAt time.Time) error {
+    _, err := d.pool.Exec(ctx,
+        `INSERT INTO tokens (id, user_id, jti, claims, expires_at) VALUES ($1,$2,$3,$4,$5)`,
+        id, userID, jti, claims, expiresAt,
+    )
+    return err
+}
+
+type TokenRow struct {
+    CredentialID string
+    Claims       json.RawMessage
+    ExpiresAt    time.Time
+}
+
+func (d *DB) FindToken(ctx context.Context, jti string) (*TokenRow, error) {
+    row := &TokenRow{}
+    err := d.pool.QueryRow(ctx,
+        `SELECT user_id, claims, expires_at FROM tokens WHERE jti = $1`,
+        jti,
+    ).Scan(&row.CredentialID, &row.Claims, &row.ExpiresAt)
+    return row, err
+}
+
+func (d *DB) DeleteToken(ctx context.Context, jti string) error {
+    _, err := d.pool.Exec(ctx, `DELETE FROM tokens WHERE jti = $1`, jti)
+    return err
 }
 ```
 
-- [ ] **Step 7: Write failing test for login handler**
+- [ ] **Step 7: Implement `sync/admin.go`**
 
 ```go
-// services/auth/internal/handlers/login_test.go
+// services/auth/internal/sync/admin.go
+package sync
+
+import (
+    "context"
+    "log"
+    "github.com/google/uuid"
+    "golang.org/x/crypto/bcrypt"
+)
+
+type credentialDB interface {
+    FindCredentialByEmail(ctx context.Context, email string) (interface{ GetHash() string }, error)
+    UpsertCredential(ctx context.Context, id, email, hash, role string) error
+}
+
+type authDB interface {
+    FindCredentialByEmail(ctx context.Context, email string) (*struct {
+        ID           string
+        PasswordHash string
+        SystemRole   string
+    }, error)
+    UpsertCredential(ctx context.Context, id, email, hash, role string) error
+}
+
+// SyncServerAdmin reads server_admin config and ensures the DB credential matches.
+// Called on every startup. Safe to run repeatedly.
+func SyncServerAdmin(ctx context.Context, d interface {
+    FindCredentialByEmail(context.Context, string) (interface{}, error)
+    UpsertCredential(context.Context, string, string, string, string) error
+}, email, password string) error {
+    hash, err := bcrypt.GenerateFromPassword([]byte(password), 12)
+    if err != nil {
+        return err
+    }
+    id := uuid.New().String()
+    if err := d.UpsertCredential(ctx, id, email, string(hash), "server_admin"); err != nil {
+        return err
+    }
+    log.Printf("sync: server_admin credential synced for %s", email)
+    return nil
+}
+```
+
+Note: `UpsertCredential` uses `ON CONFLICT (email) DO UPDATE`, so it is safe to call on every startup. The `id` passed here is only used when inserting a new row; existing rows keep their original UUID.
+
+- [ ] **Step 8: Write failing tests for credential handlers**
+
+```go
+// services/auth/internal/handlers/credentials_test.go
 package handlers_test
 
 import (
     "bytes"
     "context"
     "encoding/json"
-    "fmt"
     "net/http"
     "net/http/httptest"
     "testing"
     "github.com/veloci/auth/internal/handlers"
-    "github.com/veloci/auth/internal/tokens"
     "golang.org/x/crypto/bcrypt"
 )
 
-type stubDB struct{ fail bool }
-
-func (s *stubDB) FindUserByEmail(_ context.Context, email string) (*handlers.UserLookup, error) {
-    if s.fail {
-        return nil, fmt.Errorf("not found")
-    }
-    // generate bcrypt hash of "password" at cost 12 for the stub
-    hash, _ := bcrypt.GenerateFromPassword([]byte("password"), 12)
-    return &handlers.UserLookup{
-        ID:           "user-1",
-        PasswordHash: string(hash),
-        EntityID:     "entity-1",
-        RoleName:     "admin",
-    }, nil
+type stubCredDB struct {
+    hash string
+    role string
+    miss bool
 }
 
-func TestLoginSuccess(t *testing.T) {
-    secret := []byte("test-secret")
-    h := handlers.NewLogin(&stubDB{fail: false}, secret)
+func (s *stubCredDB) FindCredentialByEmail(_ context.Context, _ string) (*handlers.CredentialRow, error) {
+    if s.miss {
+        return nil, handlers.ErrNotFound
+    }
+    return &handlers.CredentialRow{ID: "cred-1", PasswordHash: s.hash, SystemRole: s.role}, nil
+}
 
-    body, _ := json.Marshal(map[string]string{"email": "a@b.com", "password": "password"})
-    req := httptest.NewRequest(http.MethodPost, "/login", bytes.NewReader(body))
+func (s *stubCredDB) CreateCredential(_ context.Context, id, email, hash, role string) error {
+    return nil
+}
+
+func TestValidateCredential_Success(t *testing.T) {
+    hash, _ := bcrypt.GenerateFromPassword([]byte("correct"), 12)
+    db := &stubCredDB{hash: string(hash), role: "user"}
+    h := handlers.NewCredentials(db)
+
+    body, _ := json.Marshal(map[string]string{"email": "a@b.com", "password": "correct"})
+    req := httptest.NewRequest(http.MethodPost, "/credentials/validate", bytes.NewReader(body))
     req.Header.Set("Content-Type", "application/json")
     w := httptest.NewRecorder()
 
-    h.ServeHTTP(w, req)
+    h.Validate(w, req)
 
     if w.Code != http.StatusOK {
-        t.Fatalf("status: got %d, want 200", w.Code)
+        t.Fatalf("status: got %d want 200; body: %s", w.Code, w.Body)
     }
     var resp map[string]string
     json.NewDecoder(w.Body).Decode(&resp)
-    if resp["token"] == "" {
-        t.Error("expected token in response")
+    if resp["credential_id"] != "cred-1" {
+        t.Errorf("credential_id: got %q", resp["credential_id"])
     }
-    claims, err := tokens.Parse(secret, resp["token"])
-    if err != nil {
-        t.Fatalf("token invalid: %v", err)
-    }
-    if claims.UserID != "user-1" || claims.EntityID != "entity-1" || claims.Role != "admin" {
-        t.Errorf("unexpected claims: %+v", claims)
+    if resp["system_role"] != "user" {
+        t.Errorf("system_role: got %q", resp["system_role"])
     }
 }
 
-func TestLoginBadCredentials(t *testing.T) {
-    h := handlers.NewLogin(&stubDB{fail: true}, []byte("s"))
-    body, _ := json.Marshal(map[string]string{"email": "x@x.com", "password": "wrong"})
-    req := httptest.NewRequest(http.MethodPost, "/login", bytes.NewReader(body))
+func TestValidateCredential_WrongPassword(t *testing.T) {
+    hash, _ := bcrypt.GenerateFromPassword([]byte("correct"), 12)
+    db := &stubCredDB{hash: string(hash), role: "user"}
+    h := handlers.NewCredentials(db)
+
+    body, _ := json.Marshal(map[string]string{"email": "a@b.com", "password": "wrong"})
+    req := httptest.NewRequest(http.MethodPost, "/credentials/validate", bytes.NewReader(body))
     req.Header.Set("Content-Type", "application/json")
     w := httptest.NewRecorder()
-    h.ServeHTTP(w, req)
+
+    h.Validate(w, req)
     if w.Code != http.StatusUnauthorized {
-        t.Errorf("status: got %d, want 401", w.Code)
+        t.Errorf("status: got %d want 401", w.Code)
     }
 }
 ```
 
-- [ ] **Step 8: Run tests — verify they fail**
+- [ ] **Step 9: Run tests — verify they fail**
 
 ```bash
 cd services/auth && go test ./internal/handlers/... 2>&1 | head -5
 ```
-Expected: compile error — `handlers` package not found.
 
-- [ ] **Step 9: Implement `handlers/login.go`**
+Expected: compile error — package not found.
+
+- [ ] **Step 10: Implement `handlers/credentials.go`**
 
 ```go
-// services/auth/internal/handlers/login.go
+// services/auth/internal/handlers/credentials.go
+package handlers
+
+import (
+    "context"
+    "encoding/json"
+    "errors"
+    "net/http"
+    "github.com/google/uuid"
+    "golang.org/x/crypto/bcrypt"
+)
+
+var ErrNotFound = errors.New("not found")
+
+type CredentialRow struct {
+    ID           string
+    PasswordHash string
+    SystemRole   string
+}
+
+type credentialStore interface {
+    FindCredentialByEmail(ctx context.Context, email string) (*CredentialRow, error)
+    CreateCredential(ctx context.Context, id, email, hash, role string) error
+}
+
+type Credentials struct{ db credentialStore }
+
+func NewCredentials(db credentialStore) *Credentials { return &Credentials{db: db} }
+
+func (h *Credentials) Validate(w http.ResponseWriter, r *http.Request) {
+    var req struct {
+        Email    string `json:"email"`
+        Password string `json:"password"`
+    }
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        http.Error(w, `{"code":"BAD_REQUEST"}`, http.StatusBadRequest)
+        return
+    }
+    cred, err := h.db.FindCredentialByEmail(r.Context(), req.Email)
+    if err != nil || bcrypt.CompareHashAndPassword([]byte(cred.PasswordHash), []byte(req.Password)) != nil {
+        http.Error(w, `{"code":"INVALID_CREDENTIALS"}`, http.StatusUnauthorized)
+        return
+    }
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(map[string]string{
+        "credential_id": cred.ID,
+        "system_role":   cred.SystemRole,
+    })
+}
+
+func (h *Credentials) Create(w http.ResponseWriter, r *http.Request) {
+    var req struct {
+        Email    string `json:"email"`
+        Password string `json:"password"`
+    }
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        http.Error(w, `{"code":"BAD_REQUEST"}`, http.StatusBadRequest)
+        return
+    }
+    hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), 12)
+    if err != nil {
+        http.Error(w, `{"code":"INTERNAL"}`, http.StatusInternalServerError)
+        return
+    }
+    id := uuid.New().String()
+    if err := h.db.CreateCredential(r.Context(), id, req.Email, string(hash), "user"); err != nil {
+        http.Error(w, `{"code":"CONFLICT"}`, http.StatusConflict)
+        return
+    }
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(http.StatusCreated)
+    json.NewEncoder(w).Encode(map[string]string{"credential_id": id})
+}
+```
+
+- [ ] **Step 11: Write failing tests for token handlers**
+
+```go
+// services/auth/internal/handlers/tokens_test.go
+package handlers_test
+
+import (
+    "bytes"
+    "context"
+    "encoding/json"
+    "net/http"
+    "net/http/httptest"
+    "testing"
+    "time"
+    "github.com/veloci/auth/internal/handlers"
+    "github.com/veloci/auth/internal/tokens"
+)
+
+type stubTokenDB struct {
+    stored map[string]*handlers.TokenRow
+}
+
+func newStubTokenDB() *stubTokenDB {
+    return &stubTokenDB{stored: map[string]*handlers.TokenRow{}}
+}
+
+func (s *stubTokenDB) StoreToken(_ context.Context, id, userID, jti string, claims json.RawMessage, exp time.Time) error {
+    s.stored[jti] = &handlers.TokenRow{CredentialID: userID, Claims: claims, ExpiresAt: exp}
+    return nil
+}
+
+func (s *stubTokenDB) FindToken(_ context.Context, jti string) (*handlers.TokenRow, error) {
+    row, ok := s.stored[jti]
+    if !ok {
+        return nil, handlers.ErrNotFound
+    }
+    return row, nil
+}
+
+func (s *stubTokenDB) DeleteToken(_ context.Context, jti string) error {
+    delete(s.stored, jti)
+    return nil
+}
+
+func TestMintAndValidateToken(t *testing.T) {
+    secret := []byte("test-secret-at-least-32-characters!!")
+    db := newStubTokenDB()
+    h := handlers.NewTokens(db, secret)
+
+    mintBody, _ := json.Marshal(map[string]interface{}{
+        "credential_id": "cred-1",
+        "claims": map[string]string{
+            "sub": "user-1", "entity_id": "ent-1", "entity_role": "entity_admin",
+        },
+    })
+    req := httptest.NewRequest(http.MethodPost, "/tokens/mint", bytes.NewReader(mintBody))
+    req.Header.Set("Content-Type", "application/json")
+    w := httptest.NewRecorder()
+    h.Mint(w, req)
+
+    if w.Code != http.StatusCreated {
+        t.Fatalf("mint status: got %d; body: %s", w.Code, w.Body)
+    }
+    var mintResp map[string]string
+    json.NewDecoder(w.Body).Decode(&mintResp)
+    tok := mintResp["token"]
+    if tok == "" {
+        t.Fatal("expected token in mint response")
+    }
+
+    validateBody, _ := json.Marshal(map[string]string{"token": tok})
+    req2 := httptest.NewRequest(http.MethodPost, "/tokens/validate", bytes.NewReader(validateBody))
+    req2.Header.Set("Content-Type", "application/json")
+    w2 := httptest.NewRecorder()
+    h.Validate(w2, req2)
+
+    if w2.Code != http.StatusOK {
+        t.Fatalf("validate status: got %d; body: %s", w2.Code, w2.Body)
+    }
+    var validateResp map[string]interface{}
+    json.NewDecoder(w2.Body).Decode(&validateResp)
+    if validateResp["credential_id"] != "cred-1" {
+        t.Errorf("credential_id: got %v", validateResp["credential_id"])
+    }
+}
+```
+
+- [ ] **Step 12: Implement `handlers/tokens.go`**
+
+```go
+// services/auth/internal/handlers/tokens.go
 package handlers
 
 import (
     "context"
     "encoding/json"
     "net/http"
+    "time"
+    "github.com/go-chi/chi/v5"
+    "github.com/google/uuid"
     "github.com/veloci/auth/internal/tokens"
-    "golang.org/x/crypto/bcrypt"
 )
 
-type UserLookup struct {
-    ID           string
-    PasswordHash string
-    EntityID     string
-    RoleName     string
+type TokenRow struct {
+    CredentialID string
+    Claims       json.RawMessage
+    ExpiresAt    time.Time
 }
 
-type userDB interface {
-    FindUserByEmail(ctx context.Context, email string) (*UserLookup, error)
+type tokenStore interface {
+    StoreToken(ctx context.Context, id, userID, jti string, claims json.RawMessage, exp time.Time) error
+    FindToken(ctx context.Context, jti string) (*TokenRow, error)
+    DeleteToken(ctx context.Context, jti string) error
 }
 
-type loginHandler struct {
-    db     userDB
+type Tokens struct {
+    db     tokenStore
     secret []byte
 }
 
-func NewLogin(db userDB, secret []byte) http.Handler {
-    return &loginHandler{db: db, secret: secret}
-}
+func NewTokens(db tokenStore, secret []byte) *Tokens { return &Tokens{db: db, secret: secret} }
 
-func (h *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h *Tokens) Mint(w http.ResponseWriter, r *http.Request) {
     var req struct {
-        Email    string `json:"email"`
-        Password string `json:"password"`
+        CredentialID string          `json:"credential_id"`
+        Claims       json.RawMessage `json:"claims"`
     }
     if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-        http.Error(w, "invalid request", http.StatusBadRequest)
+        http.Error(w, `{"code":"BAD_REQUEST"}`, http.StatusBadRequest)
         return
     }
+    jti := uuid.New().String()
+    expiresAt := time.Now().Add(60 * time.Minute)
 
-    user, err := h.db.FindUserByEmail(r.Context(), req.Email)
-    if err != nil || bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)) != nil {
-        http.Error(w, "invalid credentials", http.StatusUnauthorized)
-        return
-    }
-
-    tok, err := tokens.Issue(h.secret, user.ID, user.EntityID, user.RoleName)
+    tok, err := tokens.Mint(h.secret, jti, req.Claims, expiresAt)
     if err != nil {
-        http.Error(w, "internal error", http.StatusInternalServerError)
+        http.Error(w, `{"code":"INTERNAL"}`, http.StatusInternalServerError)
         return
     }
-
+    id := uuid.New().String()
+    if err := h.db.StoreToken(r.Context(), id, req.CredentialID, jti, req.Claims, expiresAt); err != nil {
+        http.Error(w, `{"code":"INTERNAL"}`, http.StatusInternalServerError)
+        return
+    }
     w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(map[string]string{"token": tok})
+    w.WriteHeader(http.StatusCreated)
+    json.NewEncoder(w).Encode(map[string]interface{}{
+        "token":      tok,
+        "jti":        jti,
+        "expires_at": expiresAt.UTC().Format(time.RFC3339),
+    })
+}
+
+func (h *Tokens) Validate(w http.ResponseWriter, r *http.Request) {
+    var req struct {
+        Token string `json:"token"`
+    }
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        http.Error(w, `{"code":"BAD_REQUEST"}`, http.StatusBadRequest)
+        return
+    }
+    jti, _, err := tokens.Verify(h.secret, req.Token)
+    if err != nil {
+        http.Error(w, `{"code":"UNAUTHORIZED"}`, http.StatusUnauthorized)
+        return
+    }
+    row, err := h.db.FindToken(r.Context(), jti)
+    if err != nil || time.Now().After(row.ExpiresAt) {
+        http.Error(w, `{"code":"UNAUTHORIZED"}`, http.StatusUnauthorized)
+        return
+    }
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(map[string]interface{}{
+        "jti":           jti,
+        "credential_id": row.CredentialID,
+        "claims":        json.RawMessage(row.Claims),
+    })
+}
+
+func (h *Tokens) Revoke(w http.ResponseWriter, r *http.Request) {
+    jti := chi.URLParam(r, "jti")
+    h.db.DeleteToken(r.Context(), jti)
+    w.WriteHeader(http.StatusNoContent)
 }
 ```
 
-- [ ] **Step 10: Run tests — verify they pass**
+- [ ] **Step 13: Run all auth handler tests — verify they pass**
 
 ```bash
 cd services/auth && go test ./internal/... -v
 ```
+
 Expected: all tests PASS.
 
-- [ ] **Step 11: Implement `main.go`**
+- [ ] **Step 14: Implement `main.go`**
 
 ```go
 // services/auth/main.go
@@ -664,15 +1109,17 @@ import (
     "github.com/veloci/auth/internal/handlers"
 )
 
-var rootCmd = &cobra.Command{
-    Use:   "veloci-auth",
-    Short: "Veloci authentication service",
+func main() {
+    if err := rootCmd.Execute(); err != nil {
+        log.Fatal(err)
+    }
 }
 
+var rootCmd = &cobra.Command{Use: "veloci-auth", Short: "Veloci auth service"}
+
 var serveCmd = &cobra.Command{
-    Use:   "serve",
-    Short: "Start the auth HTTP server",
-    RunE:  runServe,
+    Use:  "serve",
+    RunE: runServe,
 }
 
 func init() {
@@ -682,29 +1129,68 @@ func init() {
 }
 
 func runServe(_ *cobra.Command, _ []string) error {
+    configPath := viper.GetString("CONFIG_PATH")
+    if configPath != "" {
+        viper.SetConfigFile(configPath)
+        if err := viper.ReadInConfig(); err != nil {
+            return fmt.Errorf("config: %w", err)
+        }
+    }
+
     ctx := context.Background()
     database, err := db.New(ctx, viper.GetString("DATABASE_URL"))
     if err != nil {
         return fmt.Errorf("db: %w", err)
     }
-    secret := []byte(viper.GetString("JWT_SECRET"))
-    port := viper.GetString("PORT")
+
+    adminEmail := viper.GetString("server_admin.email")
+    adminPass := viper.GetString("server_admin.password")
+    if adminEmail != "" && adminPass != "" {
+        if err := syncAdmin(ctx, database, adminEmail, adminPass); err != nil {
+            return fmt.Errorf("admin sync: %w", err)
+        }
+    }
+
+    secret := []byte(viper.GetString("jwt_secret"))
+    if len(secret) < 32 {
+        return fmt.Errorf("jwt_secret must be at least 32 characters")
+    }
+
+    creds := handlers.NewCredentials(database)
+    toks := handlers.NewTokens(database, secret)
 
     r := chi.NewRouter()
-    r.Post("/login", handlers.NewLogin(database, secret).ServeHTTP)
+    r.Post("/credentials/validate", creds.Validate)
+    r.Post("/credentials/create", creds.Create)
+    r.Post("/tokens/mint", toks.Mint)
+    r.Post("/tokens/validate", toks.Validate)
+    r.Delete("/tokens/{jti}", toks.Revoke)
 
+    port := viper.GetString("PORT")
     log.Printf("veloci-auth listening on :%s", port)
     return http.ListenAndServe(":"+port, r)
 }
+```
 
-func main() {
-    if err := rootCmd.Execute(); err != nil {
-        log.Fatal(err)
+Add a thin `syncAdmin` helper in `main.go` below `runServe`:
+
+```go
+func syncAdmin(ctx context.Context, d *db.DB, email, password string) error {
+    import (
+        "github.com/google/uuid"
+        "golang.org/x/crypto/bcrypt"
+    )
+    hash, err := bcrypt.GenerateFromPassword([]byte(password), 12)
+    if err != nil {
+        return err
     }
+    return d.UpsertCredential(ctx, uuid.New().String(), email, string(hash), "server_admin")
 }
 ```
 
-- [ ] **Step 12: Create `Dockerfile`**
+Note: move the imports block to the file-level import statement. Keep `syncAdmin` as a package-level function, not nested.
+
+- [ ] **Step 15: Create `Dockerfile`**
 
 ```dockerfile
 # services/auth/Dockerfile
@@ -717,14 +1203,14 @@ RUN go build -o auth .
 
 FROM alpine:3.24
 COPY --from=build /app/auth /auth
-ENTRYPOINT ["/auth"]
+ENTRYPOINT ["/auth", "serve"]
 ```
 
-- [ ] **Step 13: Commit**
+- [ ] **Step 16: Commit**
 
 ```bash
 git add services/auth/
-git commit -m "feat: veloci-auth service with JWT issuance and login endpoint"
+git commit -m "feat: veloci-auth service — credential management, token lifecycle, admin sync"
 ```
 
 ---
@@ -732,51 +1218,164 @@ git commit -m "feat: veloci-auth service with JWT issuance and login endpoint"
 ## Task 3: veloci-api Scaffolding
 
 **Files:**
+
 - Create: `services/api/go.mod`
-- Create: `services/api/main.go`
+- Create: `services/api/internal/authclient/client.go`
+- Create: `services/api/internal/authclient/client_test.go`
 - Create: `services/api/internal/middleware/auth.go`
 - Create: `services/api/internal/middleware/auth_test.go`
-- Create: `services/api/internal/queue/publisher.go`
-- Create: `services/api/internal/queue/publisher_test.go`
+- Create: `services/api/internal/handlers/auth.go`
+- Create: `services/api/internal/handlers/auth_test.go`
 - Create: `services/api/internal/handlers/health.go`
+- Create: `services/api/internal/queue/publisher.go`
+- Create: `services/api/main.go`
 - Create: `services/api/Dockerfile`
 
 **Interfaces:**
-- Consumes: `tokens.Claims` shape from Task 2 — same `user_id`/`entity_id`/`role` JWT payload
+
+- Consumes: `veloci-auth` HTTP endpoints
 - Produces:
-  - `middleware.Authenticate(secret []byte) func(http.Handler) http.Handler` — validates JWT, injects claims into context
-  - `middleware.EntityID(ctx context.Context) string` — extracts entity_id from context
-  - `middleware.UserID(ctx context.Context) string` — extracts user_id from context
-  - `queue.Publisher` — `Publish(ctx, job) error`
-  - `queue.Job` struct with fields `Type string`, `EntityID string`, `Payload json.RawMessage`
-  - `GET /health` → `{"status":"ok"}`
+  - `POST /auth/login` → `{token, expires_at}`
+  - `GET /health` → `{status: "ok"}`
+  - `middleware.Authenticate(client)` — calls `/tokens/validate`, injects claims into context
+  - `middleware.EntityID(ctx)`, `middleware.EntityRole(ctx)`, `middleware.SystemRole(ctx)`
 
 ---
 
 - [ ] **Step 1: Initialize Go module**
 
 ```bash
-mkdir -p services/api/internal/{middleware,queue,handlers}
+mkdir -p services/api/internal/{authclient,middleware,handlers,queue}
 cd services/api
 go mod init github.com/veloci/api
 go get github.com/go-chi/chi/v5
 go get github.com/jackc/pgx/v5
 go get github.com/rabbitmq/amqp091-go
-go get github.com/golang-jwt/jwt/v5
 go get github.com/spf13/cobra
 go get github.com/spf13/viper
 ```
 
-Note: copy `tokens` package from `services/auth` — or extract to a shared module. For v1, duplicate it in `services/api/internal/tokens/` to keep services independently deployable.
+- [ ] **Step 2: Implement `authclient/client.go`**
 
-```bash
-mkdir -p services/api/internal/tokens
-cp services/auth/internal/tokens/jwt.go services/api/internal/tokens/
-# Update package declaration: change `github.com/veloci/auth/internal/tokens` imports to `github.com/veloci/api/internal/tokens`
-sed -i '' 's|github.com/veloci/auth|github.com/veloci/api|g' services/api/internal/tokens/jwt.go
+```go
+// services/api/internal/authclient/client.go
+package authclient
+
+import (
+    "bytes"
+    "context"
+    "encoding/json"
+    "fmt"
+    "net/http"
+)
+
+type Client struct {
+    baseURL    string
+    httpClient *http.Client
+}
+
+func New(baseURL string) *Client {
+    return &Client{baseURL: baseURL, httpClient: &http.Client{}}
+}
+
+type ValidateResult struct {
+    JTI          string          `json:"jti"`
+    CredentialID string          `json:"credential_id"`
+    Claims       json.RawMessage `json:"claims"`
+}
+
+type ValidateCredResult struct {
+    CredentialID string `json:"credential_id"`
+    SystemRole   string `json:"system_role"`
+}
+
+type MintResult struct {
+    Token     string `json:"token"`
+    JTI       string `json:"jti"`
+    ExpiresAt string `json:"expires_at"`
+}
+
+func (c *Client) ValidateToken(ctx context.Context, token string) (*ValidateResult, error) {
+    body, _ := json.Marshal(map[string]string{"token": token})
+    resp, err := c.post(ctx, "/tokens/validate", body)
+    if err != nil {
+        return nil, err
+    }
+    defer resp.Body.Close()
+    if resp.StatusCode != http.StatusOK {
+        return nil, fmt.Errorf("auth: validate returned %d", resp.StatusCode)
+    }
+    var result ValidateResult
+    return &result, json.NewDecoder(resp.Body).Decode(&result)
+}
+
+func (c *Client) ValidateCredential(ctx context.Context, email, password string) (*ValidateCredResult, error) {
+    body, _ := json.Marshal(map[string]string{"email": email, "password": password})
+    resp, err := c.post(ctx, "/credentials/validate", body)
+    if err != nil {
+        return nil, err
+    }
+    defer resp.Body.Close()
+    if resp.StatusCode != http.StatusOK {
+        return nil, fmt.Errorf("auth: credential validate returned %d", resp.StatusCode)
+    }
+    var result ValidateCredResult
+    return &result, json.NewDecoder(resp.Body).Decode(&result)
+}
+
+func (c *Client) MintToken(ctx context.Context, credentialID string, claims map[string]interface{}) (*MintResult, error) {
+    body, _ := json.Marshal(map[string]interface{}{
+        "credential_id": credentialID,
+        "claims":        claims,
+    })
+    resp, err := c.post(ctx, "/tokens/mint", body)
+    if err != nil {
+        return nil, err
+    }
+    defer resp.Body.Close()
+    if resp.StatusCode != http.StatusCreated {
+        return nil, fmt.Errorf("auth: mint returned %d", resp.StatusCode)
+    }
+    var result MintResult
+    return &result, json.NewDecoder(resp.Body).Decode(&result)
+}
+
+func (c *Client) RevokeToken(ctx context.Context, jti string) error {
+    req, _ := http.NewRequestWithContext(ctx, http.MethodDelete, c.baseURL+"/tokens/"+jti, nil)
+    resp, err := c.httpClient.Do(req)
+    if err != nil {
+        return err
+    }
+    resp.Body.Close()
+    return nil
+}
+
+func (c *Client) CreateCredential(ctx context.Context, email, password string) (string, error) {
+    body, _ := json.Marshal(map[string]string{"email": email, "password": password})
+    resp, err := c.post(ctx, "/credentials/create", body)
+    if err != nil {
+        return "", err
+    }
+    defer resp.Body.Close()
+    if resp.StatusCode != http.StatusCreated {
+        return "", fmt.Errorf("auth: create credential returned %d", resp.StatusCode)
+    }
+    var result map[string]string
+    json.NewDecoder(resp.Body).Decode(&result)
+    return result["credential_id"], nil
+}
+
+func (c *Client) post(ctx context.Context, path string, body []byte) (*http.Response, error) {
+    req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, bytes.NewReader(body))
+    if err != nil {
+        return nil, err
+    }
+    req.Header.Set("Content-Type", "application/json")
+    return c.httpClient.Do(req)
+}
 ```
 
-- [ ] **Step 2: Write failing tests for auth middleware**
+- [ ] **Step 3: Write failing tests for auth middleware**
 
 ```go
 // services/api/internal/middleware/auth_test.go
@@ -784,73 +1383,83 @@ package middleware_test
 
 import (
     "context"
+    "encoding/json"
     "net/http"
     "net/http/httptest"
     "testing"
+    "github.com/veloci/api/internal/authclient"
     "github.com/veloci/api/internal/middleware"
-    "github.com/veloci/api/internal/tokens"
 )
 
-func TestAuthMiddlewareInjectsClaims(t *testing.T) {
-    secret := []byte("test-secret")
-    tok, _ := tokens.Issue(secret, "user-1", "entity-1", "admin")
+// mockAuthServer simulates veloci-auth /tokens/validate
+func mockAuthServer(claims map[string]interface{}) *httptest.Server {
+    return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        if r.URL.Path != "/tokens/validate" {
+            http.NotFound(w, r)
+            return
+        }
+        w.Header().Set("Content-Type", "application/json")
+        json.NewEncoder(w).Encode(map[string]interface{}{
+            "jti":           "test-jti",
+            "credential_id": "cred-1",
+            "claims":        claims,
+        })
+    }))
+}
 
-    var capturedEntityID, capturedUserID string
+func TestAuthMiddlewareInjectsClaims(t *testing.T) {
+    srv := mockAuthServer(map[string]interface{}{
+        "sub": "user-1", "entity_id": "ent-1",
+        "entity_role": "entity_admin", "system_role": "user",
+    })
+    defer srv.Close()
+
+    client := authclient.New(srv.URL)
+    var gotEntityID, gotEntityRole string
+
     next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        capturedEntityID = middleware.EntityID(r.Context())
-        capturedUserID = middleware.UserID(r.Context())
+        gotEntityID = middleware.EntityID(r.Context())
+        gotEntityRole = middleware.EntityRole(r.Context())
         w.WriteHeader(http.StatusOK)
     })
 
     req := httptest.NewRequest(http.MethodGet, "/", nil)
-    req.Header.Set("Authorization", "Bearer "+tok)
+    req.Header.Set("Authorization", "Bearer sometoken")
     w := httptest.NewRecorder()
-
-    middleware.Authenticate(secret)(next).ServeHTTP(w, req)
+    middleware.Authenticate(client)(next).ServeHTTP(w, req)
 
     if w.Code != http.StatusOK {
-        t.Fatalf("status: got %d, want 200", w.Code)
+        t.Fatalf("status: got %d want 200", w.Code)
     }
-    if capturedEntityID != "entity-1" {
-        t.Errorf("EntityID: got %q, want %q", capturedEntityID, "entity-1")
+    if gotEntityID != "ent-1" {
+        t.Errorf("entity_id: got %q", gotEntityID)
     }
-    if capturedUserID != "user-1" {
-        t.Errorf("UserID: got %q, want %q", capturedUserID, "user-1")
+    if gotEntityRole != "entity_admin" {
+        t.Errorf("entity_role: got %q", gotEntityRole)
     }
 }
 
 func TestAuthMiddlewareRejectsMissingToken(t *testing.T) {
-    next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        w.WriteHeader(http.StatusOK)
-    })
+    client := authclient.New("http://unused")
+    next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
     req := httptest.NewRequest(http.MethodGet, "/", nil)
     w := httptest.NewRecorder()
-    middleware.Authenticate([]byte("s"))(next).ServeHTTP(w, req)
+    middleware.Authenticate(client)(next).ServeHTTP(w, req)
     if w.Code != http.StatusUnauthorized {
-        t.Errorf("status: got %d, want 401", w.Code)
-    }
-}
-
-func TestAuthMiddlewareRejectsInvalidToken(t *testing.T) {
-    next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
-    req := httptest.NewRequest(http.MethodGet, "/", nil)
-    req.Header.Set("Authorization", "Bearer not-a-token")
-    w := httptest.NewRecorder()
-    middleware.Authenticate([]byte("s"))(next).ServeHTTP(w, req)
-    if w.Code != http.StatusUnauthorized {
-        t.Errorf("status: got %d, want 401", w.Code)
+        t.Errorf("status: got %d want 401", w.Code)
     }
 }
 ```
 
-- [ ] **Step 3: Run tests — verify they fail**
+- [ ] **Step 4: Run middleware tests — verify they fail**
 
 ```bash
 cd services/api && go test ./internal/middleware/... 2>&1 | head -5
 ```
-Expected: compile error — `middleware` package not found.
 
-- [ ] **Step 4: Implement `middleware/auth.go`**
+Expected: compile error — package not found.
+
+- [ ] **Step 5: Implement `middleware/auth.go`**
 
 ```go
 // services/api/internal/middleware/auth.go
@@ -858,98 +1467,284 @@ package middleware
 
 import (
     "context"
+    "encoding/json"
     "net/http"
     "strings"
-    "github.com/veloci/api/internal/tokens"
 )
+
+type tokenValidator interface {
+    ValidateToken(ctx context.Context, token string) (interface{ GetClaims() json.RawMessage }, error)
+}
 
 type contextKey string
 
 const (
-    ctxUserID   contextKey = "user_id"
-    ctxEntityID contextKey = "entity_id"
-    ctxRole     contextKey = "role"
+    ctxEntityID   contextKey = "entity_id"
+    ctxEntityRole contextKey = "entity_role"
+    ctxSystemRole contextKey = "system_role"
+    ctxUserID     contextKey = "sub"
 )
 
-func Authenticate(secret []byte) func(http.Handler) http.Handler {
+type authClient interface {
+    ValidateToken(ctx context.Context, token string) (*validateResult, error)
+}
+
+// validateResult mirrors authclient.ValidateResult without importing it
+// (keeps middleware testable with any compatible client)
+type validateResult struct {
+    Claims json.RawMessage
+}
+
+// Authenticate calls veloci-auth /tokens/validate on every request.
+// Injects entity_id, entity_role, system_role, and sub into context.
+func Authenticate(client interface {
+    ValidateToken(ctx context.Context, token string) (interface{ GetEntityID() string; GetEntityRole() string; GetSystemRole() string; GetSub() string }, error)
+}) func(http.Handler) http.Handler {
     return func(next http.Handler) http.Handler {
         return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
             header := r.Header.Get("Authorization")
             if !strings.HasPrefix(header, "Bearer ") {
-                http.Error(w, "unauthorized", http.StatusUnauthorized)
+                http.Error(w, `{"code":"UNAUTHORIZED"}`, http.StatusUnauthorized)
                 return
             }
-            claims, err := tokens.Parse(secret, strings.TrimPrefix(header, "Bearer "))
+            token := strings.TrimPrefix(header, "Bearer ")
+            result, err := client.ValidateToken(r.Context(), token)
             if err != nil {
-                http.Error(w, "unauthorized", http.StatusUnauthorized)
+                http.Error(w, `{"code":"UNAUTHORIZED"}`, http.StatusUnauthorized)
                 return
             }
-            ctx := context.WithValue(r.Context(), ctxUserID, claims.UserID)
-            ctx = context.WithValue(ctx, ctxEntityID, claims.EntityID)
-            ctx = context.WithValue(ctx, ctxRole, claims.Role)
+            ctx := context.WithValue(r.Context(), ctxEntityID, result.GetEntityID())
+            ctx = context.WithValue(ctx, ctxEntityRole, result.GetEntityRole())
+            ctx = context.WithValue(ctx, ctxSystemRole, result.GetSystemRole())
+            ctx = context.WithValue(ctx, ctxUserID, result.GetSub())
             next.ServeHTTP(w, r.WithContext(ctx))
         })
     }
 }
 
-func EntityID(ctx context.Context) string {
-    v, _ := ctx.Value(ctxEntityID).(string)
-    return v
-}
+func EntityID(ctx context.Context) string   { v, _ := ctx.Value(ctxEntityID).(string); return v }
+func EntityRole(ctx context.Context) string { v, _ := ctx.Value(ctxEntityRole).(string); return v }
+func SystemRole(ctx context.Context) string { v, _ := ctx.Value(ctxSystemRole).(string); return v }
+func UserID(ctx context.Context) string     { v, _ := ctx.Value(ctxUserID).(string); return v }
+```
 
-func UserID(ctx context.Context) string {
-    v, _ := ctx.Value(ctxUserID).(string)
-    return v
-}
+Note: The interface approach above is overly complex. Simplify by accepting `*authclient.Client` directly and extracting claims from the returned `json.RawMessage`:
 
-func Role(ctx context.Context) string {
-    v, _ := ctx.Value(ctxRole).(string)
-    return v
+```go
+// Simplified middleware/auth.go — replace the Authenticate function above with:
+
+import "github.com/veloci/api/internal/authclient"
+
+func Authenticate(client *authclient.Client) func(http.Handler) http.Handler {
+    return func(next http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            header := r.Header.Get("Authorization")
+            if !strings.HasPrefix(header, "Bearer ") {
+                http.Error(w, `{"code":"UNAUTHORIZED"}`, http.StatusUnauthorized)
+                return
+            }
+            result, err := client.ValidateToken(r.Context(), strings.TrimPrefix(header, "Bearer "))
+            if err != nil {
+                http.Error(w, `{"code":"UNAUTHORIZED"}`, http.StatusUnauthorized)
+                return
+            }
+            var claims map[string]interface{}
+            json.Unmarshal(result.Claims, &claims)
+            ctx := r.Context()
+            for key, ctxK := range map[string]contextKey{
+                "entity_id": ctxEntityID, "entity_role": ctxEntityRole,
+                "system_role": ctxSystemRole, "sub": ctxUserID,
+            } {
+                if v, ok := claims[key].(string); ok {
+                    ctx = context.WithValue(ctx, ctxK, v)
+                }
+            }
+            next.ServeHTTP(w, r.WithContext(ctx))
+        })
+    }
 }
 ```
 
-- [ ] **Step 5: Run middleware tests — verify they pass**
+Update the test's mock server to return the correct shape (already done in Step 3), and update `Authenticate`'s parameter to `*authclient.Client`.
+
+- [ ] **Step 6: Run middleware tests — verify they pass**
 
 ```bash
 cd services/api && go test ./internal/middleware/... -v
 ```
-Expected: all 3 tests PASS.
 
-- [ ] **Step 6: Write failing test for queue publisher**
+Expected: both tests PASS.
+
+- [ ] **Step 7: Write failing test for login handler**
 
 ```go
-// services/api/internal/queue/publisher_test.go
-package queue_test
+// services/api/internal/handlers/auth_test.go
+package handlers_test
 
 import (
-    "context"
+    "bytes"
     "encoding/json"
+    "net/http"
+    "net/http/httptest"
     "testing"
-    "github.com/veloci/api/internal/queue"
+    "github.com/veloci/api/internal/handlers"
 )
 
-func TestJobMarshal(t *testing.T) {
-    payload, _ := json.Marshal(map[string]string{"import_id": "abc"})
-    job := queue.Job{
-        Type:     "import.process",
-        EntityID: "entity-1",
-        Payload:  payload,
+// stubAuthForLogin simulates veloci-auth /credentials/validate and /tokens/mint
+func stubAuthForLogin(t *testing.T) *httptest.Server {
+    return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        switch r.URL.Path {
+        case "/credentials/validate":
+            w.Header().Set("Content-Type", "application/json")
+            json.NewEncoder(w).Encode(map[string]string{
+                "credential_id": "cred-1",
+                "system_role":   "user",
+            })
+        case "/tokens/mint":
+            w.Header().Set("Content-Type", "application/json")
+            w.WriteHeader(http.StatusCreated)
+            json.NewEncoder(w).Encode(map[string]string{
+                "token":      "test-token",
+                "jti":        "jti-1",
+                "expires_at": "2099-01-01T00:00:00Z",
+            })
+        default:
+            t.Errorf("unexpected auth call: %s", r.URL.Path)
+            http.NotFound(w, r)
+        }
+    }))
+}
+
+// stubAppDB simulates the veloci_app lookup for entity+role
+type stubAppDB struct{}
+
+func (s *stubAppDB) FindUserEntity(email string) (handlers.UserEntity, error) {
+    return handlers.UserEntity{UserID: "user-1", EntityID: "ent-1", EntityRole: "entity_admin"}, nil
+}
+
+func TestLoginSuccess(t *testing.T) {
+    authSrv := stubAuthForLogin(t)
+    defer authSrv.Close()
+
+    h := handlers.NewAuth(authSrv.URL, &stubAppDB{})
+    body, _ := json.Marshal(map[string]string{"email": "a@b.com", "password": "pw"})
+    req := httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewReader(body))
+    req.Header.Set("Content-Type", "application/json")
+    w := httptest.NewRecorder()
+    h.Login(w, req)
+
+    if w.Code != http.StatusOK {
+        t.Fatalf("status: got %d; body: %s", w.Code, w.Body)
     }
-    b, err := json.Marshal(job)
-    if err != nil {
-        t.Fatalf("marshal: %v", err)
-    }
-    var out queue.Job
-    if err := json.Unmarshal(b, &out); err != nil {
-        t.Fatalf("unmarshal: %v", err)
-    }
-    if out.Type != "import.process" || out.EntityID != "entity-1" {
-        t.Errorf("roundtrip failed: %+v", out)
+    var resp map[string]string
+    json.NewDecoder(w.Body).Decode(&resp)
+    if resp["token"] == "" {
+        t.Error("expected token in response")
     }
 }
 ```
 
-- [ ] **Step 7: Implement `queue/publisher.go`**
+- [ ] **Step 8: Run — verify test fails**
+
+```bash
+cd services/api && go test ./internal/handlers/... 2>&1 | head -5
+```
+
+Expected: compile error.
+
+- [ ] **Step 9: Implement `handlers/auth.go`**
+
+```go
+// services/api/internal/handlers/auth.go
+package handlers
+
+import (
+    "context"
+    "encoding/json"
+    "net/http"
+    "github.com/veloci/api/internal/authclient"
+)
+
+type UserEntity struct {
+    UserID     string
+    EntityID   string
+    EntityRole string
+}
+
+type appDB interface {
+    FindUserEntity(email string) (UserEntity, error)
+}
+
+type Auth struct {
+    auth *authclient.Client
+    db   appDB
+}
+
+func NewAuth(authURL string, db appDB) *Auth {
+    return &Auth{auth: authclient.New(authURL), db: db}
+}
+
+func (h *Auth) Login(w http.ResponseWriter, r *http.Request) {
+    var req struct {
+        Email    string `json:"email"`
+        Password string `json:"password"`
+    }
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        http.Error(w, `{"code":"BAD_REQUEST"}`, http.StatusBadRequest)
+        return
+    }
+
+    cred, err := h.auth.ValidateCredential(r.Context(), req.Email, req.Password)
+    if err != nil {
+        http.Error(w, `{"code":"INVALID_CREDENTIALS"}`, http.StatusUnauthorized)
+        return
+    }
+
+    ue, err := h.db.FindUserEntity(req.Email)
+    if err != nil {
+        http.Error(w, `{"code":"INVALID_CREDENTIALS"}`, http.StatusUnauthorized)
+        return
+    }
+
+    claims := map[string]interface{}{
+        "sub":         ue.UserID,
+        "email":       req.Email,
+        "system_role": cred.SystemRole,
+        "entity_id":   ue.EntityID,
+        "entity_role": ue.EntityRole,
+    }
+    minted, err := h.auth.MintToken(r.Context(), cred.CredentialID, claims)
+    if err != nil {
+        http.Error(w, `{"code":"INTERNAL"}`, http.StatusInternalServerError)
+        return
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(map[string]string{
+        "token":      minted.Token,
+        "expires_at": minted.ExpiresAt,
+    })
+}
+
+func (h *Auth) Logout(w http.ResponseWriter, r *http.Request) {
+    var req struct{ JTI string `json:"jti"` }
+    json.NewDecoder(r.Body).Decode(&req)
+    if req.JTI != "" {
+        h.auth.RevokeToken(context.Background(), req.JTI)
+    }
+    w.WriteHeader(http.StatusNoContent)
+}
+```
+
+- [ ] **Step 10: Run all API handler tests — verify they pass**
+
+```bash
+cd services/api && go test ./internal/... -v
+```
+
+Expected: all tests PASS.
+
+- [ ] **Step 11: Implement `queue/publisher.go`, health handler, and `main.go`**
 
 ```go
 // services/api/internal/queue/publisher.go
@@ -964,9 +1759,10 @@ import (
 const QueueName = "veloci.jobs"
 
 type Job struct {
+    JobID    string          `json:"job_id"`
     Type     string          `json:"type"`
     EntityID string          `json:"entity_id"`
-    Payload  json.RawMessage `json:"payload"`
+    Metadata json.RawMessage `json:"metadata"`
 }
 
 type Publisher struct {
@@ -1003,15 +1799,6 @@ func (p *Publisher) Publish(ctx context.Context, job Job) error {
 }
 ```
 
-- [ ] **Step 8: Run queue tests — verify they pass**
-
-```bash
-cd services/api && go test ./internal/queue/... -v
-```
-Expected: `TestJobMarshal PASS`
-
-- [ ] **Step 9: Implement health handler and `main.go`**
-
 ```go
 // services/api/internal/handlers/health.go
 package handlers
@@ -1032,27 +1819,28 @@ func Health(w http.ResponseWriter, r *http.Request) {
 package main
 
 import (
+    "context"
     "fmt"
     "log"
     "net/http"
     "github.com/go-chi/chi/v5"
     "github.com/spf13/cobra"
     "github.com/spf13/viper"
+    "github.com/veloci/api/internal/authclient"
     "github.com/veloci/api/internal/handlers"
     "github.com/veloci/api/internal/middleware"
     "github.com/veloci/api/internal/queue"
 )
 
-var rootCmd = &cobra.Command{
-    Use:   "veloci-api",
-    Short: "Veloci API service",
+func main() {
+    if err := rootCmd.Execute(); err != nil {
+        log.Fatal(err)
+    }
 }
 
-var serveCmd = &cobra.Command{
-    Use:   "serve",
-    Short: "Start the API HTTP server",
-    RunE:  runServe,
-}
+var rootCmd = &cobra.Command{Use: "veloci-api", Short: "Veloci API service"}
+
+var serveCmd = &cobra.Command{Use: "serve", RunE: runServe}
 
 func init() {
     rootCmd.AddCommand(serveCmd)
@@ -1061,33 +1849,37 @@ func init() {
 }
 
 func runServe(_ *cobra.Command, _ []string) error {
-    secret := []byte(viper.GetString("JWT_SECRET"))
-    port := viper.GetString("PORT")
+    authURL := viper.GetString("VELOCI_AUTH_URL")
+    if authURL == "" {
+        return fmt.Errorf("VELOCI_AUTH_URL required")
+    }
 
     if _, err := queue.NewPublisher(viper.GetString("RABBITMQ_URL")); err != nil {
         return fmt.Errorf("queue: %w", err)
     }
 
+    authClient := authclient.New(authURL)
+
+    // appDB will be wired to pgx pool in subsequent tasks; nil here for scaffold
+    authHandler := handlers.NewAuth(authURL, nil)
+
     r := chi.NewRouter()
     r.Get("/health", handlers.Health)
+    r.Post("/auth/login", authHandler.Login)
+    r.Post("/auth/logout", authHandler.Logout)
 
     r.Group(func(r chi.Router) {
-        r.Use(middleware.Authenticate(secret))
-        // Financial routes added in subsequent specs
+        r.Use(middleware.Authenticate(authClient))
+        // Financial routes added in service-specific implementation plans
     })
 
+    port := viper.GetString("PORT")
     log.Printf("veloci-api listening on :%s", port)
     return http.ListenAndServe(":"+port, r)
 }
-
-func main() {
-    if err := rootCmd.Execute(); err != nil {
-        log.Fatal(err)
-    }
-}
 ```
 
-- [ ] **Step 10: Create `Dockerfile`**
+- [ ] **Step 12: Create `Dockerfile`**
 
 ```dockerfile
 # services/api/Dockerfile
@@ -1100,14 +1892,14 @@ RUN go build -o api .
 
 FROM alpine:3.24
 COPY --from=build /app/api /api
-ENTRYPOINT ["/api"]
+ENTRYPOINT ["/api", "serve"]
 ```
 
-- [ ] **Step 11: Commit**
+- [ ] **Step 13: Commit**
 
 ```bash
 git add services/api/
-git commit -m "feat: veloci-api scaffolding with JWT middleware and RabbitMQ publisher"
+git commit -m "feat: veloci-api scaffold — auth proxy, per-request token validation, RabbitMQ publisher"
 ```
 
 ---
@@ -1115,6 +1907,7 @@ git commit -m "feat: veloci-api scaffolding with JWT middleware and RabbitMQ pub
 ## Task 4: veloci-engine Scaffolding
 
 **Files:**
+
 - Create: `services/engine/Cargo.toml`
 - Create: `services/engine/src/main.rs`
 - Create: `services/engine/src/consumer.rs`
@@ -1124,17 +1917,18 @@ git commit -m "feat: veloci-api scaffolding with JWT middleware and RabbitMQ pub
 - Create: `services/engine/Dockerfile`
 
 **Interfaces:**
-- Consumes: `queue.Job` envelope from Task 3 — `{"type": "...", "entity_id": "...", "payload": {...}}`
-- Produces: persistent RabbitMQ consumer that dispatches to job handlers; handlers are stubs returning `Ok(())` (real logic added in engine spec)
+
+- Consumes: `queue.Job` envelope — `{"job_id":"...","type":"...","entity_id":"...","metadata":{...}}`
+- Produces: persistent RabbitMQ consumer dispatching to stub job handlers
 
 ---
 
 - [ ] **Step 1: Initialize Rust project**
 
 ```bash
+mkdir -p services/engine/src/jobs
 cd services/engine
 cargo init --name veloci-engine
-mkdir -p src/jobs
 ```
 
 - [ ] **Step 2: Set `Cargo.toml` dependencies**
@@ -1147,60 +1941,51 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-tokio = { version = "1", features = ["full"] }
-lapin = "2"
-sqlx = { version = "0.8", features = ["postgres", "runtime-tokio", "uuid", "chrono"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-anyhow = "1"
-tracing = "0.1"
+tokio       = { version = "1",   features = ["full"] }
+lapin       = "2"
+sqlx        = { version = "0.8", features = ["postgres", "runtime-tokio", "uuid", "chrono"] }
+serde       = { version = "1",   features = ["derive"] }
+serde_json  = "1"
+anyhow      = "1"
+tracing     = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-backon = "1"
-chrono = { version = "0.4", features = ["serde"] }
+backon      = "1"
 futures-lite = "2"
 ```
 
 - [ ] **Step 3: Write test for job dispatch routing**
 
 ```rust
-// services/engine/src/jobs/mod.rs (start with tests)
+// Add to services/engine/src/jobs/mod.rs
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
 
     #[tokio::test]
-    async fn test_known_job_types_dispatch_without_error() {
-        // Stubs return Ok — we're testing routing only, not logic
-        for job_type in &["import.process", "rules.reprocess", "account.analyze"] {
-            let job = Job {
-                r#type: job_type.to_string(),
-                entity_id: "entity-1".to_string(),
-                payload: json!({}),
-            };
-            let result = dispatch(job).await;
-            assert!(result.is_ok(), "dispatch failed for {}: {:?}", job_type, result);
+    async fn known_job_types_dispatch_ok() {
+        for t in &["import.process", "rules.reprocess", "account.analyze"] {
+            let job = Job { job_id: "j".into(), r#type: t.to_string(),
+                            entity_id: "e".into(), metadata: json!({}) };
+            assert!(dispatch(job).await.is_ok(), "failed for {}", t);
         }
     }
 
     #[tokio::test]
-    async fn test_unknown_job_type_returns_ok() {
-        let job = Job {
-            r#type: "unknown.type".to_string(),
-            entity_id: "entity-1".to_string(),
-            payload: json!({}),
-        };
-        // Unknown types are logged and dropped — not an error
+    async fn unknown_job_type_is_dropped_not_errored() {
+        let job = Job { job_id: "j".into(), r#type: "unknown".into(),
+                        entity_id: "e".into(), metadata: json!({}) };
         assert!(dispatch(job).await.is_ok());
     }
 }
 ```
 
-- [ ] **Step 4: Run tests — verify they fail**
+- [ ] **Step 4: Run — verify compile fails**
 
 ```bash
 cd services/engine && cargo test 2>&1 | tail -5
 ```
+
 Expected: compile error — `Job` and `dispatch` not defined.
 
 - [ ] **Step 5: Implement `jobs/mod.rs`**
@@ -1212,35 +1997,33 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Job {
-    pub r#type: String,
+    pub job_id:    String,
+    pub r#type:    String,
     pub entity_id: String,
-    pub payload: serde_json::Value,
+    pub metadata:  serde_json::Value,
 }
 
 pub async fn dispatch(job: Job) -> Result<()> {
     match job.r#type.as_str() {
-        "import.process" => import_process(&job.entity_id, job.payload).await,
-        "rules.reprocess" => rules_reprocess(&job.entity_id, job.payload).await,
-        "account.analyze" => account_analyze(&job.entity_id, job.payload).await,
-        other => {
-            tracing::warn!("unknown job type: {}", other);
-            Ok(())
-        }
+        "import.process"   => import_process(&job.entity_id).await,
+        "rules.reprocess"  => rules_reprocess(&job.entity_id).await,
+        "account.analyze"  => account_analyze(&job.entity_id).await,
+        other => { tracing::warn!("unknown job type: {}", other); Ok(()) }
     }
 }
 
-async fn import_process(_entity_id: &str, _payload: serde_json::Value) -> Result<()> {
-    tracing::info!("import.process stub");
+async fn import_process(entity_id: &str) -> Result<()> {
+    tracing::info!(entity_id, "import.process stub");
     Ok(())
 }
 
-async fn rules_reprocess(_entity_id: &str, _payload: serde_json::Value) -> Result<()> {
-    tracing::info!("rules.reprocess stub");
+async fn rules_reprocess(entity_id: &str) -> Result<()> {
+    tracing::info!(entity_id, "rules.reprocess stub");
     Ok(())
 }
 
-async fn account_analyze(_entity_id: &str, _payload: serde_json::Value) -> Result<()> {
-    tracing::info!("account.analyze stub");
+async fn account_analyze(entity_id: &str) -> Result<()> {
+    tracing::info!(entity_id, "account.analyze stub");
     Ok(())
 }
 ```
@@ -1250,76 +2033,60 @@ async fn account_analyze(_entity_id: &str, _payload: serde_json::Value) -> Resul
 ```bash
 cd services/engine && cargo test -- --nocapture
 ```
+
 Expected:
-```
-test jobs::tests::test_known_job_types_dispatch_without_error ... ok
-test jobs::tests::test_unknown_job_type_returns_ok ... ok
-test result: ok. 2 passed
+
+```text
+test jobs::tests::known_job_types_dispatch_ok ... ok
+test jobs::tests::unknown_job_type_is_dropped_not_errored ... ok
 ```
 
-- [ ] **Step 7: Implement `consumer.rs`**
+- [ ] **Step 7: Implement `consumer.rs`, `db.rs`, `health.rs`, `main.rs`**
 
 ```rust
 // services/engine/src/consumer.rs
 use anyhow::Result;
 use backon::{ExponentialBuilder, Retryable};
-use lapin::{
-    Connection, ConnectionProperties,
+use futures_lite::StreamExt;
+use lapin::{Connection, ConnectionProperties,
     options::{BasicAckOptions, BasicConsumeOptions, QueueDeclareOptions},
-    types::FieldTable,
-};
+    types::FieldTable};
 use crate::jobs::{self, Job};
 
 const QUEUE: &str = "veloci.jobs";
 
 pub async fn run(rabbitmq_url: &str) -> Result<()> {
-    let conn = {
-        let url = rabbitmq_url.to_string();
-        (|| async {
-            Connection::connect(&url, ConnectionProperties::default()).await
-        })
-        .retry(ExponentialBuilder::default().with_max_times(10))
-        .await?
-    };
-    let channel = conn.create_channel().await?;
+    let url = rabbitmq_url.to_string();
+    let conn = (|| async {
+        Connection::connect(&url, ConnectionProperties::default()).await
+    })
+    .retry(ExponentialBuilder::default().with_max_times(10))
+    .await?;
 
-    channel.queue_declare(
-        QUEUE,
-        QueueDeclareOptions { durable: true, ..Default::default() },
-        FieldTable::default(),
-    ).await?;
+    let ch = conn.create_channel().await?;
+    ch.queue_declare(QUEUE, QueueDeclareOptions { durable: true, ..Default::default() },
+        FieldTable::default()).await?;
 
-    let mut consumer = channel.basic_consume(
-        QUEUE,
-        "veloci-engine",
-        BasicConsumeOptions::default(),
-        FieldTable::default(),
-    ).await?;
+    let mut consumer = ch.basic_consume(QUEUE, "veloci-engine",
+        BasicConsumeOptions::default(), FieldTable::default()).await?;
 
-    tracing::info!("veloci-engine consuming from {}", QUEUE);
-
-    use futures_lite::StreamExt;
+    tracing::info!("consuming from {}", QUEUE);
     while let Some(delivery) = consumer.next().await {
-        let delivery = delivery?;
-        match serde_json::from_slice::<Job>(&delivery.data) {
+        let d = delivery?;
+        match serde_json::from_slice::<Job>(&d.data) {
             Ok(job) => {
-                let entity_id = job.entity_id.clone();
-                let job_type = job.r#type.clone();
+                let (eid, jt) = (job.entity_id.clone(), job.r#type.clone());
                 if let Err(e) = jobs::dispatch(job).await {
-                    tracing::error!("job failed entity={} type={}: {:?}", entity_id, job_type, e);
+                    tracing::error!(entity_id=%eid, job_type=%jt, "job failed: {:?}", e);
                 }
             }
             Err(e) => tracing::error!("malformed job: {:?}", e),
         }
-        delivery.ack(BasicAckOptions::default()).await?;
+        d.ack(BasicAckOptions::default()).await?;
     }
     Ok(())
 }
 ```
-
-`futures-lite` is already in `Cargo.toml` from Step 2.
-
-- [ ] **Step 8: Implement `db.rs` and `main.rs`**
 
 ```rust
 // services/engine/src/db.rs
@@ -1327,8 +2094,21 @@ use anyhow::Result;
 use sqlx::PgPool;
 
 pub async fn connect(database_url: &str) -> Result<PgPool> {
-    let pool = PgPool::connect(database_url).await?;
-    Ok(pool)
+    Ok(PgPool::connect(database_url).await?)
+}
+```
+
+```rust
+// services/engine/src/health.rs
+use anyhow::Result;
+
+pub async fn check(database_url: &str, rabbitmq_url: &str) -> Result<()> {
+    sqlx::PgPool::connect(database_url).await
+        .map_err(|e| anyhow::anyhow!("postgres: {}", e))?;
+    lapin::Connection::connect(rabbitmq_url, lapin::ConnectionProperties::default()).await
+        .map_err(|e| anyhow::anyhow!("rabbitmq: {}", e))?;
+    println!("ok");
+    Ok(())
 }
 ```
 
@@ -1347,39 +2127,21 @@ async fn main() -> Result<()> {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
-    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL required");
-    let rabbitmq_url = std::env::var("RABBITMQ_URL").expect("RABBITMQ_URL required");
+    let db_url  = std::env::var("DATABASE_URL").expect("DATABASE_URL required");
+    let mq_url  = std::env::var("RABBITMQ_URL").expect("RABBITMQ_URL required");
 
     match std::env::args().nth(1).as_deref() {
-        Some("health") => health::check(&database_url, &rabbitmq_url).await,
+        Some("health") => health::check(&db_url, &mq_url).await,
         _ => {
-            let _pool = db::connect(&database_url).await?;
-            tracing::info!("veloci-engine connected to postgres");
-            consumer::run(&rabbitmq_url).await
+            let _pool = db::connect(&db_url).await?;
+            tracing::info!("connected to postgres");
+            consumer::run(&mq_url).await
         }
     }
 }
 ```
 
-- [ ] **Step 8b: Implement `health.rs`**
-
-```rust
-// services/engine/src/health.rs
-use anyhow::Result;
-
-pub async fn check(database_url: &str, rabbitmq_url: &str) -> Result<()> {
-    sqlx::PgPool::connect(database_url).await
-        .map_err(|e| anyhow::anyhow!("postgres unreachable: {}", e))?;
-
-    lapin::Connection::connect(rabbitmq_url, lapin::ConnectionProperties::default()).await
-        .map_err(|e| anyhow::anyhow!("rabbitmq unreachable: {}", e))?;
-
-    println!("ok");
-    Ok(())
-}
-```
-
-- [ ] **Step 9: Create `Dockerfile`**
+- [ ] **Step 8: Create `Dockerfile`**
 
 ```dockerfile
 # services/engine/Dockerfile
@@ -1387,22 +2149,21 @@ FROM rust:1.95-alpine AS build
 RUN apk add --no-cache musl-dev
 WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
-RUN mkdir src && echo "fn main() {}" > src/main.rs && cargo build --release && rm src/main.rs
+RUN mkdir src && echo "fn main() {}" > src/main.rs \
+    && cargo build --release && rm src/main.rs
 COPY src ./src
 RUN touch src/main.rs && cargo build --release
 
 FROM alpine:3.24
 COPY --from=build /app/target/release/veloci-engine /veloci-engine
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-    CMD ["/veloci-engine", "health"]
 ENTRYPOINT ["/veloci-engine"]
 ```
 
-- [ ] **Step 10: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 git add services/engine/
-git commit -m "feat: veloci-engine scaffolding with RabbitMQ consumer and job dispatch stubs"
+git commit -m "feat: veloci-engine scaffold — RabbitMQ consumer, job dispatch stubs, health check"
 ```
 
 ---
@@ -1410,35 +2171,34 @@ git commit -m "feat: veloci-engine scaffolding with RabbitMQ consumer and job di
 ## Task 5: veloci-web Scaffolding
 
 **Files:**
-- Create: `services/web/package.json`
+
+- Create: `services/web/package.json` (via Vite scaffold)
 - Create: `services/web/vite.config.ts`
-- Create: `services/web/tsconfig.json`
-- Create: `services/web/index.html`
-- Create: `services/web/src/main.tsx`
-- Create: `services/web/src/App.tsx`
 - Create: `services/web/src/api/client.ts`
 - Create: `services/web/src/auth/AuthProvider.tsx`
 - Create: `services/web/src/auth/LoginPage.tsx`
+- Create: `services/web/src/App.tsx`
+- Create: `services/web/src/main.tsx`
 - Create: `services/web/nginx.conf`
 - Create: `services/web/Dockerfile`
 
 **Interfaces:**
-- Consumes: `POST /login` on `veloci-auth` (port 8081), `GET /health` on `veloci-api` (port 8080)
-- Produces: working login flow — user enters credentials, JWT stored in `localStorage`, subsequent API calls include `Authorization: Bearer <token>`
+
+- Consumes: `POST /auth/login` on `veloci-api` (port 8080) — all auth through the API, never directly to veloci-auth
+- Produces: login page → JWT in `localStorage` → subsequent API calls include `Authorization: Bearer`
 
 ---
 
-- [ ] **Step 1: Initialize project**
+- [ ] **Step 1: Scaffold and install dependencies**
 
 ```bash
 cd services/web
 npm create vite@8 . -- --template react-ts
 npm install
 npm install axios
-# Vite 8 scaffolds React 19 + TypeScript 6.0 by default
 ```
 
-- [ ] **Step 2: Configure Vite with API proxy**
+- [ ] **Step 2: Configure Vite proxy — all traffic through veloci-api**
 
 ```typescript
 // services/web/vite.config.ts
@@ -1449,19 +2209,22 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      '/api': { target: 'http://localhost:8080', rewrite: (p) => p.replace(/^\/api/, '') },
-      '/auth': { target: 'http://localhost:8081', rewrite: (p) => p.replace(/^\/auth/, '') },
+      '/api': {
+        target: 'http://localhost:8080',
+        rewrite: (p) => p.replace(/^\/api/, ''),
+      },
     },
   },
 })
 ```
 
+Note: all requests — including login — go through `/api` to `veloci-api`. The frontend never talks to `veloci-auth` directly.
+
 - [ ] **Step 3: Implement `api/client.ts`**
 
 ```typescript
 // services/web/src/api/client.ts
-const AUTH_URL = import.meta.env.VITE_AUTH_URL ?? '/auth'
-const API_URL  = import.meta.env.VITE_API_URL  ?? '/api'
+const BASE = import.meta.env.VITE_API_URL ?? '/api'
 
 function authHeader(): Record<string, string> {
   const token = localStorage.getItem('token')
@@ -1469,7 +2232,7 @@ function authHeader(): Record<string, string> {
 }
 
 export async function login(email: string, password: string): Promise<void> {
-  const res = await fetch(`${AUTH_URL}/login`, {
+  const res = await fetch(`${BASE}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
@@ -1488,7 +2251,7 @@ export function isAuthenticated(): boolean {
 }
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await fetch(`${BASE}${path}`, {
     ...init,
     headers: { 'Content-Type': 'application/json', ...authHeader(), ...init?.headers },
   })
@@ -1544,7 +2307,7 @@ export function useAuth(): AuthContextValue {
 }
 ```
 
-- [ ] **Step 5: Implement `auth/LoginPage.tsx`**
+- [ ] **Step 5: Implement `auth/LoginPage.tsx`, `App.tsx`, `main.tsx`**
 
 ```typescript
 // services/web/src/auth/LoginPage.tsx
@@ -1562,13 +2325,9 @@ export function LoginPage() {
     e.preventDefault()
     setError(null)
     setLoading(true)
-    try {
-      await login(email, password)
-    } catch {
-      setError('Invalid email or password')
-    } finally {
-      setLoading(false)
-    }
+    try { await login(email, password) }
+    catch { setError('Invalid email or password') }
+    finally { setLoading(false) }
   }
 
   return (
@@ -1576,24 +2335,16 @@ export function LoginPage() {
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12, width: 320 }}>
         <h1 style={{ margin: 0 }}>Veloci</h1>
         {error && <p style={{ color: 'red', margin: 0 }}>{error}</p>}
-        <input
-          type="email" value={email} onChange={e => setEmail(e.target.value)}
-          placeholder="Email" required autoFocus
-        />
-        <input
-          type="password" value={password} onChange={e => setPassword(e.target.value)}
-          placeholder="Password" required
-        />
-        <button type="submit" disabled={loading}>
-          {loading ? 'Signing in…' : 'Sign in'}
-        </button>
+        <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+          placeholder="Email" required autoFocus />
+        <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+          placeholder="Password" required />
+        <button type="submit" disabled={loading}>{loading ? 'Signing in…' : 'Sign in'}</button>
       </form>
     </main>
   )
 }
 ```
-
-- [ ] **Step 6: Implement `App.tsx` and `main.tsx`**
 
 ```typescript
 // services/web/src/App.tsx
@@ -1621,23 +2372,20 @@ export default function App() {
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
-
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode><App /></React.StrictMode>
 )
 ```
 
-- [ ] **Step 7: Create `nginx.conf` and `Dockerfile`**
+- [ ] **Step 6: Create `nginx.conf` and `Dockerfile`**
 
 ```nginx
 # services/web/nginx.conf
 server {
-    listen 80;
-    root /usr/share/nginx/html;
-    index index.html;
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
+  listen 80;
+  root /usr/share/nginx/html;
+  index index.html;
+  location / { try_files $uri $uri/ /index.html; }
 }
 ```
 
@@ -1655,31 +2403,34 @@ COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 ```
 
-- [ ] **Step 8: Verify dev server starts**
+- [ ] **Step 7: Verify dev server starts**
 
 ```bash
 cd services/web && npm run dev
 ```
-Expected: Vite dev server at `http://localhost:5173`. Open browser, see login form. No console errors.
 
-- [ ] **Step 9: Commit**
+Expected: Vite dev server at `http://localhost:5173`. Open browser — login form renders, no console errors.
+
+- [ ] **Step 8: Commit**
 
 ```bash
 git add services/web/
-git commit -m "feat: veloci-web React SPA with login flow and authenticated API client"
+git commit -m "feat: veloci-web — React SPA, login through veloci-api, authenticated API client"
 ```
 
 ---
 
 ## Task 6: Integration Smoke Test
 
-**Goal:** Verify all six services come up healthy, migrations run, and the login → JWT → API flow works end-to-end.
+**Goal:** Verify all services start, migrations run, and the full login flow works end-to-end through `veloci-api`.
 
 ---
 
-- [ ] **Step 1: Build and start all services**
+- [ ] **Step 1: Copy env files and start all services**
 
 ```bash
+cp .env.example .env
+cp config/veloci-auth.yaml.example config/veloci-auth.yaml
 docker compose --env-file .env up --build -d
 ```
 
@@ -1688,107 +2439,126 @@ docker compose --env-file .env up --build -d
 ```bash
 docker compose ps
 ```
-Expected: all services `healthy` or `running`. Postgres and RabbitMQ show `healthy`. Give it ~30 seconds.
 
-- [ ] **Step 3: Verify migrations ran**
+Wait ~30 seconds. Expected: postgres `healthy`, rabbitmq `healthy`, all others `running`.
 
-```bash
-docker compose exec postgres psql -U $POSTGRES_USER -d $POSTGRES_DB -c "\dt"
-```
-Expected output includes: `users`, `entities`, `roles`, `permissions`, `role_permissions`, `entity_users`
-
-- [ ] **Step 4: Verify seeded roles**
+- [ ] **Step 3: Verify both databases exist**
 
 ```bash
-docker compose exec postgres psql -U $POSTGRES_USER -d $POSTGRES_DB -c "SELECT name FROM roles;"
+docker compose exec postgres psql -U postgres -c "\l" | grep veloci
 ```
+
+Expected output includes both `veloci_auth` and `veloci_app`.
+
+- [ ] **Step 4: Verify auth schema**
+
+```bash
+docker compose exec postgres psql -U veloci_auth_user -d veloci_auth -c "\dt"
+```
+
+Expected: `auth_credentials`, `tokens`, `invite_tokens`
+
+- [ ] **Step 5: Verify app schema and seeded roles**
+
+```bash
+docker compose exec postgres psql -U veloci_app_user -d veloci_app -c "\dt"
+docker compose exec postgres psql -U veloci_app_user -d veloci_app \
+  -c "SELECT name FROM roles ORDER BY name;"
+```
+
+Expected tables: `entities`, `entity_users`, `permissions`, `role_permissions`, `roles`, `users`
+
+Expected roles:
+
+```text
+    name
+-----------
+ entity_admin
+ entity_user
+```
+
+- [ ] **Step 6: Verify server_admin credential was synced by veloci-auth startup**
+
+```bash
+docker compose exec postgres psql -U veloci_auth_user -d veloci_auth \
+  -c "SELECT email, system_role FROM auth_credentials;"
+```
+
 Expected:
-```
- name
---------
- admin
- member
+
+```text
+       email        | system_role
+--------------------+-------------
+ admin@veloci.local | server_admin
 ```
 
-- [ ] **Step 5: Create a test user + entity (required for login)**
+- [ ] **Step 7: Create a test entity and user in veloci_app**
 
-First generate a real bcrypt hash for 'testpassword':
+The server admin credential exists in `veloci_auth`. We need a matching user + entity in `veloci_app` for the login flow to complete:
+
 ```bash
-# Requires htpasswd (brew install httpd) or use the Go one-liner:
-docker run --rm golang:1.26-alpine sh -c \
-  'go run -e "import (\"fmt\";\"golang.org/x/crypto/bcrypt\"); func main() { h,_:=bcrypt.GenerateFromPassword([]byte(\"testpassword\"),12); fmt.Println(string(h)) }"'
-```
+docker compose exec postgres psql -U veloci_app_user -d veloci_app <<'SQL'
+INSERT INTO entities (name) VALUES ('Test Family');
 
-Alternatively, run this Go snippet locally and copy the output hash:
-```go
-// run: go run hash.go
-package main
-import ("fmt"; "golang.org/x/crypto/bcrypt")
-func main() {
-    h, _ := bcrypt.GenerateFromPassword([]byte("testpassword"), 12)
-    fmt.Println(string(h))
-}
-```
-
-Then insert with that hash:
-```bash
-HASH='<paste bcrypt hash here>'
-docker compose exec postgres psql -U $POSTGRES_USER -d $POSTGRES_DB << SQL
-INSERT INTO users (email, password_hash)
-VALUES ('admin@veloci.local', '$HASH');
-
-INSERT INTO entities (name) VALUES ('Test Family') RETURNING id;
+-- auth_credential_id must match the ID from veloci_auth.auth_credentials
+-- Fetch it first:
+\! docker compose exec postgres psql -U veloci_auth_user -d veloci_auth \
+     -t -c "SELECT id FROM auth_credentials WHERE email='admin@veloci.local';"
 SQL
 ```
 
-Note the returned entity UUID, then:
+Then insert the user with the returned UUID:
 
 ```bash
-docker compose exec postgres psql -U $POSTGRES_USER -d $POSTGRES_DB << 'SQL'
-INSERT INTO entity_users (user_id, entity_id, role_id)
-SELECT u.id, e.id, r.id
-FROM users u, entities e, roles r
-WHERE u.email = 'admin@veloci.local'
-  AND e.name = 'Test Family'
-  AND r.name = 'admin';
+CRED_ID=$(docker compose exec -T postgres psql -U veloci_auth_user -d veloci_auth \
+  -t -c "SELECT id FROM auth_credentials WHERE email='admin@veloci.local';" | tr -d ' ')
+
+docker compose exec postgres psql -U veloci_app_user -d veloci_app <<SQL
+INSERT INTO users (auth_credential_id, email) VALUES ('${CRED_ID}', 'admin@veloci.local');
+
+INSERT INTO entity_users (user_id, entity_id, entity_role)
+SELECT u.id, e.id, 'entity_admin'
+FROM users u, entities e
+WHERE u.email = 'admin@veloci.local' AND e.name = 'Test Family';
 SQL
 ```
 
-- [ ] **Step 6: Test login endpoint**
+- [ ] **Step 8: Test login through veloci-api**
 
 ```bash
-curl -s -X POST http://localhost:8081/login \
+curl -s -X POST http://localhost:8080/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@veloci.local","password":"testpassword"}' | jq .
+  -d '{"email":"admin@veloci.local","password":"changeme"}' | jq .
 ```
+
 Expected:
+
 ```json
-{ "token": "<jwt string>" }
+{ "token": "<jwt string>", "expires_at": "..." }
 ```
 
-- [ ] **Step 7: Test API health with JWT**
+- [ ] **Step 9: Test authenticated request**
 
 ```bash
-TOKEN=$(curl -s -X POST http://localhost:8081/login \
+TOKEN=$(curl -s -X POST http://localhost:8080/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@veloci.local","password":"testpassword"}' | jq -r .token)
+  -d '{"email":"admin@veloci.local","password":"changeme"}' | jq -r .token)
 
 curl -s http://localhost:8080/health \
   -H "Authorization: Bearer $TOKEN" | jq .
 ```
-Expected:
-```json
-{ "status": "ok" }
-```
 
-- [ ] **Step 8: Verify engine is consuming (check logs)**
+Expected: `{ "status": "ok" }`
+
+- [ ] **Step 10: Verify engine is consuming**
 
 ```bash
 docker compose logs veloci-engine | tail -5
 ```
-Expected: `veloci-engine connected to postgres` and `veloci-engine consuming from veloci.jobs`
 
-- [ ] **Step 9: Final commit**
+Expected: `connected to postgres` and `consuming from veloci.jobs`
+
+- [ ] **Step 11: Final commit**
 
 ```bash
 git add .
