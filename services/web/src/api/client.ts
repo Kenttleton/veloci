@@ -15,7 +15,8 @@ api.interceptors.response.use(
   (err: unknown) => {
     if (
       axios.isAxiosError(err) &&
-      err.response?.status === 401
+      err.response?.status === 401 &&
+      err.config?.url !== '/auth/login'
     ) {
       localStorage.removeItem('token')
       window.location.href = '/login'
@@ -37,7 +38,10 @@ export function isAuthenticated(): boolean {
   return !!localStorage.getItem('token')
 }
 
-export async function apiFetch<T>(path: string, config?: Parameters<typeof api.get>[1]): Promise<T> {
-  const { data } = await api.get<T>(path, config)
+export async function apiFetch<T>(
+  path: string,
+  config?: Parameters<typeof api.request>[0],
+): Promise<T> {
+  const { data } = await api.request<T>({ url: path, method: 'GET', ...config })
   return data
 }
