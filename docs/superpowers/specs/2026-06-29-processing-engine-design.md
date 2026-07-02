@@ -72,7 +72,7 @@ This makes the review queue the live preview: the engine has already done the wo
 
 ---
 
-## 4. Stage 0: CSV Normalization + 4-Pass Deduplication
+## 4. Stage 0: CSV Normalization + Volatility-Aware Deduplication
 
 **Input:** `pending_imports` record (contains `csv_bytes`, `date_range_start`, `date_range_end`, `institution_mapping_id`, `account_id`)
 
@@ -84,30 +84,81 @@ This makes the review queue the live preview: the engine has already done the wo
 2. Parse date strings to `DATE`. Parse amount to `BIGINT cents` using the mapping's `amount_sign_convention`.
 3. Normalize merchant: strip leading/trailing whitespace; collapse internal whitespace; strip punctuation except hyphens and ampersands; title-case. Store raw bank string as `imported_payee` (immutable). Store normalized result as `merchant_normalized`.
 
-### 4-Pass Deduplication
+### Volatility Model
 
-Borrowed from Actual Budget. Passes run in order; a transaction matched in an earlier pass is not re-evaluated in later passes.
+Every transaction exists in one of three zones relative to the import timestamp `T` (`pending_imports.uploaded_at`):
 
-**Pass 1 — Exact imported_id match**
-- Query: find any `raw_transaction` in the same account where `imported_id = candidate.imported_id` (only when the bank provides `imported_id`)
-- If found: skip (duplicate)
+| Zone | Condition | Meaning |
+|---|---|---|
+| **Settled** | `candidate.date < T - settlement_window_days` | Final and authoritative. No further changes expected. |
+| **Flux** | `candidate.date >= T - settlement_window_days` | Pending or recently posted. Date or amount may still differ across exports. |
+| **New** | `candidate.date > existing_boundary + dedup_window_days` | Beyond all previously imported data. Cannot be a duplicate. |
 
-**Pass 2 — Date range + approximate amount**
+`settlement_window_days`, `dedup_window_days`, and `amount_tolerance_pct` are read from the `institution_mappings` record for this import.
+
+`existing_boundary` = `MAX(date_range_end)` across all prior `import_batches` for this account (NULL on first import).
+
+### Effective Settlement Status of Existing Rows
+
+Before checking each candidate against the database, the engine computes the effective settlement status of any existing row it finds:
+
+```
+effective_status =
+  if existing.settlement_status = 'settled'          → settled
+  if existing.settlement_status = 'flux'
+     AND NOW() - existing.imported_at > settlement_window_days  → effectively settled (aged)
+  if existing.settlement_status = 'flux'
+     AND NOW() - existing.imported_at <= settlement_window_days → young flux (supersedeable)
+```
+
+Aged flux rows are treated identically to settled rows for dedup purposes — they represent transactions that have had sufficient time to resolve without a newer import superseding them.
+
+> **Determinism note:** `NOW()` appears only in this effective-status check, which is part of the import utility (Stage 0), not the financial calculation stages (3–5). Stages 3–6 include all rows regardless of settlement status and never branch on this field.
+
+### Deduplication Passes
+
+Passes run in order. A candidate matched in an earlier pass is not re-evaluated in later passes.
+
+**Pass 1 — Exact imported_id match** *(primary path when bank provides IDs)*
+- Only runs when `candidate.imported_id` is non-null.
+- Query: find any `raw_transaction` in the same account where `imported_id = candidate.imported_id`.
+- If found and effective_status = settled or aged flux → **skip** (genuine duplicate).
+- If found and effective_status = young flux → **supersede**: delete old row (cascades `transaction_rule_assignments`), insert candidate.
+
+**Pass 2 — New territory check**
+- If `candidate.date > existing_boundary + dedup_window_days` → **insert directly**. No existing data can overlap this date range.
+
+**Pass 3 — Volatility-aware exact merchant match**
 - Query: find any `raw_transaction` in the same account where:
-  - `date BETWEEN candidate.date - 7 AND candidate.date + 7`
-  - `ABS(amount_cents - candidate.amount_cents) <= candidate.amount_cents * 0.02` (within 2%)
-- If found: skip (likely the same transaction with slight date/amount drift)
+  - `merchant_normalized = candidate.merchant_normalized` (exact match)
+  - `ABS(date - candidate.date) <= dedup_window_days`
+  - `ABS(amount_cents - candidate.amount_cents) <= candidate.amount_cents * amount_tolerance_pct`
+- If found and effective_status = settled or aged flux → **skip**.
+- If found and effective_status = young flux → **supersede**.
 
-**Pass 3 — Merchant partial match**
-- Query: find any `raw_transaction` in the same account within ±7 days where the `merchant_normalized` strings share at least a 70% longest common subsequence ratio (computed in Rust, no SQL LIKE required)
-- If found: skip (same merchant, same window)
+**Pass 4 — Volatility-aware fuzzy merchant match**
+- Query: find any `raw_transaction` in the same account within `dedup_window_days` where:
+  - `merchant_normalized` shares ≥70% LCS ratio with `candidate.merchant_normalized`
+  - `ABS(amount_cents - candidate.amount_cents) <= candidate.amount_cents * amount_tolerance_pct`
+- If found and effective_status = settled or aged flux → **skip**.
+- If found and effective_status = young flux → **supersede**.
 
-**Pass 4 — Fallback insert**
-- If no pass matched: insert as new `raw_transaction`
+**Pass 5 — Fallback insert**
+- If no pass matched: insert as new `raw_transaction`.
 
-### Dedup Scope
+### Setting settlement_status at Insert Time
 
-The date range query is bounded to `pending_import.date_range_start - 7 days` through `pending_import.date_range_end + 7 days`. This prevents unbounded full-table scans on large transaction histories while covering edge cases at range boundaries.
+When inserting a new row (Pass 2 fallback, Pass 5), `settlement_status` is determined once and never changed:
+
+```
+settlement_status =
+  if candidate.date < T - settlement_window_days → 'settled'
+  else                                           → 'flux'
+```
+
+### Dedup Query Scope
+
+All dedup queries are bounded to `date BETWEEN candidate.date - dedup_window_days AND candidate.date + dedup_window_days`. This prevents unbounded full-table scans on large transaction histories.
 
 ---
 

@@ -8,10 +8,11 @@ CREATE TABLE entities (
 );
 
 CREATE TABLE users (
-  id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  auth_credential_id UUID       NOT NULL UNIQUE,
-  email             TEXT        NOT NULL UNIQUE,
-  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id                 UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  auth_credential_id UUID        NOT NULL UNIQUE,
+  email              TEXT        NOT NULL UNIQUE,
+  name               TEXT        NOT NULL,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE roles (

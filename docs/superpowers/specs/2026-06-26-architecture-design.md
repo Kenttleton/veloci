@@ -50,7 +50,9 @@ At login, `veloci-api` validates credentials via `veloci-auth`, then mints a tok
 **Two Postgres databases:**
 
 - `veloci_auth` — `auth_credentials`, `tokens`, `invite_tokens`. Owned exclusively by `veloci-auth`.
-- `veloci_app` — all financial data, RBAC, entity and user management. Owned by `veloci-api` and `veloci-engine`. No cross-database queries between the two.
+- `veloci_app` — all financial data, RBAC, entity and user management. Shared by `veloci-api` and `veloci-engine` under a single DB user (`veloci_app_user`). No cross-database queries between the two.
+
+**Intentional shared DB user:** `veloci-engine` is a performance-split extension of `veloci-api`, not an independent service. The Rust engine exists solely because Go is a poor fit for the CPU-bound pipeline stages; the application is logically one unit with shared state. A single `veloci_app_user` correctly expresses this. **v2 note:** when Veloci moves to SaaS, split DB users (`veloci_api_user` / `veloci_engine_user`) become worthwhile for audit logging and distributed tracing — distinguishing at the Postgres level which process wrote a given row is valuable in a paid, multi-tenant product. That change is additive (a new role + GRANT migration) and does not require schema changes.
 
 ---
 
@@ -140,7 +142,11 @@ Custom role creation, additional permissions, per-user permission overrides. No 
 
 ### Token Refresh
 
-Active sessions auto-refresh: with 15 minutes remaining, `veloci-api` mints a replacement token and revokes the old one. Expired tokens force re-login.
+Veloci uses a standard OAuth2 access + refresh token flow. Access tokens are short-lived (60 min). Refresh tokens are long-lived (30 days) and stored in the `tokens` table with `token_type = 'refresh'`.
+
+The frontend detects when ~15 minutes remain on the access token and calls `POST /auth/refresh` with the current access token. `veloci-auth` validates the token, mints a new access token, soft-deletes the old refresh token (sets `rotated_at`), and issues a new refresh token. A 60-second grace window on `rotated_at` prevents two-tab concurrent rotation requests from forcing a re-login.
+
+Revoking a refresh token cascades via `parent_id` FK to all access tokens it issued. Expired or missing tokens force re-login. This flow is designed to be swappable — `veloci-auth` can be replaced with an external OAuth2 provider (Keycloak, Auth0) in v2 without changes to `veloci-api`'s auth middleware.
 
 ---
 
