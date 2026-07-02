@@ -95,6 +95,9 @@ func (h *Tokens) Validate(w http.ResponseWriter, r *http.Request) {
 // Revoke deletes a token record by jti, invalidating it immediately.
 func (h *Tokens) Revoke(w http.ResponseWriter, r *http.Request) {
 	jti := chi.URLParam(r, "jti")
-	h.db.DeleteToken(r.Context(), jti)
+	if err := h.db.DeleteToken(r.Context(), jti); err != nil {
+		http.Error(w, `{"code":"INTERNAL"}`, http.StatusInternalServerError)
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }

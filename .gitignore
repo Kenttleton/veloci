@@ -1,1 +1,2 @@
-tmp/*services/auth/auth
+tmp/*
+services/auth/auth

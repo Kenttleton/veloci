@@ -29,12 +29,15 @@ func New(ctx context.Context, dsn string) (*DB, error) {
 
 // FindCredentialByEmail returns the credential row for the given email.
 func (d *DB) FindCredentialByEmail(ctx context.Context, email string) (*Credential, error) {
-	c := &Credential{}
+	c := new(Credential)
 	err := d.pool.QueryRow(ctx,
 		`SELECT id, password_hash, system_role FROM auth_credentials WHERE email = $1`,
 		email,
 	).Scan(&c.ID, &c.PasswordHash, &c.SystemRole)
-	return c, err
+	if err != nil {
+		return nil, err
+	}
+	return c, nil
 }
 
 // CreateCredential inserts a new credential row.
@@ -76,12 +79,15 @@ type TokenRow struct {
 
 // FindToken returns the token row for the given jti.
 func (d *DB) FindToken(ctx context.Context, jti string) (*TokenRow, error) {
-	row := &TokenRow{}
+	row := new(TokenRow)
 	err := d.pool.QueryRow(ctx,
 		`SELECT user_id, claims, expires_at FROM tokens WHERE jti = $1`,
 		jti,
 	).Scan(&row.CredentialID, &row.Claims, &row.ExpiresAt)
-	return row, err
+	if err != nil {
+		return nil, err
+	}
+	return row, nil
 }
 
 // DeleteToken removes a token record by jti (revocation).
