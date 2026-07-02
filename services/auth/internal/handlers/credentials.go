@@ -39,20 +39,20 @@ func (h *Credentials) Validate(w http.ResponseWriter, r *http.Request) {
 		Password string `json:"password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"code":"BAD_REQUEST"}`, http.StatusBadRequest)
+		writeJSON(w, http.StatusBadRequest, `{"code":"BAD_REQUEST"}`)
 		return
 	}
 	cred, err := h.db.FindCredentialByEmail(r.Context(), req.Email)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, ErrNotFound) {
-			http.Error(w, `{"code":"INVALID_CREDENTIALS"}`, http.StatusUnauthorized)
+			writeJSON(w, http.StatusUnauthorized, `{"code":"INVALID_CREDENTIALS"}`)
 			return
 		}
-		http.Error(w, `{"code":"INVALID_CREDENTIALS"}`, http.StatusUnauthorized)
+		writeJSON(w, http.StatusUnauthorized, `{"code":"INVALID_CREDENTIALS"}`)
 		return
 	}
 	if bcrypt.CompareHashAndPassword([]byte(cred.PasswordHash), []byte(req.Password)) != nil {
-		http.Error(w, `{"code":"INVALID_CREDENTIALS"}`, http.StatusUnauthorized)
+		writeJSON(w, http.StatusUnauthorized, `{"code":"INVALID_CREDENTIALS"}`)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -69,17 +69,17 @@ func (h *Credentials) Create(w http.ResponseWriter, r *http.Request) {
 		Password string `json:"password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"code":"BAD_REQUEST"}`, http.StatusBadRequest)
+		writeJSON(w, http.StatusBadRequest, `{"code":"BAD_REQUEST"}`)
 		return
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), 12)
 	if err != nil {
-		http.Error(w, `{"code":"INTERNAL"}`, http.StatusInternalServerError)
+		writeJSON(w, http.StatusInternalServerError, `{"code":"INTERNAL"}`)
 		return
 	}
 	id := uuid.New().String()
 	if err := h.db.CreateCredential(r.Context(), id, req.Email, string(hash), "user"); err != nil {
-		http.Error(w, `{"code":"CONFLICT"}`, http.StatusConflict)
+		writeJSON(w, http.StatusConflict, `{"code":"CONFLICT"}`)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")

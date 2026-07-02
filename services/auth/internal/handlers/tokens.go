@@ -40,7 +40,7 @@ func (h *Tokens) Mint(w http.ResponseWriter, r *http.Request) {
 		Claims       json.RawMessage `json:"claims"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"code":"BAD_REQUEST"}`, http.StatusBadRequest)
+		writeJSON(w, http.StatusBadRequest, `{"code":"BAD_REQUEST"}`)
 		return
 	}
 	jti := uuid.New().String()
@@ -48,12 +48,12 @@ func (h *Tokens) Mint(w http.ResponseWriter, r *http.Request) {
 
 	tok, err := tokens.Mint(h.secret, jti, req.Claims, expiresAt)
 	if err != nil {
-		http.Error(w, `{"code":"INTERNAL"}`, http.StatusInternalServerError)
+		writeJSON(w, http.StatusInternalServerError, `{"code":"INTERNAL"}`)
 		return
 	}
 	id := uuid.New().String()
 	if err := h.db.StoreToken(r.Context(), id, req.CredentialID, jti, req.Claims, expiresAt); err != nil {
-		http.Error(w, `{"code":"INTERNAL"}`, http.StatusInternalServerError)
+		writeJSON(w, http.StatusInternalServerError, `{"code":"INTERNAL"}`)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -71,17 +71,17 @@ func (h *Tokens) Validate(w http.ResponseWriter, r *http.Request) {
 		Token string `json:"token"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"code":"BAD_REQUEST"}`, http.StatusBadRequest)
+		writeJSON(w, http.StatusBadRequest, `{"code":"BAD_REQUEST"}`)
 		return
 	}
 	jti, _, err := tokens.Verify(h.secret, req.Token)
 	if err != nil {
-		http.Error(w, `{"code":"UNAUTHORIZED"}`, http.StatusUnauthorized)
+		writeJSON(w, http.StatusUnauthorized, `{"code":"UNAUTHORIZED"}`)
 		return
 	}
 	row, err := h.db.FindToken(r.Context(), jti)
 	if err != nil || time.Now().After(row.ExpiresAt) {
-		http.Error(w, `{"code":"UNAUTHORIZED"}`, http.StatusUnauthorized)
+		writeJSON(w, http.StatusUnauthorized, `{"code":"UNAUTHORIZED"}`)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -96,7 +96,7 @@ func (h *Tokens) Validate(w http.ResponseWriter, r *http.Request) {
 func (h *Tokens) Revoke(w http.ResponseWriter, r *http.Request) {
 	jti := chi.URLParam(r, "jti")
 	if err := h.db.DeleteToken(r.Context(), jti); err != nil {
-		http.Error(w, `{"code":"INTERNAL"}`, http.StatusInternalServerError)
+		writeJSON(w, http.StatusInternalServerError, `{"code":"INTERNAL"}`)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

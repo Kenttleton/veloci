@@ -55,9 +55,11 @@ func runServe(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("VELOCI_AUTH_URL required")
 	}
 
-	if _, err := queue.NewPublisher(viper.GetString("RABBITMQ_URL")); err != nil {
+	pub, err := queue.NewPublisher(viper.GetString("RABBITMQ_URL"))
+	if err != nil {
 		return fmt.Errorf("queue: %w", err)
 	}
+	_ = pub // TODO: pass to financial route handlers in service implementation plan
 
 	pool, err := pgxpool.New(context.Background(), viper.GetString("DATABASE_URL"))
 	if err != nil {
