@@ -1,0 +1,10 @@
+# config/veloci-auth.yaml.example
+# Copy to config/veloci-auth.yaml and fill in values.
+# This file is bind-mounted into the veloci-auth container.
+# server_admin password is stored in plaintext here so self-hosters
+# can recover it without CLI access. Only the bcrypt hash is stored in DB.
+server_admin:
+  email: admin@veloci.local
+  password: changeme
+jwt_secret: change-this-to-a-long-random-string-at-least-32-chars
+port: 8081

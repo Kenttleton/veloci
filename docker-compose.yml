@@ -1,0 +1,101 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      VELOCI_AUTH_DB: ${VELOCI_AUTH_DB}
+      VELOCI_AUTH_DB_USER: ${VELOCI_AUTH_DB_USER}
+      VELOCI_AUTH_DB_PASSWORD: ${VELOCI_AUTH_DB_PASSWORD}
+      VELOCI_APP_DB: ${VELOCI_APP_DB}
+      VELOCI_APP_DB_USER: ${VELOCI_APP_DB_USER}
+      VELOCI_APP_DB_PASSWORD: ${VELOCI_APP_DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+      - ./migrations:/migrations
+    networks:
+      - veloci
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:4.3-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - veloci
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      retries: 5
+
+  veloci-auth:
+    build: ./services/auth
+    environment:
+      DATABASE_URL: postgres://${VELOCI_AUTH_DB_USER}:${VELOCI_AUTH_DB_PASSWORD}@postgres:5432/${VELOCI_AUTH_DB}
+      CONFIG_PATH: /etc/veloci-auth/veloci-auth.yaml
+    volumes:
+      - ./config/veloci-auth.yaml:/etc/veloci-auth/veloci-auth.yaml:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - veloci
+    # No external ports — internal only
+
+  veloci-api:
+    build: ./services/api
+    environment:
+      DATABASE_URL: postgres://${VELOCI_APP_DB_USER}:${VELOCI_APP_DB_PASSWORD}@postgres:5432/${VELOCI_APP_DB}
+      VELOCI_AUTH_URL: http://veloci-auth:8081
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      PORT: "8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      veloci-auth:
+        condition: service_started
+    networks:
+      - veloci
+    ports:
+      - "8080:8080"
+
+  veloci-engine:
+    build: ./services/engine
+    environment:
+      DATABASE_URL: postgres://${VELOCI_APP_DB_USER}:${VELOCI_APP_DB_PASSWORD}@postgres:5432/${VELOCI_APP_DB}
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - veloci
+    healthcheck:
+      test: ["/veloci-engine", "health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  veloci-web:
+    build: ./services/web
+    networks:
+      - veloci
+    ports:
+      - "3000:80"
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
+
+networks:
+  veloci:
