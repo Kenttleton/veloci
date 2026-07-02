@@ -1,2 +1,5 @@
 tmp/*
 services/auth/auth
+
+.env
+veloci-auth.yaml
