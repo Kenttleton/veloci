@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -14,6 +16,22 @@ import (
 	"github.com/veloci/api/internal/middleware"
 	"github.com/veloci/api/internal/queue"
 )
+
+type appDBImpl struct {
+	pool *pgxpool.Pool
+}
+
+func (d *appDBImpl) FindUserEntity(ctx context.Context, email string) (handlers.UserEntity, error) {
+	var ue handlers.UserEntity
+	err := d.pool.QueryRow(ctx, `
+		SELECT u.id::text, eu.entity_id::text, eu.entity_role
+		FROM users u
+		JOIN entity_users eu ON eu.user_id = u.id
+		WHERE u.email = $1
+		LIMIT 1
+	`, email).Scan(&ue.UserID, &ue.EntityID, &ue.EntityRole)
+	return ue, err
+}
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
@@ -41,10 +59,15 @@ func runServe(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("queue: %w", err)
 	}
 
+	pool, err := pgxpool.New(context.Background(), viper.GetString("DATABASE_URL"))
+	if err != nil {
+		return fmt.Errorf("database: %w", err)
+	}
+	defer pool.Close()
+
 	authClient := authclient.New(authURL)
 
-	// TODO: wire real appDB in service implementation plan
-	authHandler := handlers.NewAuth(authURL, nil)
+	authHandler := handlers.NewAuth(authURL, &appDBImpl{pool: pool})
 
 	r := chi.NewRouter()
 	r.Get("/health", handlers.Health)
