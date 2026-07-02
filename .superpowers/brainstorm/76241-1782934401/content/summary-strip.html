@@ -1,0 +1,120 @@
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; }
+
+  .strip-wrap { background: #0f0f1a; border-radius: 8px; overflow: hidden; }
+
+  /* Summary strip */
+  .v-summary { display: flex; align-items: stretch; border-bottom: 1px solid #1e1e2e; }
+  .v-summary-cell { flex: 1; padding: 14px 20px; }
+  .v-summary-cell + .v-summary-cell { border-left: 1px solid #1e1e2e; }
+  .s-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; color: #444; margin-bottom: 4px; }
+  .s-value { font-size: 24px; font-weight: 700; line-height: 1; }
+  .s-unit  { font-size: 12px; color: #555; margin-top: 3px; }
+  .s-pct   { font-size: 11px; margin-top: 2px; }
+
+  .v-summary-op { display: flex; align-items: center; padding: 0 4px; color: #2a2a3a; font-size: 20px; font-weight: 300; flex-shrink: 0; align-self: center; }
+
+  /* Proportion bar */
+  .v-prop-bar { height: 4px; display: flex; }
+  .pb-commit { background: #c0392b; opacity: 0.45; }
+  .pb-margin-pos { background: #4caf50; opacity: 0.65; }
+  .pb-margin-neg { background: #c0392b; opacity: 0.8; }
+  .pb-income { background: #555; opacity: 0.3; }
+
+  /* Alarm banner */
+  .v-alarm { display: flex; align-items: center; gap: 8px; padding: 7px 20px; background: #1a0808; border-bottom: 1px solid #3a1010; font-size: 12px; color: #e07070; }
+  .v-alarm svg { flex-shrink: 0; }
+
+  /* Section label */
+  .case-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: #444; padding: 10px 0 6px; text-align: center; }
+
+  .ico { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+</style>
+
+<h2>Summary Strip — Positive vs Negative Margin</h2>
+<p class="subtitle">Reordered to Income − Commitments = Margin. Margin is green when positive, red when negative. Proportion bar and alarm banner reinforce the state.</p>
+
+<div style="display:flex;gap:24px;max-width:980px;margin:0 auto;">
+
+  <!-- ── POSITIVE STATE ── -->
+  <div style="flex:1;">
+    <div class="case-label" style="color:#4caf50;">Healthy — margin positive</div>
+    <div class="strip-wrap">
+      <div class="v-summary">
+        <div class="v-summary-cell">
+          <div class="s-label">Income</div>
+          <div class="s-value" style="color:#fff;">$287.50</div>
+          <div class="s-unit">/day</div>
+        </div>
+        <div class="v-summary-op">−</div>
+        <div class="v-summary-cell">
+          <div class="s-label">Commitments</div>
+          <div class="s-value" style="color:#e07070;">$201.33</div>
+          <div class="s-unit">/day · 70%</div>
+        </div>
+        <div class="v-summary-op">=</div>
+        <div class="v-summary-cell" style="background:#0d1f10;">
+          <div class="s-label" style="color:#2d5a30;">Margin</div>
+          <div class="s-value" style="color:#4caf50;">$86.17</div>
+          <div class="s-unit" style="color:#2d5a30;">/day · 30%</div>
+        </div>
+      </div>
+      <!-- Proportion bar: commits fill left, margin fills right -->
+      <div class="v-prop-bar">
+        <div class="pb-commit" style="width:70%"></div>
+        <div class="pb-margin-pos" style="width:30%"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── NEGATIVE STATE ── -->
+  <div style="flex:1;">
+    <div class="case-label" style="color:#e07070;">Alarm — commitments exceed income</div>
+    <div class="strip-wrap">
+      <div class="v-alarm">
+        <svg class="ico" viewBox="0 0 24 24" style="color:#e07070"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Commitments exceed income — your margin is negative
+      </div>
+      <div class="v-summary">
+        <div class="v-summary-cell">
+          <div class="s-label">Income</div>
+          <div class="s-value" style="color:#fff;">$287.50</div>
+          <div class="s-unit">/day</div>
+        </div>
+        <div class="v-summary-op">−</div>
+        <div class="v-summary-cell">
+          <div class="s-label">Commitments</div>
+          <div class="s-value" style="color:#e07070;">$310.00</div>
+          <div class="s-unit">/day · 108%</div>
+        </div>
+        <div class="v-summary-op">=</div>
+        <div class="v-summary-cell" style="background:#1a0808;">
+          <div class="s-label" style="color:#5a2020;">Margin</div>
+          <div class="s-value" style="color:#e74c3c;">−$22.50</div>
+          <div class="s-unit" style="color:#5a2020;">/day</div>
+        </div>
+      </div>
+      <!-- Proportion bar: full red because commitments > income -->
+      <div class="v-prop-bar">
+        <div class="pb-income" style="width:100%;position:relative;overflow:visible;">
+          <!-- income fills full width, then overflow marker -->
+        </div>
+      </div>
+      <div class="v-prop-bar" style="margin-top:-4px;">
+        <div class="pb-margin-neg" style="width:100%"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div style="max-width:980px;margin:16px auto 0;">
+  <div class="case-label" style="color:#aaa;text-align:left;font-size:11px;color:#444;">Notes on the negative state</div>
+  <ul style="font-size:12px;color:#555;line-height:1.8;margin:0;padding-left:20px;">
+    <li>Alarm banner appears above the strip only when margin is negative — not a persistent element</li>
+    <li>Margin cell background shifts to dark red; value shows the signed number (−$22.50)</li>
+    <li>Commitments percentage > 100% is valid — it just means overspend relative to income</li>
+    <li>Proportion bar goes solid red in the alarm state to reinforce that there is no remaining margin</li>
+  </ul>
+</div>

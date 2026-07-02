@@ -1,0 +1,342 @@
+<style>
+  .v-shell { display: flex; height: 640px; font-size: 13px; font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; background: #0f0f1a; border-radius: 8px; overflow: hidden; }
+
+  /* Sidebar */
+  .v-sidebar { width: 220px; flex-shrink: 0; background: #13131f; border-right: 1px solid #1e1e2e; display: flex; flex-direction: column; color: #c0c0d0; }
+  .v-sidebar-logo { padding: 18px 16px 14px; border-bottom: 1px solid #1e1e2e; }
+  .v-sidebar-logo .name { font-size: 17px; font-weight: 700; color: #fff; letter-spacing: 0.3px; }
+  .v-sidebar-logo .entity { font-size: 11px; color: #555; margin-top: 2px; }
+  .v-sidebar-nav { padding: 10px 8px 0; }
+  .v-nav-item { display: flex; align-items: center; gap: 9px; padding: 7px 10px; border-radius: 5px; cursor: pointer; color: #888; margin-bottom: 1px; }
+  .v-nav-item:hover { background: #1a1a2c; color: #ccc; }
+  .v-nav-item.active { background: #1c2a3a; color: #fff; }
+  .v-nav-item .label { flex: 1; font-size: 13px; }
+  .v-nav-badge { background: #c0392b; color: #fff; border-radius: 10px; font-size: 10px; padding: 1px 6px; font-weight: 600; }
+  .v-accounts-section { padding: 16px 8px 6px; }
+  .v-accounts-header { font-size: 10px; text-transform: uppercase; letter-spacing: 0.7px; color: #444; padding: 0 10px 6px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; }
+  .v-account-item { display: flex; align-items: center; padding: 5px 10px; border-radius: 5px; cursor: pointer; color: #777; margin-bottom: 1px; font-size: 12px; }
+  .v-account-item:hover { background: #1a1a2c; color: #bbb; }
+  .v-account-item .acct-name { flex: 1; }
+  .v-account-item .acct-bal { font-size: 11px; color: #555; }
+  .v-account-item.passive .acct-bal { color: #7b4040; }
+  .v-sidebar-footer { margin-top: auto; padding: 10px 8px; border-top: 1px solid #1e1e2e; }
+  .v-nav-item.settings { color: #555; }
+
+  /* Main canvas */
+  .v-canvas { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .v-canvas-header { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid #1e1e2e; flex-shrink: 0; }
+  .v-canvas-title { font-size: 15px; font-weight: 600; color: #fff; }
+  .v-view-toggle { display: flex; background: #1a1a2c; border-radius: 6px; padding: 2px; gap: 1px; }
+  .v-view-btn { padding: 4px 12px; border-radius: 4px; font-size: 12px; cursor: pointer; color: #666; }
+  .v-view-btn.active { background: #252540; color: #fff; }
+  .v-scale-toggle { display: flex; background: #1a1a2c; border-radius: 6px; padding: 2px; gap: 1px; margin-left: auto; }
+  .v-scale-btn { padding: 4px 10px; border-radius: 4px; font-size: 11px; cursor: pointer; color: #666; }
+  .v-scale-btn.active { background: #252540; color: #fff; }
+
+  /* Stack view body */
+  .v-stack-body { flex: 1; overflow-y: auto; padding: 16px 20px; }
+  .v-stack-income { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .v-stack-income-label { width: 160px; flex-shrink: 0; }
+  .v-stack-income-label .entry-name { font-size: 13px; font-weight: 600; color: #fff; }
+  .v-stack-income-label .entry-rate { font-size: 12px; color: #4caf50; margin-top: 1px; }
+  .v-stack-income-bar { flex: 1; height: 16px; background: #1e3a1e; border-radius: 3px; overflow: hidden; }
+  .v-stack-income-bar .fill { height: 100%; background: #4caf50; opacity: 0.7; border-radius: 3px; }
+
+  .v-stack-divider { height: 1px; background: #1e1e2e; margin: 8px 0; }
+  .v-stack-group-header { display: flex; align-items: center; gap: 8px; padding: 6px 0 4px; }
+  .v-stack-group-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; color: #444; font-weight: 600; flex: 1; width: 160px; }
+
+  .v-stack-row { display: flex; align-items: center; gap: 12px; padding: 4px 0; }
+  .v-stack-row:hover { background: #16162a; border-radius: 4px; margin: 0 -4px; padding: 4px 4px; }
+  .v-stack-row-label { width: 160px; flex-shrink: 0; }
+  .v-stack-row-label .entry-name { font-size: 12px; color: #ccc; }
+  .v-stack-row-label .entry-meta { font-size: 10px; color: #444; margin-top: 1px; }
+  .v-stack-bar-track { flex: 1; height: 10px; background: #1a1a2c; border-radius: 3px; overflow: hidden; position: relative; }
+  .v-stack-bar-used { position: absolute; right: 0; top: 0; height: 100%; background: #c0392b; opacity: 0.5; border-radius: 3px; }
+  .v-stack-bar-remaining { position: absolute; left: 0; top: 0; height: 100%; background: #2a4a2a; border-radius: 3px; }
+  .v-stack-rate { width: 72px; flex-shrink: 0; text-align: right; font-size: 12px; color: #aaa; }
+  .v-stack-drift { width: 56px; flex-shrink: 0; text-align: right; font-size: 11px; }
+  .v-stack-drift.pos { color: #4caf50; }
+  .v-stack-drift.neg { color: #e74c3c; }
+  .v-stack-drift.neu { color: #555; }
+
+  .v-stack-margin { display: flex; align-items: center; gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 2px solid #1e1e2e; }
+  .v-stack-margin-label { width: 160px; flex-shrink: 0; }
+  .v-stack-margin-label .entry-name { font-size: 13px; font-weight: 600; color: #fff; }
+  .v-stack-margin-label .entry-rate { font-size: 12px; color: #4caf50; margin-top: 1px; }
+  .v-stack-margin-bar { flex: 1; height: 16px; background: #1e3a1e; border-radius: 3px; overflow: hidden; display: flex; justify-content: flex-end; }
+  .v-stack-margin-bar .fill { height: 100%; background: #4caf50; opacity: 0.6; border-radius: 3px; }
+
+  /* SVG icon helper */
+  .ico { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+</style>
+
+<h2>Veloci — Budget · Stack View</h2>
+<p class="subtitle">Sidebar mirrors Actual's account-list structure. Pulse / Stack / Horizon are view modes on one canvas, not pages. Scale is canvas-scoped. Stack is a row-by-row waterfall — each entry removes its slice from the remaining income bar.</p>
+
+<div class="mockup" style="max-width:980px;margin:0 auto 20px;">
+  <div class="mockup-header">Desktop — Budget page · Stack view active</div>
+  <div class="mockup-body" style="padding:0;">
+    <div class="v-shell">
+
+      <!-- SIDEBAR -->
+      <div class="v-sidebar">
+        <div class="v-sidebar-logo">
+          <div class="name">veloci</div>
+          <div class="entity">Utterback household</div>
+        </div>
+
+        <div class="v-sidebar-nav">
+          <!-- Budget = primary nav item, always active when on budget canvas -->
+          <div class="v-nav-item active">
+            <svg class="ico" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+            <span class="label">Budget</span>
+          </div>
+          <div class="v-nav-item">
+            <svg class="ico" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            <span class="label">Reports</span>
+          </div>
+          <div class="v-nav-item">
+            <svg class="ico" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            <span class="label">Review</span>
+            <span class="v-nav-badge">3</span>
+          </div>
+        </div>
+
+        <!-- Account list — mirrors Actual's On/Off budget split -->
+        <div class="v-accounts-section" style="flex:1;overflow-y:auto;">
+          <div class="v-accounts-header">
+            Active
+            <svg class="ico" viewBox="0 0 24 24" style="width:11px;height:11px;color:#333"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </div>
+          <div class="v-account-item">
+            <span class="acct-name">Chase Checking</span>
+            <span class="acct-bal">$4,210</span>
+          </div>
+          <div class="v-account-item">
+            <span class="acct-name">Chase Savings</span>
+            <span class="acct-bal">$12,440</span>
+          </div>
+          <div class="v-account-item">
+            <span class="acct-name">AMEX Blue</span>
+            <span class="acct-bal">$840</span>
+          </div>
+
+          <div class="v-accounts-header" style="margin-top:12px;">
+            Passive
+            <svg class="ico" viewBox="0 0 24 24" style="width:11px;height:11px;color:#333"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </div>
+          <div class="v-account-item passive">
+            <span class="acct-name">Auto Loan</span>
+            <span class="acct-bal">-$14,200</span>
+          </div>
+          <div class="v-account-item passive">
+            <span class="acct-name">Student Loan</span>
+            <span class="acct-bal">-$28,500</span>
+          </div>
+          <div class="v-account-item">
+            <span class="acct-name">Fidelity 401k</span>
+            <span class="acct-bal">$61,000</span>
+          </div>
+        </div>
+
+        <div class="v-sidebar-footer">
+          <div class="v-nav-item settings">
+            <svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+            <span class="label">Settings</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- MAIN CANVAS -->
+      <div class="v-canvas">
+        <!-- Canvas header: title + view toggle + scale -->
+        <div class="v-canvas-header">
+          <span class="v-canvas-title">Budget</span>
+          <div class="v-view-toggle">
+            <div class="v-view-btn">Pulse</div>
+            <div class="v-view-btn active">Stack</div>
+            <div class="v-view-btn">Horizon</div>
+          </div>
+          <div class="v-scale-toggle">
+            <div class="v-scale-btn active">/day</div>
+            <div class="v-scale-btn">/mo</div>
+            <div class="v-scale-btn">/yr</div>
+          </div>
+        </div>
+
+        <!-- STACK VIEW BODY -->
+        <div class="v-stack-body">
+
+          <!-- Column headers -->
+          <div style="display:flex;align-items:center;gap:12px;padding:0 0 8px;border-bottom:1px solid #1e1e2e;margin-bottom:10px;">
+            <div style="width:160px;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:#333;flex-shrink:0;"></div>
+            <div style="flex:1;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:#333;"></div>
+            <div style="width:72px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:#333;">Rate</div>
+            <div style="width:56px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:#333;">Drift</div>
+          </div>
+
+          <!-- INCOME row -->
+          <div class="v-stack-income">
+            <div class="v-stack-income-label">
+              <div class="entry-name">Income</div>
+              <div class="entry-rate">$287.50 /day</div>
+            </div>
+            <div class="v-stack-income-bar"><div class="fill" style="width:100%"></div></div>
+            <div class="v-stack-rate" style="color:#4caf50;font-weight:600;">$287.50</div>
+            <div class="v-stack-drift neu">—</div>
+          </div>
+
+          <div class="v-stack-divider"></div>
+
+          <!-- Group: Housing -->
+          <div class="v-stack-group-header">
+            <svg class="ico" viewBox="0 0 24 24" style="color:#444;width:11px;height:11px;"><polyline points="6 9 12 15 18 9"/></svg>
+            <span class="v-stack-group-label">Housing</span>
+          </div>
+
+          <!-- Rent: uses 30% of income bar. Remaining = 70% -->
+          <div class="v-stack-row">
+            <div class="v-stack-row-label">
+              <div class="entry-name">Rent</div>
+              <div class="entry-meta">Standing · auto-matched</div>
+            </div>
+            <div class="v-stack-bar-track">
+              <div class="v-stack-bar-remaining" style="width:70%"></div>
+              <div class="v-stack-bar-used" style="width:30%"></div>
+            </div>
+            <div class="v-stack-rate">$86.30</div>
+            <div class="v-stack-drift neg">−$1.20</div>
+          </div>
+
+          <!-- Electric: uses 3% -->
+          <div class="v-stack-row">
+            <div class="v-stack-row-label">
+              <div class="entry-name">Electric</div>
+              <div class="entry-meta">Variable · avg method</div>
+            </div>
+            <div class="v-stack-bar-track">
+              <div class="v-stack-bar-remaining" style="width:67%"></div>
+              <div class="v-stack-bar-used" style="width:3%"></div>
+            </div>
+            <div class="v-stack-rate">$8.60</div>
+            <div class="v-stack-drift pos">+$0.40</div>
+          </div>
+
+          <!-- Internet: uses 2% -->
+          <div class="v-stack-row">
+            <div class="v-stack-row-label">
+              <div class="entry-name">Internet</div>
+              <div class="entry-meta">Standing · auto-matched</div>
+            </div>
+            <div class="v-stack-bar-track">
+              <div class="v-stack-bar-remaining" style="width:65%"></div>
+              <div class="v-stack-bar-used" style="width:2%"></div>
+            </div>
+            <div class="v-stack-rate">$5.75</div>
+            <div class="v-stack-drift neu">—</div>
+          </div>
+
+          <div class="v-stack-divider"></div>
+
+          <!-- Group: Transport -->
+          <div class="v-stack-group-header">
+            <svg class="ico" viewBox="0 0 24 24" style="color:#444;width:11px;height:11px;"><polyline points="6 9 12 15 18 9"/></svg>
+            <span class="v-stack-group-label">Transport</span>
+          </div>
+
+          <!-- Car payment: 15% -->
+          <div class="v-stack-row">
+            <div class="v-stack-row-label">
+              <div class="entry-name">Auto Loan</div>
+              <div class="entry-meta">Standing · min payment</div>
+            </div>
+            <div class="v-stack-bar-track">
+              <div class="v-stack-bar-remaining" style="width:50%"></div>
+              <div class="v-stack-bar-used" style="width:15%"></div>
+            </div>
+            <div class="v-stack-rate">$43.15</div>
+            <div class="v-stack-drift neu">—</div>
+          </div>
+
+          <!-- Gas: 5% -->
+          <div class="v-stack-row">
+            <div class="v-stack-row-label">
+              <div class="entry-name">Gas</div>
+              <div class="entry-meta">Variable · avg method</div>
+            </div>
+            <div class="v-stack-bar-track">
+              <div class="v-stack-bar-remaining" style="width:45%"></div>
+              <div class="v-stack-bar-used" style="width:5%"></div>
+            </div>
+            <div class="v-stack-rate">$14.38</div>
+            <div class="v-stack-drift neg">−$2.10</div>
+          </div>
+
+          <!-- Car insurance: 4% -->
+          <div class="v-stack-row">
+            <div class="v-stack-row-label">
+              <div class="entry-name">Car Insurance</div>
+              <div class="entry-meta">Standing · smoothed 365d</div>
+            </div>
+            <div class="v-stack-bar-track">
+              <div class="v-stack-bar-remaining" style="width:41%"></div>
+              <div class="v-stack-bar-used" style="width:4%"></div>
+            </div>
+            <div class="v-stack-rate">$11.51</div>
+            <div class="v-stack-drift neu">—</div>
+          </div>
+
+          <div class="v-stack-divider"></div>
+
+          <!-- Group: Subscriptions -->
+          <div class="v-stack-group-header">
+            <svg class="ico" viewBox="0 0 24 24" style="color:#444;width:11px;height:11px;"><polyline points="6 9 12 15 18 9"/></svg>
+            <span class="v-stack-group-label">Subscriptions</span>
+          </div>
+
+          <div class="v-stack-row">
+            <div class="v-stack-row-label">
+              <div class="entry-name">Netflix</div>
+              <div class="entry-meta">Standing · auto-matched</div>
+            </div>
+            <div class="v-stack-bar-track">
+              <div class="v-stack-bar-remaining" style="width:40.6%"></div>
+              <div class="v-stack-bar-used" style="width:0.4%"></div>
+            </div>
+            <div class="v-stack-rate">$0.66</div>
+            <div class="v-stack-drift neu">—</div>
+          </div>
+
+          <div class="v-stack-row">
+            <div class="v-stack-row-label">
+              <div class="entry-name">Spotify</div>
+              <div class="entry-meta">Standing · auto-matched</div>
+            </div>
+            <div class="v-stack-bar-track">
+              <div class="v-stack-bar-remaining" style="width:40.3%"></div>
+              <div class="v-stack-bar-used" style="width:0.3%"></div>
+            </div>
+            <div class="v-stack-rate">$0.33</div>
+            <div class="v-stack-drift neu">—</div>
+          </div>
+
+          <!-- MARGIN row -->
+          <div class="v-stack-margin">
+            <div class="v-stack-margin-label">
+              <div class="entry-name">Margin</div>
+              <div class="entry-rate" style="color:#aaa;">30% of income</div>
+            </div>
+            <div class="v-stack-margin-bar"><div class="fill" style="width:40%"></div></div>
+            <div class="v-stack-rate" style="color:#4caf50;font-weight:600;">$86.17</div>
+            <div class="v-stack-drift neu">—</div>
+          </div>
+
+        </div><!-- /stack-body -->
+      </div><!-- /canvas -->
+
+    </div><!-- /shell -->
+  </div>
+</div>
+
+<p class="subtitle" style="text-align:center;">Each row narrows the remaining bar as its expense removes a slice. Drift column shows actual vs projection delta per entry. Does the row structure and waterfall mechanic feel right?</p>

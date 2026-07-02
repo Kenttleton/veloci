@@ -1,0 +1,398 @@
+<style>
+  * { box-sizing: border-box; }
+  :root {
+    --bg:        #1a2235;
+    --surface:   #1f2b40;
+    --surface2:  #263044;
+    --border:    #2d3a52;
+    --border2:   #364255;
+    --text:      #dde4f0;
+    --text2:     #8a9bb8;
+    --text3:     #4f607a;
+    --income:    #64b580;
+    --commit:    #d97070;
+    --margin-pos:#52c47a;
+    --margin-neg:#e05555;
+    --accent:    #7aa3e0;
+  }
+  .v-shell { display: flex; height: 700px; font-size: 13px; font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; background: var(--bg); border-radius: 8px; overflow: hidden; color: var(--text); }
+  .v-sidebar { width: 220px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+  .v-logo { padding: 18px 16px 14px; border-bottom: 1px solid var(--border); }
+  .v-logo .name { font-size: 17px; font-weight: 700; color: var(--text); }
+  .v-logo .entity { font-size: 11px; color: var(--text3); margin-top: 2px; }
+  .v-sidebar-nav { padding: 10px 8px 0; flex-shrink: 0; }
+  .v-nav-item { display: flex; align-items: center; gap: 9px; padding: 7px 10px; border-radius: 5px; cursor: pointer; color: var(--text3); margin-bottom: 1px; }
+  .v-nav-item.active { background: var(--surface2); color: var(--text); }
+  .v-nav-item .label { flex: 1; font-size: 13px; }
+  .v-nav-badge { background: #b03030; color: #fff; border-radius: 10px; font-size: 10px; padding: 1px 6px; font-weight: 600; }
+  .v-acct-section { padding: 12px 8px 6px; flex: 1; overflow-y: auto; }
+  .v-acct-header { font-size: 10px; text-transform: uppercase; letter-spacing: 0.7px; color: var(--text3); padding: 0 10px 5px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+  .v-acct-item { display: flex; align-items: center; padding: 5px 10px; border-radius: 5px; color: var(--text2); margin-bottom: 1px; font-size: 12px; cursor: pointer; }
+  .v-acct-item .aname { flex: 1; }
+  .v-acct-item .abal { font-size: 11px; color: var(--text3); }
+  .v-acct-item.passive .abal { color: #8a4a4a; }
+  .v-sidebar-footer { padding: 10px 8px; border-top: 1px solid var(--border); flex-shrink: 0; }
+  .v-canvas { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+  .v-topbar { display: flex; align-items: center; gap: 14px; padding: 10px 18px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .v-topbar-title { font-size: 15px; font-weight: 600; color: var(--text); }
+  .v-ctrl-group { display: flex; flex-direction: column; gap: 3px; }
+  .v-ctrl-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text3); }
+  .v-ctrl-btns { display: flex; gap: 2px; }
+  .v-ctrl-btn { padding: 3px 9px; border-radius: 4px; font-size: 11px; cursor: pointer; color: var(--text3); background: var(--surface); border: 1px solid var(--border); }
+  .v-ctrl-btn.active { background: var(--surface2); color: var(--accent); border-color: var(--border2); }
+  .v-ctrl-sep { width: 1px; height: 28px; background: var(--border); align-self: center; }
+  .v-summary { display: flex; align-items: stretch; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .v-summary-cell { flex: 1; padding: 11px 16px; }
+  .v-summary-cell + .v-summary-cell { border-left: 1px solid var(--border); }
+  .s-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text3); margin-bottom: 3px; }
+  .s-value { font-size: 21px; font-weight: 700; line-height: 1; }
+  .s-unit { font-size: 11px; color: var(--text3); margin-top: 2px; }
+  .v-sum-op { display: flex; align-items: center; padding: 0 2px; color: var(--border2); font-size: 20px; font-weight: 300; flex-shrink: 0; align-self: center; }
+  .v-prop-bar { height: 3px; display: flex; flex-shrink: 0; }
+  .v-graph-wrap { padding: 12px 18px 8px; flex-shrink: 0; border-bottom: 1px solid var(--border); }
+  .v-graph-top { display: flex; align-items: center; margin-bottom: 8px; gap: 14px; }
+  .v-legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text3); }
+  .v-legend-swatch { width: 20px; height: 2px; border-radius: 1px; }
+  .v-pulse-info { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+  .v-pulse-date { font-size: 11px; color: var(--text2); background: var(--surface2); border: 1px solid var(--border2); border-radius: 4px; padding: 2px 8px; }
+  .v-stack-panel { flex: 1; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+  .v-stack-header { display: flex; align-items: center; padding: 7px 18px; border-bottom: 1px solid var(--border); flex-shrink: 0; background: var(--surface); }
+  .v-stack-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text3); }
+  .v-stack-at { font-size: 11px; color: var(--text2); margin-left: 6px; flex: 1; }
+  .v-stack-cols { font-size: 10px; color: var(--text3); margin-right: 10px; }
+  .v-stack-collapse { font-size: 11px; color: var(--text3); cursor: pointer; }
+  .v-stack-body { flex: 1; overflow-y: auto; padding: 6px 18px 12px; }
+  .v-srow { display: flex; align-items: center; gap: 10px; padding: 3px 0; }
+  .v-srow:hover { background: var(--surface); border-radius: 4px; margin: 0 -4px; padding: 3px 4px; }
+  .v-rlabel { width: 148px; flex-shrink: 0; }
+  .v-rlabel .rname { font-size: 12px; color: var(--text); }
+  .v-rlabel .rmeta { font-size: 10px; color: var(--text3); margin-top: 1px; }
+  .v-track { flex: 1; height: 9px; border-radius: 3px; background: var(--surface2); position: relative; overflow: hidden; }
+  .v-track .t-rem { position: absolute; left: 0; top: 0; height: 100%; background: #1d3a28; border-radius: 3px; }
+  .v-track .t-exp { position: absolute; right: 0; top: 0; height: 100%; background: #7a2a2a; opacity: 0.5; border-radius: 3px; }
+  .v-rrate { width: 62px; flex-shrink: 0; text-align: right; font-size: 12px; color: var(--text2); }
+  .v-rdrift { width: 50px; flex-shrink: 0; text-align: right; font-size: 11px; }
+  .pos { color: var(--margin-pos); } .neg { color: var(--commit); } .neu { color: var(--text3); }
+  .v-ghead { display: flex; align-items: center; gap: 6px; padding: 6px 0 2px; }
+  .v-ghead .gname { font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text3); font-weight: 600; }
+  .v-anchor .rname { color: var(--text); font-weight: 600; font-size: 13px; }
+  .v-anchor .v-rrate { font-weight: 600; font-size: 13px; }
+  .v-divider { height: 1px; background: var(--border); margin: 3px 0; }
+  .ico { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+</style>
+
+<h2>Veloci — Budget (v9)</h2>
+<p class="subtitle">
+  Graph plots the <strong>rate of change</strong> of margin — the second derivative of transaction data.
+  Zero = stable margin. Above = margin improving. Below = margin declining.
+  The summary still shows the absolute margin value at the Pulse; the graph shows direction and momentum.
+</p>
+
+<div class="mockup" style="max-width:980px;margin:0 auto 20px;">
+  <div class="mockup-header">Desktop · 6m window · /day · Pulse at TODAY (Jul 1, 2026)</div>
+  <div class="mockup-body" style="padding:0;">
+  <div class="v-shell">
+
+    <div class="v-sidebar">
+      <div class="v-logo"><div class="name">veloci</div><div class="entity">Utterback household</div></div>
+      <div class="v-sidebar-nav">
+        <div class="v-nav-item active">
+          <svg class="ico" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+          <span class="label">Budget</span>
+        </div>
+        <div class="v-nav-item">
+          <svg class="ico" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          <span class="label">Reports</span>
+        </div>
+        <div class="v-nav-item">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/></svg>
+          <span class="label">Review</span><span class="v-nav-badge">3</span>
+        </div>
+      </div>
+      <div class="v-acct-section">
+        <div class="v-acct-header">Active <svg class="ico" viewBox="0 0 24 24" style="width:10px;height:10px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>
+        <div class="v-acct-item"><span class="aname">Chase Checking</span><span class="abal">$4,210</span></div>
+        <div class="v-acct-item"><span class="aname">Chase Savings</span><span class="abal">$12,440</span></div>
+        <div class="v-acct-item"><span class="aname">AMEX Blue</span><span class="abal">$840</span></div>
+        <div class="v-acct-header" style="margin-top:12px;">Passive <svg class="ico" viewBox="0 0 24 24" style="width:10px;height:10px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>
+        <div class="v-acct-item passive"><span class="aname">Auto Loan</span><span class="abal">−$14,200</span></div>
+        <div class="v-acct-item passive"><span class="aname">Student Loan</span><span class="abal">−$28,500</span></div>
+        <div class="v-acct-item"><span class="aname">Fidelity 401k</span><span class="abal">$61,000</span></div>
+      </div>
+      <div class="v-sidebar-footer">
+        <div class="v-nav-item" style="color:var(--text3)">
+          <svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+          <span class="label">Settings</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="v-canvas">
+
+      <div class="v-topbar">
+        <span class="v-topbar-title">Budget</span>
+        <div style="flex:1"></div>
+        <div class="v-ctrl-group">
+          <div class="v-ctrl-label">Data window</div>
+          <div class="v-ctrl-btns">
+            <div class="v-ctrl-btn">1m</div><div class="v-ctrl-btn">3m</div>
+            <div class="v-ctrl-btn active">6m</div>
+            <div class="v-ctrl-btn">1y</div><div class="v-ctrl-btn">3y</div>
+          </div>
+        </div>
+        <div class="v-ctrl-sep"></div>
+        <div class="v-ctrl-group">
+          <div class="v-ctrl-label">Rate format</div>
+          <div class="v-ctrl-btns">
+            <div class="v-ctrl-btn active">/day</div>
+            <div class="v-ctrl-btn">/mo</div><div class="v-ctrl-btn">/yr</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Summary: absolute values at the Pulse point -->
+      <div class="v-summary">
+        <div class="v-summary-cell">
+          <div class="s-label">Income</div>
+          <div class="s-value" style="color:var(--text)">$287.50</div>
+          <div class="s-unit">/day · 100%</div>
+        </div>
+        <div class="v-sum-op">−</div>
+        <div class="v-summary-cell">
+          <div class="s-label">Commitments</div>
+          <div class="s-value" style="color:var(--commit)">$201.33</div>
+          <div class="s-unit">/day · 70%</div>
+        </div>
+        <div class="v-sum-op">=</div>
+        <div class="v-summary-cell" style="background:#192e22;">
+          <div class="s-label" style="color:#3a6a48;">Margin</div>
+          <div class="s-value" style="color:var(--margin-pos)">$86.17</div>
+          <div class="s-unit" style="color:#3a6a48;">/day · 30% · at Pulse</div>
+        </div>
+      </div>
+      <div class="v-prop-bar">
+        <div style="width:70%;background:#8a3030;opacity:0.4;"></div>
+        <div style="width:30%;background:#3a8a55;opacity:0.55;"></div>
+      </div>
+
+      <!--
+        GRAPH — plots d(margin)/dt: rate of change of margin velocity.
+
+        Y axis (SVG, y increases downward):
+          y=18  = strongly improving  (+)
+          y=55  = zero trend line     (0° — no change in margin rate)
+          y=92  = strongly declining  (−)
+
+        Zero line at y=55 is the horizontal center reference — "0 degrees of trend."
+        Above it (lower y): margin actively improving.
+        Below it (higher y): margin actively declining.
+
+        Projection: mostly hugs near y=55 (steady state), then briefly dips above
+        (positive — loan pays off, margin improving for a period) then settles back.
+        In this healthy scenario it stays above zero line most of the time.
+
+        Actual: tighter oscillation around projection. Normal daily noise keeps it
+        near the zero line. Unexpected expense pulls it briefly below, smooths back.
+
+        Drift shading: green where actual > projection (improving faster),
+                       red where actual < projection (declining faster).
+        Background fill: soft green above zero line, soft red below — shows the
+                         region meaning at a glance.
+      -->
+      <div class="v-graph-wrap">
+        <div class="v-graph-top">
+          <div class="v-legend-item">
+            <div class="v-legend-swatch" style="border-top:1.5px dashed var(--accent);height:0;margin-top:1px;"></div>
+            Projection trend
+          </div>
+          <div class="v-legend-item">
+            <div class="v-legend-swatch" style="background:var(--commit);"></div>
+            Actual trend
+          </div>
+          <div class="v-legend-item">
+            <div style="width:10px;height:8px;background:var(--margin-pos);opacity:0.2;border-radius:1px;"></div>
+            Ahead of projection
+          </div>
+          <div class="v-legend-item">
+            <div style="width:10px;height:8px;background:var(--commit);opacity:0.2;border-radius:1px;"></div>
+            Behind projection
+          </div>
+          <div class="v-pulse-info">
+            <span style="font-size:10px;color:var(--text3)">Pulse</span>
+            <div class="v-pulse-date">Jul 1, 2026</div>
+            <span style="font-size:10px;color:var(--accent)">TODAY</span>
+          </div>
+        </div>
+
+        <svg width="100%" height="110" viewBox="0 0 660 110" preserveAspectRatio="none" style="display:block;">
+
+          <!-- Background region fills: above zero = subtle green, below = subtle red -->
+          <!-- Above zero line (y=0 to y=55): improving region -->
+          <rect x="30" y="0" width="630" height="55" fill="#52c47a" fill-opacity="0.04"/>
+          <!-- Below zero line (y=55 to y=110): declining region -->
+          <rect x="30" y="55" width="630" height="55" fill="#e05555" fill-opacity="0.04"/>
+
+          <!-- ── Zero trend line (0° — no change in margin rate) ── -->
+          <line x1="30" y1="55" x2="660" y2="55"
+                stroke="#dde4f0" stroke-width="1" opacity="0.2"/>
+          <!-- Label -->
+          <text x="32" y="52" fill="#4a5a70" font-size="8" font-family="monospace">0° trend</text>
+          <!-- Region labels -->
+          <text x="32" y="22" fill="#2a5a3a" font-size="8" font-family="sans-serif">improving →</text>
+          <text x="32" y="100" fill="#5a2a2a" font-size="8" font-family="sans-serif">declining →</text>
+
+          <!--
+            Projection path: mostly near y=55 (stable), rises above (y≈38) when
+            auto loan drops off around x=370, then settles back to y=52 by x=460.
+            Small positive lean through the window = healthy steady improvement.
+          -->
+
+          <!-- Drift fills: actual vs projection -->
+
+          <!-- pos 1: x=40→125 actual slightly above proj -->
+          <path d="M 40,53 C 60,50 90,48 110,50 C 118,51 122,52 125,53
+                   C 105,53 70,53 40,53 Z" fill="#52c47a" fill-opacity="0.18"/>
+
+          <!-- neg 1: x=125→190 -->
+          <path d="M 125,53 C 138,58 155,62 170,61 C 180,59 187,56 190,54
+                   L 190,53 C 165,53 145,53 125,53 Z" fill="#d97070" fill-opacity="0.18"/>
+
+          <!-- pos 2: x=190→300 -->
+          <path d="M 190,54 C 210,50 245,47 270,48 C 286,49 295,51 300,52
+                   C 275,52 235,52 190,54 Z" fill="#52c47a" fill-opacity="0.18"/>
+
+          <!-- neg 2: x=300→358 — unexpected expense spike below projection -->
+          <path d="M 300,52 C 308,58 315,67 322,70 C 333,72 344,66 350,60 C 355,57 357,55 358,54
+                   L 358,50 C 335,50 315,50 300,52 Z" fill="#d97070" fill-opacity="0.2"/>
+
+          <!-- pos 3: x=358→440 — includes loan payoff lift -->
+          <path d="M 358,50 C 370,44 382,38 392,37 C 406,36 420,38 432,41 C 437,43 439,44 440,45
+                   C 425,47 400,48 370,50 C 362,50 358,50 358,50 Z" fill="#52c47a" fill-opacity="0.18"/>
+
+          <!-- neg 4: x=440→478 -->
+          <path d="M 440,45 C 450,50 460,54 468,53 C 474,52 477,50 478,49
+                   L 478,44 C 462,44 450,44 440,45 Z" fill="#d97070" fill-opacity="0.18"/>
+
+          <!-- pos 5: x=478→500 TODAY — slightly ahead -->
+          <path d="M 478,49 C 486,47 493,46 500,46
+                   L 500,48 C 493,48 486,48 478,49 Z" fill="#52c47a" fill-opacity="0.18"/>
+
+          <!-- ── Projection: smooth, near zero line, lifts for loan payoff ── -->
+          <path d="M 40,53
+                   C 100,52 200,52 295,52
+                   C 330,52 355,51 365,49
+                   C 374,42 382,37 392,37
+                   C 408,37 425,39 440,43
+                   C 460,47 480,49 500,48
+                   C 550,47 610,47 660,47"
+                stroke="#7aa3e0" stroke-width="1.5" stroke-dasharray="5 3" fill="none" opacity="0.65"/>
+
+          <!-- Loan payoff annotation -->
+          <line x1="388" y1="37" x2="388" y2="52" stroke="#7aa3e0" stroke-width="1" opacity="0.25"/>
+          <text x="392" y="47" fill="#304866" font-size="7" font-family="sans-serif">loan off</text>
+
+          <!-- ── Actual: solid to TODAY ── -->
+          <path d="M 40,53
+                   C 60,50 90,48 110,50 C 118,51 122,52 125,53
+                   C 138,58 155,62 170,61 C 180,59 187,56 190,54
+                   C 210,50 245,47 270,48 C 286,49 295,51 300,52
+                   C 308,58 315,67 322,70 C 333,72 344,66 352,59 C 356,56 357,55 358,54
+                   C 368,47 380,38 391,37 C 403,36 418,38 430,41 C 437,43 439,44 440,45
+                   C 450,50 460,54 468,53 C 474,52 477,50 478,49
+                   C 486,47 493,46 500,46"
+                stroke="#d97070" stroke-width="2" fill="none"/>
+
+          <!-- Actual dashed after TODAY — trends with projection toward zero -->
+          <path d="M 500,46 C 540,47 600,47 660,47"
+                stroke="#d97070" stroke-width="1.5" stroke-dasharray="3 4" fill="none" opacity="0.28"/>
+
+          <!-- TODAY cursor -->
+          <line x1="500" y1="0" x2="500" y2="110" stroke="#dde4f0" stroke-width="1" stroke-dasharray="3 3" opacity="0.18"/>
+          <circle cx="500" cy="46" r="4.5" fill="#1a2235" stroke="#7aa3e0" stroke-width="1.5"/>
+
+          <!-- Axis labels -->
+          <text x="42" y="11" fill="#3a4a5a" font-size="8" font-family="monospace">Jan 1</text>
+          <text x="504" y="11" fill="#5a7aa0" font-size="8" font-family="monospace">TODAY</text>
+          <text x="625" y="107" fill="#2d3a52" font-size="8" font-family="monospace">→ ∞</text>
+        </svg>
+
+        <div style="font-size:10px;color:var(--text3);margin-top:3px;">
+          Y axis = d(margin)/dt — rate of change of margin velocity. Zero line = stable margin. Above = improving. Below = declining. Summary shows the absolute $/day value at the Pulse; the graph shows momentum.
+        </div>
+      </div>
+
+      <!-- STACK -->
+      <div class="v-stack-panel">
+        <div class="v-stack-header">
+          <span class="v-stack-title">Stack</span>
+          <span class="v-stack-at">— Jul 1, 2026 <span style="color:var(--accent);font-size:10px;">TODAY</span></span>
+          <span class="v-stack-cols">entry · type · rate · drift</span>
+          <span class="v-stack-collapse">collapse ∧</span>
+        </div>
+        <div class="v-stack-body">
+          <div class="v-srow v-anchor">
+            <div class="v-rlabel"><div class="rname">Income</div></div>
+            <div class="v-track"><div class="t-rem" style="width:100%"></div></div>
+            <div class="v-rrate" style="color:var(--income)">$287.50</div>
+            <div class="v-rdrift neu">—</div>
+          </div>
+          <div class="v-divider"></div>
+          <div class="v-ghead"><svg class="ico" viewBox="0 0 24 24" style="width:10px;height:10px;color:var(--text3)"><polyline points="6 9 12 15 18 9"/></svg><span class="gname">Housing</span></div>
+          <div class="v-srow">
+            <div class="v-rlabel"><div class="rname">Rent</div><div class="rmeta">Standing</div></div>
+            <div class="v-track"><div class="t-rem" style="width:70%"></div><div class="t-exp" style="width:30%"></div></div>
+            <div class="v-rrate">$86.30</div><div class="v-rdrift neg">−$1.20</div>
+          </div>
+          <div class="v-srow">
+            <div class="v-rlabel"><div class="rname">Electric</div><div class="rmeta">Variable · avg</div></div>
+            <div class="v-track"><div class="t-rem" style="width:67%"></div><div class="t-exp" style="width:3%"></div></div>
+            <div class="v-rrate">$8.60</div><div class="v-rdrift pos">+$0.40</div>
+          </div>
+          <div class="v-srow">
+            <div class="v-rlabel"><div class="rname">Internet</div><div class="rmeta">Standing</div></div>
+            <div class="v-track"><div class="t-rem" style="width:65%"></div><div class="t-exp" style="width:2%"></div></div>
+            <div class="v-rrate">$5.75</div><div class="v-rdrift neu">—</div>
+          </div>
+          <div class="v-divider"></div>
+          <div class="v-ghead"><svg class="ico" viewBox="0 0 24 24" style="width:10px;height:10px;color:var(--text3)"><polyline points="6 9 12 15 18 9"/></svg><span class="gname">Transport</span></div>
+          <div class="v-srow">
+            <div class="v-rlabel"><div class="rname">Auto Loan</div><div class="rmeta">Standing · min pmt</div></div>
+            <div class="v-track"><div class="t-rem" style="width:50%"></div><div class="t-exp" style="width:15%"></div></div>
+            <div class="v-rrate">$43.15</div><div class="v-rdrift neu">—</div>
+          </div>
+          <div class="v-srow">
+            <div class="v-rlabel"><div class="rname">Gas</div><div class="rmeta">Variable · avg</div></div>
+            <div class="v-track"><div class="t-rem" style="width:45%"></div><div class="t-exp" style="width:5%"></div></div>
+            <div class="v-rrate">$14.38</div><div class="v-rdrift neg">−$2.10</div>
+          </div>
+          <div class="v-srow">
+            <div class="v-rlabel"><div class="rname">Car Insurance</div><div class="rmeta">Standing · smoothed 365d</div></div>
+            <div class="v-track"><div class="t-rem" style="width:41%"></div><div class="t-exp" style="width:4%"></div></div>
+            <div class="v-rrate">$11.51</div><div class="v-rdrift neu">—</div>
+          </div>
+          <div class="v-divider"></div>
+          <div class="v-ghead"><svg class="ico" viewBox="0 0 24 24" style="width:10px;height:10px;color:var(--text3)"><polyline points="6 9 12 15 18 9"/></svg><span class="gname">Subscriptions</span></div>
+          <div class="v-srow">
+            <div class="v-rlabel"><div class="rname">Netflix</div><div class="rmeta">Standing</div></div>
+            <div class="v-track"><div class="t-rem" style="width:40.6%"></div><div class="t-exp" style="width:0.4%"></div></div>
+            <div class="v-rrate">$0.66</div><div class="v-rdrift neu">—</div>
+          </div>
+          <div class="v-srow">
+            <div class="v-rlabel"><div class="rname">Spotify</div><div class="rmeta">Standing</div></div>
+            <div class="v-track"><div class="t-rem" style="width:40.3%"></div><div class="t-exp" style="width:0.3%"></div></div>
+            <div class="v-rrate">$0.33</div><div class="v-rdrift neu">—</div>
+          </div>
+          <div class="v-divider"></div>
+          <div class="v-srow v-anchor">
+            <div class="v-rlabel"><div class="rname">Margin</div><div class="rmeta" style="color:#3a6a48;">30% · at Pulse</div></div>
+            <div class="v-track" style="background:none;"><div class="t-rem" style="background:#1d3a28;width:40%"></div></div>
+            <div class="v-rrate" style="color:var(--margin-pos)">$86.17</div>
+            <div class="v-rdrift neu">—</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+  </div>
+</div>

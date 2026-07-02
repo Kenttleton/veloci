@@ -1,0 +1,81 @@
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; }
+  .strip-wrap { background: #0f0f1a; border-radius: 8px; overflow: hidden; }
+  .v-summary { display: flex; align-items: stretch; border-bottom: 1px solid #1e1e2e; }
+  .v-summary-cell { flex: 1; padding: 14px 20px; }
+  .v-summary-cell + .v-summary-cell { border-left: 1px solid #1e1e2e; }
+  .s-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; color: #444; margin-bottom: 4px; }
+  .s-value { font-size: 24px; font-weight: 700; line-height: 1; }
+  .s-unit  { font-size: 12px; color: #555; margin-top: 3px; }
+  .v-summary-op { display: flex; align-items: center; padding: 0 4px; color: #2a2a3a; font-size: 20px; font-weight: 300; flex-shrink: 0; align-self: center; }
+  .v-prop-bar { height: 4px; display: flex; }
+  .case-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; padding: 10px 0 6px; text-align: center; }
+</style>
+
+<h2>Summary Strip</h2>
+<p class="subtitle">No alarm banner. Red margin is the only signal — the data speaks, the app doesn't interpret.</p>
+
+<div style="display:flex;gap:24px;max-width:980px;margin:0 auto;">
+
+  <!-- POSITIVE -->
+  <div style="flex:1;">
+    <div class="case-label" style="color:#4caf50;">Positive margin</div>
+    <div class="strip-wrap">
+      <div class="v-summary">
+        <div class="v-summary-cell">
+          <div class="s-label">Income</div>
+          <div class="s-value" style="color:#fff;">$287.50</div>
+          <div class="s-unit">/day · 100%</div>
+        </div>
+        <div class="v-summary-op">−</div>
+        <div class="v-summary-cell">
+          <div class="s-label">Commitments</div>
+          <div class="s-value" style="color:#e07070;">$201.33</div>
+          <div class="s-unit">/day · 70%</div>
+        </div>
+        <div class="v-summary-op">=</div>
+        <div class="v-summary-cell" style="background:#0d1f10;">
+          <div class="s-label" style="color:#2d5a30;">Margin</div>
+          <div class="s-value" style="color:#4caf50;">$86.17</div>
+          <div class="s-unit" style="color:#2d5a30;">/day · 30%</div>
+        </div>
+      </div>
+      <div class="v-prop-bar">
+        <div style="width:70%;background:#c0392b;opacity:0.45;"></div>
+        <div style="width:30%;background:#4caf50;opacity:0.65;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- NEGATIVE -->
+  <div style="flex:1;">
+    <div class="case-label" style="color:#e07070;">Negative margin</div>
+    <div class="strip-wrap">
+      <div class="v-summary">
+        <div class="v-summary-cell">
+          <div class="s-label">Income</div>
+          <div class="s-value" style="color:#fff;">$287.50</div>
+          <div class="s-unit">/day · 100%</div>
+        </div>
+        <div class="v-summary-op">−</div>
+        <div class="v-summary-cell">
+          <div class="s-label">Commitments</div>
+          <div class="s-value" style="color:#e07070;">$310.00</div>
+          <div class="s-unit">/day · 108%</div>
+        </div>
+        <div class="v-summary-op">=</div>
+        <div class="v-summary-cell" style="background:#1a0808;">
+          <div class="s-label" style="color:#5a2020;">Margin</div>
+          <div class="s-value" style="color:#e74c3c;">−$22.50</div>
+          <div class="s-unit" style="color:#5a2020;">/day · −8%</div>
+        </div>
+      </div>
+      <!-- Full red bar — no remaining margin to show -->
+      <div class="v-prop-bar">
+        <div style="width:100%;background:#c0392b;opacity:0.55;"></div>
+      </div>
+    </div>
+  </div>
+
+</div>

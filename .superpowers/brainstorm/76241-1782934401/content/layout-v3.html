@@ -1,0 +1,344 @@
+<style>
+  * { box-sizing: border-box; }
+  .v-shell { display: flex; height: 700px; font-size: 13px; font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; background: #0f0f1a; border-radius: 8px; overflow: hidden; }
+
+  /* ── Sidebar ── */
+  .v-sidebar { width: 220px; flex-shrink: 0; background: #13131f; border-right: 1px solid #1e1e2e; display: flex; flex-direction: column; color: #c0c0d0; }
+  .v-sidebar-logo { padding: 18px 16px 14px; border-bottom: 1px solid #1e1e2e; }
+  .v-sidebar-logo .name { font-size: 17px; font-weight: 700; color: #fff; letter-spacing: 0.3px; }
+  .v-sidebar-logo .entity { font-size: 11px; color: #555; margin-top: 2px; }
+  .v-sidebar-nav { padding: 10px 8px 0; flex-shrink: 0; }
+  .v-nav-item { display: flex; align-items: center; gap: 9px; padding: 7px 10px; border-radius: 5px; cursor: pointer; color: #888; margin-bottom: 1px; }
+  .v-nav-item.active { background: #1c2a3a; color: #fff; }
+  .v-nav-item .label { flex: 1; font-size: 13px; }
+  .v-nav-badge { background: #c0392b; color: #fff; border-radius: 10px; font-size: 10px; padding: 1px 6px; font-weight: 600; }
+  .v-accounts-section { padding: 12px 8px 6px; flex: 1; overflow-y: auto; }
+  .v-accounts-header { font-size: 10px; text-transform: uppercase; letter-spacing: 0.7px; color: #444; padding: 0 10px 5px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+  .v-account-item { display: flex; align-items: center; padding: 5px 10px; border-radius: 5px; cursor: pointer; color: #777; margin-bottom: 1px; font-size: 12px; }
+  .v-account-item:hover { background: #1a1a2c; color: #bbb; }
+  .v-account-item .acct-name { flex: 1; }
+  .v-account-item .acct-bal { font-size: 11px; color: #555; }
+  .v-account-item.passive .acct-bal { color: #6b3535; }
+  .v-sidebar-footer { padding: 10px 8px; border-top: 1px solid #1e1e2e; flex-shrink: 0; }
+
+  /* ── Canvas ── */
+  .v-canvas { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+
+  /* Canvas top bar */
+  .v-topbar { display: flex; align-items: center; gap: 14px; padding: 10px 18px; border-bottom: 1px solid #1e1e2e; flex-shrink: 0; }
+  .v-topbar-title { font-size: 15px; font-weight: 600; color: #fff; margin-right: 4px; }
+
+  /* Time range slider area */
+  .v-range-group { display: flex; flex-direction: column; gap: 3px; }
+  .v-range-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; color: #444; }
+  .v-range-btns { display: flex; gap: 2px; }
+  .v-range-btn { padding: 3px 9px; border-radius: 4px; font-size: 11px; cursor: pointer; color: #555; background: #1a1a2c; }
+  .v-range-btn.active { background: #252545; color: #aac4ff; }
+
+  /* Rate format toggle */
+  .v-rate-group { display: flex; flex-direction: column; gap: 3px; }
+  .v-rate-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; color: #444; }
+  .v-rate-btns { display: flex; gap: 2px; }
+  .v-rate-btn { padding: 3px 9px; border-radius: 4px; font-size: 11px; cursor: pointer; color: #555; background: #1a1a2c; }
+  .v-rate-btn.active { background: #252545; color: #aac4ff; }
+
+  /* ── Summary strip ── */
+  .v-summary { display: flex; gap: 0; flex-shrink: 0; border-bottom: 1px solid #1e1e2e; }
+  .v-summary-cell { flex: 1; padding: 12px 18px; position: relative; }
+  .v-summary-cell + .v-summary-cell { border-left: 1px solid #1e1e2e; }
+  .v-summary-cell .s-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; color: #444; }
+  .v-summary-cell .s-value { font-size: 22px; font-weight: 700; margin-top: 3px; }
+  .v-summary-cell .s-sub { font-size: 11px; color: #555; margin-top: 1px; }
+  .v-summary-eq { display: flex; align-items: center; padding: 0 8px; color: #333; font-size: 16px; align-self: center; flex-shrink: 0; }
+
+  /* Proportion bar across full width */
+  .v-summary-bar { height: 4px; display: flex; flex-shrink: 0; }
+  .v-summary-bar .seg-commit { background: #c0392b; opacity: 0.5; }
+  .v-summary-bar .seg-margin { background: #4caf50; opacity: 0.6; }
+
+  /* ── Graph ── */
+  .v-graph-section { padding: 14px 18px 10px; flex-shrink: 0; border-bottom: 1px solid #1e1e2e; }
+  .v-graph-header { display: flex; align-items: center; margin-bottom: 10px; }
+  .v-graph-legend { display: flex; gap: 14px; flex: 1; }
+  .v-legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #555; }
+  .v-legend-dot { width: 24px; height: 2px; border-radius: 1px; }
+  .v-today-label { font-size: 10px; color: #444; margin-left: auto; }
+
+  /* ── Stack panel ── */
+  .v-stack-panel { flex: 1; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+  .v-stack-header { display: flex; align-items: center; padding: 8px 18px; border-bottom: 1px solid #1e1e2e; flex-shrink: 0; }
+  .v-stack-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #444; flex: 1; }
+  .v-stack-collapse { font-size: 11px; color: #333; cursor: pointer; }
+  .v-stack-body { flex: 1; overflow-y: auto; padding: 8px 18px 14px; }
+
+  .v-stack-row { display: flex; align-items: center; gap: 10px; padding: 3px 0; }
+  .v-stack-row-label { width: 152px; flex-shrink: 0; }
+  .v-stack-row-label .r-name { font-size: 12px; color: #ccc; }
+  .v-stack-row-label .r-meta { font-size: 10px; color: #3a3a55; margin-top: 1px; }
+  .v-stack-track { flex: 1; height: 10px; border-radius: 3px; overflow: hidden; background: #1a1a2c; position: relative; }
+  .v-stack-track .t-rem { position: absolute; left: 0; top: 0; height: 100%; background: #1d3a2a; border-radius: 3px; }
+  .v-stack-track .t-exp { position: absolute; right: 0; top: 0; height: 100%; background: #c0392b; opacity: 0.45; border-radius: 3px; }
+  .v-stack-rate { width: 66px; flex-shrink: 0; text-align: right; font-size: 12px; color: #888; }
+  .v-stack-drift { width: 52px; flex-shrink: 0; text-align: right; font-size: 11px; }
+  .v-stack-drift.pos { color: #4caf50; }
+  .v-stack-drift.neg { color: #e74c3c; }
+  .v-stack-drift.neu { color: #333; }
+
+  .v-group-head { display: flex; align-items: center; gap: 6px; padding: 7px 0 3px; }
+  .v-group-head .g-name { font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; color: #3a3a55; font-weight: 600; flex: 1; }
+
+  .v-anchor-row .r-name { color: #fff; font-weight: 600; }
+  .v-anchor-row .v-stack-rate { color: #4caf50; font-weight: 600; font-size: 13px; }
+  .v-anchor-track-income { background: none; }
+  .v-anchor-track-income .t-rem { background: #1d3a2a; width: 100%; }
+  .v-anchor-track-margin .t-rem { background: #1d3a2a; }
+
+  .v-divider { height: 1px; background: #1a1a2c; margin: 4px 0; }
+
+  .ico { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+</style>
+
+<h2>Veloci — Budget Canvas</h2>
+<p class="subtitle">All views on one canvas. Summary strip shows Income = Commitments + Margin. Graph is always visible. Stack is below and collapsible. Two independent controls: time range (data scope) + rate format (display unit).</p>
+
+<div class="mockup" style="max-width:980px;margin:0 auto 20px;">
+  <div class="mockup-header">Desktop — Budget · 6-month window · /day rates</div>
+  <div class="mockup-body" style="padding:0;">
+  <div class="v-shell">
+
+    <!-- SIDEBAR -->
+    <div class="v-sidebar">
+      <div class="v-sidebar-logo">
+        <div class="name">veloci</div>
+        <div class="entity">Utterback household</div>
+      </div>
+      <div class="v-sidebar-nav">
+        <div class="v-nav-item active">
+          <svg class="ico" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+          <span class="label">Budget</span>
+        </div>
+        <div class="v-nav-item">
+          <svg class="ico" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          <span class="label">Reports</span>
+        </div>
+        <div class="v-nav-item">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/></svg>
+          <span class="label">Review</span>
+          <span class="v-nav-badge">3</span>
+        </div>
+      </div>
+      <div class="v-accounts-section">
+        <div class="v-accounts-header">Active
+          <svg class="ico" viewBox="0 0 24 24" style="width:10px;height:10px;color:#2a2a3a"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </div>
+        <div class="v-account-item"><span class="acct-name">Chase Checking</span><span class="acct-bal">$4,210</span></div>
+        <div class="v-account-item"><span class="acct-name">Chase Savings</span><span class="acct-bal">$12,440</span></div>
+        <div class="v-account-item"><span class="acct-name">AMEX Blue</span><span class="acct-bal">$840</span></div>
+        <div class="v-accounts-header" style="margin-top:12px;">Passive
+          <svg class="ico" viewBox="0 0 24 24" style="width:10px;height:10px;color:#2a2a3a"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </div>
+        <div class="v-account-item passive"><span class="acct-name">Auto Loan</span><span class="acct-bal">−$14,200</span></div>
+        <div class="v-account-item passive"><span class="acct-name">Student Loan</span><span class="acct-bal">−$28,500</span></div>
+        <div class="v-account-item"><span class="acct-name">Fidelity 401k</span><span class="acct-bal">$61,000</span></div>
+      </div>
+      <div class="v-sidebar-footer">
+        <div class="v-nav-item" style="color:#444;">
+          <svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+          <span class="label">Settings</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- MAIN CANVAS -->
+    <div class="v-canvas">
+
+      <!-- TOP BAR: title + two independent controls -->
+      <div class="v-topbar">
+        <span class="v-topbar-title">Budget</span>
+        <div style="flex:1"></div>
+
+        <!-- Control 1: Data window (scope of what's shown in graph) -->
+        <div class="v-range-group">
+          <div class="v-range-label">Data window</div>
+          <div class="v-range-btns">
+            <div class="v-range-btn">1m</div>
+            <div class="v-range-btn">3m</div>
+            <div class="v-range-btn active">6m</div>
+            <div class="v-range-btn">1y</div>
+            <div class="v-range-btn">3y</div>
+          </div>
+        </div>
+
+        <div style="width:1px;height:28px;background:#1e1e2e;margin:0 4px;"></div>
+
+        <!-- Control 2: Rate display format -->
+        <div class="v-rate-group">
+          <div class="v-rate-label">Rate format</div>
+          <div class="v-rate-btns">
+            <div class="v-rate-btn active">/day</div>
+            <div class="v-rate-btn">/mo</div>
+            <div class="v-rate-btn">/yr</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SUMMARY STRIP: Income = Commitments + Margin -->
+      <div class="v-summary">
+        <div class="v-summary-cell">
+          <div class="s-label">Income</div>
+          <div class="s-value" style="color:#fff;">$287.50</div>
+          <div class="s-sub">/day · 100%</div>
+        </div>
+        <div class="v-summary-eq">=</div>
+        <div class="v-summary-cell">
+          <div class="s-label">Commitments</div>
+          <div class="s-value" style="color:#e07070;">$201.33</div>
+          <div class="s-sub">/day · 70% of income</div>
+        </div>
+        <div class="v-summary-eq">+</div>
+        <div class="v-summary-cell">
+          <div class="s-label">Margin</div>
+          <div class="s-value" style="color:#4caf50;">$86.17</div>
+          <div class="s-sub">/day · 30% of income</div>
+        </div>
+      </div>
+      <!-- Thin proportion bar under the summary -->
+      <div class="v-summary-bar">
+        <div class="seg-commit" style="width:70%"></div>
+        <div class="seg-margin" style="width:30%"></div>
+      </div>
+
+      <!-- GRAPH SECTION (Pulse = left of TODAY, Horizon = right of TODAY) -->
+      <div class="v-graph-section">
+        <div class="v-graph-header">
+          <div class="v-graph-legend">
+            <div class="v-legend-item"><div class="v-legend-dot" style="background:#aac4ff;"></div> Projection</div>
+            <div class="v-legend-item"><div class="v-legend-dot" style="background:#e07070;"></div> Actual</div>
+            <div class="v-legend-item"><div class="v-legend-dot" style="background:#4caf50;height:1px;border-top:1px dashed #4caf50;"></div> Margin</div>
+          </div>
+          <div class="v-today-label">← past &nbsp;|&nbsp; TODAY &nbsp;|&nbsp; future →</div>
+        </div>
+        <svg width="100%" height="110" viewBox="0 0 700 110" preserveAspectRatio="none">
+          <!-- Drift fill between lines (actual above projection = positive drift) -->
+          <path d="M0,55 C80,52 160,58 220,54 C280,50 320,60 380,56 C420,53 460,58 500,55 L500,55 L500,63 C460,67 420,62 380,65 C320,70 280,60 220,64 C160,68 80,62 0,65 Z" fill="#4caf50" fill-opacity="0.08"/>
+
+          <!-- Projection line (dashed blue) -->
+          <path d="M0,55 C80,52 160,58 220,54 C280,50 320,60 380,56 C420,53 460,58 500,55 C560,52 620,50 700,48" stroke="#aac4ff" stroke-width="1.5" stroke-dasharray="5 3" fill="none" opacity="0.6"/>
+
+          <!-- Actual line (solid, stops at TODAY) -->
+          <path d="M0,65 C50,62 100,68 150,64 C200,60 250,70 300,67 C340,64 360,70 400,66 C440,62 470,67 500,63" stroke="#e07070" stroke-width="2" fill="none"/>
+
+          <!-- TODAY cursor -->
+          <line x1="500" y1="0" x2="500" y2="110" stroke="#ffffff" stroke-width="1" stroke-dasharray="3 3" opacity="0.2"/>
+          <text x="504" y="14" fill="#444" font-size="9" font-family="monospace">TODAY</text>
+
+          <!-- Future projection continues as dashed (dimmer) -->
+          <path d="M500,63 C540,60 580,54 640,51 C670,50 685,49 700,48" stroke="#e07070" stroke-width="1.5" stroke-dasharray="3 4" fill="none" opacity="0.3"/>
+
+          <!-- Margin baseline (thin green) -->
+          <path d="M0,88 C200,87 400,89 700,87" stroke="#4caf50" stroke-width="1" stroke-dasharray="2 4" fill="none" opacity="0.3"/>
+        </svg>
+      </div>
+
+      <!-- STACK PANEL (collapsible) -->
+      <div class="v-stack-panel">
+        <div class="v-stack-header">
+          <span class="v-stack-title">Stack</span>
+          <span style="font-size:10px;color:#333;margin-right:12px;">entry · type · rate · drift</span>
+          <span class="v-stack-collapse">collapse ∧</span>
+        </div>
+        <div class="v-stack-body">
+
+          <!-- Income anchor row -->
+          <div class="v-stack-row v-anchor-row">
+            <div class="v-stack-row-label"><div class="r-name">Income</div></div>
+            <div class="v-stack-track v-anchor-track-income"><div class="t-rem" style="width:100%"></div></div>
+            <div class="v-stack-rate">$287.50</div>
+            <div class="v-stack-drift neu">—</div>
+          </div>
+
+          <div class="v-divider"></div>
+
+          <!-- Housing group -->
+          <div class="v-group-head">
+            <svg class="ico" viewBox="0 0 24 24" style="color:#2a2a45;width:10px;height:10px;"><polyline points="6 9 12 15 18 9"/></svg>
+            <span class="g-name">Housing</span>
+          </div>
+          <div class="v-stack-row">
+            <div class="v-stack-row-label"><div class="r-name">Rent</div><div class="r-meta">Standing</div></div>
+            <div class="v-stack-track"><div class="t-rem" style="width:70%"></div><div class="t-exp" style="width:30%"></div></div>
+            <div class="v-stack-rate">$86.30</div>
+            <div class="v-stack-drift neg">−$1.20</div>
+          </div>
+          <div class="v-stack-row">
+            <div class="v-stack-row-label"><div class="r-name">Electric</div><div class="r-meta">Variable · avg</div></div>
+            <div class="v-stack-track"><div class="t-rem" style="width:67%"></div><div class="t-exp" style="width:3%"></div></div>
+            <div class="v-stack-rate">$8.60</div>
+            <div class="v-stack-drift pos">+$0.40</div>
+          </div>
+          <div class="v-stack-row">
+            <div class="v-stack-row-label"><div class="r-name">Internet</div><div class="r-meta">Standing</div></div>
+            <div class="v-stack-track"><div class="t-rem" style="width:65%"></div><div class="t-exp" style="width:2%"></div></div>
+            <div class="v-stack-rate">$5.75</div>
+            <div class="v-stack-drift neu">—</div>
+          </div>
+
+          <div class="v-divider"></div>
+
+          <!-- Transport group -->
+          <div class="v-group-head">
+            <svg class="ico" viewBox="0 0 24 24" style="color:#2a2a45;width:10px;height:10px;"><polyline points="6 9 12 15 18 9"/></svg>
+            <span class="g-name">Transport</span>
+          </div>
+          <div class="v-stack-row">
+            <div class="v-stack-row-label"><div class="r-name">Auto Loan</div><div class="r-meta">Standing · min pmt</div></div>
+            <div class="v-stack-track"><div class="t-rem" style="width:50%"></div><div class="t-exp" style="width:15%"></div></div>
+            <div class="v-stack-rate">$43.15</div>
+            <div class="v-stack-drift neu">—</div>
+          </div>
+          <div class="v-stack-row">
+            <div class="v-stack-row-label"><div class="r-name">Gas</div><div class="r-meta">Variable · avg</div></div>
+            <div class="v-stack-track"><div class="t-rem" style="width:45%"></div><div class="t-exp" style="width:5%"></div></div>
+            <div class="v-stack-rate">$14.38</div>
+            <div class="v-stack-drift neg">−$2.10</div>
+          </div>
+
+          <div class="v-divider"></div>
+
+          <!-- Subscriptions group -->
+          <div class="v-group-head">
+            <svg class="ico" viewBox="0 0 24 24" style="color:#2a2a45;width:10px;height:10px;"><polyline points="6 9 12 15 18 9"/></svg>
+            <span class="g-name">Subscriptions</span>
+          </div>
+          <div class="v-stack-row">
+            <div class="v-stack-row-label"><div class="r-name">Netflix</div><div class="r-meta">Standing</div></div>
+            <div class="v-stack-track"><div class="t-rem" style="width:40.6%"></div><div class="t-exp" style="width:0.4%"></div></div>
+            <div class="v-stack-rate">$0.66</div>
+            <div class="v-stack-drift neu">—</div>
+          </div>
+          <div class="v-stack-row">
+            <div class="v-stack-row-label"><div class="r-name">Spotify</div><div class="r-meta">Standing</div></div>
+            <div class="v-stack-track"><div class="t-rem" style="width:40.3%"></div><div class="t-exp" style="width:0.3%"></div></div>
+            <div class="v-stack-rate">$0.33</div>
+            <div class="v-stack-drift neu">—</div>
+          </div>
+
+          <div class="v-divider"></div>
+
+          <!-- Margin anchor row -->
+          <div class="v-stack-row v-anchor-row">
+            <div class="v-stack-row-label"><div class="r-name">Margin</div><div class="r-meta" style="color:#3a5a3a;">30% of income</div></div>
+            <div class="v-stack-track" style="background:none;"><div class="t-rem" style="background:#1d3a2a;width:40%"></div></div>
+            <div class="v-stack-rate">$86.17</div>
+            <div class="v-stack-drift neu">—</div>
+          </div>
+
+        </div>
+      </div>
+
+    </div><!-- /canvas -->
+  </div><!-- /shell -->
+  </div>
+</div>
+
+<p class="subtitle" style="text-align:center;">Two controls top-right: data window (scope) and rate format (display unit) work independently. Summary strip shows the equation. Graph left of TODAY = Pulse; right of TODAY = Horizon. Stack below, collapsible. Does this framing click?</p>
