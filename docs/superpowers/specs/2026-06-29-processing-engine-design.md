@@ -15,7 +15,7 @@ The Veloci processing engine is a pure function: given (raw_transactions, rules,
 Two Postgres tables are the source of truth:
 
 | Table | Role |
-|---|---|
+| --- | --- |
 | `raw_transactions` | Immutable, normalized transaction records. Written once at import time. Never modified. |
 | `computed_snapshots` | Rebuildable calculations. Written by the engine after every analysis run. Safe to drop and recompute. |
 
@@ -27,7 +27,7 @@ This separation means rule changes can be applied retroactively with zero re-upl
 
 Every job type runs a contiguous suffix of these seven stages. No branching, no parallel tracks.
 
-```
+```text
 Stage 0  CSV normalization + 4-pass dedup     →  raw_transactions
 Stage 1  Rule matching (pre/post, boolean)    →  transaction_rule_assignments
 Stage 2  Pattern detection (unmatched only)   →  rules (status: pending_review)
@@ -53,7 +53,7 @@ Stage 6  Snapshot write (batch INSERT)        →  computed_snapshots
 
 New rules detected in Stage 2 start in `status: pending_review`. Stages 3–6 filter exclusively on `status = 'active'`. Until the user approves a pending rule, it does not contribute to any rate, slope, or snapshot calculation.
 
-```
+```text
 Stage 2 detects pattern → rule created with status: pending_review
 User sees review queue in UI → rule shown with:
   - suggested name
@@ -89,7 +89,7 @@ This makes the review queue the live preview: the engine has already done the wo
 Every transaction exists in one of three zones relative to the import timestamp `T` (`pending_imports.uploaded_at`):
 
 | Zone | Condition | Meaning |
-|---|---|---|
+| --- | --- | --- |
 | **Settled** | `candidate.date < T - settlement_window_days` | Final and authoritative. No further changes expected. |
 | **Flux** | `candidate.date >= T - settlement_window_days` | Pending or recently posted. Date or amount may still differ across exports. |
 | **New** | `candidate.date > existing_boundary + dedup_window_days` | Beyond all previously imported data. Cannot be a duplicate. |
@@ -102,13 +102,13 @@ Every transaction exists in one of three zones relative to the import timestamp 
 
 Before checking each candidate against the database, the engine computes the effective settlement status of any existing row it finds:
 
-```
+```text
 effective_status =
-  if existing.settlement_status = 'settled'          → settled
+  if existing.settlement_status = 'settled'                              → settled
   if existing.settlement_status = 'flux'
-     AND NOW() - existing.imported_at > settlement_window_days  → effectively settled (aged)
+     AND NOW() - existing.imported_at > settlement_window_days           → effectively settled (aged)
   if existing.settlement_status = 'flux'
-     AND NOW() - existing.imported_at <= settlement_window_days → young flux (supersedeable)
+     AND NOW() - existing.imported_at <= settlement_window_days          → young flux (supersedeable)
 ```
 
 Aged flux rows are treated identically to settled rows for dedup purposes — they represent transactions that have had sufficient time to resolve without a newer import superseding them.
@@ -150,7 +150,7 @@ Passes run in order. A candidate matched in an earlier pass is not re-evaluated 
 
 When inserting a new row (Pass 2 fallback, Pass 5), `settlement_status` is determined once and never changed:
 
-```
+```text
 settlement_status =
   if candidate.date < T - settlement_window_days → 'settled'
   else                                           → 'flux'
