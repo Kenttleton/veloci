@@ -14,6 +14,6 @@ COPY src ./src
 # Touch main.rs to force cargo to re-link the final binary.
 RUN touch src/main.rs && cargo build --release
 
-FROM alpine:3.21
+FROM alpine:3.24
 COPY --from=build /app/target/release/veloci-engine /veloci-engine
 ENTRYPOINT ["/veloci-engine"]
