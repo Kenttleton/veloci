@@ -42,6 +42,10 @@ func (h *Credentials) Validate(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, `{"code":"BAD_REQUEST"}`)
 		return
 	}
+	if req.Email == "" || req.Password == "" {
+		writeJSON(w, http.StatusBadRequest, `{"code":"BAD_REQUEST"}`)
+		return
+	}
 	cred, err := h.db.FindCredentialByEmail(r.Context(), req.Email)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, ErrNotFound) {
@@ -69,6 +73,10 @@ func (h *Credentials) Create(w http.ResponseWriter, r *http.Request) {
 		Password string `json:"password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, `{"code":"BAD_REQUEST"}`)
+		return
+	}
+	if req.Email == "" || len(req.Password) < 8 {
 		writeJSON(w, http.StatusBadRequest, `{"code":"BAD_REQUEST"}`)
 		return
 	}

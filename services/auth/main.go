@@ -67,6 +67,12 @@ func init() {
 	rootCmd.AddCommand(serveCmd)
 	viper.AutomaticEnv()
 	viper.SetDefault("PORT", "8081")
+	// Env var overrides for secrets — AutomaticEnv doesn't map nested keys.
+	// VELOCI_SERVER_ADMIN_EMAIL / VELOCI_SERVER_ADMIN_PASSWORD / VELOCI_JWT_SECRET
+	// take precedence over veloci-auth.yaml values when set.
+	viper.BindEnv("server_admin.email", "VELOCI_SERVER_ADMIN_EMAIL")       //nolint:errcheck
+	viper.BindEnv("server_admin.password", "VELOCI_SERVER_ADMIN_PASSWORD") //nolint:errcheck
+	viper.BindEnv("jwt_secret", "VELOCI_JWT_SECRET")                       //nolint:errcheck
 }
 
 func runServe(_ *cobra.Command, _ []string) error {

@@ -203,9 +203,20 @@ Rules have a `stage` field (`pre` or `post`). Pre-stage rules run first in prior
 
 1. For each transaction, build a candidate set from `rules` ordered by `stage ASC, priority ASC`.
 2. Evaluate each rule's condition tree recursively.
-3. A transaction may match more than one rule (multiple assignments are valid — e.g., a Netflix charge matched by both a Netflix rule and a standing subscription rule).
+3. A transaction may match more than one rule. **This is intentional, not a bug.** Rules exist to apply labels — a Netflix charge legitimately belongs to both a "Netflix" rule (specific) and a "Streaming Subscriptions" rule (broad). Both assignments are correct.
 4. Each match produces one `transaction_rule_assignments` row with the `rule_id` and a `confidence` of 1.0.
 5. Unmatched transactions pass through to Stage 2.
+
+### Rate Overlap is Intentional
+
+Because a transaction can match multiple rules, the same transaction contributes to multiple rules' rates in Stage 3. This is by design:
+
+- **Netflix rule** `actual_rate` reflects only Netflix charges.
+- **Streaming rule** `actual_rate` reflects all streaming charges — including Netflix.
+
+Both rates are independently correct at the rule level. **Label rates (Stage 4) are the authoritative non-overlapping view** — the DAG set-union ensures each transaction contributes exactly once to any given label's rate regardless of how many rules matched it.
+
+A derived metric available at the API/UI layer: a rule's share of its parent label's budget is `rule.actual_rate / parent_label.actual_rate`. The engine produces both values in `computed_snapshots`; the percentage is a simple division the API can compute on read.
 
 ---
 

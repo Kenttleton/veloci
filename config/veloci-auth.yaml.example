@@ -1,8 +1,22 @@
 # config/veloci-auth.yaml.example
-# Copy to config/veloci-auth.yaml and fill in values.
-# This file is bind-mounted into the veloci-auth container.
-# server_admin password is stored in plaintext here so self-hosters
-# can recover it without CLI access. Only the bcrypt hash is stored in DB.
+# Copy to config/veloci-auth.yaml and fill in your values.
+# This file is bind-mounted read-only into the veloci-auth container.
+#
+# SECURITY: veloci-auth.yaml is gitignored and should never be committed.
+# Restrict permissions after copying:
+#   chmod 600 config/veloci-auth.yaml
+#
+# ENV VAR OVERRIDES: Any value here can be overridden by an environment variable,
+# which is preferred for secrets in production or CI environments:
+#   VELOCI_SERVER_ADMIN_EMAIL     → server_admin.email
+#   VELOCI_SERVER_ADMIN_PASSWORD  → server_admin.password
+#   VELOCI_JWT_SECRET             → jwt_secret
+#
+# ADMIN RESET: To reset a forgotten admin password, change server_admin.password
+# below (or set VELOCI_SERVER_ADMIN_PASSWORD) and restart veloci-auth.
+# The service compares the config password against the stored hash on startup
+# and only rehashes when the password has changed — no DB surgery needed.
+
 server_admin:
   email: admin@veloci.local
   password: changeme
