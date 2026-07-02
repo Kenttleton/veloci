@@ -35,7 +35,10 @@ func Authenticate(client *authclient.Client) func(http.Handler) http.Handler {
 				return
 			}
 			var claims map[string]any
-			json.Unmarshal(result.Claims, &claims)
+			if err := json.Unmarshal(result.Claims, &claims); err != nil {
+				http.Error(w, `{"code":"UNAUTHORIZED"}`, http.StatusUnauthorized)
+				return
+			}
 			ctx := r.Context()
 			for key, ctxK := range map[string]contextKey{
 				"entity_id": ctxEntityID, "entity_role": ctxEntityRole,

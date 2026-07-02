@@ -33,10 +33,12 @@ func NewPublisher(url string) (*Publisher, error) {
 	}
 	ch, err := conn.Channel()
 	if err != nil {
+		conn.Close()
 		return nil, err
 	}
 	_, err = ch.QueueDeclare(QueueName, true, false, false, false, nil)
 	if err != nil {
+		conn.Close()
 		return nil, err
 	}
 	return &Publisher{ch: ch, queue: QueueName}, nil
