@@ -264,6 +264,11 @@ CREATE TABLE computed_snapshots (
   drift_per_day          NUMERIC(12,4) NOT NULL,
   slope_per_day          NUMERIC(14,6) NOT NULL,
   r_squared              NUMERIC(4,3)  NOT NULL,
+  -- rolling window high/low over the 90-day regression window (same data Stage 5 reads).
+  -- on first snapshot: rate_high = rate_low = actual_rate_per_day.
+  -- feeds candlestick OHLC on the Horizon graph; open/close derived by the API from adjacent snapshots.
+  rate_high_per_day      NUMERIC(12,4) NOT NULL,
+  rate_low_per_day       NUMERIC(12,4) NOT NULL,
   transaction_count      INTEGER       NOT NULL,
   window_days_used       INTEGER       NOT NULL,
 

@@ -64,7 +64,7 @@ A **financial entity** is the unit of financial ownership. A family, household, 
 entity
   └── users (via entity_users)
         └── entity_role → permissions
-  └── accounts
+  └── accounts         (active + passive — see below)
   └── raw_transactions
   └── rules
   └── labels (via label_members)
@@ -73,6 +73,29 @@ entity
 
 **v1:** One entity per self-hosted deployment. Multiple users (family members) per entity.
 **v2:** Multiple entities per deployment. API gains multi-entity admin routes; auth service is unchanged.
+
+### Account Status: Active vs Passive
+
+`accounts.status` determines whether an account contributes to the **main budget** or functions as a **standalone account budget**.
+
+**Active accounts** (`status = 'active'`) are cash-flow accounts — checking and savings. These form the main budget. The main budget is seeded with three system labels at entity setup: **Income**, **Commitments**, and **Margin**. Rules on active accounts auto-join Income or Commitments based on their `direction` field. Margin is the parent of both.
+
+**Passive accounts** (`status = 'passive'`) are all other account types: credit cards, investment accounts, loans, mortgages. Each passive account operates as its own independent mini-budget. Rules and labels for passive accounts are user-managed. The engine runs the full pipeline against them identically — same stages, same rule/label DAG, same $/day output. No special-casing per account type.
+
+This means every account in Veloci — regardless of type — produces comparable $/day rates. A credit card's Netflix spending rate, an investment account's contribution rate, and a mortgage's payment rate are all in the same unit and directly comparable in the UI.
+
+**Why passive accounts are not in the main budget:** Transactions on a credit card are purchases the user made using credit — the cash-flow event that matters to the main budget is the payment from checking, not the individual charges. Similarly, an investment contribution is tracked as a checking outflow; the investment account tracks what that money is doing once it arrives. This prevents double-counting at the entity level without requiring transfer detection logic in the engine.
+
+**Interest** (HYSA yield, CC interest charges, investment returns) is a known gap for v1. Interest income/expense will be modeled as rules in a future spec.
+
+### Cross-Account Rate Comparison
+
+Because all accounts produce $/day rates through the same engine, the UI can surface comparisons across budget contexts without any special API aggregation:
+
+- "Netflix ($0.50/day) consumes 7.5% of my CC payment rate ($6.67/day from checking)"
+- "My Vanguard contribution cluster is growing at +$1.20/day faster than my individual stock cluster"
+
+The engine produces the numbers; labels define the groupings; the UI handles the comparison.
 
 ---
 

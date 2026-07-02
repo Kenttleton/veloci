@@ -322,11 +322,11 @@ Because a set can only contain each `rule_id` once, Netflix contributes exactly 
 
 ---
 
-## 9. Stage 5: Slope + Drift
+## 9. Stage 5: Slope + Drift + Rolling Range
 
 **Input:** Current per-node rates from Stages 3 and 4; prior `computed_snapshots` (last 90 days, all nodes)
 
-**Output:** Per-node `{drift_per_day, slope_per_day, r_squared}`
+**Output:** Per-node `{drift_per_day, slope_per_day, r_squared, rate_high_per_day, rate_low_per_day}`
 
 ### Drift
 
@@ -347,6 +347,21 @@ outputs:  slope_per_day   — regression coefficient (units: $/day per day — a
 ```
 
 Minimum 2 data points required. With 0 or 1 prior snapshot: `slope_per_day = 0.0`, `r_squared = 0.0`.
+
+### Rolling Range (Candlestick High/Low)
+
+Using the same 90-day snapshot history already loaded for regression — no additional queries:
+
+```
+rate_high_per_day = MAX(actual_rate_per_day) across all prior snapshots in the 90-day window,
+                    including the current run's actual_rate_per_day
+rate_low_per_day  = MIN(actual_rate_per_day) across all prior snapshots in the 90-day window,
+                    including the current run's actual_rate_per_day
+```
+
+On first snapshot (no history): `rate_high = rate_low = actual_rate_per_day`.
+
+These feed the Horizon graph candlestick: `rate_high` and `rate_low` are the candle wicks; the API derives open/close by reading adjacent snapshots from the time series. The engine stores the range; the UI does only the subtraction to render the candle body.
 
 ### computed_as_of
 
@@ -372,7 +387,8 @@ The engine writes all snapshots for this run in a single Postgres transaction. P
 INSERT INTO computed_snapshots (
   entity_id, node_id, node_type, computed_as_of, job_id,
   actual_rate_per_day, projected_rate_per_day, drift_per_day,
-  slope_per_day, r_squared, transaction_count, window_days_used
+  slope_per_day, r_squared, rate_high_per_day, rate_low_per_day,
+  transaction_count, window_days_used
 )
 VALUES ...
 ON CONFLICT (entity_id, node_id, computed_as_of) DO UPDATE SET ...;
@@ -675,6 +691,8 @@ CREATE TABLE computed_snapshots (
   drift_per_day          NUMERIC(12,4) NOT NULL,
   slope_per_day          NUMERIC(14,6) NOT NULL,   -- $/day per day
   r_squared              NUMERIC(4,3) NOT NULL,
+  rate_high_per_day      NUMERIC(12,4) NOT NULL,   -- MAX actual_rate over 90-day regression window
+  rate_low_per_day       NUMERIC(12,4) NOT NULL,   -- MIN actual_rate over 90-day regression window
   transaction_count      INTEGER NOT NULL,
   window_days_used       INTEGER NOT NULL,
 
@@ -805,6 +823,7 @@ For `rules.reprocess` and `account.analyze`, `metadata` is empty. The engine use
 
 - Go API endpoints for importing, reviewing, and approving rules (covered in import pipeline spec)
 - UI views: Pulse, Stack, Horizon (covered in UI spec)
-- Transfer detection (two debits/credits that cancel at the budget level — deferred to v1.1)
+- Transfer detection — not required. Cross-account transfers (e.g. a CC payment from checking) do not double-count because active accounts (checking/savings) and passive accounts (credit, investment, loan) are separate budget contexts with separate label hierarchies. The CC payment appears as a Commitments entry in the main budget; individual CC charges appear in the CC's own label structure. No shared label ancestry means no summing conflict.
+- Interest calculations (high-yield savings account yield, CC interest charges, investment returns) — deferred to v1.1. Interest will be modeled as income/expense rules once the rate computation for time-varying balances is spec'd.
 - Debt account rate calculations (APR-adjusted payoff projections — deferred to v1.1)
 - Projected-only rules (rules in the Projection lane with no transaction history — deferred to v1.1)
