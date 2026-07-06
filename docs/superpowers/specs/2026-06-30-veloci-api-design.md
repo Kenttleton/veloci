@@ -232,8 +232,8 @@ CREATE TABLE rules (
   name                  TEXT NOT NULL,
   direction             TEXT NOT NULL CHECK (direction IN ('income','expense')),
   entry_type            TEXT NOT NULL
-    CHECK (entry_type IN ('standing','single','hit','boost','variable')),
-  smoothing_window_days INTEGER NOT NULL DEFAULT 30,
+    CHECK (entry_type IN ('standing','hit','boost','variable')),
+  period_days           INTEGER NOT NULL DEFAULT 30,
   variable_method       TEXT CHECK (variable_method IN ('avg','max')),
   projected_rate_per_day NUMERIC(12,4),
   conditions            JSONB NOT NULL,   -- boolean expression tree; same shape as engine spec

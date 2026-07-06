@@ -28,22 +28,24 @@ This separation means rule changes can be applied retroactively with zero re-upl
 Every job type runs a contiguous suffix of these seven stages. No branching, no parallel tracks.
 
 ```text
-Stage 0  CSV normalization + 4-pass dedup     →  raw_transactions
+Stage 0  CSV normalization + deduplication     →  raw_transactions
 Stage 1  Rule matching (pre/post, boolean)    →  transaction_rule_assignments
 Stage 2  Pattern detection (unmatched only)   →  rules (status: pending_review)
-Stage 3  Rate computation + smoothing         →  per-rule rates   [active only]
+Stage 3  Rate computation                     →  per-rule rates   [active only]
 Stage 4  DAG aggregation (set-union)          →  per-label rates  [active only]
-Stage 5  Slope + drift (linear regression)    →  trends           [active only]
+Stage 5  Slope + drift + rolling range        →  trends           [active only]
 Stage 6  Snapshot write (batch INSERT)        →  computed_snapshots
+Stage 7  Cash flow projection                 →  rate_projections
 ```
 
 ### Job Types and Entry Points
 
 | Job Type | Stages Run | Trigger |
 |---|---|---|
-| `import.process` | 0 → 1 → 2 → 3 → 4 → 5 → 6 | New CSV uploaded |
-| `rules.reprocess` | 1 → 2 → 3 → 4 → 5 → 6 | Rule created, modified, or deleted |
-| `account.analyze` | 3 → 4 → 5 → 6 | Rule approved from review queue; manual recalculate |
+| `import.process` | 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 | New CSV uploaded |
+| `rules.reprocess` | 1 → 2 → 3 → 4 → 5 → 6 → 7 | Rule created, modified, or deleted |
+| `account.analyze` | 3 → 4 → 5 → 6 → 7 | Rule approved from review queue; manual recalculate |
+| `balance.project` | 7 | Account balance updated manually |
 
 `import.process` is the only job that writes to `raw_transactions`. All other jobs read from it.
 
@@ -234,7 +236,7 @@ The engine clusters unmatched transactions into candidate rules using three sign
 
 2. **Amount regularity** — within a merchant cluster, the engine checks whether amounts are consistent (within ±2% of the cluster median). Consistent amounts suggest a `standing` entry; variable amounts suggest `variable`.
 
-3. **Timing regularity** — the engine computes inter-transaction intervals within a cluster. Near-constant intervals (±5 days variance) suggest `standing`. Irregular intervals with consistent amounts suggest `single` or `hit`.
+3. **Timing regularity** — the engine computes inter-transaction intervals within a cluster. Near-constant intervals (±5 days variance) suggest `standing`. Irregular intervals with consistent amounts suggest `hit`.
 
 ### Confidence Scoring
 
@@ -262,24 +264,53 @@ For each cluster above 0.3 confidence:
 
 **Output:** Per-rule `{actual_rate_per_day, projected_rate_per_day, window_days_used, transaction_count}`
 
+### The `period_days` Field
+
+`period_days` carries different semantics depending on entry type:
+
+| Entry type | `period_days` meaning |
+| --- | --- |
+| `standing` | Expected recurrence cycle — how often this commitment comes due. With 2+ transactions the engine uses the detected median interval; with 1 transaction `period_days` is authoritative. |
+| `variable` | Expected recurrence cycle — same as standing. Amount varies; timing does not. |
+| `hit` | Amortization window — how many days to spread this one-time impact. |
+| `boost` | Amortization window — same as hit, positive direction. |
+
+> **`single` entry type is deprecated and removed.** Hit and Boost cover all single-transaction cases.
+
 ### Rate Computation by Entry Type
 
-**Standing**
-```
-actual_rate = amount_cents / detected_period_days
-```
-Period is derived from the median inter-transaction interval. If only one transaction exists, period defaults to the `smoothing_window_days` on the rule.
+#### Standing
 
-**Variable**
-- If `variable_method = 'avg'`: `actual_rate = rolling_window_total_cents / window_days`
-- If `variable_method = 'max'`: `actual_rate = max_transaction_cents / window_days`
-- Rolling window width = `rule.smoothing_window_days`
+```
+actual_rate = amount_cents / period_days
+```
 
-**Single, Hit, Boost**
+Represents the savings-reservation rate: "I need to set aside X cents/day so I have enough when this commitment comes due." With 2+ matched transactions, the engine uses the detected median inter-transaction interval instead of the configured `period_days`.
+
+#### Variable
+
 ```
-actual_rate = amount_cents / smoothing_window_days
+actual_rate (avg) = rolling_window_total_cents / period_days
+actual_rate (max) = max_transaction_cents / period_days
 ```
-For a $150 car repair with `smoothing_window_days = 30`: `actual_rate = 150_00 / 30 = 500 cents/day ($5.00/day)`.
+
+`variable_method` determines whether the rate is a running average or a conservative worst-case. `period_days` is the recurrence cycle — the window over which amounts are averaged or peaked.
+
+#### Hit
+
+```
+actual_rate = amount_cents / period_days
+```
+
+A one-time expense treated as a short-term debt. `period_days` is the amortization window — how long this hit reduces the margin. A $150 car repair with `period_days = 30` registers as $5.00/day until the window closes.
+
+#### Boost
+
+```
+actual_rate = amount_cents / period_days
+```
+
+The positive mirror of Hit — a one-time income event (bonus, tax refund) that temporarily lifts the margin for `period_days` days.
 
 **Projected Rate**
 
@@ -308,7 +339,7 @@ A rule can belong to multiple labels. Example:
 
 Naively summing rates through all paths would count Netflix twice at Total Expenses. The engine prevents this with memoized set-union rollup.
 
-### Algorithm
+### Aggregation Algorithm
 
 1. **Build the DAG** from `label_members` (member_type = 'rule' or 'label').
 2. **Topological sort** (Kahn's algorithm). If a cycle is detected, the job fails with an error — cycles are a data integrity violation.
@@ -398,7 +429,68 @@ Prior snapshots for the same `(entity_id, node_id)` are retained — they form t
 
 ---
 
-## 11. Entity Isolation
+## 11. Stage 7: Signal Superposition Projection
+
+**Input:** Active rules with `period_days`, `recurrence_anchor`, and `next_due_date`; `accounts.balance_cents` as starting point for derived balance; `computed_as_of` from Stage 6
+
+**Output:** Rows in `rate_projections` — a forward-looking 90-day signal superposition per account (and entity aggregate)
+
+### Purpose
+
+Rate comparison tells you whether you are accumulating or falling behind on average. Stage 7 answers the timing question: do the signals have the right phase alignment? Even if income rate > commitments rate overall, a commitment signal firing before enough income signal has accumulated creates a gap.
+
+- "Will I make rent on the 1st if my paycheck lands on the 15th?"
+- "My bar tab last night — does that rate spike push margin negative before next payday?"
+
+### Projection Algorithm
+
+Each rule contributes a rate signal active on day D when D falls within a scheduled activation window: `[fire_date, fire_date + period_days)`. The engine expands `recurrence_anchor` into fire dates for the full 90-day window using `next_due_date` as the starting phase point.
+
+```text
+balance = accounts.balance_cents   // starting point for derived balance only
+
+for each day D in [computed_as_of .. computed_as_of + 90]:
+
+    income_rate_D      = Σ { r.amount_cents / r.period_days
+                             for income rules r whose window covers D }
+
+    commitment_rate_D  = Σ { r.amount_cents / r.period_days
+                             for commitment rules r whose window covers D }
+
+    margin_rate_D      = income_rate_D - commitment_rate_D
+
+    balance            = balance + margin_rate_D   // derived running total
+
+    write rate_projections row:
+      income_rate_per_day     = income_rate_D
+      commitment_rate_per_day = commitment_rate_D
+      margin_rate_per_day     = margin_rate_D
+      projected_balance_cents = balance            // secondary; for bank account comparison
+      is_pinch_point          = (margin_rate_D < 0)
+
+// Advance next_due_date for rules that fired during the window.
+// Staged write AFTER projection completes — not in-loop — to preserve determinism.
+for each rule r with recurrence_anchor:
+    r.next_due_date = last_fire_date(r, window) + r.period_days
+```
+
+Pinch points are rate-native: `is_pinch_point = TRUE` when commitment signals exceed income signals at that phase offset — not when the derived balance crosses a threshold.
+
+### Determinism
+
+Stage 7 uses `computed_as_of` as its "today" anchor — never `NOW()`. `next_due_date` is a stored field. Running the same job twice produces identical `rate_projections` rows.
+
+### Variable Rule Projection
+
+For `variable` rules, Stage 7 uses `actual_rate_per_day` from the most recent `computed_snapshot` as the amplitude estimate. This is a best-current-estimate; rows are rebuilt on every job run.
+
+### Stage 7 in the Pipeline
+
+Stage 7 commits its `rate_projections` rows in the same Postgres transaction as the Stage 6 snapshot write — projections are always consistent with the snapshots that produced them.
+
+---
+
+## 12. Entity Isolation
 
 ### Design
 
@@ -567,8 +659,8 @@ CREATE TABLE rules (
   entity_id              UUID NOT NULL REFERENCES entities(id),
   name                   TEXT NOT NULL,
   direction              TEXT NOT NULL CHECK (direction IN ('income','expense')),
-  entry_type             TEXT NOT NULL CHECK (entry_type IN ('standing','single','hit','boost','variable')),
-  smoothing_window_days  INTEGER NOT NULL DEFAULT 30,
+  entry_type             TEXT NOT NULL CHECK (entry_type IN ('standing','hit','boost','variable')),
+  period_days  INTEGER NOT NULL DEFAULT 30,
   variable_method        TEXT CHECK (variable_method IN ('avg','max')),
   projected_rate_per_day NUMERIC(12,4),
   conditions             JSONB NOT NULL,
@@ -695,6 +787,7 @@ CREATE TABLE computed_snapshots (
   rate_low_per_day       NUMERIC(12,4) NOT NULL,   -- MIN actual_rate over 90-day regression window
   transaction_count      INTEGER NOT NULL,
   window_days_used       INTEGER NOT NULL,
+  balance_cents          BIGINT NOT NULL DEFAULT 0,   -- running total; secondary to rates, for bank account comparison
 
   UNIQUE (entity_id, node_id, computed_as_of)
 );

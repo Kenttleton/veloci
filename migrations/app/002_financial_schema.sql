@@ -56,7 +56,7 @@ CREATE TABLE processing_jobs (
   id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   entity_id    UUID        NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
   job_type     TEXT        NOT NULL
-               CHECK (job_type IN ('import.process', 'rules.reprocess', 'account.analyze')),
+               CHECK (job_type IN ('import.process', 'rules.reprocess', 'account.analyze', 'balance.project')),
   triggered_by UUID        NOT NULL REFERENCES users(id),
   status       TEXT        NOT NULL DEFAULT 'queued'
                CHECK (status IN ('queued', 'processing', 'complete', 'failed')),
@@ -157,8 +157,8 @@ CREATE TABLE rules (
   name                   TEXT        NOT NULL,
   direction              TEXT        NOT NULL CHECK (direction IN ('income', 'expense')),
   entry_type             TEXT        NOT NULL
-                         CHECK (entry_type IN ('standing', 'single', 'hit', 'boost', 'variable')),
-  smoothing_window_days  INTEGER     NOT NULL DEFAULT 30,
+                         CHECK (entry_type IN ('standing', 'hit', 'boost', 'variable')),
+  period_days  INTEGER     NOT NULL DEFAULT 30,
   variable_method        TEXT        CHECK (variable_method IN ('avg', 'max')),
   projected_rate_per_day NUMERIC(12,4),
   conditions             JSONB       NOT NULL,
@@ -271,8 +271,38 @@ CREATE TABLE computed_snapshots (
   rate_low_per_day       NUMERIC(12,4) NOT NULL,
   transaction_count      INTEGER       NOT NULL,
   window_days_used       INTEGER       NOT NULL,
+  -- running balance at this snapshot date; secondary to rates, used for bank account comparison.
+  balance_cents          BIGINT        NOT NULL DEFAULT 0,
 
   UNIQUE (entity_id, node_id, computed_as_of)
 );
 
 CREATE INDEX ON computed_snapshots (entity_id, node_id, computed_as_of DESC);
+
+-- ── RATE PROJECTIONS ─────────────────────────────────────────────────────────
+-- Forward-looking signal superposition timeline produced by Stage 7.
+-- One row per (account, projected date) per job run. Safe to truncate and
+-- recompute — derived entirely from active rules + their recurrence schedules.
+--
+-- account_id NULL = entity-level aggregate across all active accounts.
+-- Rates are the primary output; projected_balance_cents is derived (running
+-- integral of margin_rate_per_day) for bank account comparison only.
+-- is_pinch_point = margin_rate_per_day < 0 (commitment signals exceed income
+-- signals at this phase offset).
+
+CREATE TABLE rate_projections (
+  id                       UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+  entity_id                UUID          NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+  account_id               UUID          REFERENCES accounts(id),
+  job_id                   UUID          NOT NULL REFERENCES processing_jobs(id),
+  projected_date           DATE          NOT NULL,
+  income_rate_per_day      NUMERIC(12,4) NOT NULL DEFAULT 0,
+  commitment_rate_per_day  NUMERIC(12,4) NOT NULL DEFAULT 0,
+  margin_rate_per_day      NUMERIC(12,4) NOT NULL,
+  projected_balance_cents  BIGINT        NOT NULL,
+  is_pinch_point           BOOLEAN       NOT NULL DEFAULT FALSE,
+
+  UNIQUE (entity_id, account_id, job_id, projected_date)
+);
+
+CREATE INDEX ON rate_projections (entity_id, account_id, projected_date);
