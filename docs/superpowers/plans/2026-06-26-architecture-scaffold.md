@@ -42,6 +42,7 @@ veloci/
 │   │   └── 001_auth_schema.sql
 │   └── app/
 │       ├── 001_app_schema.sql
+│       ├── 002_financial_schema.sql
 │       └── 002_rbac_seed.sql
 └── services/
     ├── auth/
@@ -59,6 +60,7 @@ veloci/
     │       └── handlers/
     │           ├── credentials.go
     │           ├── credentials_test.go
+    │           ├── helpers.go
     │           ├── tokens.go
     │           └── tokens_test.go
     ├── api/
@@ -224,17 +226,26 @@ CREATE TABLE auth_credentials (
 );
 
 CREATE TABLE tokens (
-  id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id    UUID        NOT NULL REFERENCES auth_credentials(id) ON DELETE CASCADE,
-  jti        TEXT        NOT NULL UNIQUE,
-  claims     JSONB       NOT NULL,
-  issued_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  expires_at TIMESTAMPTZ NOT NULL
+  id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     UUID        NOT NULL REFERENCES auth_credentials(id) ON DELETE CASCADE,
+  jti         TEXT        NOT NULL UNIQUE,
+  token_type  TEXT        NOT NULL DEFAULT 'access'
+              CHECK (token_type IN ('access', 'refresh')),
+  -- links an access token back to the refresh token that issued it;
+  -- cascade delete means revoking a refresh token kills all its access tokens
+  parent_id   UUID        REFERENCES tokens(id) ON DELETE CASCADE,
+  claims      JSONB       NOT NULL,
+  issued_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at  TIMESTAMPTZ NOT NULL,
+  -- set when this refresh token is rotated; allows a short grace window
+  -- so two-tab concurrent rotation requests don't force a re-login
+  rotated_at  TIMESTAMPTZ
 );
 
 CREATE INDEX ON tokens (jti);
 CREATE INDEX ON tokens (user_id);
 CREATE INDEX ON tokens (expires_at);
+CREATE INDEX ON tokens (parent_id) WHERE parent_id IS NOT NULL;
 
 CREATE TABLE invite_tokens (
   id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -261,10 +272,11 @@ CREATE TABLE entities (
 );
 
 CREATE TABLE users (
-  id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  auth_credential_id UUID       NOT NULL UNIQUE,
-  email             TEXT        NOT NULL UNIQUE,
-  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id                 UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  auth_credential_id UUID        NOT NULL UNIQUE,
+  email              TEXT        NOT NULL UNIQUE,
+  name               TEXT        NOT NULL,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE roles (
@@ -336,7 +348,7 @@ services:
       VELOCI_APP_DB_USER: ${VELOCI_APP_DB_USER}
       VELOCI_APP_DB_PASSWORD: ${VELOCI_APP_DB_PASSWORD}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
       - ./scripts/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
       - ./migrations:/migrations
     networks:
@@ -379,7 +391,7 @@ services:
     environment:
       DATABASE_URL: postgres://${VELOCI_APP_DB_USER}:${VELOCI_APP_DB_PASSWORD}@postgres:5432/${VELOCI_APP_DB}
       VELOCI_AUTH_URL: http://veloci-auth:8081
-      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/%2F
       PORT: "8080"
     depends_on:
       postgres:
@@ -397,7 +409,7 @@ services:
     build: ./services/engine
     environment:
       DATABASE_URL: postgres://${VELOCI_APP_DB_USER}:${VELOCI_APP_DB_PASSWORD}@postgres:5432/${VELOCI_APP_DB}
-      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/%2F
     depends_on:
       postgres:
         condition: service_healthy
@@ -691,41 +703,45 @@ func (d *DB) DeleteToken(ctx context.Context, jti string) error {
 
 ```go
 // services/auth/internal/sync/admin.go
-package sync
+package authsync
 
 import (
     "context"
+    "errors"
     "log"
+
     "github.com/google/uuid"
+    "github.com/jackc/pgx/v5"
+    "github.com/veloci/auth/internal/db"
     "golang.org/x/crypto/bcrypt"
 )
 
-type credentialDB interface {
-    FindCredentialByEmail(ctx context.Context, email string) (interface{ GetHash() string }, error)
-    UpsertCredential(ctx context.Context, id, email, hash, role string) error
-}
+// SyncServerAdmin ensures a server_admin credential exists for the given email/password.
+// On first run it hashes and inserts. On subsequent restarts it compares the config
+// password against the stored hash — bcrypt work only runs when the password has changed.
+// Changing the config password and restarting is the intentional admin-reset UX.
+func SyncServerAdmin(ctx context.Context, d *db.DB, email, password string) error {
+    existing, err := d.FindCredentialByEmail(ctx, email)
+    if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+        return err
+    }
+    if existing != nil {
+        compareErr := bcrypt.CompareHashAndPassword([]byte(existing.PasswordHash), []byte(password))
+        if compareErr == nil {
+            log.Printf("sync: server_admin credential unchanged for %s", email)
+            return nil
+        }
+        if !errors.Is(compareErr, bcrypt.ErrMismatchedHashAndPassword) {
+            log.Printf("sync: server_admin hash comparison error for %s: %v", email, compareErr)
+        }
+        // password changed — fall through to rehash + upsert
+    }
 
-type authDB interface {
-    FindCredentialByEmail(ctx context.Context, email string) (*struct {
-        ID           string
-        PasswordHash string
-        SystemRole   string
-    }, error)
-    UpsertCredential(ctx context.Context, id, email, hash, role string) error
-}
-
-// SyncServerAdmin reads server_admin config and ensures the DB credential matches.
-// Called on every startup. Safe to run repeatedly.
-func SyncServerAdmin(ctx context.Context, d interface {
-    FindCredentialByEmail(context.Context, string) (interface{}, error)
-    UpsertCredential(context.Context, string, string, string, string) error
-}, email, password string) error {
     hash, err := bcrypt.GenerateFromPassword([]byte(password), 12)
     if err != nil {
         return err
     }
-    id := uuid.New().String()
-    if err := d.UpsertCredential(ctx, id, email, string(hash), "server_admin"); err != nil {
+    if err := d.UpsertCredential(ctx, uuid.New().String(), email, string(hash), "server_admin"); err != nil {
         return err
     }
     log.Printf("sync: server_admin credential synced for %s", email)
@@ -733,7 +749,7 @@ func SyncServerAdmin(ctx context.Context, d interface {
 }
 ```
 
-Note: `UpsertCredential` uses `ON CONFLICT (email) DO UPDATE`, so it is safe to call on every startup. The `id` passed here is only used when inserting a new row; existing rows keep their original UUID.
+Note: The sync skips bcrypt on every restart — it first checks whether the config password matches the stored hash. Only if the password has changed does it rehash and upsert. The `id` passed to `UpsertCredential` is only used when inserting a new row; existing rows keep their original UUID.
 
 - [ ] **Step 8: Write failing tests for credential handlers**
 
@@ -1099,15 +1115,53 @@ package main
 
 import (
     "context"
+    "encoding/json"
     "fmt"
     "log"
     "net/http"
+    "time"
+
     "github.com/go-chi/chi/v5"
     "github.com/spf13/cobra"
     "github.com/spf13/viper"
     "github.com/veloci/auth/internal/db"
     "github.com/veloci/auth/internal/handlers"
+    authsync "github.com/veloci/auth/internal/sync"
 )
+
+// dbCredAdapter adapts *db.DB to satisfy handlers.credentialStore.
+type dbCredAdapter struct{ d *db.DB }
+
+func (a *dbCredAdapter) FindCredentialByEmail(ctx context.Context, email string) (*handlers.CredentialRow, error) {
+    c, err := a.d.FindCredentialByEmail(ctx, email)
+    if err != nil {
+        return nil, err
+    }
+    return &handlers.CredentialRow{ID: c.ID, PasswordHash: c.PasswordHash, SystemRole: c.SystemRole}, nil
+}
+
+func (a *dbCredAdapter) CreateCredential(ctx context.Context, id, email, hash, role string) error {
+    return a.d.CreateCredential(ctx, id, email, hash, role)
+}
+
+// dbTokenAdapter adapts *db.DB to satisfy handlers.tokenStore.
+type dbTokenAdapter struct{ d *db.DB }
+
+func (a *dbTokenAdapter) StoreToken(ctx context.Context, id, userID, jti string, claims json.RawMessage, exp time.Time) error {
+    return a.d.StoreToken(ctx, id, userID, jti, claims, exp)
+}
+
+func (a *dbTokenAdapter) FindToken(ctx context.Context, jti string) (*handlers.TokenRow, error) {
+    row, err := a.d.FindToken(ctx, jti)
+    if err != nil {
+        return nil, err
+    }
+    return &handlers.TokenRow{CredentialID: row.CredentialID, Claims: row.Claims, ExpiresAt: row.ExpiresAt}, nil
+}
+
+func (a *dbTokenAdapter) DeleteToken(ctx context.Context, jti string) error {
+    return a.d.DeleteToken(ctx, jti)
+}
 
 func main() {
     if err := rootCmd.Execute(); err != nil {
@@ -1126,6 +1180,12 @@ func init() {
     rootCmd.AddCommand(serveCmd)
     viper.AutomaticEnv()
     viper.SetDefault("PORT", "8081")
+    // Env var overrides for secrets — AutomaticEnv doesn't map nested keys.
+    // VELOCI_SERVER_ADMIN_EMAIL / VELOCI_SERVER_ADMIN_PASSWORD / VELOCI_JWT_SECRET
+    // take precedence over veloci-auth.yaml values when set.
+    viper.BindEnv("server_admin.email", "VELOCI_SERVER_ADMIN_EMAIL")
+    viper.BindEnv("server_admin.password", "VELOCI_SERVER_ADMIN_PASSWORD")
+    viper.BindEnv("jwt_secret", "VELOCI_JWT_SECRET")
 }
 
 func runServe(_ *cobra.Command, _ []string) error {
@@ -1146,7 +1206,7 @@ func runServe(_ *cobra.Command, _ []string) error {
     adminEmail := viper.GetString("server_admin.email")
     adminPass := viper.GetString("server_admin.password")
     if adminEmail != "" && adminPass != "" {
-        if err := syncAdmin(ctx, database, adminEmail, adminPass); err != nil {
+        if err := authsync.SyncServerAdmin(ctx, database, adminEmail, adminPass); err != nil {
             return fmt.Errorf("admin sync: %w", err)
         }
     }
@@ -1156,8 +1216,8 @@ func runServe(_ *cobra.Command, _ []string) error {
         return fmt.Errorf("jwt_secret must be at least 32 characters")
     }
 
-    creds := handlers.NewCredentials(database)
-    toks := handlers.NewTokens(database, secret)
+    creds := handlers.NewCredentials(&dbCredAdapter{database})
+    toks := handlers.NewTokens(&dbTokenAdapter{database}, secret)
 
     r := chi.NewRouter()
     r.Post("/credentials/validate", creds.Validate)
@@ -1172,23 +1232,7 @@ func runServe(_ *cobra.Command, _ []string) error {
 }
 ```
 
-Add a thin `syncAdmin` helper in `main.go` below `runServe`:
-
-```go
-func syncAdmin(ctx context.Context, d *db.DB, email, password string) error {
-    import (
-        "github.com/google/uuid"
-        "golang.org/x/crypto/bcrypt"
-    )
-    hash, err := bcrypt.GenerateFromPassword([]byte(password), 12)
-    if err != nil {
-        return err
-    }
-    return d.UpsertCredential(ctx, uuid.New().String(), email, string(hash), "server_admin")
-}
-```
-
-Note: move the imports block to the file-level import statement. Keep `syncAdmin` as a package-level function, not nested.
+Note: `main.go` uses adapter structs (`dbCredAdapter`, `dbTokenAdapter`) to bridge `*db.DB` to the handler interfaces. This keeps `db.DB` decoupled from the handler layer and keeps handlers testable with stubs. `SyncServerAdmin` from the `authsync` package is called directly rather than an inline helper.
 
 - [ ] **Step 15: Create `Dockerfile`**
 
@@ -1375,7 +1419,75 @@ func (c *Client) post(ctx context.Context, path string, body []byte) (*http.Resp
 }
 ```
 
-- [ ] **Step 3: Write failing tests for auth middleware**
+- [ ] **Step 3: Write and verify tests for authclient**
+
+```go
+// services/api/internal/authclient/client_test.go
+package authclient_test
+
+import (
+    "context"
+    "encoding/json"
+    "net/http"
+    "net/http/httptest"
+    "testing"
+    "github.com/veloci/api/internal/authclient"
+)
+
+func TestValidateToken_Success(t *testing.T) {
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        if r.URL.Path != "/tokens/validate" || r.Method != http.MethodPost {
+            http.NotFound(w, r)
+            return
+        }
+        w.Header().Set("Content-Type", "application/json")
+        json.NewEncoder(w).Encode(map[string]any{
+            "jti":           "test-jti",
+            "credential_id": "cred-1",
+            "claims":        map[string]string{"sub": "user-1", "entity_id": "ent-1"},
+        })
+    }))
+    defer srv.Close()
+
+    c := authclient.New(srv.URL)
+    result, err := c.ValidateToken(context.Background(), "some-token")
+    if err != nil {
+        t.Fatalf("ValidateToken: %v", err)
+    }
+    if result.JTI != "test-jti" {
+        t.Errorf("jti: got %q want test-jti", result.JTI)
+    }
+    if result.CredentialID != "cred-1" {
+        t.Errorf("credential_id: got %q want cred-1", result.CredentialID)
+    }
+}
+
+func TestValidateToken_Unauthorized(t *testing.T) {
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        http.Error(w, `{"code":"UNAUTHORIZED"}`, http.StatusUnauthorized)
+    }))
+    defer srv.Close()
+
+    c := authclient.New(srv.URL)
+    _, err := c.ValidateToken(context.Background(), "bad-token")
+    if err == nil {
+        t.Error("expected error for 401 response")
+    }
+}
+
+func TestValidateCredential_Success(t *testing.T) { /* see file for full test */ }
+func TestMintToken_Success(t *testing.T)          { /* see file for full test */ }
+func TestCreateCredential_Success(t *testing.T)   { /* see file for full test */ }
+func TestCreateCredential_Conflict(t *testing.T)  { /* see file for full test */ }
+```
+
+```bash
+cd services/api && go test ./internal/authclient/... -v
+```
+
+Expected: all tests PASS.
+
+- [ ] **Step 4: Write failing tests for auth middleware**
 
 ```go
 // services/api/internal/middleware/auth_test.go
@@ -1823,14 +1935,33 @@ import (
     "fmt"
     "log"
     "net/http"
+
     "github.com/go-chi/chi/v5"
+    "github.com/jackc/pgx/v5/pgxpool"
     "github.com/spf13/cobra"
     "github.com/spf13/viper"
+
     "github.com/veloci/api/internal/authclient"
     "github.com/veloci/api/internal/handlers"
     "github.com/veloci/api/internal/middleware"
     "github.com/veloci/api/internal/queue"
 )
+
+type appDBImpl struct {
+    pool *pgxpool.Pool
+}
+
+func (d *appDBImpl) FindUserEntity(ctx context.Context, email string) (handlers.UserEntity, error) {
+    var ue handlers.UserEntity
+    err := d.pool.QueryRow(ctx, `
+        SELECT u.id::text, eu.entity_id::text, eu.entity_role
+        FROM users u
+        JOIN entity_users eu ON eu.user_id = u.id
+        WHERE u.email = $1
+        LIMIT 1
+    `, email).Scan(&ue.UserID, &ue.EntityID, &ue.EntityRole)
+    return ue, err
+}
 
 func main() {
     if err := rootCmd.Execute(); err != nil {
@@ -1840,7 +1971,7 @@ func main() {
 
 var rootCmd = &cobra.Command{Use: "veloci-api", Short: "Veloci API service"}
 
-var serveCmd = &cobra.Command{Use: "serve", RunE: runServe}
+var serveCmd = &cobra.Command{Use: "serve", Short: "Start the HTTP server", RunE: runServe}
 
 func init() {
     rootCmd.AddCommand(serveCmd)
@@ -1854,14 +1985,21 @@ func runServe(_ *cobra.Command, _ []string) error {
         return fmt.Errorf("VELOCI_AUTH_URL required")
     }
 
-    if _, err := queue.NewPublisher(viper.GetString("RABBITMQ_URL")); err != nil {
+    pub, err := queue.NewPublisher(viper.GetString("RABBITMQ_URL"))
+    if err != nil {
         return fmt.Errorf("queue: %w", err)
     }
+    _ = pub // passed to financial route handlers in service implementation plans
+
+    pool, err := pgxpool.New(context.Background(), viper.GetString("DATABASE_URL"))
+    if err != nil {
+        return fmt.Errorf("database: %w", err)
+    }
+    defer pool.Close()
 
     authClient := authclient.New(authURL)
 
-    // appDB will be wired to pgx pool in subsequent tasks; nil here for scaffold
-    authHandler := handlers.NewAuth(authURL, nil)
+    authHandler := handlers.NewAuth(authURL, &appDBImpl{pool: pool})
 
     r := chi.NewRouter()
     r.Get("/health", handlers.Health)
@@ -1879,7 +2017,54 @@ func runServe(_ *cobra.Command, _ []string) error {
 }
 ```
 
-- [ ] **Step 12: Create `Dockerfile`**
+- [ ] **Step 12: Write tests for queue publisher**
+
+```go
+// services/api/internal/queue/publisher_test.go
+package queue_test
+
+import (
+    "encoding/json"
+    "testing"
+    "github.com/veloci/api/internal/queue"
+)
+
+func TestJobSerializesCorrectly(t *testing.T) {
+    job := queue.Job{
+        JobID:    "job-123",
+        Type:     "import.process",
+        EntityID: "ent-1",
+        Metadata: json.RawMessage(`{"pending_import_id":"imp-1"}`),
+    }
+    body, err := json.Marshal(job)
+    if err != nil {
+        t.Fatalf("marshal: %v", err)
+    }
+    var m map[string]any
+    json.Unmarshal(body, &m)
+    if m["job_id"] != "job-123" {
+        t.Errorf("job_id: got %v", m["job_id"])
+    }
+    if m["type"] != "import.process" {
+        t.Errorf("type: got %v", m["type"])
+    }
+}
+
+func TestNewPublisher_FailsWithUnreachableHost(t *testing.T) {
+    _, err := queue.NewPublisher("amqp://localhost:1/")
+    if err == nil {
+        t.Error("expected error connecting to unreachable host")
+    }
+}
+```
+
+```bash
+cd services/api && go test ./internal/queue/... -v
+```
+
+Expected: serialization tests PASS; `TestNewPublisher_FailsWithUnreachableHost` PASS (connection refused).
+
+- [ ] **Step 13: Create `Dockerfile`**
 
 ```dockerfile
 # services/api/Dockerfile
@@ -1895,7 +2080,7 @@ COPY --from=build /app/api /api
 ENTRYPOINT ["/api", "serve"]
 ```
 
-- [ ] **Step 13: Commit**
+- [ ] **Step 14: Commit**
 
 ```bash
 git add services/api/
