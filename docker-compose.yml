@@ -14,6 +14,8 @@ services:
       - postgres_data:/var/lib/postgresql
       - ./scripts/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
       - ./migrations:/migrations
+    ports:
+      - "5432:5432"
     networks:
       - veloci
     healthcheck:
@@ -22,12 +24,17 @@ services:
       retries: 5
 
   rabbitmq:
-    image: rabbitmq:4.3-alpine
+    # management variant adds the HTTP API on :15672 — same AMQP behaviour.
+    # Used by `just enqueue-import` and `just queue-check`.
+    image: rabbitmq:4-management-alpine
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
     networks:
       - veloci
     healthcheck:
@@ -45,12 +52,8 @@ services:
       VELOCI_DATABASE_AUTH_PASSWORD: ${VELOCI_AUTH_DB_PASSWORD}
     volumes:
       - ./config/veloci.toml:/etc/veloci/veloci.toml:ro
-    depends_on:
-      postgres:
-        condition: service_healthy
     networks:
       - veloci
-    # No external ports — internal only
 
   veloci-api:
     build: ./services/api
@@ -66,13 +69,6 @@ services:
       VELOCI_AUTH_HOST: veloci-auth
     volumes:
       - ./config/veloci.toml:/etc/veloci/veloci.toml:ro
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      veloci-auth:
-        condition: service_started
     networks:
       - veloci
     ports:
@@ -91,11 +87,6 @@ services:
       VELOCI_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
     volumes:
       - ./config/veloci.toml:/etc/veloci/veloci.toml:ro
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
     networks:
       - veloci
     healthcheck:
