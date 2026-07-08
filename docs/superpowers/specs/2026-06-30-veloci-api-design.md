@@ -20,15 +20,15 @@
 Two categories of data live in `veloci_app`:
 
 | Category | Tables | Characteristics |
-|---|---|---|
-| Permanent | `rules`, `labels`, `label_members`, `label_rules`, `institution_mappings`, `accounts`, `users`, `entities`, `entity_users` | User-owned configuration. Full CRUD. |
+| --- | --- | --- |
+| Permanent | `rules`, `labels`, `institution_mappings`, `accounts`, `users`, `entities`, `entity_users` | User-owned configuration. Full CRUD. |
 | Transient | `raw_transactions`, `computed_snapshots`, `processing_jobs`, `review_queue` | Engine output. Read-only via API. Rebuilt when rules change. |
 
 **`raw_transactions` is append-only** — never modified after import.
 
 **Entries are not a stored table** — an "entry" in the UI is the join of a `rule` (permanent config) with its most recent `computed_snapshot`. `GET /entries` is a read-only computed view, not a writable resource.
 
-> **Note:** This spec supersedes the data model in the engine spec (`2026-06-29-processing-engine-design.md`) for the following tables: `entries` and `entry_rules` are replaced by `rules`; `groups` and `group_members` are replaced by `labels`, `label_members`, and `label_rules`; `transaction_entry_assignments` is renamed `transaction_rule_assignments`; `computed_snapshots.node_type` values change from `entry|group` to `rule|label`.
+> **Note:** This spec supersedes the data model in the engine spec (`2026-06-29-processing-engine-design.md`) for the following tables: `entries` and `entry_rules` are replaced by `rules`; `groups` and `group_members` are replaced by `labels`; `label_members` and `label_rules` are removed — the label hierarchy is expressed via `rules.label_id` and post-stage JSONB conditions; `transaction_entry_assignments` is renamed `transaction_rule_assignments`; `computed_snapshots.node_type` values change from `entry|group` to `rule|label`.
 
 ---
 
@@ -38,7 +38,7 @@ Two categories of data live in `veloci_app`:
 
 Forwarded directly to veloci-auth. No JWT validation, no RBAC check:
 
-```
+```text
 POST  /auth/register
 POST  /auth/login
 POST  /auth/refresh
@@ -48,7 +48,7 @@ POST  /auth/users/invite/:token/accept
 
 ### Protected routes — middleware chain
 
-```
+```text
 1. Extract Bearer token from Authorization header → 401 if missing
 2. POST veloci-auth /tokens/validate → claims attached to request context → 401 if invalid
 3. Load permission set for claims.entity_role from startup cache
@@ -61,7 +61,7 @@ Permissions are seeded by `veloci-api migrate` and cached at startup. No per-req
 
 ### Cobra subcommands
 
-```
+```bash
 veloci-api serve     — start HTTP server, load permission cache
 veloci-api migrate   — run migrations + seed roles, permissions, role_permissions
 ```
@@ -223,27 +223,28 @@ CREATE TABLE accounts (
 
 ### rules
 
-Replaces `entries` + `entry_rules` from the engine spec. Permanent configuration for how transactions are identified and converted to a $/day rate.
+Replaces `entries` + `entry_rules` from the engine spec. Permanent configuration for how transactions are identified and converted to a $/day rate. Each rule outputs exactly one label (`label_id`). Rules are composable: post-stage rule conditions may reference other label UUIDs as inputs, building aggregate labels without a separate membership table.
 
 ```sql
 CREATE TABLE rules (
-  id                    UUID PRIMARY KEY,
-  entity_id             UUID NOT NULL,
-  name                  TEXT NOT NULL,
-  direction             TEXT NOT NULL CHECK (direction IN ('income','expense')),
-  entry_type            TEXT NOT NULL
+  id                     UUID PRIMARY KEY,
+  entity_id              UUID NOT NULL,
+  name                   TEXT NOT NULL,
+  direction              TEXT NOT NULL CHECK (direction IN ('income','expense')),
+  entry_type             TEXT NOT NULL
     CHECK (entry_type IN ('standing','hit','boost','variable')),
-  period_days           INTEGER NOT NULL DEFAULT 30,
-  variable_method       TEXT CHECK (variable_method IN ('avg','max')),
+  period_days            INTEGER NOT NULL DEFAULT 30,
+  variable_method        TEXT CHECK (variable_method IN ('avg','max')),
   projected_rate_per_day NUMERIC(12,4),
-  conditions            JSONB NOT NULL,   -- boolean expression tree; same shape as engine spec
-  stage                 TEXT NOT NULL DEFAULT 'pre' CHECK (stage IN ('pre','post')),
-  priority              INTEGER NOT NULL DEFAULT 100,
-  status                TEXT NOT NULL DEFAULT 'pending_review'
+  conditions             JSONB NOT NULL,   -- boolean expression tree; leaf nodes may reference label UUIDs
+  label_id               UUID REFERENCES labels(id) ON DELETE SET NULL,  -- one output label per rule
+  stage                  TEXT NOT NULL DEFAULT 'pre' CHECK (stage IN ('pre','post')),
+  priority               INTEGER NOT NULL DEFAULT 100,
+  status                 TEXT NOT NULL DEFAULT 'pending_review'
     CHECK (status IN ('pending_review','active','inactive')),
-  source                TEXT NOT NULL DEFAULT 'user'
-    CHECK (source IN ('user','engine')),  -- engine-generated rules are surfaced in review queue
-  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  source                 TEXT NOT NULL DEFAULT 'user'
+    CHECK (source IN ('user','engine')),
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX ON rules (entity_id, status);
@@ -264,68 +265,53 @@ CREATE TABLE transaction_rule_assignments (
 
 ### labels
 
+User-facing named groupings. Each label is the output of exactly one rule (`rules.label_id`). The label hierarchy (leaf → aggregate) is implicit in post-stage rule conditions that reference other label UUIDs — no separate membership or automation table.
+
 ```sql
 CREATE TABLE labels (
   id         UUID PRIMARY KEY,
   entity_id  UUID NOT NULL,
   name       TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (entity_id, name)
 );
 ```
 
-Name is user-visible and freely mutable. Calculations always reference `id`, never `name`.
+Name is user-visible and freely mutable (rename cascades in the UI automatically because all references use `id`). Calculations always reference `id`, never `name`.
 
-### label_members
-
-DAG edges. A label's members are rules and/or other labels.
-
-```sql
-CREATE TABLE label_members (
-  label_id    UUID NOT NULL REFERENCES labels(id),
-  member_id   UUID NOT NULL,
-  member_type TEXT NOT NULL CHECK (member_type IN ('rule','label')),
-  PRIMARY KEY (label_id, member_id)
-);
-```
-
-### label_rules
-
-Automated conditions for applying a label to matching rules. Same boolean expression tree shape as `rules.conditions`, evaluated against rule properties (name, entry_type, direction).
-
-```sql
-CREATE TABLE label_rules (
-  id         UUID PRIMARY KEY,
-  label_id   UUID NOT NULL REFERENCES labels(id),
-  entity_id  UUID NOT NULL,
-  conditions JSONB NOT NULL,
-  priority   INTEGER NOT NULL DEFAULT 100,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-```
+To find all rules that feed into a label: `SELECT * FROM rules WHERE label_id = $label_id`.
+To find the aggregate labels a label participates in: query the JSONB conditions of post-stage rules for references to this `label_id`.
 
 ### computed_snapshots
 
-Updated `node_type` values from engine spec (`entry|group` → `rule|label`).
+Updated `node_type` values from engine spec (`entry|group` → `rule|label`). One row per calendar day per node — not one per import. The engine crawls the flux window on each import and UPSERTs affected days.
+
+`snapshot_date` is the calendar day identity key. `computed_as_of` is the import's data horizon (MAX transaction date), denormalized here so Stage 5 regression can read the settlement boundary without joining to import_batches.
+
+`epoch_id` is internal — not returned in API responses. Snapshot responses join `rule_epochs` and return `epoch_start`/`epoch_end` directly. OHLC candlestick high/low are **not stored** — the API computes them from the daily `actual_rate_per_day` series at query time (see Snapshots endpoints).
 
 ```sql
 CREATE TABLE computed_snapshots (
-  id                     UUID PRIMARY KEY,
-  entity_id              UUID NOT NULL,
-  node_id                UUID NOT NULL,        -- rule_id or label_id
-  node_type              TEXT NOT NULL CHECK (node_type IN ('rule','label')),
-  computed_as_of         DATE NOT NULL,
-  job_id                 UUID NOT NULL,
+  id                     UUID          PRIMARY KEY,
+  entity_id              UUID          NOT NULL,
+  node_id                UUID          NOT NULL,   -- rule_id or label_id
+  node_type              TEXT          NOT NULL CHECK (node_type IN ('rule','label')),
+  snapshot_date          DATE          NOT NULL,   -- calendar day this row represents
+  computed_as_of         DATE          NOT NULL,   -- MAX(raw_transactions.date) from the import run
+  job_id                 UUID          NOT NULL,
   actual_rate_per_day    NUMERIC(12,4) NOT NULL,
   projected_rate_per_day NUMERIC(12,4) NOT NULL,
   drift_per_day          NUMERIC(12,4) NOT NULL,
   slope_per_day          NUMERIC(14,6) NOT NULL,
-  r_squared              NUMERIC(4,3) NOT NULL,
-  transaction_count      INTEGER NOT NULL,
-  window_days_used       INTEGER NOT NULL,
-  UNIQUE (entity_id, node_id, computed_as_of)
+  r_squared              NUMERIC(4,3)  NOT NULL,
+  transaction_count      INTEGER       NOT NULL,
+  window_days_used       INTEGER       NOT NULL,
+  balance_cents          BIGINT        NOT NULL DEFAULT 0,
+  epoch_id               UUID          REFERENCES rule_epochs(id),   -- internal; not returned by API
+  UNIQUE (entity_id, node_id, snapshot_date)
 );
 
-CREATE INDEX ON computed_snapshots (entity_id, node_id, computed_as_of DESC);
+CREATE INDEX ON computed_snapshots (entity_id, node_id, snapshot_date DESC);
 ```
 
 ---
@@ -335,7 +321,7 @@ CREATE INDEX ON computed_snapshots (entity_id, node_id, computed_as_of DESC);
 Seeded at migration time. TBD permissions are provisioned but assignment to `entity_user` is deferred.
 
 | Permission | `entity_admin` | `entity_user` |
-|---|---|---|
+| --- | --- | --- |
 | `accounts:read` | ✓ | ✓ |
 | `accounts:write` | ✓ | — |
 | `import:create` | ✓ | TBD |
@@ -354,7 +340,7 @@ Seeded at migration time. TBD permissions are provisioned but assignment to `ent
 
 No JWT validation. Forwarded directly to veloci-auth.
 
-```
+```text
 POST   /auth/register
 POST   /auth/login
 POST   /auth/refresh
@@ -366,7 +352,7 @@ POST   /auth/users/invite/:token/accept
 
 Proxied writes to veloci-auth; app-side reads from `veloci_app`.
 
-```
+```text
 GET    /users/me                        accounts:read    own profile
 PUT    /users/me                        accounts:read    update own name
 GET    /users                           users:manage     list entity members
@@ -378,7 +364,7 @@ POST   /users/invite                    users:manage     generate invite link
 
 ### Institutions and Accounts
 
-```
+```text
 GET    /institutions                    accounts:read
 POST   /institutions                    accounts:write
 GET    /institutions/:id                accounts:read
@@ -395,7 +381,7 @@ DELETE /accounts/:id                    accounts:write
 
 ### Rules (permanent — match configuration)
 
-```
+```text
 GET    /rules                           accounts:read    all rules for entity
 POST   /rules                           rules:write      create rule
 GET    /rules/:id                       accounts:read
@@ -408,25 +394,21 @@ POST   /rules/preview                   accounts:read    which transactions matc
 
 ### Labels (permanent)
 
-```
-GET    /labels                          accounts:read
-POST   /labels                          labels:write
+Labels are named groupings created independently and then referenced by `rules.label_id`. Label membership (which rules output this label) is managed through the rule, not the label.
+
+```text
+GET    /labels                          accounts:read    all labels for entity
+POST   /labels                          labels:write     create label (name only)
 GET    /labels/:id                      accounts:read
-PUT    /labels/:id                      labels:write
+PUT    /labels/:id                      labels:write     rename label
 DELETE /labels/:id                      labels:write
 
-POST   /labels/:id/members              labels:write     add rule or label to this label
-DELETE /labels/:id/members/:member_id   labels:write
-
-GET    /labels/:id/rules                accounts:read    automated label assignment rules
-POST   /labels/:id/rules                rules:write
-PUT    /labels/:id/rules/:rule_id       rules:write
-DELETE /labels/:id/rules/:rule_id       rules:write
+GET    /labels/:id/rules                accounts:read    rules that output this label (reads rules.label_id)
 ```
 
 ### Imports
 
-```
+```text
 POST   /imports                         import:create    upload CSV → pending_import + job_id
 GET    /imports                         accounts:read    paginated import batch history
 GET    /imports/:id                     accounts:read
@@ -434,14 +416,14 @@ GET    /imports/:id                     accounts:read
 
 ### Transactions (transient — read only)
 
-```
+```text
 GET    /transactions                    accounts:read    filter: account_id, date, rule_id, unmatched
 GET    /transactions/:id                accounts:read
 ```
 
 ### Entries (transient — computed view of rules + snapshots)
 
-```
+```text
 GET    /entries                         accounts:read    rules joined with latest computed_snapshot
 GET    /entries/:id                     accounts:read    rule_id used as entry id
 ```
@@ -450,7 +432,7 @@ GET    /entries/:id                     accounts:read    rule_id used as entry i
 
 Engine-generated rule proposals. User edits the match conditions before approving.
 
-```
+```text
 GET    /review                          accounts:read    pending rule proposals
 PUT    /review/:id                      entries:write    edit rule conditions, name, type before approving
 POST   /review/:id/approve              entries:write    activate rule → triggers account.analyze
@@ -459,15 +441,54 @@ POST   /review/:id/reject               entries:write    discard proposal
 
 ### Snapshots (transient — read only)
 
-```
+```text
 GET    /snapshots                       reports:read     current snapshot, all nodes
 GET    /snapshots/summary               reports:read     entity total: income/expense/margin/drift
-GET    /snapshots/:node_id/history      reports:read     historical series for one node
+GET    /snapshots/:node_id/history      reports:read     historical daily series for one node (paginated)
 ```
+
+#### Snapshot history pagination
+
+`GET /snapshots/:node_id/history` supports cursor-based lazy loading for the Horizon graph. The UI fetches the most recent chunk on load and pages backward as the user scrolls.
+
+Query parameters:
+
+| Parameter | Type | Default | Description |
+| --- | --- | --- | --- |
+| `before` | date | latest | Return rows with `snapshot_date < before` (cursor) |
+| `limit` | int | 60 | Rows per page. Max 180. |
+| `granularity` | string | `day` | `day`, `week`, `month`, `year` — controls OHLC aggregation |
+
+When `granularity` is `day`, the response returns raw daily snapshot rows. For `week`, `month`, or `year`, the API aggregates the daily series into OHLC candles:
+
+```json
+{
+  "data": [
+    {
+      "period_start": "2026-02-01",
+      "period_end": "2026-02-28",
+      "open": 0.6667,
+      "close": 0.6667,
+      "high": 0.8000,
+      "low": 0.6667,
+      "actual_rate_per_day": 0.6667,
+      "projected_rate_per_day": 0.6667,
+      "drift_per_day": 0.0000,
+      "slope_per_day": 0.000001,
+      "epoch_start": "2025-01-01",
+      "epoch_end": null
+    }
+  ],
+  "next_cursor": "2026-01-31",
+  "has_more": true
+}
+```
+
+`epoch_start`/`epoch_end` are joined from `rule_epochs` on `epoch_id`. `epoch_id` is not returned. `next_cursor` is the `snapshot_date` of the last row returned — pass it as `before` on the next request. `has_more: false` means the full history has been loaded.
 
 ### Jobs
 
-```
+```text
 GET    /jobs                            accounts:read    paginated history
 GET    /jobs/stream                     accounts:read    SSE — all entity jobs, entity-scoped
 POST   /jobs/reprocess                  rules:write      trigger rules.reprocess
@@ -478,7 +499,7 @@ POST   /jobs/analyze                    entries:write    trigger account.analyze
 
 Read-only in v1. `system_role: server_admin` required; entity_role ignored.
 
-```
+```text
 GET    /admin/status                    server version, uptime, Postgres + RabbitMQ health
 GET    /admin/entities                  list all entities (v2: create, configure, DNS)
 ```
@@ -491,7 +512,7 @@ GET    /admin/entities                  list all entities (v2: create, configure
 
 ### Server-side ordering (race condition prevention)
 
-```
+```text
 1. Register LISTEN on Postgres NOTIFY channel for entity_id  ← before any query
 2. Query current state of all active jobs (queued + processing) for entity
 3. Send snapshot events to client
@@ -516,7 +537,7 @@ The LISTEN is registered before the snapshot query. Notifications fired during t
 
 ### Client pattern
 
-```
+```text
 1. GET /jobs          → populate full jobs table (REST)
 2. GET /jobs/stream   → server sends current active job states, then streams deltas
 3. On each event      → update row by job_id; last-write-wins handles REST/SSE overlap

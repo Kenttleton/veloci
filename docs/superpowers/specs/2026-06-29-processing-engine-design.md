@@ -4,13 +4,13 @@
 **Status:** Approved — data model revised 2026-06-30 by veloci-api spec
 **Scope:** Rust processing engine pipeline, financial data model, review queue flow, import deduplication algorithm
 
-> **Data model supersession:** `entries` and `entry_rules` are replaced by `rules` (defined in `2026-06-30-veloci-api-design.md`). `groups` and `group_members` are replaced by `labels`, `label_members`, and `label_rules`. `transaction_entry_assignments` is renamed `transaction_rule_assignments`. `computed_snapshots.node_type` values change from `entry|group` to `rule|label`. `entities` lives in `veloci_app` — FK constraints on `entity_id` are valid throughout.
+> **Data model supersession:** `entries` and `entry_rules` are replaced by `rules` (defined in `2026-06-30-veloci-api-design.md`). `groups` and `group_members` are replaced by `labels`. `label_members` and `label_rules` are removed — the label hierarchy is now expressed through `rules.label_id` (one output label per rule) and post-stage JSONB conditions that reference label UUIDs as inputs. `transaction_entry_assignments` is renamed `transaction_rule_assignments`. `computed_snapshots.node_type` values change from `entry|group` to `rule|label`. `entities` lives in `veloci_app` — FK constraints on `entity_id` are valid throughout.
 
 ---
 
 ## 1. Overview
 
-The Veloci processing engine is a pure function: given (raw_transactions, rules, DAG), it produces computed_snapshots. It never calls `NOW()`, never generates UUIDs, and never owns state — all state lives in Postgres. The Go API orchestrates job dispatch; the Rust engine owns all computation.
+The Veloci processing engine is a pure function: given (raw_transactions, rules, labels), it produces computed_snapshots. It never calls `NOW()`, never generates UUIDs, and never owns state — all state lives in Postgres. The Go API orchestrates job dispatch; the Rust engine owns all computation.
 
 Two Postgres tables are the source of truth:
 
@@ -32,7 +32,7 @@ Stage 0  CSV normalization + deduplication     →  raw_transactions
 Stage 1  Rule matching (pre/post, boolean)    →  transaction_rule_assignments
 Stage 2  Pattern detection (unmatched only)   →  rules (status: pending_review)
 Stage 3  Rate computation                     →  per-rule rates   [active only]
-Stage 4  DAG aggregation (set-union)          →  per-label rates  [active only]
+Stage 4  Label rate mapping                   →  per-label rates  [active only]
 Stage 5  Slope + drift + rolling range        →  trends           [active only]
 Stage 6  Snapshot write (batch INSERT)        →  computed_snapshots
 Stage 7  Cash flow projection                 →  rate_projections
@@ -41,7 +41,7 @@ Stage 7  Cash flow projection                 →  rate_projections
 ### Job Types and Entry Points
 
 | Job Type | Stages Run | Trigger |
-|---|---|---|
+| --- | --- | --- |
 | `import.process` | 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 | New CSV uploaded |
 | `rules.reprocess` | 1 → 2 → 3 → 4 → 5 → 6 → 7 | Rule created, modified, or deleted |
 | `account.analyze` | 3 → 4 → 5 → 6 → 7 | Rule approved from review queue; manual recalculate |
@@ -65,10 +65,16 @@ User sees review queue in UI → rule shown with:
   - calculated rate preview (what it would be if approved)
 
 User approves → rule.status = 'active'
+                → rule_epochs row created: epoch_start = first_matched_tx_date
                 → job published: account.analyze
                 → engine runs stages 3–6
                 → Pulse view updates with new Margin impact
+
+User rejects  → rule.project_tentatively = FALSE (removes from Stage 7 immediately)
+                → rule.status = 'inactive'
 ```
+
+Stage 2 sets `project_tentatively = TRUE` on any `pending_review` rule that has both `next_due_date` and `recurrence_anchor` populated — enough schedule data to produce a meaningful projection. This allows the pending rule to appear in the Stage 7 forecast before the user approves it. No `rule_epochs` row is created for pending rules.
 
 This makes the review queue the live preview: the engine has already done the work, the user sees the full picture before committing. No dry-run mode needed in the Go API.
 
@@ -121,16 +127,19 @@ Aged flux rows are treated identically to settled rows for dedup purposes — th
 
 Passes run in order. A candidate matched in an earlier pass is not re-evaluated in later passes.
 
-**Pass 1 — Exact imported_id match** *(primary path when bank provides IDs)*
+#### Pass 1 — Exact imported_id match *(primary path when bank provides IDs)*
+
 - Only runs when `candidate.imported_id` is non-null.
 - Query: find any `raw_transaction` in the same account where `imported_id = candidate.imported_id`.
 - If found and effective_status = settled or aged flux → **skip** (genuine duplicate).
 - If found and effective_status = young flux → **supersede**: delete old row (cascades `transaction_rule_assignments`), insert candidate.
 
-**Pass 2 — New territory check**
+#### Pass 2 — New territory check
+
 - If `candidate.date > existing_boundary + dedup_window_days` → **insert directly**. No existing data can overlap this date range.
 
-**Pass 3 — Volatility-aware exact merchant match**
+#### Pass 3 — Volatility-aware exact merchant match
+
 - Query: find any `raw_transaction` in the same account where:
   - `merchant_normalized = candidate.merchant_normalized` (exact match)
   - `ABS(date - candidate.date) <= dedup_window_days`
@@ -138,14 +147,36 @@ Passes run in order. A candidate matched in an earlier pass is not re-evaluated 
 - If found and effective_status = settled or aged flux → **skip**.
 - If found and effective_status = young flux → **supersede**.
 
-**Pass 4 — Volatility-aware fuzzy merchant match**
-- Query: find any `raw_transaction` in the same account within `dedup_window_days` where:
-  - `merchant_normalized` shares ≥70% LCS ratio with `candidate.merchant_normalized`
-  - `ABS(amount_cents - candidate.amount_cents) <= candidate.amount_cents * amount_tolerance_pct`
-- If found and effective_status = settled or aged flux → **skip**.
-- If found and effective_status = young flux → **supersede**.
+#### Pass 4 — Volatility-aware fuzzy merchant match
 
-**Pass 5 — Fallback insert**
+LCS ratio is computed in Rust, not in SQL. The SQL fetch retrieves date+amount-bounded candidates; Rust filters by LCS ratio. No `pg_trgm` or database extension is required.
+
+**SQL fetch:**
+
+```sql
+SELECT id, merchant_normalized, amount_cents, settlement_status, imported_at
+FROM raw_transactions
+WHERE account_id = $account_id
+  AND date BETWEEN $candidate_date - $dedup_window_days
+                AND $candidate_date + $dedup_window_days
+  AND ABS(amount_cents - $candidate_amount) <= $candidate_amount * $amount_tolerance_pct
+```
+
+**Rust filter (on the fetched set):**
+
+```rust
+let match = candidates.iter().find(|existing| {
+    lcs_ratio(&existing.merchant_normalized, &candidate.merchant_normalized) >= 0.70
+});
+```
+
+`lcs_ratio(a, b) = lcs_length(a, b) / max(a.len(), b.len())` — computed in Rust, no DB round-trip per row.
+
+- If `match` found and effective_status = settled or aged flux → **skip**.
+- If `match` found and effective_status = young flux → **supersede**.
+
+#### Pass 5 — Fallback insert
+
 - If no pass matched: insert as new `raw_transaction`.
 
 ### Setting settlement_status at Insert Time
@@ -161,6 +192,14 @@ settlement_status =
 ### Dedup Query Scope
 
 All dedup queries are bounded to `date BETWEEN candidate.date - dedup_window_days AND candidate.date + dedup_window_days`. This prevents unbounded full-table scans on large transaction histories.
+
+### Stage 0 Concurrency
+
+Candidate rows are processed concurrently using `buffer_unordered(import_concurrency)` from `futures::StreamExt`. `import_concurrency` is read from `engine.pipeline.import_concurrency` in `veloci.toml` (default: 4). This caps the number of simultaneous dedup lookups to prevent exhausting the write connection pool.
+
+All Stage 0 DB access — dedup reads and the final batch INSERT — uses the write pool (`engine.pool.write_max`). The dedup check and insert share the same connection context to keep the import transactionally consistent. `import_concurrency` should not exceed `engine.pool.write_max`.
+
+The final batch INSERT is always sequential and runs after all candidates are classified — no partial writes are possible.
 
 ---
 
@@ -187,7 +226,7 @@ Each `rule` contains a boolean expression tree stored as JSONB in `rules.conditi
 **Leaf node types:**
 
 | Type | Description |
-|---|---|
+| --- | --- |
 | `imported_payee_exact` | Case-insensitive exact match against `merchant_normalized` |
 | `imported_payee_contains` | Substring match against `merchant_normalized` |
 | `imported_payee_regex` | PCRE regex against `merchant_normalized` |
@@ -201,13 +240,49 @@ Each `rule` contains a boolean expression tree stored as JSONB in `rules.conditi
 
 Rules have a `stage` field (`pre` or `post`). Pre-stage rules run first in priority order; post-stage rules run after, allowing override patterns. Rules with lower `priority` integer values run first within each stage.
 
+### Pre-compilation Pass
+
+Before the parallel matching loop, all rules are compiled into `CompiledRule` structs. This happens once on the main thread:
+
+```rust
+struct CompiledRule {
+    rule_id:    Uuid,
+    stage:      Stage,
+    priority:   i32,
+    conditions: CompiledConditionTree,
+}
+
+enum CompiledConditionTree {
+    And(Vec<CompiledConditionTree>),
+    Or(Vec<CompiledConditionTree>),
+    Not(Box<CompiledConditionTree>),
+    Xor(Vec<CompiledConditionTree>),
+    PayeeExact(String),
+    PayeeContains(String),
+    PayeeRegex(regex::Regex),   // compiled once here; Regex is Send + Sync
+    PayeeOneOf(Vec<String>),
+    AmountRange { min: Option<i64>, max: Option<i64> },
+    DateDayOfMonth { day: u8, tolerance_days: u8 },
+    DateRange { start: NaiveDate, end: NaiveDate },
+    AccountId(Uuid),
+}
+
+let compiled_rules: Vec<CompiledRule> = rules
+    .iter()
+    .map(CompiledRule::try_from)   // fails fast on malformed JSONB or invalid regex
+    .collect::<Result<_, _>>()?;
+```
+
+`regex::Regex` is `Send + Sync` — compiled patterns are shared across rayon worker threads with no cloning or locking. A malformed regex in a rule's JSONB causes a compile-time error for that rule (logged and skipped); it does not abort the job.
+
 ### Matching Algorithm
 
-1. For each transaction, build a candidate set from `rules` ordered by `stage ASC, priority ASC`.
-2. Evaluate each rule's condition tree recursively.
-3. A transaction may match more than one rule. **This is intentional, not a bug.** Rules exist to apply labels — a Netflix charge legitimately belongs to both a "Netflix" rule (specific) and a "Streaming Subscriptions" rule (broad). Both assignments are correct.
-4. Each match produces one `transaction_rule_assignments` row with the `rule_id` and a `confidence` of 1.0.
-5. Unmatched transactions pass through to Stage 2.
+1. Sort `compiled_rules` by `stage ASC, priority ASC` (done once after pre-compilation).
+2. `par_iter` over transactions; for each transaction evaluate all compiled rules in order.
+3. Evaluate each rule's compiled condition tree recursively — no regex compilation at this point.
+4. A transaction may match more than one rule. **This is intentional, not a bug.** Rules exist to apply labels — a Netflix charge legitimately belongs to both a "Netflix" rule (specific) and a "Streaming Subscriptions" rule (broad). Both assignments are correct.
+5. Each match produces one `transaction_rule_assignments` row with the `rule_id` and a `confidence` of 1.0.
+6. Unmatched transactions pass through to Stage 2.
 
 ### Rate Overlap is Intentional
 
@@ -216,7 +291,7 @@ Because a transaction can match multiple rules, the same transaction contributes
 - **Netflix rule** `actual_rate` reflects only Netflix charges.
 - **Streaming rule** `actual_rate` reflects all streaming charges — including Netflix.
 
-Both rates are independently correct at the rule level. **Label rates (Stage 4) are the authoritative non-overlapping view** — the DAG set-union ensures each transaction contributes exactly once to any given label's rate regardless of how many rules matched it.
+Both rates are independently correct at the rule level. **Label rates (Stage 4) are the authoritative user-facing view** — each rule has exactly one output label, so each transaction contributes to a label's rate exactly once regardless of how many rules matched it.
 
 A derived metric available at the API/UI layer: a rule's share of its parent label's budget is `rule.actual_rate / parent_label.actual_rate`. The engine produces both values in `computed_snapshots`; the percentage is a simple division the API can compute on read.
 
@@ -260,9 +335,50 @@ For each cluster above 0.3 confidence:
 
 ## 7. Stage 3: Rate Computation
 
-**Input:** `transaction_rule_assignments` joined to `rules` WHERE `rules.status = 'active'`
+**Input:** `transaction_rule_assignments` joined to `rules` WHERE `rules.status = 'active'`; current open `rule_epochs` (epoch_start, epoch_end) for each rule
 
 **Output:** Per-rule `{actual_rate_per_day, projected_rate_per_day, window_days_used, transaction_count}`
+
+### Data Horizon
+
+Every rate computation is scoped to the rule's current signal epoch. Only transactions where `date >= epoch_start` are included:
+
+```sql
+SELECT tra.* FROM transaction_rule_assignments tra
+JOIN raw_transactions rt ON rt.id = tra.transaction_id
+JOIN rule_epochs re ON re.rule_id = tra.rule_id
+  AND re.epoch_end IS NULL
+  AND re.epoch_start <= rt.date
+WHERE tra.rule_id = $1
+  AND rt.date >= re.epoch_start
+```
+
+This is the data horizon: transactions predating the current epoch (e.g. the prior Netflix subscription) are excluded from live rate computation. They remain in `raw_transactions` (immutable) and in prior `computed_snapshots` (available to Horizon chart via `epoch_id`).
+
+### Signal Expiry
+
+The engine auto-terminates signals that have gone quiet for `EPOCH_TERMINATION_MULTIPLIER * period_days` days. This constant is defined once in the engine codebase and used everywhere the check runs — never as a magic number.
+
+```rust
+const EPOCH_TERMINATION_MULTIPLIER: u32 = 3;
+```
+
+```text
+staleness = snapshot_date - next_due_date
+
+staleness < period_days                              → normal; use computed actual_rate
+staleness in [period_days, MULTIPLIER*period_days)   → warning: actual_rate = 0, projected_rate persists
+staleness >= MULTIPLIER * period_days                → auto-terminate: write epoch_end (terminated_by='auto')
+                                                       actual_rate = 0, projected_rate = 0
+```
+
+For `hit` and `boost` rules, expiry uses amortization completion rather than the 3-strike mechanism:
+
+```text
+snapshot_date >= last_tx_date + period_days  →  actual_rate = 0, projected_rate = 0
+```
+
+Hit/Boost amortization is a single window — no recurring epochs.
 
 ### The `period_days` Field
 
@@ -281,7 +397,7 @@ For each cluster above 0.3 confidence:
 
 #### Standing
 
-```
+```text
 actual_rate = amount_cents / period_days
 ```
 
@@ -289,16 +405,33 @@ Represents the savings-reservation rate: "I need to set aside X cents/day so I h
 
 #### Variable
 
-```
-actual_rate (avg) = rolling_window_total_cents / period_days
-actual_rate (max) = max_transaction_cents / period_days
+Actual rate is always amortized — the same formula as all other types. `variable_method` does not affect actuals; it only affects the projected rate. The line is expected to fluctuate across snapshots; that variance is the signal.
+
+```text
+// Actual — amortized total over the period window. Same for avg and max methods.
+actual_rate = rolling_window_total_cents / period_days
+
+// rolling_window_total_cents = SUM(matched amount_cents)
+//   WHERE date IN [snapshot_date - period_days, snapshot_date]
+// Stored in computed_snapshots. Represents the true dollar flow in the current window.
 ```
 
-`variable_method` determines whether the rate is a running average or a conservative worst-case. `period_days` is the recurrence cycle — the window over which amounts are averaged or peaked.
+Projected rate uses `variable_method` to pick a representative amount from a recent history window, then amortizes it:
+
+```text
+projection_lookback_start = MAX(snapshot_date - (3 * period_days), epoch_start)
+
+projected_rate (avg) = MEAN(matched amounts in [projection_lookback_start, snapshot_date]) / period_days
+projected_rate (max) = MAX(matched amounts  in [projection_lookback_start, snapshot_date]) / period_days
+```
+
+`3 * period_days` gives three full cycles of recent history — enough to capture seasonal variation for monthly bills while staying recent enough to reflect current reality. The `epoch_start` floor prevents the window from reaching across a signal lifecycle boundary into data that belongs to a prior signal instance. If the epoch is newer than `3 * period_days`, the window narrows to what the current epoch has.
+
+`avg` projects the mean observed amount forward — balanced planning. `max` projects the worst recent occurrence forward — conservative planning. Both apply to income and expense directions.
 
 #### Hit
 
-```
+```text
 actual_rate = amount_cents / period_days
 ```
 
@@ -306,13 +439,13 @@ A one-time expense treated as a short-term debt. `period_days` is the amortizati
 
 #### Boost
 
-```
+```text
 actual_rate = amount_cents / period_days
 ```
 
 The positive mirror of Hit — a one-time income event (bonus, tax refund) that temporarily lifts the margin for `period_days` days.
 
-**Projected Rate**
+#### Projected Rate
 
 If the rule has a user-set `projected_rate_per_day`, use it directly.
 If no projected rate is set, the engine uses the `actual_rate` from the most recent prior `computed_snapshot` for that rule as the projection baseline. For brand-new rules (no prior snapshot), `projected_rate = actual_rate` (drift = 0 on first appearance).
@@ -323,55 +456,70 @@ For rules with fewer transactions than the window would normally expect, the win
 
 ---
 
-## 8. Stage 4: DAG Aggregation
+## 8. Stage 4: Label Rate Mapping
 
-**Input:** Per-rule rates from Stage 3; `labels` and `label_members` tables
+**Input:** Per-rule rates from Stage 3; `rules.label_id`
 
 **Output:** Per-label `{actual_rate_per_day, projected_rate_per_day, contributing_rule_count}`
 
-### The Deduplication Problem
+### Model
 
-A rule can belong to multiple labels. Example:
+Each rule has exactly one output label (`rules.label_id`). The label hierarchy is built implicitly through pre/post rule staging:
 
-- Netflix rule → Streaming (label)
-- Netflix rule → Kent's Expenses (label)
-- Both labels → Total Expenses (root label)
+- **Pre-stage rules** match transaction attributes (merchant, amount, date pattern) and output a leaf label. Example: a Netflix rule with `period_days = 30`, `dom:7` outputs the "Netflix LLC" label.
+- **Post-stage rules** match label conditions in their JSONB and output an aggregate label. Example: a Streaming rule with `period_days = 30`, `dom:-1` has conditions referencing the Netflix LLC, Disney+, and Hulu label UUIDs; it outputs the "Streaming" label.
 
-Naively summing rates through all paths would count Netflix twice at Total Expenses. The engine prevents this with memoized set-union rollup.
+Stage 1 already runs pre-stage rules before post-stage rules. By the time Stage 4 runs, `transaction_rule_assignments` contains the full rule-to-transaction mapping at every level of the hierarchy. A Netflix transaction is assigned to:
 
-### Aggregation Algorithm
+1. Netflix LLC rule (pre-stage, fires first) → "Netflix LLC" label
+2. Streaming rule (post-stage) → "Streaming" label
+3. Commitments rule (post-stage) → "Commitments" label
 
-1. **Build the DAG** from `label_members` (member_type = 'rule' or 'label').
-2. **Topological sort** (Kahn's algorithm). If a cycle is detected, the job fails with an error — cycles are a data integrity violation.
-3. **Process bottom-up** (leaves to root):
-   - For each leaf rule node: `reachable_rule_set = {rule_id}`
-   - For each label node: `reachable_rule_set = UNION(children's reachable_rule_sets)`
-   - Label rate = `SUM of actual_rate_per_day for all rules in reachable_rule_set`
-4. **Memoize** each node's `reachable_rule_set` — each set is computed once.
+Each transaction is assigned to each rule once — no path duplication. No set-union deduplication is needed.
 
-Because a set can only contain each `rule_id` once, Netflix contributes exactly once to Total Expenses regardless of how many labels it belongs to.
+### Aggregation
+
+Stage 4 is a flat mapping: for each active label, read the rate of the rule whose `label_id` matches:
+
+```text
+label_rate = rate of the rule WHERE rules.label_id = $label_id AND status = 'active'
+```
+
+`contributing_rule_count` is the count of transactions assigned to that rule in Stage 3.
+
+### Cycle Detection
+
+A cycle occurs when label A is an input to a rule that outputs label B, and label B is an input to a rule that outputs label A. The Go API validates acyclicity by traversing rule conditions before saving any rule. The engine errors on cycle detection as a defense-in-depth check.
 
 ---
 
 ## 9. Stage 5: Slope + Drift + Rolling Range
 
-**Input:** Current per-node rates from Stages 3 and 4; prior `computed_snapshots` (last 90 days, all nodes)
+**Input:** Current per-node rates from Stages 3 and 4; prior `computed_snapshots` bulk-loaded for all nodes (variable window per node)
 
-**Output:** Per-node `{drift_per_day, slope_per_day, r_squared, rate_high_per_day, rate_low_per_day}`
+**Output:** Per-node `{drift_per_day, slope_per_day, r_squared}`
 
 ### Drift
 
-```
-drift_per_day = actual_rate_per_day - projected_rate_per_day
+Drift direction is determined by the `direction` of the rule(s) reachable through the label hierarchy. The sign convention ensures **positive drift always means financially ahead of projection**.
+
+```text
+if ALL reachable rules have direction = 'expense':
+    drift_per_day = projected_rate_per_day - actual_rate_per_day
+    // positive = spent less than projected = ahead
+else (ANY income rule reachable — short-circuit on first found):
+    drift_per_day = actual_rate_per_day - projected_rate_per_day
+    // positive = earned more than projected = ahead
 ```
 
-Computed at every node (rule and label). Positive = spending more than projected. Negative = spending less than projected. Applies equally to income rules (positive = earning more than projected).
+For a rule node: read `rule.direction` directly.
+For a label node: read the direction of its defining rule (`rules WHERE label_id = $label_id`). For aggregate labels whose defining rule's conditions reference sub-labels, traverse those sub-label rules recursively until a `direction` is found — short-circuit on the first income rule. The Margin label's hierarchy contains income rules, so it always hits the income branch and correctly produces positive drift = net ahead of projection.
 
 ### Slope (Rate of Change)
 
-The slope measures how fast the actual rate is changing over time. It is a linear regression over the most recent 90 days of snapshots for each node.
+The slope measures how fast the actual rate is changing over time. It is a linear regression over each node's variable regression window (see Regression Window Selection below).
 
-```
+```text
 inputs:   [(snapshot.computed_as_of - first_snapshot.computed_as_of, actual_rate_per_day), ...]
 outputs:  slope_per_day   — regression coefficient (units: $/day per day — a rate of rate change)
           r_squared       — goodness of fit (0.0–1.0 confidence in the trend line)
@@ -379,30 +527,93 @@ outputs:  slope_per_day   — regression coefficient (units: $/day per day — a
 
 Minimum 2 data points required. With 0 or 1 prior snapshot: `slope_per_day = 0.0`, `r_squared = 0.0`.
 
-### Rolling Range (Candlestick High/Low)
+### Rolling Range (Candlestick OHLC)
 
-Using the same 90-day snapshot history already loaded for regression — no additional queries:
+The engine does **not** pre-compute or store high/low range values. Because `computed_snapshots` is a daily series (one row per calendar day per node), the API computes OHLC for any candlestick period as a window aggregate over `actual_rate_per_day` at query time:
 
-```
-rate_high_per_day = MAX(actual_rate_per_day) across all prior snapshots in the 90-day window,
-                    including the current run's actual_rate_per_day
-rate_low_per_day  = MIN(actual_rate_per_day) across all prior snapshots in the 90-day window,
-                    including the current run's actual_rate_per_day
-```
+- **Open**: `actual_rate_per_day` of the earliest snapshot in the period
+- **Close**: `actual_rate_per_day` of the latest snapshot in the period
+- **High**: `MAX(actual_rate_per_day)` over all snapshots in the period
+- **Low**: `MIN(actual_rate_per_day)` over all snapshots in the period
 
-On first snapshot (no history): `rate_high = rate_low = actual_rate_per_day`.
+This is a single indexed range scan on `(entity_id, node_id, snapshot_date DESC)` — no joins, no pre-computation. The API supports chunked/lazy-load queries over this index (see API spec). Removing the stored columns keeps the snapshot row self-describing: it represents the state on one calendar day and nothing else.
 
-These feed the Horizon graph candlestick: `rate_high` and `rate_low` are the candle wicks; the API derives open/close by reading adjacent snapshots from the time series. The engine stores the range; the UI does only the subtraction to render the candle body.
+### Regression Window Selection
 
-### computed_as_of
+Each node's regression window is `3 * period_days`, sourced from the defining rule:
 
-The `computed_as_of` field on every snapshot is:
+| Node type | `period_days` source | Regression window |
+| --- | --- | --- |
+| Rule | `rule.period_days` | `3 * period_days` |
+| Label | `rules WHERE label_id = $label_id AND status = 'active'` | `3 * period_days` |
+
+Every label has exactly one defining rule. That rule's `period_days` defines the label's regression window regardless of how many sub-rules or sub-labels it aggregates. The three major system labels (Income, Commitments, Margin) each have a defining rule with `period_days = 30`, giving them a 90-day window.
+
+### Bulk Load Before par_iter
+
+Stage 5 runs as a `rayon::par_iter` over all active nodes. Before the parallel loop, all snapshot history is loaded in a single query:
 
 ```sql
-SELECT MAX(date) FROM raw_transactions WHERE entity_id = $1
+SELECT node_id, node_type, snapshot_date, actual_rate_per_day, epoch_id
+FROM computed_snapshots
+WHERE entity_id = $entity_id
+  AND node_id = ANY($all_node_ids)
+  AND snapshot_date >= $snapshot_date - $max_window_days
+ORDER BY node_id, snapshot_date ASC
 ```
 
-Never `NOW()`. The engine is time-agnostic — it reports the state of the data as of the most recent transaction it has seen. The UI is responsible for interpreting what "now" means relative to that date.
+`$max_window_days` is the maximum `3 * period_days` across all nodes. Results are grouped into a `HashMap<Uuid, Vec<SnapshotRow>>` in Rust before `par_iter` begins. No database access occurs inside the parallel loop.
+
+### Snapshot-Epoch Relationship and Regression Scoping
+
+Each snapshot row represents one calendar day. The `epoch_id` column records which epoch was open on that calendar day — snapshots contain epoch context, epochs do not own snapshots. A snapshot on March 4th carries the epoch that was open that day (e.g. the Netflix epoch closing on March 4th); the March 5th snapshot for the same rule carries a different epoch_id (a new epoch) or no snapshot exists at all if no epoch was open.
+
+For **rule nodes**, Stage 5 must not regress across epoch boundaries — a prior epoch's snapshots reflect different data scope and corrupt the slope. After grouping the bulk-loaded rows, Rust filters each rule's history to the current epoch and its regression window:
+
+```rust
+let history: Vec<&SnapshotRow> = node_history
+    .iter()
+    .filter(|r| r.epoch_id == Some(current_epoch_id))
+    .filter(|r| r.snapshot_date >= snapshot_date - window_days)
+    .collect();
+```
+
+For **label nodes**, `epoch_id IS NULL` on all their snapshots. Labels carry no independent epoch lifecycle — their historical rates already reflect which member rules had open epochs on each past calendar day (Stage 4 only mapped active-epoch rules to labels when those snapshots were written). Only the date window filter applies:
+
+```rust
+let history: Vec<&SnapshotRow> = node_history
+    .iter()
+    .filter(|r| r.snapshot_date >= snapshot_date - window_days)
+    .collect();
+```
+
+### snapshot_date vs computed_as_of
+
+Each snapshot row carries two date fields with distinct purposes:
+
+- **`snapshot_date`** — the calendar day this snapshot represents. Row identity key. The UI queries by this field to retrieve a specific point on the Horizon timeline.
+- **`computed_as_of`** — `MAX(date) FROM raw_transactions WHERE entity_id = $entity_id`, computed at import time. The import's data horizon. Used by Stage 3 signal expiry and Stage 7 as the projection anchor. Denormalized onto each snapshot row so Stage 5 regression can read the settlement boundary of historical rows without joining back through import_batches.
+
+These are different things. An import uploaded on March 15 whose transactions extend through March 10 produces snapshot rows for every day in the flux window, each with `computed_as_of = March 10` and a distinct `snapshot_date`.
+
+The engine never calls `NOW()`. `computed_as_of` is always derived from `MAX(raw_transactions.date)`.
+
+### Flux Window Day-Crawl
+
+Stages 3–6 run as a day-loop over the import's flux window — not once per import. The flux window is:
+
+```text
+flux_start    = computed_as_of - settlement_window_days
+flux_end      = computed_as_of
+
+for each snapshot_date D in [flux_start .. flux_end]:
+    Stage 3: compute per-rule rates using transactions WHERE rt.date <= D
+    Stage 4: aggregate via DAG
+    Stage 5: compute slope/drift using prior snapshots WHERE snapshot_date <= D
+    Stage 6: UPSERT computed_snapshots row for (entity_id, node_id, D)
+```
+
+Days where `snapshot_date < flux_start` have only settled transactions — those snapshot rows are frozen and not recomputed. A new import only touches the rows its flux window covers.
 
 ---
 
@@ -416,24 +627,65 @@ The engine writes all snapshots for this run in a single Postgres transaction. P
 
 ```sql
 INSERT INTO computed_snapshots (
-  entity_id, node_id, node_type, computed_as_of, job_id,
+  entity_id, node_id, node_type, snapshot_date, computed_as_of, job_id,
   actual_rate_per_day, projected_rate_per_day, drift_per_day,
-  slope_per_day, r_squared, rate_high_per_day, rate_low_per_day,
-  transaction_count, window_days_used
+  slope_per_day, r_squared,
+  transaction_count, window_days_used, rolling_window_total_cents, balance_cents, epoch_id
 )
 VALUES ...
-ON CONFLICT (entity_id, node_id, computed_as_of) DO UPDATE SET ...;
+ON CONFLICT (entity_id, node_id, snapshot_date) DO UPDATE SET
+  computed_as_of                = EXCLUDED.computed_as_of,
+  job_id                        = EXCLUDED.job_id,
+  actual_rate_per_day           = EXCLUDED.actual_rate_per_day,
+  projected_rate_per_day        = EXCLUDED.projected_rate_per_day,
+  drift_per_day                 = EXCLUDED.drift_per_day,
+  slope_per_day                 = EXCLUDED.slope_per_day,
+  r_squared                     = EXCLUDED.r_squared,
+  transaction_count             = EXCLUDED.transaction_count,
+  window_days_used              = EXCLUDED.window_days_used,
+  rolling_window_total_cents    = EXCLUDED.rolling_window_total_cents,
+  balance_cents                 = EXCLUDED.balance_cents,
+  epoch_id                      = EXCLUDED.epoch_id;
 ```
 
-Prior snapshots for the same `(entity_id, node_id)` are retained — they form the historical series that Stage 5 reads in future runs.
+The UPSERT covers the flux window. Rows outside the flux window (`snapshot_date < flux_start`) are untouched — they were written by a prior import and their transactions are fully settled.
 
 ---
 
 ## 11. Stage 7: Signal Superposition Projection
 
-**Input:** Active rules with `period_days`, `recurrence_anchor`, and `next_due_date`; `accounts.balance_cents` as starting point for derived balance; `computed_as_of` from Stage 6
+**Input:** Eligible rules (see eligibility table below) with `period_days`, `recurrence_anchor`, and `next_due_date`; `accounts.balance_cents` as starting point for derived balance; `computed_as_of` from Stage 6
 
 **Output:** Rows in `rate_projections` — a forward-looking 90-day signal superposition per account (and entity aggregate)
+
+### Rule Eligibility for Projection
+
+Stage 7 uses two axes — `status` and epoch state — to determine which rules contribute to the projection:
+
+| `status` | Epoch state | `project_tentatively` | Stage 7 |
+| --- | --- | --- | --- |
+| `active` | open epoch (`epoch_end IS NULL`) | — | **Include** — live signal |
+| `active` | terminated or no epoch | — | **Exclude** — signal absent from projection |
+| `pending_review` | no epoch | `TRUE` | **Include** — tentative signal |
+| `pending_review` | no epoch | `FALSE` | **Exclude** |
+| `inactive` | any | — | **Exclude** always |
+
+A terminated epoch signals absence — the cancelled Netflix subscription disappears from the projection timeline, which is the correct representation. Projecting it as $0 would inflate `rate_projections` row counts unboundedly as signals accumulate.
+
+```sql
+SELECT r.*
+FROM rules r
+LEFT JOIN rule_epochs re ON re.rule_id = r.id AND re.epoch_end IS NULL
+WHERE r.entity_id = $1
+  AND r.status IN ('active', 'pending_review')
+  AND (
+    (r.status = 'active'         AND re.id IS NOT NULL)
+    OR
+    (r.status = 'pending_review' AND r.project_tentatively = TRUE)
+  )
+```
+
+The entity-aggregate row in `rate_projections` (`account_id IS NULL`) is the sum of all rules that passed this eligibility check for each day — no separate eligibility pass.
 
 ### Purpose
 
@@ -478,7 +730,7 @@ Pinch points are rate-native: `is_pinch_point = TRUE` when commitment signals ex
 
 ### Determinism
 
-Stage 7 uses `computed_as_of` as its "today" anchor — never `NOW()`. `next_due_date` is a stored field. Running the same job twice produces identical `rate_projections` rows.
+Stage 7 uses `computed_as_of` (the import's data horizon, `MAX(raw_transactions.date)`) as its "today" anchor — never `NOW()`. `next_due_date` is a stored field. Running the same job twice produces identical `rate_projections` rows.
 
 ### Variable Rule Projection
 
@@ -660,34 +912,65 @@ CREATE TABLE rules (
   name                   TEXT NOT NULL,
   direction              TEXT NOT NULL CHECK (direction IN ('income','expense')),
   entry_type             TEXT NOT NULL CHECK (entry_type IN ('standing','hit','boost','variable')),
-  period_days  INTEGER NOT NULL DEFAULT 30,
+  period_days            INTEGER NOT NULL DEFAULT 30,
   variable_method        TEXT CHECK (variable_method IN ('avg','max')),
   projected_rate_per_day NUMERIC(12,4),
   conditions             JSONB NOT NULL,
+  -- label_id: the one label this rule outputs when it fires.
+  -- Pre-stage rules output leaf labels; post-stage rules output aggregate labels.
+  -- Conditions may reference other label UUIDs as inputs (composability).
+  label_id               UUID REFERENCES labels(id) ON DELETE SET NULL,
   stage                  TEXT NOT NULL DEFAULT 'pre' CHECK (stage IN ('pre','post')),
   priority               INTEGER NOT NULL DEFAULT 100,
   status                 TEXT NOT NULL DEFAULT 'pending_review'
                          CHECK (status IN ('pending_review','active','inactive')),
   source                 TEXT NOT NULL DEFAULT 'user' CHECK (source IN ('user','engine')),
+  recurrence_anchor      TEXT,
+  next_due_date          DATE,
+  project_tentatively    BOOLEAN NOT NULL DEFAULT FALSE,
   created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX ON rules (entity_id, status);
 CREATE INDEX ON rules (entity_id, priority);
+CREATE INDEX ON rules (entity_id, label_id);
+CREATE INDEX ON rules (entity_id, next_due_date);
+```
+
+### rule_epochs
+
+Signal lifecycle records. One row per active instance of a rule's signal. Append-only — epoch_start is never modified. Reactivation (e.g. Netflix restart) writes a new row; prior epoch is preserved with its epoch_end for historical chart queries.
+
+```sql
+CREATE TABLE rule_epochs (
+  id                      UUID        PRIMARY KEY,
+  entity_id               UUID        NOT NULL REFERENCES entities(id),
+  rule_id                 UUID        NOT NULL REFERENCES rules(id),
+  epoch_start             DATE        NOT NULL,   -- Stage 3 data horizon: transactions WHERE date >= epoch_start
+  epoch_end               DATE,                   -- NULL = signal currently live
+  epoch_transaction_count INTEGER     NOT NULL DEFAULT 0,
+  terminated_by           TEXT        CHECK (terminated_by IN ('auto', 'manual')),
+  created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (rule_id, epoch_start)
+);
+
+CREATE INDEX ON rule_epochs (rule_id, epoch_end);
+CREATE INDEX ON rule_epochs (entity_id, epoch_end);
 ```
 
 **Condition tree shape (JSONB):**
 
-```
-Node:  { "op": "AND"|"OR"|"NOT"|"XOR", "children": [Node|Leaf, ...] }
-Leaf:  { "type": "<leaf_type>", "value": <string|number|array|{min,max}> }
+```json
+// Node:  { "op": "AND"|"OR"|"NOT"|"XOR", "children": [Node|Leaf, ...] }
+// Leaf:  { "type": "<leaf_type>", "value": <string|number|array|{min,max}> }
+// Label leaf (post-stage rules only):  { "type": "label", "label_id": "<uuid>" }
 ```
 
-`NOT` and `XOR` nodes require exactly 1 and exactly 2 children respectively. `AND` / `OR` accept 1 or more.
+`NOT` and `XOR` nodes require exactly 1 and exactly 2 children respectively. `AND` / `OR` accept 1 or more. Label leaf nodes reference a label by UUID — names are never embedded in JSONB so renames require no JSONB migration.
 
 ### transaction_rule_assignments
 
-Many-to-many join between transactions and rules. A transaction can match multiple rules (legitimate — see DAG deduplication in Stage 4).
+Many-to-many join between transactions and rules. A transaction legitimately matches multiple rules across pre/post stages — each rule outputs a distinct label.
 
 ```sql
 CREATE TABLE transaction_rule_assignments (
@@ -701,46 +984,23 @@ CREATE TABLE transaction_rule_assignments (
 
 ### labels
 
-Named DAG nodes. Replaces `groups`. Full definition in `2026-06-30-veloci-api-design.md`.
+Named user-facing groupings. Replaces `groups`. Full definition in `2026-06-30-veloci-api-design.md`.
+
+Each label is the output of exactly one rule (`rules.label_id → labels.id`). The label hierarchy (leaf → aggregate) is expressed through post-stage rule conditions referencing other label UUIDs — no separate membership table.
+
+Name is freely mutable; all downstream references (rules, snapshots, projections) use `labels.id`.
 
 ```sql
 CREATE TABLE labels (
   id         UUID PRIMARY KEY,
   entity_id  UUID NOT NULL REFERENCES entities(id),
   name       TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (entity_id, name)
 );
 ```
 
-### label_members
-
-DAG edges. `member_type` distinguishes rule leaves from label nodes.
-
-```sql
-CREATE TABLE label_members (
-  label_id    UUID NOT NULL REFERENCES labels(id),
-  member_id   UUID NOT NULL,
-  member_type TEXT NOT NULL CHECK (member_type IN ('rule','label')),
-  PRIMARY KEY (label_id, member_id)
-);
-```
-
-Cycle prevention is enforced at the application layer in `veloci-api` before publishing a job. The engine will error on cycle detection as a safeguard.
-
-### label_rules
-
-Automated conditions for applying a label to matching rules. Full definition in `2026-06-30-veloci-api-design.md`.
-
-```sql
-CREATE TABLE label_rules (
-  id         UUID PRIMARY KEY,
-  label_id   UUID NOT NULL REFERENCES labels(id),
-  entity_id  UUID NOT NULL REFERENCES entities(id),
-  conditions JSONB NOT NULL,
-  priority   INTEGER NOT NULL DEFAULT 100,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-```
+Cycle prevention (label A → rule → label B → rule → label A) is enforced by `veloci-api` before saving any rule. The engine errors on cycle detection as a defense-in-depth check.
 
 ### review_queue
 
@@ -768,31 +1028,36 @@ CREATE TABLE review_queue (
 
 ### computed_snapshots
 
-Rebuildable output from the engine. Safe to truncate and recompute at any time.
+Rebuildable output from the engine. One row per calendar day per node. Safe to truncate and recompute at any time.
 
 ```sql
 CREATE TABLE computed_snapshots (
-  id                     UUID PRIMARY KEY,
-  entity_id              UUID NOT NULL REFERENCES entities(id),
-  node_id                UUID NOT NULL,        -- rule_id or label_id
-  node_type              TEXT NOT NULL CHECK (node_type IN ('rule','label')),
-  computed_as_of         DATE NOT NULL,        -- MAX(raw_transaction.date) for this entity
-  job_id                 UUID NOT NULL REFERENCES processing_jobs(id),
+  id                     UUID          PRIMARY KEY,
+  entity_id              UUID          NOT NULL REFERENCES entities(id),
+  node_id                UUID          NOT NULL,   -- rule_id or label_id
+  node_type              TEXT          NOT NULL CHECK (node_type IN ('rule','label')),
+  snapshot_date          DATE          NOT NULL,   -- calendar day this row represents
+  computed_as_of         DATE          NOT NULL,   -- MAX(raw_transactions.date) from import run; projection anchor
+  job_id                 UUID          NOT NULL REFERENCES processing_jobs(id),
   actual_rate_per_day    NUMERIC(12,4) NOT NULL,
   projected_rate_per_day NUMERIC(12,4) NOT NULL,
   drift_per_day          NUMERIC(12,4) NOT NULL,
   slope_per_day          NUMERIC(14,6) NOT NULL,   -- $/day per day
-  r_squared              NUMERIC(4,3) NOT NULL,
-  rate_high_per_day      NUMERIC(12,4) NOT NULL,   -- MAX actual_rate over 90-day regression window
-  rate_low_per_day       NUMERIC(12,4) NOT NULL,   -- MIN actual_rate over 90-day regression window
-  transaction_count      INTEGER NOT NULL,
-  window_days_used       INTEGER NOT NULL,
-  balance_cents          BIGINT NOT NULL DEFAULT 0,   -- running total; secondary to rates, for bank account comparison
+  r_squared              NUMERIC(4,3)  NOT NULL,
+  transaction_count             INTEGER       NOT NULL,
+  window_days_used              INTEGER       NOT NULL,
+  -- SUM(matched amount_cents WHERE date IN [snapshot_date - period_days, snapshot_date]).
+  -- The raw dollar flow in the actual window. Basis for actual_rate_per_day on all rule types.
+  -- For variable rules, also used with variable_method to compute projected_rate_per_day
+  -- over the 3*period_days projection lookback window.
+  rolling_window_total_cents    BIGINT        NOT NULL DEFAULT 0,
+  balance_cents                 BIGINT        NOT NULL DEFAULT 0,
+  epoch_id                      UUID          REFERENCES rule_epochs(id),   -- NULL for label nodes
 
-  UNIQUE (entity_id, node_id, computed_as_of)
+  UNIQUE (entity_id, node_id, snapshot_date)
 );
 
-CREATE INDEX ON computed_snapshots (entity_id, node_id, computed_as_of DESC);
+CREATE INDEX ON computed_snapshots (entity_id, node_id, snapshot_date DESC);
 ```
 
 ### processing_jobs
@@ -820,15 +1085,15 @@ CREATE TABLE processing_jobs (
 
 These invariants are structural constraints on the system, not implementation details. Violations are bugs.
 
-1. **Engine never calls `NOW()`** — `computed_as_of` is always derived from `MAX(raw_transactions.date)`. The engine has no concept of the current date.
+1. **Engine never calls `NOW()`** — `computed_as_of` (the import data horizon) is always derived from `MAX(raw_transactions.date)`; `snapshot_date` is a calendar day derived from the flux window crawl. Neither field is wall-clock time.
 
 2. **`raw_transactions` is immutable** — the engine never UPDATE or DELETE rows in this table. All re-runs read the same source data.
 
-3. **Stages 3–6 filter on `status = 'active'`** — rules in `pending_review` or `inactive` are invisible to all calculation stages.
+3. **Stages 3–6 filter on `status = 'active'` with open epoch** — rules in `pending_review` or `inactive` are invisible to historical calculation stages. Stage 7 additionally projects `pending_review` rules where `project_tentatively = TRUE`; active rules with no open epoch are excluded from Stage 7.
 
 4. **Snapshot writes are atomic** — all snapshots for a given job commit in one transaction or not at all.
 
-5. **DAG is acyclic** — cycle check runs in the Go API before publishing. The engine errors on cycle detection as a defense-in-depth check.
+5. **Label hierarchy is acyclic** — the Go API validates that no rule's conditions (directly or transitively) reference a label that is also downstream of this rule. The engine errors on cycle detection as a defense-in-depth check.
 
 6. **Deduplication is idempotent** — running Stage 0 twice on the same CSV produces the same `raw_transactions` row count the second time (zero new inserts).
 
@@ -848,11 +1113,11 @@ Each stage has a defined parallelism strategy. The stage order is a hard depende
 
 | Stage | Strategy | Rust primitive |
 | --- | --- | --- |
-| 0 — CSV norm + dedup | Normalize all rows in parallel; dedup lookups in parallel; batch INSERT sequentially at end | `rayon::par_iter` for normalization; `FuturesUnordered` for concurrent Postgres dedup reads |
-| 1 — Rule matching | Each transaction evaluated independently; shard transactions across threads | `rayon::par_iter` over transaction slice |
+| 0 — CSV norm + dedup | Normalize all rows in parallel; dedup lookups concurrently up to `import_concurrency`; batch INSERT sequentially at end | `rayon::par_iter` for normalization; `buffer_unordered(import_concurrency)` for concurrent Postgres dedup reads |
+| 1 — Rule matching | Pre-compile all rules into `CompiledRule` structs (single-threaded, once); then evaluate each transaction independently | Sequential pre-compilation → `rayon::par_iter` over transaction slice |
 | 2 — Pattern detection | Global clustering pass is sequential (must see all unmatched at once); cluster scoring is parallel | Sequential LCS clustering → `rayon::par_iter` over candidate clusters for confidence scoring |
 | 3 — Rate computation | Each rule's rate computed from its own transactions only; fully independent | `rayon::par_iter` over active rules |
-| 4 — DAG aggregation | Topological sort is sequential; nodes within each level of the DAG are independent | Sequential toposort → level-parallel: `rayon::par_iter` over each level's node set |
+| 4 — Label rate mapping | Each label's rate reads only its own rule's Stage 3 output; fully independent | `rayon::par_iter` over all active labels |
 | 5 — Slope + drift | Each node's regression reads only its own snapshot history; fully independent | `rayon::par_iter` over all nodes |
 | 6 — Snapshot write | Data serialization parallel; single atomic `INSERT` at the end is sequential | `rayon::par_iter` to build row structs → single `sqlx` batch execute |
 
@@ -873,7 +1138,7 @@ For v1, a single engine container is sufficient. For v2, scaling is horizontal: 
 
 ### What Cannot Be Parallelized
 
-- **Stage ordering** — Stages 3 → 4 → 5 → 6 are a strict dependency chain. Stage 4 (DAG aggregation) cannot start until all per-entry rates from Stage 3 are complete.
+- **Stage ordering** — Stages 3 → 4 → 5 → 6 are a strict dependency chain. Stage 4 (label rate mapping) cannot start until all per-rule rates from Stage 3 are complete.
 - **Stage 2 clustering** — The LCS similarity pass must see all unmatched transactions before any cluster can be formed. The global scan is sequential.
 - **Stage 6 commit** — The final snapshot INSERT must be a single Postgres transaction. The commit point is inherently sequential.
 - **Same-entity concurrent jobs** — Two jobs for the same `entity_id` must not run simultaneously; they would produce conflicting snapshot writes. The Go API enforces a per-entity job lock before publishing. If a job for entity X is already in `processing` state, a new job for entity X is queued and deferred until the current one completes.

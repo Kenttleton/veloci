@@ -69,12 +69,33 @@ Encoding format:
 
 | Pattern | Meaning | Example |
 | --- | --- | --- |
-| `dom:N` | Day of month N | `dom:1` — fires 1st of each month |
-| `dom:N,M` | Multi-anchor: days N and M each month | `dom:1,15` — semi-monthly (single rule, two phase points) |
-| `dow:N` | Day of week N (0=Monday … 6=Sunday) | `dow:4` — every Friday |
-| `interval:N` | Every N days from last occurrence | `interval:14` — biweekly from last fire |
+| `dom:N` | Day of month, 1-indexed from start. N = 1–31. | `dom:1` — 1st; `dom:15` — 15th |
+| `dom:-N` | Day of month, 1-indexed from end. `-1` = last day. | `dom:-1` — last day of month |
+| `dom:N,M,...` | Multi-anchor: multiple phase points per month. Mix positive and negative. | `dom:15,-1` — 15th and last day (semi-monthly) |
+| `dow:N` | Day of week. 0=Monday … 6=Sunday. | `dow:4` — every Friday |
+| `interval:N` | Every N days from last fire date. | `interval:14` — biweekly |
 
-Multi-anchor rules (e.g., `dom:1,15`) allow a single income rule to represent semi-monthly pay without splitting into two separate rules. Stage 7 expands the anchors into individual scheduled dates within the projection window.
+**Index convention:** Both positive and negative indices are 1-based. `dom:1` is the 1st, `dom:-1` is the last day. There is no `dom:0`.
+
+**Negative index resolution:** For a given year/month with `D = days_in_month(year, month)`:
+
+```text
+resolved_day(N) = N > 0 ? N : D + N + 1
+
+dom:-1  → D + (-1) + 1 = D        // last day
+dom:-2  → D + (-2) + 1 = D - 1    // second-to-last
+```
+
+**UI translation:** The engine stores and reads the raw index. The UI translates for display:
+
+- Positive: `1` → "1st", `15` → "15th", `28` → "28th"
+- Negative: `-1` → "last" (v1 only; `-2`, `-3`, etc. displayed as ordinal from end in future)
+
+**Quarterly and annual rules:** Use `interval:91` and `interval:365`. Do not use `dom:N` with large `period_days` — `dom:` is for within-month phase anchors only.
+
+**Invoice-triggered income (net-30, net-15, etc.):** Model as `variable` with no `recurrence_anchor`. Invoice payments are event-driven, not calendar-phase-driven. They contribute to the rolling rate baseline but are excluded from Stage 7 projection.
+
+Multi-anchor rules (e.g., `dom:15,-1`) allow a single income rule to represent semi-monthly pay without splitting into two separate rules. Stage 7 expands each anchor into individual scheduled dates within the projection window and computes the effective window duration between consecutive firings.
 
 ### `next_due_date` — next scheduled phase occurrence
 
@@ -111,13 +132,22 @@ Stage 7 projects all rate signals forward 90 days. For each day in the projectio
 projection_window = 90 days
 balance = accounts.balance_cents  // starting point for derived balance only
 
-for each day D in [today .. today + 90]:
+// Pre-expand all dom: anchors into concrete fire dates before the day loop.
+// For each dom: rule, build a sorted list of all fire dates in the projection window.
+// For interval: rules, fire dates are computed on-the-fly from next_due_date + N.
+for each rule r with recurrence_anchor:
+    if r.recurrence_anchor starts with "dom:":
+        r.fire_dates = expand_dom_anchors(r.recurrence_anchor, computed_as_of, computed_as_of + 90)
+        // effective_period_days(fire) = next fire date after fire - fire (variable per firing)
+        // this eliminates false pinch points caused by fixed-width windows across unequal anchor gaps
+
+for each day D in [computed_as_of .. computed_as_of + 90]:
 
     // Sum instantaneous rate contributions for day D
-    income_rate_D = Σ { r.amount_cents / r.period_days
+    income_rate_D = Σ { rate_on_day(r, D)
                         for income rules r whose signal is active on D }
 
-    commitment_rate_D = Σ { r.amount_cents / r.period_days
+    commitment_rate_D = Σ { rate_on_day(r, D)
                             for commitment rules r whose signal is active on D }
 
     margin_rate_D = income_rate_D - commitment_rate_D
@@ -139,10 +169,21 @@ for each day D in [today .. today + 90]:
 // Written in a staged pass AFTER the full projection is complete — not in-loop —
 // to keep the projection output deterministic and reproducible from the same inputs.
 for each rule r with recurrence_anchor:
-    r.next_due_date = last_projected_fire_date(r) + r.period_days
+    if r.recurrence_anchor starts with "dom:":
+        // Advance to the next calendar anchor after the last fire date.
+        // Do NOT add period_days — dom: rules have variable inter-firing gaps.
+        r.next_due_date = next_anchor_date_after(last_fire_date(r), r.recurrence_anchor)
+    else:  // interval:N
+        r.next_due_date = last_projected_fire_date(r) + N
 ```
 
-**"A rule's signal is active on day D"** means D falls within the current activation window: `[next_fire_date, next_fire_date + period_days)`. For standing/variable rules, the engine expands `recurrence_anchor` into a list of fire dates within the 90-day window and checks each.
+**`rate_on_day(r, D)`** — how a rule contributes its rate on day D:
+
+- `dom:` rules: find the fire date `F` in `r.fire_dates` such that `F <= D < next_fire_date_after(F)`. If found, rate = `r.amount_cents / effective_period_days` where `effective_period_days = next_fire_date_after(F) - F`. This uses the actual inter-firing gap rather than the stored `period_days`, eliminating false pinch points from unequal anchor spacing (e.g., the 15th→last gap varies by month).
+- `interval:N` rules: signal is active on D if `next_due_date <= D < next_due_date + r.period_days`. Rate = `r.amount_cents / r.period_days`.
+- `dow:N` rules: signal is active on D if `day_of_week(D) == N`. Rate = `r.amount_cents / 7`.
+
+**"A rule's signal is active on day D"** means D falls within one of the rule's activation windows as defined above. For standing/variable rules, the engine expands `recurrence_anchor` into a list of fire dates within the 90-day window and checks each.
 
 ### Determinism
 
@@ -163,6 +204,7 @@ The **second derivative** is the rate of change of the margin rate over time. It
 This is already captured. The Margin label's `slope_per_day` in `computed_snapshots` (written by Stage 5) is exactly this value — the slope of the margin rate across the last N snapshots. No new field or computation is needed.
 
 The API surfaces it as:
+
 - **Margin rate** — current $/day gap. Primary number on the Margin label.
 - **Margin slope** (`slope_per_day` on the Margin snapshot) — trend direction and magnitude. "Improving at +$0.15/day" or "tightening at -$0.40/day."
 - **Margin on due date** — the `margin_rate_per_day` value from `rate_projections` on the due date. The signal-native answer to "will I make rent?"
@@ -170,7 +212,7 @@ The API surfaces it as:
 
 ### `drift_per_day`
 
-`drift_per_day` in `computed_snapshots` is `projected_rate - actual_rate` — the historical accuracy signal showing how far the actual rate deviated from what was projected at the prior snapshot. This is already defined and computed in Stage 5/6. It is not a new concept in this spec.
+`drift_per_day` in `computed_snapshots` uses an all-or-nothing direction check: ALL-expense nodes use `projected_rate - actual_rate`; any node containing income uses `actual_rate - projected_rate`. Positive drift always means financially ahead of projection. Defined and computed in Stage 5; see the processing engine spec for the full formula.
 
 ---
 

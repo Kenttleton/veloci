@@ -15,7 +15,7 @@ Veloci is a local-first personal finance application targeting the self-hosting 
 ## 2. Services
 
 | Service | Language | Responsibility |
-|---|---|---|
+| --- | --- | --- |
 | `veloci-web` | TypeScript / React | Static SPA — UI only, no server-side logic |
 | `veloci-api` | Go + Cobra + Viper | REST API, auth proxy, RBAC enforcement, all CRUD, job publishing. Cobra subcommands: `serve`, `migrate` |
 | `veloci-engine` | Rust | Pattern clustering, rule evaluation, rate/slope calculations. Health via CLI subcommand |
@@ -28,9 +28,11 @@ Veloci is a local-first personal finance application targeting the self-hosting 
 ## 3. Communication
 
 ### API ↔ Frontend
+
 REST over HTTP. The React SPA communicates exclusively with `veloci-api`. No service is exposed directly to the frontend except the API.
 
 ### API ↔ Engine
+
 Asynchronous via RabbitMQ. `veloci-api` publishes jobs to a queue. `veloci-engine` consumes jobs, reads and writes Postgres directly for analysis workloads, and acknowledges completion. The API never calls the engine synchronously.
 
 **v1 job types:**
@@ -43,6 +45,7 @@ Asynchronous via RabbitMQ. `veloci-api` publishes jobs to a queue. `veloci-engin
 **Engine health check:** The engine binary supports a `health` subcommand — `veloci-engine health` — that independently connects to Postgres and RabbitMQ and exits `0` or `1`. Docker runs this as a separate short-lived process for its healthcheck. No HTTP server is added to the engine; it remains a pure queue consumer.
 
 ### API ↔ Auth
+
 `veloci-auth` is an internal service — not exposed outside the Docker network. `veloci-api` is its only caller.
 
 At login, `veloci-api` validates credentials via `veloci-auth`, then mints a token with full claims (entity_id, roles). On every subsequent protected request, `veloci-api` calls `veloci-auth POST /tokens/validate` to verify the token is signed, unexpired, and not revoked. Claims are returned verbatim from the auth DB.
@@ -60,14 +63,14 @@ At login, `veloci-api` validates credentials via `veloci-auth`, then mints a tok
 
 A **financial entity** is the unit of financial ownership. A family, household, or individual is one entity. All financial data in `veloci_app` is keyed by `entity_id`.
 
-```
+```text
 entity
   └── users (via entity_users)
         └── entity_role → permissions
   └── accounts         (active + passive — see below)
   └── raw_transactions
-  └── rules
-  └── labels (via label_members)
+  └── rules (each rule outputs one label via rules.label_id)
+  └── labels
   └── computed_snapshots  (transient — rebuilt by engine)
 ```
 
@@ -80,7 +83,7 @@ entity
 
 **Active accounts** (`status = 'active'`) are cash-flow accounts — checking and savings. These form the main budget. The main budget is seeded with three system labels at entity setup: **Income**, **Commitments**, and **Margin**. Rules on active accounts auto-join Income or Commitments based on their `direction` field. Margin is the parent of both.
 
-**Passive accounts** (`status = 'passive'`) are all other account types: credit cards, investment accounts, loans, mortgages. Each passive account operates as its own independent mini-budget. Rules and labels for passive accounts are user-managed. The engine runs the full pipeline against them identically — same stages, same rule/label DAG, same $/day output. No special-casing per account type.
+**Passive accounts** (`status = 'passive'`) are all other account types: credit cards, investment accounts, loans, mortgages. Each passive account operates as its own independent mini-budget. Rules and labels for passive accounts are user-managed. The engine runs the full pipeline against them identically — same stages, same rule/label model, same $/day output. No special-casing per account type.
 
 This means every account in Veloci — regardless of type — produces comparable $/day rates. A credit card's Netflix spending rate, an investment account's contribution rate, and a mortgage's payment rate are all in the same unit and directly comparable in the UI.
 
@@ -102,6 +105,7 @@ The engine produces the numbers; labels define the groupings; the UI handles the
 ## 5. Auth and RBAC
 
 ### JWT Payload
+
 ```json
 {
   "sub": "user_id",
@@ -118,7 +122,7 @@ The engine produces the numbers; labels define the groupings; the UI handles the
 
 ### RBAC Schema
 
-```
+```text
 roles             — named roles (entity_admin, entity_user in v1; custom in v2)
 permissions       — named permission strings (accounts:write, import:create, ...)
 role_permissions  — join: role → [permissions]
@@ -142,6 +146,7 @@ Seeded by `veloci-api migrate`. The role→permission mapping is cached at start
 | `entity:configure` | ✓ | — |
 
 ### v2 Expansion
+
 Custom role creation, additional permissions, per-user permission overrides. No schema changes required — the tables already support it.
 
 ---
@@ -194,7 +199,7 @@ Persistent volumes: one for Postgres data, one for RabbitMQ data.
 ## 8. v1 → v2 Upgrade Path
 
 | Concern | v1 | v2 |
-|---|---|---|
+| --- | --- | --- |
 | Entities | One per deployment | Many per deployment |
 | Auth | Single-tenant JWT | Multi-tenant JWT, entity selection; auth service unchanged |
 | Postgres | One schema, `entity_id` scoping | Row-level security (already designed in; enabled for v2) |
