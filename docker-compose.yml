@@ -38,10 +38,13 @@ services:
   veloci-auth:
     build: ./services/auth
     environment:
-      DATABASE_URL: postgres://${VELOCI_AUTH_DB_USER}:${VELOCI_AUTH_DB_PASSWORD}@postgres:5432/${VELOCI_AUTH_DB}
-      CONFIG_PATH: /etc/veloci-auth/veloci-auth.yaml
+      VELOCI_CONFIG_PATH: /etc/veloci/veloci.toml
+      VELOCI_DATABASE_HOST: postgres
+      VELOCI_DATABASE_AUTH_NAME: ${VELOCI_AUTH_DB}
+      VELOCI_DATABASE_AUTH_USER: ${VELOCI_AUTH_DB_USER}
+      VELOCI_DATABASE_AUTH_PASSWORD: ${VELOCI_AUTH_DB_PASSWORD}
     volumes:
-      - ./config/veloci-auth.yaml:/etc/veloci-auth/veloci-auth.yaml:ro
+      - ./config/veloci.toml:/etc/veloci/veloci.toml:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -52,10 +55,17 @@ services:
   veloci-api:
     build: ./services/api
     environment:
-      DATABASE_URL: postgres://${VELOCI_APP_DB_USER}:${VELOCI_APP_DB_PASSWORD}@postgres:5432/${VELOCI_APP_DB}
-      VELOCI_AUTH_URL: http://veloci-auth:8081
-      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/%2F
-      PORT: "8080"
+      VELOCI_CONFIG_PATH: /etc/veloci/veloci.toml
+      VELOCI_DATABASE_HOST: postgres
+      VELOCI_DATABASE_APP_NAME: ${VELOCI_APP_DB}
+      VELOCI_DATABASE_APP_USER: ${VELOCI_APP_DB_USER}
+      VELOCI_DATABASE_APP_PASSWORD: ${VELOCI_APP_DB_PASSWORD}
+      VELOCI_RABBITMQ_HOST: rabbitmq
+      VELOCI_RABBITMQ_USER: ${RABBITMQ_USER}
+      VELOCI_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      VELOCI_AUTH_HOST: veloci-auth
+    volumes:
+      - ./config/veloci.toml:/etc/veloci/veloci.toml:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -71,8 +81,16 @@ services:
   veloci-engine:
     build: ./services/engine
     environment:
-      DATABASE_URL: postgres://${VELOCI_APP_DB_USER}:${VELOCI_APP_DB_PASSWORD}@postgres:5432/${VELOCI_APP_DB}
-      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/%2F
+      VELOCI_CONFIG_PATH: /etc/veloci/veloci.toml
+      VELOCI_DATABASE_HOST: postgres
+      VELOCI_DATABASE_APP_NAME: ${VELOCI_APP_DB}
+      VELOCI_DATABASE_APP_USER: ${VELOCI_APP_DB_USER}
+      VELOCI_DATABASE_APP_PASSWORD: ${VELOCI_APP_DB_PASSWORD}
+      VELOCI_RABBITMQ_HOST: rabbitmq
+      VELOCI_RABBITMQ_USER: ${RABBITMQ_USER}
+      VELOCI_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+    volumes:
+      - ./config/veloci.toml:/etc/veloci/veloci.toml:ro
     depends_on:
       postgres:
         condition: service_healthy

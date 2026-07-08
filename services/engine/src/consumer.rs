@@ -1,33 +1,44 @@
+//! RabbitMQ consumer: connects with exponential backoff, declares the queue,
+//! sets `basic_qos(prefetch_count=1)` for correct horizontal scaling, and
+//! dispatches each delivery to [`jobs::dispatch`].
+//!
+//! `prefetch_count = 1` is critical: it ensures each engine instance holds at
+//! most one in-flight job at a time, which prevents a slow import from
+//! blocking progress on other entities' jobs.
+
 use anyhow::Result;
 use backon::{ExponentialBuilder, Retryable};
 use futures_lite::StreamExt;
 use lapin::{
-    options::{BasicAckOptions, BasicConsumeOptions, QueueDeclareOptions},
+    options::{
+        BasicAckOptions, BasicConsumeOptions, BasicQosOptions, QueueDeclareOptions,
+    },
     types::FieldTable,
     Connection, ConnectionProperties,
 };
 
-use crate::jobs::{self, Job};
+use crate::{config::AppConfig, db::Pools, jobs};
 
 const QUEUE: &str = "veloci.jobs";
 
-/// Connect to RabbitMQ with exponential backoff, then consume `veloci.jobs`
-/// indefinitely, dispatching each message to [`jobs::dispatch`].
+/// Connect to RabbitMQ with exponential backoff, declare `veloci.jobs` as a
+/// durable queue, enforce `prefetch_count=1`, then consume indefinitely.
 ///
-/// ACKs every delivery regardless of dispatch outcome — failed jobs are logged
-/// and dropped rather than re-queued, which prevents poison-pill loops in stub
-/// handlers.  Real handlers should NACK on transient errors and rely on a
-/// dead-letter exchange.
-pub async fn run(rabbitmq_url: &str) -> Result<()> {
-    let url = rabbitmq_url.to_string();
+/// Each delivery is dispatched to [`jobs::dispatch`]. On job error the message
+/// is ACKed (logged and dropped) to prevent poison-pill loops. Production
+/// deployments should configure a dead-letter exchange for retry semantics.
+pub async fn run(cfg: &AppConfig, pools: Pools) -> Result<()> {
+    let uri = cfg.amqp_uri();
 
     let conn = (|| async {
-        Connection::connect(&url, ConnectionProperties::default()).await
+        Connection::connect(&uri, ConnectionProperties::default()).await
     })
     .retry(ExponentialBuilder::default().with_max_times(10))
     .await?;
 
     let ch = conn.create_channel().await?;
+
+    // Declare the queue as durable so it survives broker restarts.
     ch.queue_declare(
         QUEUE,
         QueueDeclareOptions {
@@ -38,6 +49,11 @@ pub async fn run(rabbitmq_url: &str) -> Result<()> {
     )
     .await?;
 
+    // Critical for horizontal scaling: each consumer processes exactly one job
+    // at a time. Without this, RabbitMQ round-robins all pending messages to
+    // the first consumer that connects, regardless of its load.
+    ch.basic_qos(1, BasicQosOptions::default()).await?;
+
     let mut consumer = ch
         .basic_consume(
             QUEUE,
@@ -47,13 +63,13 @@ pub async fn run(rabbitmq_url: &str) -> Result<()> {
         )
         .await?;
 
-    tracing::info!("consuming from {}", QUEUE);
+    tracing::info!("consuming from {} (prefetch=1)", QUEUE);
     while let Some(delivery) = consumer.next().await {
         let d = delivery?;
-        match serde_json::from_slice::<Job>(&d.data) {
-            Ok(job) => {
-                let (eid, jt) = (job.entity_id.clone(), job.r#type.clone());
-                if let Err(e) = jobs::dispatch(job).await {
+        match serde_json::from_slice::<jobs::JobMessage>(&d.data) {
+            Ok(msg) => {
+                let (eid, jt) = (msg.entity_id, msg.job_type.clone());
+                if let Err(e) = jobs::dispatch(&jt, eid, msg.job_id, msg.metadata, &pools).await {
                     tracing::error!(entity_id = %eid, job_type = %jt, "job failed: {:?}", e);
                 }
             }

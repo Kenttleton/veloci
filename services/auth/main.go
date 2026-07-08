@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -65,42 +67,47 @@ var serveCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(serveCmd)
+	viper.SetEnvPrefix("VELOCI")
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()
-	viper.SetDefault("PORT", "8081")
-	// Env var overrides for secrets — AutomaticEnv doesn't map nested keys.
-	// VELOCI_SERVER_ADMIN_EMAIL / VELOCI_SERVER_ADMIN_PASSWORD / VELOCI_JWT_SECRET
-	// take precedence over veloci-auth.yaml values when set.
-	viper.BindEnv("server_admin.email", "VELOCI_SERVER_ADMIN_EMAIL")       //nolint:errcheck
-	viper.BindEnv("server_admin.password", "VELOCI_SERVER_ADMIN_PASSWORD") //nolint:errcheck
-	viper.BindEnv("jwt_secret", "VELOCI_JWT_SECRET")                       //nolint:errcheck
+	viper.SetDefault("auth.port", 8081)
 }
 
 func runServe(_ *cobra.Command, _ []string) error {
-	configPath := viper.GetString("CONFIG_PATH")
-	if configPath != "" {
-		viper.SetConfigFile(configPath)
-		if err := viper.ReadInConfig(); err != nil {
-			return fmt.Errorf("config: %w", err)
-		}
+	configPath := os.Getenv("VELOCI_CONFIG_PATH")
+	if configPath == "" {
+		configPath = "config/veloci.toml"
+	}
+	viper.SetConfigFile(configPath)
+	viper.SetConfigType("toml")
+	if err := viper.ReadInConfig(); err != nil {
+		log.Printf("config: %v — using defaults and env vars", err)
 	}
 
+	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
+		viper.GetString("database.auth.user"),
+		viper.GetString("database.auth.password"),
+		viper.GetString("database.host"),
+		viper.GetInt("database.port"),
+		viper.GetString("database.auth.name"),
+	)
 	ctx := context.Background()
-	database, err := db.New(ctx, viper.GetString("DATABASE_URL"))
+	database, err := db.New(ctx, dsn)
 	if err != nil {
 		return fmt.Errorf("db: %w", err)
 	}
 
-	adminEmail := viper.GetString("server_admin.email")
-	adminPass := viper.GetString("server_admin.password")
+	adminEmail := viper.GetString("auth.admin.email")
+	adminPass := viper.GetString("auth.admin.password")
 	if adminEmail != "" && adminPass != "" {
 		if err := authsync.SyncServerAdmin(ctx, database, adminEmail, adminPass); err != nil {
 			return fmt.Errorf("admin sync: %w", err)
 		}
 	}
 
-	secret := []byte(viper.GetString("jwt_secret"))
+	secret := []byte(viper.GetString("auth.jwt_secret"))
 	if len(secret) < 32 {
-		return fmt.Errorf("jwt_secret must be at least 32 characters")
+		return fmt.Errorf("auth.jwt_secret must be at least 32 characters")
 	}
 
 	creds := handlers.NewCredentials(&dbCredAdapter{database})
@@ -113,7 +120,7 @@ func runServe(_ *cobra.Command, _ []string) error {
 	r.Post("/tokens/validate", toks.Validate)
 	r.Delete("/tokens/{jti}", toks.Revoke)
 
-	port := viper.GetString("PORT")
-	log.Printf("veloci-auth listening on :%s", port)
-	return http.ListenAndServe(":"+port, r)
+	port := viper.GetInt("auth.port")
+	log.Printf("veloci-auth listening on :%d", port)
+	return http.ListenAndServe(fmt.Sprintf(":%d", port), r)
 }

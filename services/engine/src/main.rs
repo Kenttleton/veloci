@@ -1,9 +1,12 @@
+mod config;
 mod consumer;
 mod db;
 mod health;
 mod jobs;
+mod pipeline;
 
 use anyhow::Result;
+use config::AppConfig;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -11,15 +14,16 @@ async fn main() -> Result<()> {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
-    let db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL required");
-    let mq_url = std::env::var("RABBITMQ_URL").expect("RABBITMQ_URL required");
+    let cfg = AppConfig::load()?;
 
     match std::env::args().nth(1).as_deref() {
-        Some("health") => health::check(&db_url, &mq_url).await,
+        Some("health") => {
+            health::check(&cfg.postgres_dsn(), &cfg.amqp_uri()).await
+        }
         _ => {
-            let _pool = db::connect(&db_url).await?;
-            tracing::info!("connected to postgres");
-            consumer::run(&mq_url).await
+            let pools = db::connect(&cfg).await?;
+            tracing::info!("connected to postgres (read + write pools)");
+            consumer::run(&cfg, pools).await
         }
     }
 }

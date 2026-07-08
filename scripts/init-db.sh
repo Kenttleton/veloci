@@ -25,4 +25,9 @@ psql -v ON_ERROR_STOP=1 \
 psql -v ON_ERROR_STOP=1 \
   --username "${VELOCI_APP_DB_USER}" \
   --dbname "${VELOCI_APP_DB}" \
+  -f /migrations/app/002_financial_schema.sql
+
+psql -v ON_ERROR_STOP=1 \
+  --username "${VELOCI_APP_DB_USER}" \
+  --dbname "${VELOCI_APP_DB}" \
   -f /migrations/app/002_rbac_seed.sql

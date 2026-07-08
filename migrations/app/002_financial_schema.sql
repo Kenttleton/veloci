@@ -147,9 +147,11 @@ CREATE INDEX ON raw_transactions (entity_id, date);
 CREATE INDEX ON raw_transactions (entity_id, account_id, settlement_status, imported_at);
 
 -- ── RULES ───────────────────────────────────────────────────────────────────
--- Match configuration. User-facing term is "Entry"; internal term is "rule".
--- conditions JSONB must be validated by veloci-api on write (tree shape enforced
--- at application layer; engine errors at the rule level on malformed trees).
+-- Match configuration. Each rule produces one label (label_id FK).
+-- Composability: post-stage rule conditions reference label UUIDs, enabling
+-- aggregate labels built from leaf labels without a separate membership table.
+-- conditions JSONB validated by veloci-api on write; engine errors on malformed trees.
+-- Cycle detection (label A → rule → label B → rule → label A) enforced by veloci-api.
 
 CREATE TABLE rules (
   id                     UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -167,15 +169,45 @@ CREATE TABLE rules (
   status                 TEXT        NOT NULL DEFAULT 'pending_review'
                          CHECK (status IN ('pending_review', 'active', 'inactive')),
   source                 TEXT        NOT NULL DEFAULT 'user' CHECK (source IN ('user', 'engine')),
+  recurrence_anchor      TEXT,
+  next_due_date          DATE,
+  -- TRUE = include in Stage 7 projection even before user approval.
+  -- Stage 2 sets this when a pending_review rule has next_due_date + recurrence_anchor.
+  -- Cleared on rejection; superseded by open epoch on approval.
+  project_tentatively    BOOLEAN     NOT NULL DEFAULT FALSE,
   created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX ON rules (entity_id, status);
 CREATE INDEX ON rules (entity_id, stage, priority);
+CREATE INDEX ON rules (entity_id, next_due_date);
+
+-- ── RULE EPOCHS ──────────────────────────────────────────────────────────────
+-- One row per signal instance of a rule. Append-only — never update epoch_start.
+-- Stage 3 data horizon: only transactions WHERE date >= current epoch's epoch_start.
+-- Stage 5 regression scope: only snapshots WHERE epoch_id = current epoch's id.
+-- Stage 7 eligibility: active rules require an open epoch (epoch_end IS NULL).
+-- epoch_end set by engine (terminated_by='auto', 3-strike) or user (terminated_by='manual').
+-- Reactivation = new row with epoch_end IS NULL; prior epoch preserved with its epoch_end.
+
+CREATE TABLE rule_epochs (
+  id                      UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  entity_id               UUID        NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+  rule_id                 UUID        NOT NULL REFERENCES rules(id) ON DELETE CASCADE,
+  epoch_start             DATE        NOT NULL,
+  epoch_end               DATE,
+  epoch_transaction_count INTEGER     NOT NULL DEFAULT 0,
+  terminated_by           TEXT        CHECK (terminated_by IN ('auto', 'manual')),
+  created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (rule_id, epoch_start)
+);
+
+CREATE INDEX ON rule_epochs (rule_id, epoch_end);
+CREATE INDEX ON rule_epochs (entity_id, epoch_end);
 
 -- ── TRANSACTION RULE ASSIGNMENTS ────────────────────────────────────────────
--- Many-to-many. A transaction may match multiple rules (DAG set-union handles
--- dedup at the label level). confidence = 1.0 for user rules, 0.0–1.0 for engine.
+-- Many-to-many. A transaction may match multiple rules across pre/post stages.
+-- confidence = 1.0 for user rules, 0.0–1.0 for engine-generated rules.
 
 CREATE TABLE transaction_rule_assignments (
   transaction_id UUID           NOT NULL REFERENCES raw_transactions(id) ON DELETE CASCADE,
@@ -187,7 +219,10 @@ CREATE TABLE transaction_rule_assignments (
 CREATE INDEX ON transaction_rule_assignments (rule_id);
 
 -- ── LABELS ──────────────────────────────────────────────────────────────────
--- DAG aggregation nodes. May contain rules or other labels as members.
+-- User-facing named groupings. Each rule produces one label (rules.label_id FK).
+-- The label hierarchy (leaf → aggregate) is implicit in post-stage rule conditions
+-- that reference other label UUIDs as inputs. No separate membership table needed.
+-- Name is freely mutable; all downstream references use id, never name.
 
 CREATE TABLE labels (
   id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -197,31 +232,11 @@ CREATE TABLE labels (
   UNIQUE (entity_id, name)
 );
 
--- ── LABEL MEMBERS ───────────────────────────────────────────────────────────
--- DAG edges. member_type distinguishes rule leaves from label sub-nodes.
--- member_id is a soft reference (no FK) because it points to either rules or
--- labels depending on member_type. Application layer must cascade deletes when
--- a rule or label is removed.
-
-CREATE TABLE label_members (
-  label_id    UUID NOT NULL REFERENCES labels(id) ON DELETE CASCADE,
-  member_id   UUID NOT NULL,
-  member_type TEXT NOT NULL CHECK (member_type IN ('rule', 'label')),
-  PRIMARY KEY (label_id, member_id)
-);
-
--- ── LABEL RULES ─────────────────────────────────────────────────────────────
--- Automated conditions for applying a label to matching rules.
--- Distinct from /rules (entry matching); these are label automation conditions.
-
-CREATE TABLE label_rules (
-  id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  label_id   UUID        NOT NULL REFERENCES labels(id) ON DELETE CASCADE,
-  entity_id  UUID        NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-  conditions JSONB       NOT NULL,
-  priority   INTEGER     NOT NULL DEFAULT 100,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+-- rules.label_id added here (after labels) to satisfy FK ordering.
+-- A rule without a label_id is valid only transiently during creation;
+-- active rules always have a label_id set.
+ALTER TABLE rules ADD COLUMN label_id UUID REFERENCES labels(id) ON DELETE SET NULL;
+CREATE INDEX ON rules (entity_id, label_id);
 
 -- ── REVIEW QUEUE ────────────────────────────────────────────────────────────
 -- Engine-detected candidate rules awaiting user approval.
@@ -249,14 +264,27 @@ CREATE INDEX ON review_queue (entity_id, status);
 
 -- ── COMPUTED SNAPSHOTS ──────────────────────────────────────────────────────
 -- Rebuildable engine output. Safe to truncate and recompute at any time.
--- computed_as_of = MAX(raw_transactions.date) for this entity — never NOW().
--- Prior snapshots are retained to form the historical series for Stage 5 regression.
+-- One row per calendar day per node. The engine crawls the flux window on each
+-- import and UPSERTs all days in [computed_as_of - settlement_window_days .. computed_as_of].
+-- Days outside the flux window have only settled transactions and are not recomputed.
+--
+-- snapshot_date    = the calendar day this row represents (identity key).
+-- computed_as_of   = MAX(raw_transactions.date) from the import run that wrote this row.
+--                    Used by Stage 3 signal expiry and Stage 7 as the projection anchor.
+--                    Separate from snapshot_date: an import on Mar 15 covering data through
+--                    Mar 10 produces snapshot rows for dates in the flux window, each with
+--                    computed_as_of = Mar 10.
+--
+-- OHLC candlestick high/low are NOT stored. The API computes MAX/MIN(actual_rate_per_day)
+-- over the daily series at query time. Snapshots are fetched in date-range chunks to
+-- support lazy-loading the Horizon graph.
 
 CREATE TABLE computed_snapshots (
   id                     UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
   entity_id              UUID          NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
   node_id                UUID          NOT NULL,
   node_type              TEXT          NOT NULL CHECK (node_type IN ('rule', 'label')),
+  snapshot_date          DATE          NOT NULL,
   computed_as_of         DATE          NOT NULL,
   job_id                 UUID          NOT NULL REFERENCES processing_jobs(id),
   actual_rate_per_day    NUMERIC(12,4) NOT NULL,
@@ -264,20 +292,23 @@ CREATE TABLE computed_snapshots (
   drift_per_day          NUMERIC(12,4) NOT NULL,
   slope_per_day          NUMERIC(14,6) NOT NULL,
   r_squared              NUMERIC(4,3)  NOT NULL,
-  -- rolling window high/low over the 90-day regression window (same data Stage 5 reads).
-  -- on first snapshot: rate_high = rate_low = actual_rate_per_day.
-  -- feeds candlestick OHLC on the Horizon graph; open/close derived by the API from adjacent snapshots.
-  rate_high_per_day      NUMERIC(12,4) NOT NULL,
-  rate_low_per_day       NUMERIC(12,4) NOT NULL,
   transaction_count      INTEGER       NOT NULL,
   window_days_used       INTEGER       NOT NULL,
+  -- SUM(matched amount_cents) for the snapshot_date - period_days window.
+  -- Basis for actual_rate_per_day. For variable rules, also feeds projected_rate_per_day
+  -- via variable_method over the 3*period_days projection lookback window.
+  rolling_window_total_cents BIGINT    NOT NULL DEFAULT 0,
   -- running balance at this snapshot date; secondary to rates, used for bank account comparison.
   balance_cents          BIGINT        NOT NULL DEFAULT 0,
+  -- epoch this snapshot belongs to. NULL for label nodes (no lifecycle epochs).
+  -- Stage 5 regression must filter WHERE epoch_id = current epoch to avoid
+  -- crossing epoch boundaries and corrupting slope calculations.
+  epoch_id               UUID          REFERENCES rule_epochs(id),
 
-  UNIQUE (entity_id, node_id, computed_as_of)
+  UNIQUE (entity_id, node_id, snapshot_date)
 );
 
-CREATE INDEX ON computed_snapshots (entity_id, node_id, computed_as_of DESC);
+CREATE INDEX ON computed_snapshots (entity_id, node_id, snapshot_date DESC);
 
 -- ── RATE PROJECTIONS ─────────────────────────────────────────────────────────
 -- Forward-looking signal superposition timeline produced by Stage 7.
