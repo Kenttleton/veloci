@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -45,23 +47,49 @@ var serveCmd = &cobra.Command{Use: "serve", Short: "Start the HTTP server", RunE
 
 func init() {
 	rootCmd.AddCommand(serveCmd)
+	viper.SetEnvPrefix("VELOCI")
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()
-	viper.SetDefault("PORT", "8080")
+	viper.SetDefault("api.port", 8080)
 }
 
 func runServe(_ *cobra.Command, _ []string) error {
-	authURL := viper.GetString("VELOCI_AUTH_URL")
-	if authURL == "" {
-		return fmt.Errorf("VELOCI_AUTH_URL required")
+	configPath := os.Getenv("VELOCI_CONFIG_PATH")
+	if configPath == "" {
+		configPath = "config/veloci.toml"
+	}
+	viper.SetConfigFile(configPath)
+	viper.SetConfigType("toml")
+	if err := viper.ReadInConfig(); err != nil {
+		log.Printf("config: %v — using defaults and env vars", err)
 	}
 
-	pub, err := queue.NewPublisher(viper.GetString("RABBITMQ_URL"))
+	authHost := viper.GetString("api.auth.host")
+	authPort := viper.GetInt("api.auth.port")
+	authURL := fmt.Sprintf("http://%s:%d", authHost, authPort)
+
+	dbDSN := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
+		viper.GetString("database.app.user"),
+		viper.GetString("database.app.password"),
+		viper.GetString("database.host"),
+		viper.GetInt("database.port"),
+		viper.GetString("database.app.name"),
+	)
+
+	amqpURI := fmt.Sprintf("amqp://%s:%s@%s:%d/",
+		viper.GetString("rabbitmq.user"),
+		viper.GetString("rabbitmq.password"),
+		viper.GetString("rabbitmq.host"),
+		viper.GetInt("rabbitmq.port"),
+	)
+
+	pub, err := queue.NewPublisher(amqpURI)
 	if err != nil {
 		return fmt.Errorf("queue: %w", err)
 	}
 	_ = pub // TODO: pass to financial route handlers in service implementation plan
 
-	pool, err := pgxpool.New(context.Background(), viper.GetString("DATABASE_URL"))
+	pool, err := pgxpool.New(context.Background(), dbDSN)
 	if err != nil {
 		return fmt.Errorf("database: %w", err)
 	}
@@ -81,7 +109,7 @@ func runServe(_ *cobra.Command, _ []string) error {
 		// Financial routes added in service-specific implementation plans
 	})
 
-	port := viper.GetString("PORT")
-	log.Printf("veloci-api listening on :%s", port)
-	return http.ListenAndServe(":"+port, r)
+	port := viper.GetInt("api.port")
+	log.Printf("veloci-api listening on :%d", port)
+	return http.ListenAndServe(fmt.Sprintf(":%d", port), r)
 }
