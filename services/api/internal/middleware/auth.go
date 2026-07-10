@@ -19,8 +19,9 @@ const (
 	ctxUserID     contextKey = "sub"
 )
 
-// Authenticate calls veloci-auth /tokens/validate on every request.
-// It injects entity_id, entity_role, system_role, and sub into the request context.
+// Authenticate validates the Bearer token via veloci-auth /tokens/validate.
+// Only access tokens are accepted — invite tokens are rejected with 401.
+// Verified claims (entity_id, entity_role, system_role, sub) are injected into context.
 func Authenticate(client *authclient.Client) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -29,23 +30,35 @@ func Authenticate(client *authclient.Client) func(http.Handler) http.Handler {
 				http.Error(w, `{"code":"UNAUTHORIZED"}`, http.StatusUnauthorized)
 				return
 			}
-			result, err := client.ValidateToken(r.Context(), strings.TrimPrefix(header, "Bearer "))
+			result, err := client.ValidateToken(r.Context(), &authclient.ValidateTokenInputBody{
+				Token: strings.TrimPrefix(header, "Bearer "),
+			})
 			if err != nil {
 				http.Error(w, `{"code":"UNAUTHORIZED"}`, http.StatusUnauthorized)
 				return
 			}
-			var claims map[string]any
-			if err := json.Unmarshal(result.Claims, &claims); err != nil {
+			if result.TokenType != authclient.ValidateTokenOutputBodyTokenTypeAccess {
 				http.Error(w, `{"code":"UNAUTHORIZED"}`, http.StatusUnauthorized)
 				return
 			}
+
+			// Extract string claims from the DB-authoritative claims map.
+			// jx.Raw is assignable to []byte — no jx import needed.
 			ctx := r.Context()
-			for key, ctxK := range map[string]contextKey{
-				"entity_id": ctxEntityID, "entity_role": ctxEntityRole,
-				"system_role": ctxSystemRole, "sub": ctxUserID,
-			} {
-				if v, ok := claims[key].(string); ok {
-					ctx = context.WithValue(ctx, ctxK, v)
+			for k, raw := range result.Claims {
+				var s string
+				if json.Unmarshal(raw, &s) != nil {
+					continue
+				}
+				switch k {
+				case "entity_id":
+					ctx = context.WithValue(ctx, ctxEntityID, s)
+				case "entity_role":
+					ctx = context.WithValue(ctx, ctxEntityRole, s)
+				case "system_role":
+					ctx = context.WithValue(ctx, ctxSystemRole, s)
+				case "sub":
+					ctx = context.WithValue(ctx, ctxUserID, s)
 				}
 			}
 			next.ServeHTTP(w, r.WithContext(ctx))

@@ -27,12 +27,12 @@ type Auth struct {
 	db   appDB
 }
 
-// NewAuth creates a new Auth handler.
-func NewAuth(authURL string, db appDB) *Auth {
-	return &Auth{auth: authclient.New(authURL), db: db}
+// NewAuth creates a new Auth handler with the given ogen-generated auth client.
+func NewAuth(auth *authclient.Client, db appDB) *Auth {
+	return &Auth{auth: auth, db: db}
 }
 
-// Login validates credentials, looks up the user entity, and mints a JWT.
+// Login validates credentials, looks up the user entity, and mints a JWT pair.
 func (h *Auth) Login(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Email    string `json:"email"`
@@ -43,7 +43,10 @@ func (h *Auth) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cred, err := h.auth.ValidateCredential(r.Context(), req.Email, req.Password)
+	cred, err := h.auth.ValidateCredential(r.Context(), &authclient.ValidateCredentialInputBody{
+		Email:    req.Email,
+		Password: req.Password,
+	})
 	if err != nil {
 		http.Error(w, `{"code":"INVALID_CREDENTIALS"}`, http.StatusUnauthorized)
 		return
@@ -55,14 +58,24 @@ func (h *Auth) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	claims := map[string]any{
+	// Build claims as map[string]jx.Raw. jx.Raw is type Raw []byte, and []byte is
+	// assignable to it — no jx import required.
+	claims := make(authclient.MintTokenInputBodyClaims)
+	for k, v := range map[string]any{
 		"sub":         ue.UserID,
 		"email":       req.Email,
-		"system_role": cred.SystemRole,
+		"system_role": string(cred.SystemRole),
 		"entity_id":   ue.EntityID,
 		"entity_role": ue.EntityRole,
+	} {
+		b, _ := json.Marshal(v)
+		claims[k] = b
 	}
-	minted, err := h.auth.MintToken(r.Context(), cred.CredentialID, claims)
+
+	minted, err := h.auth.MintToken(r.Context(), &authclient.MintTokenInputBody{
+		CredentialID: cred.CredentialID,
+		Claims:       claims,
+	})
 	if err != nil {
 		http.Error(w, `{"code":"INTERNAL"}`, http.StatusInternalServerError)
 		return
@@ -82,7 +95,7 @@ func (h *Auth) Logout(w http.ResponseWriter, r *http.Request) {
 	}
 	json.NewDecoder(r.Body).Decode(&req)
 	if req.JTI != "" {
-		h.auth.RevokeToken(r.Context(), req.JTI)
+		h.auth.RevokeToken(r.Context(), authclient.RevokeTokenParams{Jti: req.JTI}) //nolint:errcheck
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

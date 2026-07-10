@@ -95,9 +95,12 @@ func runServe(_ *cobra.Command, _ []string) error {
 	}
 	defer pool.Close()
 
-	authClient := authclient.New(authURL)
+	authClient, err := authclient.NewClient(authURL)
+	if err != nil {
+		return fmt.Errorf("authclient: %w", err)
+	}
 
-	authHandler := handlers.NewAuth(authURL, &appDBImpl{pool: pool})
+	authHandler := handlers.NewAuth(authClient, &appDBImpl{pool: pool})
 
 	r := chi.NewRouter()
 	r.Get("/health", handlers.Health)

@@ -10,9 +10,17 @@ import (
 	"github.com/veloci/api/internal/middleware"
 )
 
+func mustAuthClient(t *testing.T, url string) *authclient.Client {
+	t.Helper()
+	c, err := authclient.NewClient(url)
+	if err != nil {
+		t.Fatalf("authclient.NewClient(%q): %v", url, err)
+	}
+	return c
+}
+
 // mockAuthServer simulates veloci-auth /tokens/validate.
-// The mock returns the shape that authclient.ValidateResult expects:
-// {"jti":"...","credential_id":"...","claims":{...}}
+// Response shape matches ValidateTokenOutputBody from the generated spec.
 func mockAuthServer(claims map[string]any) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/tokens/validate" {
@@ -21,6 +29,7 @@ func mockAuthServer(claims map[string]any) *httptest.Server {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{
+			"token_type":    "access",
 			"jti":           "test-jti",
 			"credential_id": "cred-1",
 			"claims":        claims,
@@ -35,7 +44,7 @@ func TestAuthMiddlewareInjectsClaims(t *testing.T) {
 	})
 	defer srv.Close()
 
-	client := authclient.New(srv.URL)
+	client := mustAuthClient(t, srv.URL)
 	var gotEntityID, gotEntityRole string
 
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -61,7 +70,7 @@ func TestAuthMiddlewareInjectsClaims(t *testing.T) {
 }
 
 func TestAuthMiddlewareRejectsMissingToken(t *testing.T) {
-	client := authclient.New("http://unused")
+	client := mustAuthClient(t, "http://unused")
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	w := httptest.NewRecorder()
@@ -72,13 +81,19 @@ func TestAuthMiddlewareRejectsMissingToken(t *testing.T) {
 }
 
 func TestAuthMiddlewareRejectsInvalidToken(t *testing.T) {
-	// Server returns non-200 to simulate invalid token.
+	// Auth server returns 401 to simulate an invalid token.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, `{"code":"UNAUTHORIZED"}`, http.StatusUnauthorized)
+		w.Header().Set("Content-Type", "application/problem+json")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]any{
+			"status": 401,
+			"title":  "Unauthorized",
+			"detail": "invalid token",
+		})
 	}))
 	defer srv.Close()
 
-	client := authclient.New(srv.URL)
+	client := mustAuthClient(t, srv.URL)
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("Authorization", "Bearer badtoken")
@@ -86,5 +101,27 @@ func TestAuthMiddlewareRejectsInvalidToken(t *testing.T) {
 	middleware.Authenticate(client)(next).ServeHTTP(w, req)
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("status: got %d want 401", w.Code)
+	}
+}
+
+func TestAuthMiddlewareRejectsInviteToken(t *testing.T) {
+	// Auth server returns an invite token — middleware must reject with 401.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"token_type": "invite",
+			"claims":     map[string]string{"email": "invited@example.com"},
+		})
+	}))
+	defer srv.Close()
+
+	client := mustAuthClient(t, srv.URL)
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Authorization", "Bearer invitetoken")
+	w := httptest.NewRecorder()
+	middleware.Authenticate(client)(next).ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("invite token: got %d want 401", w.Code)
 	}
 }
