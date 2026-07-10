@@ -16,7 +16,7 @@ import (
 // password against the stored hash — bcrypt work only runs when the password has changed.
 // Changing the config password and restarting is the intentional admin-reset UX.
 func SyncServerAdmin(ctx context.Context, d *db.DB, email, password string) error {
-	existing, err := d.FindCredentialByEmail(ctx, email)
+	existing, err := d.FindAdminCredential(ctx, email)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return err
 	}

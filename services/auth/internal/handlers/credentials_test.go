@@ -13,9 +13,12 @@ import (
 )
 
 type stubCredDB struct {
-	hash string
-	role string
-	miss bool
+	hash              string
+	role              string
+	miss              bool
+	updateFound       bool
+	deleteFound       bool
+	deleteRoleBlocked bool
 }
 
 func (s *stubCredDB) FindCredentialByEmail(_ context.Context, _ string) (*handlers.CredentialRow, error) {
@@ -27,6 +30,14 @@ func (s *stubCredDB) FindCredentialByEmail(_ context.Context, _ string) (*handle
 
 func (s *stubCredDB) CreateCredential(_ context.Context, id, email, hash, role string) error {
 	return nil
+}
+
+func (s *stubCredDB) UpdateCredentialPassword(_ context.Context, id, hash string) (bool, error) {
+	return s.updateFound, nil
+}
+
+func (s *stubCredDB) DeleteCredential(_ context.Context, id string) (bool, bool, error) {
+	return s.deleteFound, s.deleteRoleBlocked, nil
 }
 
 func TestValidateCredential_Success(t *testing.T) {
@@ -67,5 +78,102 @@ func TestValidateCredential_WrongPassword(t *testing.T) {
 	h.Validate(w, req)
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("status: got %d want 401", w.Code)
+	}
+}
+
+func TestCreate_Success(t *testing.T) {
+	db := &stubCredDB{}
+	h := handlers.NewCredentials(db)
+
+	body, _ := json.Marshal(map[string]string{"email": "new@b.com", "password": "password123"})
+	req := httptest.NewRequest(http.MethodPost, "/credentials/create", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.Create(w, req)
+	if w.Code != http.StatusCreated {
+		t.Errorf("status: got %d want 201; body: %s", w.Code, w.Body)
+	}
+	var resp map[string]string
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["credential_id"] == "" {
+		t.Error("expected credential_id in response")
+	}
+}
+
+func TestUpdatePassword_NotFound(t *testing.T) {
+	db := &stubCredDB{updateFound: false}
+	h := handlers.NewCredentials(db)
+
+	body, _ := json.Marshal(map[string]string{"password": "newpassword123"})
+	req := httptest.NewRequest(http.MethodPut, "/credentials/missing-id/password", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	// chi URL params aren't populated outside a chi router in unit tests,
+	// but the handler reads chi.URLParam which returns "" when not set —
+	// the stub returns updateFound=false regardless of id.
+	w := httptest.NewRecorder()
+
+	h.UpdatePassword(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status: got %d want 404", w.Code)
+	}
+}
+
+func TestUpdatePassword_Success(t *testing.T) {
+	db := &stubCredDB{updateFound: true}
+	h := handlers.NewCredentials(db)
+
+	body, _ := json.Marshal(map[string]string{"password": "newpassword123"})
+	req := httptest.NewRequest(http.MethodPut, "/credentials/cred-1/password", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.UpdatePassword(w, req)
+	if w.Code != http.StatusNoContent {
+		t.Errorf("status: got %d want 204; body: %s", w.Code, w.Body)
+	}
+}
+
+func TestDelete_NotFound(t *testing.T) {
+	db := &stubCredDB{deleteFound: false}
+	h := handlers.NewCredentials(db)
+
+	req := httptest.NewRequest(http.MethodDelete, "/credentials/missing", nil)
+	w := httptest.NewRecorder()
+
+	h.Delete(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status: got %d want 404", w.Code)
+	}
+}
+
+func TestDelete_ServerAdminForbidden(t *testing.T) {
+	db := &stubCredDB{deleteFound: true, deleteRoleBlocked: true}
+	h := handlers.NewCredentials(db)
+
+	req := httptest.NewRequest(http.MethodDelete, "/credentials/admin-id", nil)
+	w := httptest.NewRecorder()
+
+	h.Delete(w, req)
+	if w.Code != http.StatusForbidden {
+		t.Errorf("status: got %d want 403", w.Code)
+	}
+	var resp map[string]string
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["code"] != "FORBIDDEN" {
+		t.Errorf("code: got %q want FORBIDDEN", resp["code"])
+	}
+}
+
+func TestDelete_Success(t *testing.T) {
+	db := &stubCredDB{deleteFound: true, deleteRoleBlocked: false}
+	h := handlers.NewCredentials(db)
+
+	req := httptest.NewRequest(http.MethodDelete, "/credentials/cred-1", nil)
+	w := httptest.NewRecorder()
+
+	h.Delete(w, req)
+	if w.Code != http.StatusNoContent {
+		t.Errorf("status: got %d want 204", w.Code)
 	}
 }

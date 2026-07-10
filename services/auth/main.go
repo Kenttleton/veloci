@@ -7,9 +7,13 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
+	"unicode"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/go-chi/chi/v5"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -33,11 +37,19 @@ func (a *dbCredAdapter) CreateCredential(ctx context.Context, id, email, hash, r
 	return a.d.CreateCredential(ctx, id, email, hash, role)
 }
 
+func (a *dbCredAdapter) UpdateCredentialPassword(ctx context.Context, id, hash string) (bool, error) {
+	return a.d.UpdateCredentialPassword(ctx, id, hash)
+}
+
+func (a *dbCredAdapter) DeleteCredential(ctx context.Context, id string) (bool, bool, error) {
+	return a.d.DeleteCredential(ctx, id)
+}
+
 // dbTokenAdapter adapts *db.DB to satisfy handlers.tokenStore.
 type dbTokenAdapter struct{ d *db.DB }
 
-func (a *dbTokenAdapter) StoreToken(ctx context.Context, id, userID, jti string, claims json.RawMessage, exp time.Time) error {
-	return a.d.StoreToken(ctx, id, userID, jti, claims, exp)
+func (a *dbTokenAdapter) StoreToken(ctx context.Context, id, userID, jti string, claims json.RawMessage, exp time.Time, tokenType string, parentID *string) error {
+	return a.d.StoreToken(ctx, id, userID, jti, claims, exp, tokenType, parentID)
 }
 
 func (a *dbTokenAdapter) FindToken(ctx context.Context, jti string) (*handlers.TokenRow, error) {
@@ -45,11 +57,48 @@ func (a *dbTokenAdapter) FindToken(ctx context.Context, jti string) (*handlers.T
 	if err != nil {
 		return nil, err
 	}
-	return &handlers.TokenRow{CredentialID: row.CredentialID, Claims: row.Claims, ExpiresAt: row.ExpiresAt}, nil
+	return &handlers.TokenRow{
+		CredentialID: row.CredentialID,
+		Claims:       row.Claims,
+		ExpiresAt:    row.ExpiresAt,
+		TokenType:    row.TokenType,
+		RotatedAt:    row.RotatedAt,
+	}, nil
 }
 
 func (a *dbTokenAdapter) DeleteToken(ctx context.Context, jti string) error {
 	return a.d.DeleteToken(ctx, jti)
+}
+
+func (a *dbTokenAdapter) DeleteUserTokens(ctx context.Context, credentialID string) error {
+	return a.d.DeleteUserTokens(ctx, credentialID)
+}
+
+func (a *dbTokenAdapter) RotateRefreshToken(ctx context.Context, oldJTI string, graceWindow time.Duration) error {
+	return a.d.RotateRefreshToken(ctx, oldJTI, graceWindow)
+}
+
+func (a *dbTokenAdapter) FindInviteToken(ctx context.Context, tokenHash string) (*handlers.InviteTokenRow, error) {
+	row, err := a.d.FindInviteToken(ctx, tokenHash)
+	if err != nil {
+		return nil, err
+	}
+	return &handlers.InviteTokenRow{
+		Claims:     row.Claims,
+		ExpiresAt:  row.ExpiresAt,
+		AcceptedAt: row.AcceptedAt,
+	}, nil
+}
+
+// dbInviteAdapter adapts *db.DB to satisfy handlers.inviteStore.
+type dbInviteAdapter struct{ d *db.DB }
+
+func (a *dbInviteAdapter) StoreInviteToken(ctx context.Context, tokenHash, createdBy string, claims []byte, expiresAt time.Time) error {
+	return a.d.StoreInviteToken(ctx, tokenHash, createdBy, claims, expiresAt)
+}
+
+func (a *dbInviteAdapter) ConsumeInviteToken(ctx context.Context, tokenHash string) (bool, bool, bool, error) {
+	return a.d.ConsumeInviteToken(ctx, tokenHash)
 }
 
 func main() {
@@ -74,6 +123,10 @@ func init() {
 }
 
 func runServe(_ *cobra.Command, _ []string) error {
+	// Root context: cancelled on SIGINT or SIGTERM for graceful shutdown.
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
 	configPath := os.Getenv("VELOCI_CONFIG_PATH")
 	if configPath == "" {
 		configPath = "config/veloci.toml"
@@ -91,10 +144,27 @@ func runServe(_ *cobra.Command, _ []string) error {
 		viper.GetInt("database.port"),
 		viper.GetString("database.auth.name"),
 	)
-	ctx := context.Background()
+
 	database, err := db.New(ctx, dsn)
 	if err != nil {
 		return fmt.Errorf("db: %w", err)
+	}
+
+	// Exponential backoff retry until postgres is reachable.
+	bo := backoff.NewExponentialBackOff()
+	bo.InitialInterval = 500 * time.Millisecond
+	bo.MaxInterval = 30 * time.Second
+	bo.MaxElapsedTime = 2 * time.Minute
+
+	pingErr := backoff.RetryNotify(
+		func() error { return database.Ping(ctx) },
+		backoff.WithContext(bo, ctx),
+		func(err error, d time.Duration) {
+			log.Printf("db not ready (retrying in %s): %v", d.Round(time.Millisecond), err)
+		},
+	)
+	if pingErr != nil {
+		return fmt.Errorf("db unreachable after 2 minutes: %w", pingErr)
 	}
 
 	adminEmail := viper.GetString("auth.admin.email")
@@ -109,18 +179,95 @@ func runServe(_ *cobra.Command, _ []string) error {
 	if len(secret) < 32 {
 		return fmt.Errorf("auth.jwt_secret must be at least 32 characters")
 	}
+	warnWeakSecret(string(secret))
+
+	// Token lifetime configuration from viper with defaults.
+	tokenCfg := handlers.TokenConfig{
+		AccessTTL:  time.Duration(viper.GetInt("session.access_token_ttl_minutes")) * time.Minute,
+		RefreshTTL: time.Duration(viper.GetInt("session.refresh_token_ttl_hours")) * time.Hour,
+	}
+	if tokenCfg.AccessTTL <= 0 {
+		tokenCfg.AccessTTL = 15 * time.Minute
+	}
+	if tokenCfg.RefreshTTL <= 0 {
+		tokenCfg.RefreshTTL = 24 * time.Hour
+	}
+
+	inviteCfg := handlers.InviteConfig{
+		TTL: time.Duration(viper.GetInt("invite.ttl_hours")) * time.Hour,
+	}
+	if inviteCfg.TTL <= 0 {
+		inviteCfg.TTL = 72 * time.Hour
+	}
 
 	creds := handlers.NewCredentials(&dbCredAdapter{database})
-	toks := handlers.NewTokens(&dbTokenAdapter{database}, secret)
+	toks := handlers.NewTokens(&dbTokenAdapter{database}, secret, tokenCfg)
+	inv := handlers.NewInvite(&dbInviteAdapter{database}, inviteCfg)
 
 	r := chi.NewRouter()
+
+	// Credentials routes
 	r.Post("/credentials/validate", creds.Validate)
 	r.Post("/credentials/create", creds.Create)
+	r.Put("/credentials/{id}/password", creds.UpdatePassword)
+	r.Delete("/credentials/{id}", creds.Delete)
+
+	// Token routes — register DELETE /tokens/user/{credential_id} BEFORE /tokens/{jti}
+	// to avoid chi ambiguity between a literal "user" segment and the {jti} wildcard.
 	r.Post("/tokens/mint", toks.Mint)
 	r.Post("/tokens/validate", toks.Validate)
+	r.Post("/tokens/refresh", toks.Refresh)
+	r.Delete("/tokens/user/{credential_id}", toks.RevokeUser)
 	r.Delete("/tokens/{jti}", toks.Revoke)
 
+	// Invite routes
+	r.Post("/invite", inv.CreateInvite)
+	r.Post("/invite/consume", inv.ConsumeInvite)
+
 	port := viper.GetInt("auth.port")
+	srv := &http.Server{
+		Addr:    fmt.Sprintf(":%d", port),
+		Handler: r,
+	}
+
+	// Graceful shutdown: wait for signal then give in-flight requests 10 seconds.
+	go func() {
+		<-ctx.Done()
+		log.Printf("veloci-auth: shutting down gracefully")
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			log.Printf("veloci-auth: shutdown error: %v", err)
+		}
+	}()
+
 	log.Printf("veloci-auth listening on :%d", port)
-	return http.ListenAndServe(fmt.Sprintf(":%d", port), r)
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		return err
+	}
+	return nil
+}
+
+// warnWeakSecret logs a prominent warning if the JWT secret looks low-entropy.
+// Non-fatal — local dev can run with a weak secret.
+func warnWeakSecret(secret string) {
+	low := strings.ToLower(secret)
+	placeholders := []string{"changeme", "replace", "your-secret", "example"}
+	for _, p := range placeholders {
+		if strings.Contains(low, p) {
+			log.Printf("WARNING: jwt_secret contains placeholder text %q — rotate before exposing to a network", p)
+			return
+		}
+	}
+	// Detect all-lowercase alpha with no digits or symbols.
+	allLowerAlpha := true
+	for _, c := range secret {
+		if !unicode.IsLower(c) || unicode.IsDigit(c) {
+			allLowerAlpha = false
+			break
+		}
+	}
+	if allLowerAlpha {
+		log.Printf("WARNING: jwt_secret appears low-entropy (all lowercase letters, no digits or symbols) — rotate before exposing to a network")
+	}
 }

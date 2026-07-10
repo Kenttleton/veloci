@@ -35,7 +35,7 @@ CREATE INDEX ON tokens (parent_id) WHERE parent_id IS NOT NULL;
 CREATE TABLE invite_tokens (
   id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   token_hash  TEXT        NOT NULL UNIQUE,
-  created_by  UUID        NOT NULL REFERENCES auth_credentials(id),
+  created_by  UUID        NOT NULL REFERENCES auth_credentials(id) ON DELETE CASCADE,
   claims      JSONB       NOT NULL,
   expires_at  TIMESTAMPTZ NOT NULL,
   accepted_at TIMESTAMPTZ
