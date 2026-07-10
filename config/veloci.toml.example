@@ -1,0 +1,56 @@
+# config/veloci.toml.example
+# Copy to config/veloci.toml and fill in real values — do not commit credentials.
+# Any value here can be overridden with an env var using the VELOCI_ prefix
+# and underscores as path separators: VELOCI_AUTH_JWT_SECRET, VELOCI_ENGINE_POOL_READ_MAX=20, etc.
+
+[database]
+host = "localhost"
+port = 5432
+
+[database.app]
+name     = "veloci_app"
+user     = "veloci_app_user"
+password = "changeme"
+
+[database.auth]
+name     = "veloci_auth"
+user     = "veloci_auth_user"
+password = "changeme"
+
+[rabbitmq]
+host     = "localhost"
+port     = 5672
+user     = "guest"
+password = "guest"
+
+# ── veloci-auth ───────────────────────────────────────────────────────────────
+
+[auth]
+jwt_secret = "change-this-to-a-long-random-string-at-least-32-chars"
+port       = 8081
+
+[auth.admin]
+email    = "admin@veloci.local"
+password = "changeme"
+
+# ── veloci-api ────────────────────────────────────────────────────────────────
+
+[api]
+port = 8080
+
+[api.pool]
+max = 5
+
+[api.auth]
+host = "localhost"
+port = 8081
+
+# ── veloci-engine ─────────────────────────────────────────────────────────────
+
+[engine.pool]
+read_max  = 12
+write_max = 4
+
+[engine.pipeline]
+import_concurrency  = 4
+snapshot_chunk_size = 500
