@@ -2,11 +2,10 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -39,125 +38,149 @@ type Credentials struct{ db credentialStore }
 // NewCredentials constructs a Credentials handler with the given store.
 func NewCredentials(db credentialStore) *Credentials { return &Credentials{db: db} }
 
+// ── Input / output types ──────────────────────────────────────────────────────
+
+type ValidateCredentialInput struct {
+	Body struct {
+		Email    string `json:"email"    required:"true" doc:"User email address"`
+		Password string `json:"password" required:"true" doc:"Plaintext password"`
+	}
+}
+type ValidateCredentialOutput struct {
+	Body struct {
+		CredentialID string `json:"credential_id" doc:"Credential UUID used as token subject"`
+		SystemRole   string `json:"system_role"   enum:"server_admin,user"`
+	}
+}
+
+type CreateCredentialInput struct {
+	Body struct {
+		Email    string `json:"email"    required:"true" doc:"User email address"`
+		Password string `json:"password" required:"true" minLength:"8" doc:"Plaintext password; bcrypt hashed at cost 12"`
+	}
+}
+type CreateCredentialOutput struct {
+	Body struct {
+		CredentialID string `json:"credential_id" doc:"UUID of the created credential"`
+	}
+}
+
+type UpdateCredentialPasswordInput struct {
+	ID   string `path:"id" doc:"Credential UUID"`
+	Body struct {
+		Password string `json:"password" required:"true" doc:"New plaintext password"`
+	}
+}
+
+type DeleteCredentialInput struct {
+	ID string `path:"id" doc:"Credential UUID"`
+}
+
+// ── Handlers ──────────────────────────────────────────────────────────────────
+
 // Validate checks email+password and returns credential_id and system_role on success.
-func (h *Credentials) Validate(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, `{"code":"BAD_REQUEST"}`)
-		return
-	}
-	if req.Email == "" || req.Password == "" {
-		writeJSON(w, http.StatusBadRequest, `{"code":"BAD_REQUEST"}`)
-		return
-	}
-	cred, err := h.db.FindCredentialByEmail(r.Context(), req.Email)
+func (h *Credentials) Validate(ctx context.Context, input *ValidateCredentialInput) (*ValidateCredentialOutput, error) {
+	cred, err := h.db.FindCredentialByEmail(ctx, input.Body.Email)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, ErrNotFound) {
-			writeJSON(w, http.StatusUnauthorized, `{"code":"INVALID_CREDENTIALS"}`)
-			return
+			return nil, huma.Error401Unauthorized("invalid credentials")
 		}
-		writeJSON(w, http.StatusUnauthorized, `{"code":"INVALID_CREDENTIALS"}`)
-		return
+		return nil, huma.Error401Unauthorized("invalid credentials")
 	}
-	if bcrypt.CompareHashAndPassword([]byte(cred.PasswordHash), []byte(req.Password)) != nil {
-		writeJSON(w, http.StatusUnauthorized, `{"code":"INVALID_CREDENTIALS"}`)
-		return
+	if bcrypt.CompareHashAndPassword([]byte(cred.PasswordHash), []byte(input.Body.Password)) != nil {
+		return nil, huma.Error401Unauthorized("invalid credentials")
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
-		"credential_id": cred.ID,
-		"system_role":   cred.SystemRole,
-	})
+	out := &ValidateCredentialOutput{}
+	out.Body.CredentialID = cred.ID
+	out.Body.SystemRole = cred.SystemRole
+	return out, nil
 }
 
 // Create registers a new credential with system_role "user".
-func (h *Credentials) Create(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, `{"code":"BAD_REQUEST"}`)
-		return
-	}
-	if req.Email == "" || len(req.Password) < 8 {
-		writeJSON(w, http.StatusBadRequest, `{"code":"BAD_REQUEST"}`)
-		return
-	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), 12)
+func (h *Credentials) Create(ctx context.Context, input *CreateCredentialInput) (*CreateCredentialOutput, error) {
+	hash, err := bcrypt.GenerateFromPassword([]byte(input.Body.Password), 12)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, `{"code":"INTERNAL_ERROR"}`)
-		return
+		return nil, huma.Error500InternalServerError("internal error")
 	}
 	id := uuid.New().String()
-	if err := h.db.CreateCredential(r.Context(), id, req.Email, string(hash), "user"); err != nil {
+	if err := h.db.CreateCredential(ctx, id, input.Body.Email, string(hash), "user"); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "auth_credentials_email_key" {
-			writeJSON(w, http.StatusConflict, `{"code":"CONFLICT"}`)
-			return
+			return nil, huma.Error409Conflict("email already registered")
 		}
-		writeJSON(w, http.StatusInternalServerError, `{"code":"INTERNAL_ERROR"}`)
-		return
+		return nil, huma.Error500InternalServerError("internal error")
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]string{"credential_id": id})
+	out := &CreateCredentialOutput{}
+	out.Body.CredentialID = id
+	return out, nil
 }
 
 // UpdatePassword replaces the password hash for an existing credential.
-func (h *Credentials) UpdatePassword(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	var req struct {
-		Password string `json:"password"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, `{"code":"BAD_REQUEST"}`)
-		return
-	}
-	if req.Password == "" {
-		writeJSON(w, http.StatusBadRequest, `{"code":"BAD_REQUEST"}`)
-		return
-	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), 12)
+func (h *Credentials) UpdatePassword(ctx context.Context, input *UpdateCredentialPasswordInput) (*struct{}, error) {
+	hash, err := bcrypt.GenerateFromPassword([]byte(input.Body.Password), 12)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, `{"code":"INTERNAL_ERROR"}`)
-		return
+		return nil, huma.Error500InternalServerError("internal error")
 	}
-	found, err := h.db.UpdateCredentialPassword(r.Context(), id, string(hash))
+	found, err := h.db.UpdateCredentialPassword(ctx, input.ID, string(hash))
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, `{"code":"INTERNAL_ERROR"}`)
-		return
+		return nil, huma.Error500InternalServerError("internal error")
 	}
 	if !found {
-		writeJSON(w, http.StatusNotFound, `{"code":"NOT_FOUND"}`)
-		return
+		return nil, huma.Error404NotFound("credential not found")
 	}
-	w.WriteHeader(http.StatusNoContent)
+	return nil, nil
 }
 
 // Delete permanently removes a credential and all its tokens via FK cascade.
-func (h *Credentials) Delete(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	found, systemRoleBlocked, err := h.db.DeleteCredential(r.Context(), id)
+func (h *Credentials) Delete(ctx context.Context, input *DeleteCredentialInput) (*struct{}, error) {
+	found, systemRoleBlocked, err := h.db.DeleteCredential(ctx, input.ID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, `{"code":"INTERNAL_ERROR"}`)
-		return
+		return nil, huma.Error500InternalServerError("internal error")
 	}
 	if !found {
-		writeJSON(w, http.StatusNotFound, `{"code":"NOT_FOUND"}`)
-		return
+		return nil, huma.Error404NotFound("credential not found")
 	}
 	if systemRoleBlocked {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-		json.NewEncoder(w).Encode(map[string]string{
-			"code":   "FORBIDDEN",
-			"reason": "cannot delete server_admin credential",
-		})
-		return
+		return nil, huma.Error403Forbidden("cannot delete server_admin credential")
 	}
-	w.WriteHeader(http.StatusNoContent)
+	return nil, nil
+}
+
+// ── Route registration ────────────────────────────────────────────────────────
+
+func RegisterCredentialRoutes(api huma.API, h *Credentials) {
+	huma.Register(api, huma.Operation{
+		OperationID: "validate-credential",
+		Method:      http.MethodPost,
+		Path:        "/credentials/validate",
+		Summary:     "Validate email/password credentials",
+		Tags:        []string{"credentials"},
+	}, h.Validate)
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "create-credential",
+		Method:        http.MethodPost,
+		Path:          "/credentials/create",
+		Summary:       "Create a new credential",
+		Tags:          []string{"credentials"},
+		DefaultStatus: http.StatusCreated,
+	}, h.Create)
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "update-credential-password",
+		Method:        http.MethodPut,
+		Path:          "/credentials/{id}/password",
+		Summary:       "Update password hash for a credential",
+		Tags:          []string{"credentials"},
+		DefaultStatus: http.StatusNoContent,
+	}, h.UpdatePassword)
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "delete-credential",
+		Method:        http.MethodDelete,
+		Path:          "/credentials/{id}",
+		Summary:       "Permanently remove a credential and cascade tokens",
+		Tags:          []string{"credentials"},
+		DefaultStatus: http.StatusNoContent,
+	}, h.Delete)
 }

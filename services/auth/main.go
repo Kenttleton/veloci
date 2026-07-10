@@ -14,6 +14,8 @@ import (
 	"unicode"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -205,24 +207,11 @@ func runServe(_ *cobra.Command, _ []string) error {
 	inv := handlers.NewInvite(&dbInviteAdapter{database}, inviteCfg)
 
 	r := chi.NewRouter()
+	api := humachi.New(r, huma.DefaultConfig("Veloci Auth", "1.0.0"))
 
-	// Credentials routes
-	r.Post("/credentials/validate", creds.Validate)
-	r.Post("/credentials/create", creds.Create)
-	r.Put("/credentials/{id}/password", creds.UpdatePassword)
-	r.Delete("/credentials/{id}", creds.Delete)
-
-	// Token routes — register DELETE /tokens/user/{credential_id} BEFORE /tokens/{jti}
-	// to avoid chi ambiguity between a literal "user" segment and the {jti} wildcard.
-	r.Post("/tokens/mint", toks.Mint)
-	r.Post("/tokens/validate", toks.Validate)
-	r.Post("/tokens/refresh", toks.Refresh)
-	r.Delete("/tokens/user/{credential_id}", toks.RevokeUser)
-	r.Delete("/tokens/{jti}", toks.Revoke)
-
-	// Invite routes
-	r.Post("/invite", inv.CreateInvite)
-	r.Post("/invite/consume", inv.ConsumeInvite)
+	handlers.RegisterCredentialRoutes(api, creds)
+	handlers.RegisterTokenRoutes(api, toks)
+	handlers.RegisterInviteRoutes(api, inv)
 
 	port := viper.GetInt("auth.port")
 	srv := &http.Server{

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-chi/chi/v5"
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/veloci/auth/internal/db"
@@ -66,9 +66,58 @@ func NewTokens(db tokenStore, secret []byte, cfg TokenConfig) *Tokens {
 	return &Tokens{db: db, secret: secret, cfg: cfg}
 }
 
+// ── Input / output types ──────────────────────────────────────────────────────
+
+type MintTokenInput struct {
+	Body struct {
+		CredentialID string         `json:"credential_id" required:"true" doc:"UUID of the credential to bind this token to"`
+		Claims       map[string]any `json:"claims"        required:"true" doc:"Opaque claims set by veloci-api; stored verbatim"`
+	}
+}
+
+// TokenPairOutput is the response shape for mint and refresh.
+type TokenPairOutput struct {
+	Body struct {
+		AccessToken  string `json:"access_token"  doc:"Signed HS256 JWT; valid for session.access_token_ttl_minutes"`
+		RefreshToken string `json:"refresh_token" doc:"Signed HS256 JWT; valid for session.refresh_token_ttl_hours"`
+		JTI          string `json:"jti"           doc:"JTI of the access token"`
+		ExpiresIn    int    `json:"expires_in"    doc:"Access token lifetime in seconds"`
+		ExpiresAt    string `json:"expires_at"    doc:"Access token expiry as RFC 3339 timestamp"`
+	}
+}
+
+type RefreshTokenInput struct {
+	Body struct {
+		RefreshToken string `json:"refresh_token" required:"true" doc:"The refresh JWT to exchange for a new pair"`
+	}
+}
+
+type ValidateTokenInput struct {
+	Body struct {
+		Token string `json:"token" required:"true" doc:"Raw token — JWT (three dot-separated base64url segments) or OTU (flat base64url)"`
+	}
+}
+
+type ValidateTokenOutput struct {
+	Body struct {
+		TokenType    string         `json:"token_type"              enum:"access,invite" doc:"Token type from the validated record"`
+		JTI          string         `json:"jti,omitempty"           doc:"Access token JTI. Present only when token_type is access"`
+		CredentialID string         `json:"credential_id,omitempty" doc:"Credential UUID. Present only when token_type is access"`
+		Claims       map[string]any `json:"claims"                  doc:"Opaque claims from storage; DB-authoritative"`
+	}
+}
+
+type RevokeTokenInput struct {
+	JTI string `path:"jti" doc:"Token JTI"`
+}
+
+type RevokeUserTokensInput struct {
+	CredentialID string `path:"credential_id" doc:"Credential UUID"`
+}
+
+// ── Internal helpers ──────────────────────────────────────────────────────────
+
 // mintPair issues an access+refresh token pair and stores both in the DB.
-// It returns the minted tokens and the access token's expiry metadata.
-// parentID is the access token's row ID, stored as parent on the refresh token.
 func (h *Tokens) mintPair(ctx context.Context, credentialID string, claims json.RawMessage) (accessTok, refreshTok, accessJTI string, accessExp time.Time, err error) {
 	now := time.Now()
 	accessExp = now.Add(h.cfg.AccessTTL)
@@ -87,7 +136,6 @@ func (h *Tokens) mintPair(ctx context.Context, credentialID string, claims json.
 
 	refreshJTI := uuid.New().String()
 	refreshID := uuid.New().String()
-	// Build minimal claims for the refresh token — just enough for signature validation.
 	refreshClaims := json.RawMessage(`{}`)
 
 	refreshTok, err = tokens.Mint(h.secret, refreshJTI, refreshClaims, refreshExp, "refresh")
@@ -101,217 +149,198 @@ func (h *Tokens) mintPair(ctx context.Context, credentialID string, claims json.
 	return accessTok, refreshTok, accessJTI, accessExp, nil
 }
 
+// ── Handlers ──────────────────────────────────────────────────────────────────
+
 // Mint signs a new access+refresh JWT pair and persists both to the token store.
-func (h *Tokens) Mint(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		CredentialID string          `json:"credential_id"`
-		Claims       json.RawMessage `json:"claims"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, `{"code":"BAD_REQUEST"}`)
-		return
-	}
-	if req.CredentialID == "" {
-		writeJSON(w, http.StatusBadRequest, `{"code":"BAD_REQUEST"}`)
-		return
-	}
-	if req.Claims == nil || string(req.Claims) == "null" {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	accessTok, refreshTok, accessJTI, accessExp, err := h.mintPair(r.Context(), req.CredentialID, req.Claims)
+func (h *Tokens) Mint(ctx context.Context, input *MintTokenInput) (*TokenPairOutput, error) {
+	claimsBytes, err := json.Marshal(input.Body.Claims)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, `{"code":"INTERNAL"}`)
-		return
+		return nil, huma.Error400BadRequest("invalid claims")
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]any{
-		"access_token":  accessTok,
-		"refresh_token": refreshTok,
-		"jti":           accessJTI,
-		"expires_in":    int(h.cfg.AccessTTL.Seconds()),
-		"expires_at":    accessExp.UTC().Format(time.RFC3339),
-	})
+	accessTok, refreshTok, accessJTI, accessExp, err := h.mintPair(ctx, input.Body.CredentialID, claimsBytes)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("internal error")
+	}
+
+	out := &TokenPairOutput{}
+	out.Body.AccessToken = accessTok
+	out.Body.RefreshToken = refreshTok
+	out.Body.JTI = accessJTI
+	out.Body.ExpiresIn = int(h.cfg.AccessTTL.Seconds())
+	out.Body.ExpiresAt = accessExp.UTC().Format(time.RFC3339)
+	return out, nil
 }
 
 // Validate verifies a token — JWT or OTU invite — and confirms it exists in the appropriate store.
 // Token type is detected by structure: JWTs have two dots; OTU tokens do not.
-func (h *Tokens) Validate(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Token string `json:"token"`
+func (h *Tokens) Validate(ctx context.Context, input *ValidateTokenInput) (*ValidateTokenOutput, error) {
+	if strings.Count(input.Body.Token, ".") == 2 {
+		return h.validateJWT(ctx, input.Body.Token)
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, `{"code":"BAD_REQUEST"}`)
-		return
-	}
-
-	// Structural token type detection: JWTs contain exactly two dots.
-	if strings.Count(req.Token, ".") == 2 {
-		h.validateJWT(w, r, req.Token)
-	} else {
-		h.validateInviteToken(w, r, req.Token)
-	}
+	return h.validateInviteToken(ctx, input.Body.Token)
 }
 
-// validateJWT handles the JWT path for Validate.
-func (h *Tokens) validateJWT(w http.ResponseWriter, r *http.Request, tokenStr string) {
+func (h *Tokens) validateJWT(ctx context.Context, tokenStr string) (*ValidateTokenOutput, error) {
 	jti, tokenType, _, err := tokens.Verify(h.secret, tokenStr)
 	if err != nil {
-		writeJSON(w, http.StatusUnauthorized, `{"code":"UNAUTHORIZED"}`)
-		return
+		return nil, huma.Error401Unauthorized("unauthorized")
 	}
-
-	// Refresh tokens are never routed through /tokens/validate.
 	if tokenType == "refresh" {
-		writeJSON(w, http.StatusUnauthorized, `{"code":"UNAUTHORIZED"}`)
-		return
+		return nil, huma.Error401Unauthorized("unauthorized")
 	}
 
 	// DB claims are authoritative; JWT claims used only to extract jti for DB lookup.
-	row, err := h.db.FindToken(r.Context(), jti)
+	row, err := h.db.FindToken(ctx, jti)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, ErrNotFound) {
-			writeJSON(w, http.StatusUnauthorized, `{"code":"UNAUTHORIZED"}`)
-			return
+			return nil, huma.Error401Unauthorized("unauthorized")
 		}
-		writeJSON(w, http.StatusUnauthorized, `{"code":"UNAUTHORIZED"}`)
-		return
+		return nil, huma.Error401Unauthorized("unauthorized")
 	}
-
 	if time.Now().After(row.ExpiresAt) {
-		writeJSON(w, http.StatusUnauthorized, `{"code":"UNAUTHORIZED"}`)
-		return
+		return nil, huma.Error401Unauthorized("unauthorized")
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]any{
-		"token_type":    "access",
-		"jti":           jti,
-		"credential_id": row.CredentialID,
-		"claims":        json.RawMessage(row.Claims),
-	})
+	var claims map[string]any
+	if err := json.Unmarshal(row.Claims, &claims); err != nil {
+		return nil, huma.Error500InternalServerError("internal error")
+	}
+
+	out := &ValidateTokenOutput{}
+	out.Body.TokenType = "access"
+	out.Body.JTI = jti
+	out.Body.CredentialID = row.CredentialID
+	out.Body.Claims = claims
+	return out, nil
 }
 
-// validateInviteToken handles the OTU invite token path for Validate.
-func (h *Tokens) validateInviteToken(w http.ResponseWriter, r *http.Request, rawToken string) {
+func (h *Tokens) validateInviteToken(ctx context.Context, rawToken string) (*ValidateTokenOutput, error) {
 	hash := hashToken(rawToken)
-	row, err := h.db.FindInviteToken(r.Context(), hash)
+	row, err := h.db.FindInviteToken(ctx, hash)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, ErrNotFound) {
-			writeJSON(w, http.StatusUnauthorized, `{"code":"UNAUTHORIZED"}`)
-			return
+			return nil, huma.Error401Unauthorized("unauthorized")
 		}
-		writeJSON(w, http.StatusUnauthorized, `{"code":"UNAUTHORIZED"}`)
-		return
+		return nil, huma.Error401Unauthorized("unauthorized")
 	}
-
 	if row.AcceptedAt != nil || time.Now().After(row.ExpiresAt) {
-		writeJSON(w, http.StatusUnauthorized, `{"code":"UNAUTHORIZED"}`)
-		return
+		return nil, huma.Error401Unauthorized("unauthorized")
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]any{
-		"token_type": "invite",
-		"claims":     json.RawMessage(row.Claims),
-	})
+	var claims map[string]any
+	if err := json.Unmarshal(row.Claims, &claims); err != nil {
+		return nil, huma.Error500InternalServerError("internal error")
+	}
+
+	out := &ValidateTokenOutput{}
+	out.Body.TokenType = "invite"
+	out.Body.Claims = claims
+	return out, nil
 }
 
 // Refresh validates a refresh token and issues a new access+refresh pair.
-// The old refresh token is rotated within a 30-second grace window.
-func (h *Tokens) Refresh(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		RefreshToken string `json:"refresh_token"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, `{"code":"BAD_REQUEST"}`)
-		return
-	}
-	if req.RefreshToken == "" {
-		writeJSON(w, http.StatusBadRequest, `{"code":"BAD_REQUEST"}`)
-		return
-	}
-
-	jti, tokenType, _, err := tokens.Verify(h.secret, req.RefreshToken)
+func (h *Tokens) Refresh(ctx context.Context, input *RefreshTokenInput) (*TokenPairOutput, error) {
+	jti, tokenType, _, err := tokens.Verify(h.secret, input.Body.RefreshToken)
 	if err != nil {
-		writeJSON(w, http.StatusUnauthorized, `{"code":"REFRESH_TOKEN_INVALID"}`)
-		return
+		return nil, huma.Error401Unauthorized("refresh token invalid")
 	}
 	if tokenType != "refresh" {
-		writeJSON(w, http.StatusUnauthorized, `{"code":"REFRESH_TOKEN_INVALID"}`)
-		return
+		return nil, huma.Error401Unauthorized("refresh token invalid")
 	}
 
-	// Find the refresh token row to get credential ID and check expiry.
-	row, err := h.db.FindToken(r.Context(), jti)
+	row, err := h.db.FindToken(ctx, jti)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, ErrNotFound) {
-			writeJSON(w, http.StatusUnauthorized, `{"code":"REFRESH_TOKEN_INVALID"}`)
-			return
+			return nil, huma.Error401Unauthorized("refresh token invalid")
 		}
-		writeJSON(w, http.StatusUnauthorized, `{"code":"REFRESH_TOKEN_INVALID"}`)
-		return
+		return nil, huma.Error401Unauthorized("refresh token invalid")
 	}
-
 	if time.Now().After(row.ExpiresAt) {
-		writeJSON(w, http.StatusUnauthorized, `{"code":"REFRESH_TOKEN_EXPIRED"}`)
-		return
+		return nil, huma.Error401Unauthorized("refresh token expired")
 	}
 
 	const graceWindow = 30 * time.Second
-	if err := h.db.RotateRefreshToken(r.Context(), jti, graceWindow); err != nil {
-		if errors.Is(err, db.ErrReplayDetected) {
-			writeJSON(w, http.StatusUnauthorized, `{"code":"REFRESH_TOKEN_INVALID"}`)
-			return
+	if err := h.db.RotateRefreshToken(ctx, jti, graceWindow); err != nil {
+		if errors.Is(err, db.ErrReplayDetected) || errors.Is(err, db.ErrTokenNotFound) {
+			return nil, huma.Error401Unauthorized("refresh token invalid")
 		}
-		if errors.Is(err, db.ErrTokenNotFound) {
-			writeJSON(w, http.StatusUnauthorized, `{"code":"REFRESH_TOKEN_INVALID"}`)
-			return
-		}
-		writeJSON(w, http.StatusInternalServerError, `{"code":"INTERNAL"}`)
-		return
+		return nil, huma.Error500InternalServerError("internal error")
 	}
 
-	// We need the original access claims to mint the new pair.
-	// The refresh row carries empty claims; we mint new tokens with an empty claim set
-	// since veloci-api should re-mint with fresh claims after refresh. Per spec,
-	// refresh returns the same shape as mint — the claims in the new access token
-	// will be the claims stored on the old access token (parent of this refresh).
-	// For simplicity, pass the claims from the refresh row (empty {}).
-	accessTok, refreshTok, accessJTI, accessExp, err := h.mintPair(r.Context(), row.CredentialID, json.RawMessage(`{}`))
+	accessTok, refreshTok, accessJTI, accessExp, err := h.mintPair(ctx, row.CredentialID, json.RawMessage(`{}`))
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, `{"code":"INTERNAL"}`)
-		return
+		return nil, huma.Error500InternalServerError("internal error")
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]any{
-		"access_token":  accessTok,
-		"refresh_token": refreshTok,
-		"jti":           accessJTI,
-		"expires_in":    int(h.cfg.AccessTTL.Seconds()),
-		"expires_at":    accessExp.UTC().Format(time.RFC3339),
-	})
+	out := &TokenPairOutput{}
+	out.Body.AccessToken = accessTok
+	out.Body.RefreshToken = refreshTok
+	out.Body.JTI = accessJTI
+	out.Body.ExpiresIn = int(h.cfg.AccessTTL.Seconds())
+	out.Body.ExpiresAt = accessExp.UTC().Format(time.RFC3339)
+	return out, nil
 }
 
-// Revoke deletes a token record by jti, invalidating it immediately.
-// Always returns 204 — intentionally idempotent; the CommandTag is discarded.
-func (h *Tokens) Revoke(w http.ResponseWriter, r *http.Request) {
-	jti := chi.URLParam(r, "jti")
-	// CommandTag intentionally discarded — revoke is idempotent, always 204.
-	h.db.DeleteToken(r.Context(), jti) //nolint:errcheck
-	w.WriteHeader(http.StatusNoContent)
+// Revoke deletes a token record by jti. Always 204 — idempotent.
+func (h *Tokens) Revoke(ctx context.Context, input *RevokeTokenInput) (*struct{}, error) {
+	h.db.DeleteToken(ctx, input.JTI) //nolint:errcheck
+	return nil, nil
 }
 
 // RevokeUser removes all active token records for a credential without deleting the credential.
-func (h *Tokens) RevokeUser(w http.ResponseWriter, r *http.Request) {
-	credentialID := chi.URLParam(r, "credential_id")
-	h.db.DeleteUserTokens(r.Context(), credentialID) //nolint:errcheck
-	w.WriteHeader(http.StatusNoContent)
+func (h *Tokens) RevokeUser(ctx context.Context, input *RevokeUserTokensInput) (*struct{}, error) {
+	h.db.DeleteUserTokens(ctx, input.CredentialID) //nolint:errcheck
+	return nil, nil
+}
+
+// ── Route registration ────────────────────────────────────────────────────────
+
+func RegisterTokenRoutes(api huma.API, h *Tokens) {
+	huma.Register(api, huma.Operation{
+		OperationID:   "mint-token",
+		Method:        http.MethodPost,
+		Path:          "/tokens/mint",
+		Summary:       "Mint an access+refresh token pair",
+		Tags:          []string{"tokens"},
+		DefaultStatus: http.StatusCreated,
+	}, h.Mint)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "validate-token",
+		Method:      http.MethodPost,
+		Path:        "/tokens/validate",
+		Summary:     "Validate any token — JWT or OTU",
+		Description: "Auth detects token type by structure (JWT = two dots; OTU = no dots) and queries the appropriate table.",
+		Tags:        []string{"tokens"},
+	}, h.Validate)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "refresh-token",
+		Method:      http.MethodPost,
+		Path:        "/tokens/refresh",
+		Summary:     "Exchange a refresh token for a new access+refresh pair",
+		Description: "Rotates the refresh token within a 30-second grace window to handle concurrent requests.",
+		Tags:        []string{"tokens"},
+	}, h.Refresh)
+
+	// Register /tokens/user/{credential_id} before /tokens/{jti} — chi's radix tree
+	// prioritises the static "user" segment, but explicit ordering makes intent clear.
+	huma.Register(api, huma.Operation{
+		OperationID:   "revoke-user-tokens",
+		Method:        http.MethodDelete,
+		Path:          "/tokens/user/{credential_id}",
+		Summary:       "Revoke all sessions for a credential without deleting it",
+		Tags:          []string{"tokens"},
+		DefaultStatus: http.StatusNoContent,
+	}, h.RevokeUser)
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "revoke-token",
+		Method:        http.MethodDelete,
+		Path:          "/tokens/{jti}",
+		Summary:       "Revoke a single token by JTI (idempotent)",
+		Tags:          []string{"tokens"},
+		DefaultStatus: http.StatusNoContent,
+	}, h.Revoke)
 }

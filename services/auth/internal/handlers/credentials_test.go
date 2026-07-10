@@ -8,6 +8,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/adapters/humachi"
+	"github.com/go-chi/chi/v5"
 	"github.com/veloci/auth/internal/handlers"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -40,17 +43,23 @@ func (s *stubCredDB) DeleteCredential(_ context.Context, id string) (bool, bool,
 	return s.deleteFound, s.deleteRoleBlocked, nil
 }
 
+// credRouter wires a chi+humachi router with credential routes registered.
+func credRouter(db *stubCredDB) *chi.Mux {
+	r := chi.NewRouter()
+	api := humachi.New(r, huma.DefaultConfig("test", "1.0.0"))
+	handlers.RegisterCredentialRoutes(api, handlers.NewCredentials(db))
+	return r
+}
+
 func TestValidateCredential_Success(t *testing.T) {
 	hash, _ := bcrypt.GenerateFromPassword([]byte("correct"), 12)
-	db := &stubCredDB{hash: string(hash), role: "user"}
-	h := handlers.NewCredentials(db)
+	r := credRouter(&stubCredDB{hash: string(hash), role: "user"})
 
 	body, _ := json.Marshal(map[string]string{"email": "a@b.com", "password": "correct"})
 	req := httptest.NewRequest(http.MethodPost, "/credentials/validate", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-
-	h.Validate(w, req)
+	r.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status: got %d want 200; body: %s", w.Code, w.Body)
@@ -67,30 +76,28 @@ func TestValidateCredential_Success(t *testing.T) {
 
 func TestValidateCredential_WrongPassword(t *testing.T) {
 	hash, _ := bcrypt.GenerateFromPassword([]byte("correct"), 12)
-	db := &stubCredDB{hash: string(hash), role: "user"}
-	h := handlers.NewCredentials(db)
+	r := credRouter(&stubCredDB{hash: string(hash), role: "user"})
 
 	body, _ := json.Marshal(map[string]string{"email": "a@b.com", "password": "wrong"})
 	req := httptest.NewRequest(http.MethodPost, "/credentials/validate", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
 
-	h.Validate(w, req)
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("status: got %d want 401", w.Code)
 	}
 }
 
 func TestCreate_Success(t *testing.T) {
-	db := &stubCredDB{}
-	h := handlers.NewCredentials(db)
+	r := credRouter(&stubCredDB{})
 
 	body, _ := json.Marshal(map[string]string{"email": "new@b.com", "password": "password123"})
 	req := httptest.NewRequest(http.MethodPost, "/credentials/create", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
 
-	h.Create(w, req)
 	if w.Code != http.StatusCreated {
 		t.Errorf("status: got %d want 201; body: %s", w.Code, w.Body)
 	}
@@ -102,77 +109,64 @@ func TestCreate_Success(t *testing.T) {
 }
 
 func TestUpdatePassword_NotFound(t *testing.T) {
-	db := &stubCredDB{updateFound: false}
-	h := handlers.NewCredentials(db)
+	r := credRouter(&stubCredDB{updateFound: false})
 
 	body, _ := json.Marshal(map[string]string{"password": "newpassword123"})
 	req := httptest.NewRequest(http.MethodPut, "/credentials/missing-id/password", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	// chi URL params aren't populated outside a chi router in unit tests,
-	// but the handler reads chi.URLParam which returns "" when not set —
-	// the stub returns updateFound=false regardless of id.
 	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
 
-	h.UpdatePassword(w, req)
 	if w.Code != http.StatusNotFound {
-		t.Errorf("status: got %d want 404", w.Code)
+		t.Errorf("status: got %d want 404; body: %s", w.Code, w.Body)
 	}
 }
 
 func TestUpdatePassword_Success(t *testing.T) {
-	db := &stubCredDB{updateFound: true}
-	h := handlers.NewCredentials(db)
+	r := credRouter(&stubCredDB{updateFound: true})
 
 	body, _ := json.Marshal(map[string]string{"password": "newpassword123"})
 	req := httptest.NewRequest(http.MethodPut, "/credentials/cred-1/password", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
 
-	h.UpdatePassword(w, req)
 	if w.Code != http.StatusNoContent {
 		t.Errorf("status: got %d want 204; body: %s", w.Code, w.Body)
 	}
 }
 
 func TestDelete_NotFound(t *testing.T) {
-	db := &stubCredDB{deleteFound: false}
-	h := handlers.NewCredentials(db)
+	r := credRouter(&stubCredDB{deleteFound: false})
 
 	req := httptest.NewRequest(http.MethodDelete, "/credentials/missing", nil)
 	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
 
-	h.Delete(w, req)
 	if w.Code != http.StatusNotFound {
 		t.Errorf("status: got %d want 404", w.Code)
 	}
 }
 
 func TestDelete_ServerAdminForbidden(t *testing.T) {
-	db := &stubCredDB{deleteFound: true, deleteRoleBlocked: true}
-	h := handlers.NewCredentials(db)
+	r := credRouter(&stubCredDB{deleteFound: true, deleteRoleBlocked: true})
 
 	req := httptest.NewRequest(http.MethodDelete, "/credentials/admin-id", nil)
 	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
 
-	h.Delete(w, req)
 	if w.Code != http.StatusForbidden {
-		t.Errorf("status: got %d want 403", w.Code)
-	}
-	var resp map[string]string
-	json.NewDecoder(w.Body).Decode(&resp)
-	if resp["code"] != "FORBIDDEN" {
-		t.Errorf("code: got %q want FORBIDDEN", resp["code"])
+		t.Errorf("status: got %d want 403; body: %s", w.Code, w.Body)
 	}
 }
 
 func TestDelete_Success(t *testing.T) {
-	db := &stubCredDB{deleteFound: true, deleteRoleBlocked: false}
-	h := handlers.NewCredentials(db)
+	r := credRouter(&stubCredDB{deleteFound: true, deleteRoleBlocked: false})
 
 	req := httptest.NewRequest(http.MethodDelete, "/credentials/cred-1", nil)
 	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
 
-	h.Delete(w, req)
 	if w.Code != http.StatusNoContent {
 		t.Errorf("status: got %d want 204", w.Code)
 	}
