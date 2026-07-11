@@ -16,7 +16,8 @@ Two lanes run in parallel:
 
 - **Projection** — the expected rate from known commitments and estimated income
 - **Actual** — the real rate from imported transaction data
-- **Drift** — the delta between them, the primary diagnostic signal
+
+**Drift** is the delta between them — the primary diagnostic signal.
 
 ---
 
@@ -26,8 +27,9 @@ Veloci is local-first and import-driven. No bank sync, no credentials to third-p
 
 1. Normalizes merchant names and clusters transactions by pattern
 2. Matches transactions to known entries automatically
-3. Surfaces new patterns as candidates for your review
-4. After approval, future matching is automatic
+3. Detects transfers by matching debit/credit pairs across accounts
+4. Surfaces new patterns as candidates for your review
+5. After approval, future matching is automatic
 
 Most people have fewer than 50 true recurring items. After two or three import cycles, the review queue shrinks to only genuinely new activity.
 
@@ -50,25 +52,13 @@ Line graph of Projection vs. Actual over time, with Drift shaded between them. S
 
 | Type | Description |
 |------|-------------|
-| **Standing** | Recurring commitment — rent, subscriptions, loan minimums. Rate is exact. |
-| **Single** | One-time expected expense. Smoothed over a window. |
-| **Hit** | Unexpected negative event. Smoothed short (30 days default). |
-| **Boost** | Unexpected positive event — refund, gift, bonus. Smoothed short. |
-| **Variable** | Regular expense with fluctuating amount — groceries, utilities. Rate by average or maximum. |
+| **Standing** | Recurring commitment — rent, subscriptions, loan minimums. Rate is exact. Treated as a savings goal for payoff day. |
+| **Variable** | Recurring commitment with fluctuating amounts — groceries, utilities. Rate by average or maximum. Treated as a savings goal for payoff day. |
+| **Hit** | Unexpected negative event. Smoothed as debt to be paid off short-term (30 days default). |
+| **Boost** | Unexpected positive event — refund, gift, bonus. Smoothed forward short-term (30 days). |
+
 
 **Smoothing** amortizes large infrequent payments over a time window so your /day rate always reflects your true ongoing cost, including obligations that haven't billed yet.
-
----
-
-## Debt accounts
-
-Debt accounts are Passive by default — tracked and projected, but isolated from your active budget picture. Each debt account exposes:
-
-- **Minimum payment rate** — the committed /day outflow from your active budget
-- **True cost rate** — principal plus interest over remaining term, as /day
-- **Payoff projection** — what adding $X/day does to payoff date and total interest paid
-
-> Instead of "should I pay an extra $100/month on this debt," Veloci asks "what does $3.29/day do to this debt?"
 
 ---
 
@@ -79,6 +69,30 @@ Debt accounts are Passive by default — tracked and projected, but isolated fro
 - **Local-first.** Your financial data stays on your hardware.
 - **Self-healing.** Cancelled subscriptions disappear from Actual as transactions stop arriving. Errors and gaps correct themselves over time without manual intervention.
 - **Friction decreases over time.** The first import cycle is the hardest. Each subsequent cycle requires less effort.
+
+---
+
+## Architecture
+
+Veloci runs as multiple processes but is not a microservices system. It is a **distributed monolith** — a single application decomposed into processes for specific technical reasons, deployed as a unit, sharing a single config file and the same Postgres and RabbitMQ instances. Nothing is independently deployable or scalable in isolation.
+
+### API and engine are one logical unit
+
+The `veloci-api` (Go) and `veloci-engine` (Rust) processes share the same application database and database user. The split exists for one reason: Go is a poor fit for CPU-bound pipeline work. The engine handles transaction clustering, pattern matching, and rate calculations — stages that benefit from Rust's performance characteristics. Everything else lives in the API.
+
+From the application's perspective, the engine is the API's compute backend. They communicate asynchronously over RabbitMQ: the API publishes jobs when data changes, the engine processes them and writes results directly to Postgres. There is no API boundary between them — the engine reads and writes the app database directly.
+
+### Auth is a deliberate boundary
+
+`veloci-auth` is different. It owns its own database (`veloci_auth`) and is the only service that touches credential and token data. The API calls auth for every login and every token validation — auth is never called by the frontend directly and is not exposed outside the internal Docker network.
+
+This separation is intentional: auth holds the one concern that is genuinely independent from the rest of the application. It is designed to be replaceable — a future deployment can swap `veloci-auth` for an external provider (Keycloak, Auth0, etc.) without touching the API or financial data services.
+
+### Deployment
+
+The full system ships as a single `docker-compose.yml`: web (React SPA), API, engine, auth, Postgres, and RabbitMQ. The only ports exposed to the host are the API and web. Everything else runs on the internal Docker network.
+
+As the product expands to cover more account types and eventually a hosted offering, the architecture is designed to evolve — but v1 is intentionally a single, self-contained unit that runs on one machine.
 
 ---
 
@@ -184,13 +198,38 @@ These have no safe default and **must be set** before the services will start co
 
 ---
 
-## Out of scope — v1
+## Roadmap
 
-- Bank sync / automatic transaction fetching
-- Cloud hosting or managed sync
-- Investment portfolio tracking
+Veloci is currently in active development toward **v1**.
+
+### v1 — Active development
+
+Checking and savings accounts as the core account types. The full /day rate model, import/detect/review cycle, and Pulse/Stack/Horizon views. All accounts in v1 are Active. A HYSA can be added as an Active account — interest payments appear as Boost events, but there is no dedicated interest modeling yet.
+
+### v1.1 — Interest on commitments
+
+Debt accounts: credit cards, personal loans, auto loans, and mortgages. Adds three calculations not available on standard accounts:
+
+- **Minimum payment rate** — the committed /day outflow from your active budget
+- **True cost rate** — principal plus interest over remaining term, as /day
+- **Payoff projection** — what adding $X/day does to payoff date and total interest paid
+
+> Instead of "should I pay an extra $100/month on this debt," Veloci asks "what does $3.29/day do to this debt?"
+
+### v1.2 — Interest on accrual
+
+Dedicated modeling for high-yield savings and other interest-bearing accounts. Yield expressed as a /day rate directly comparable to expenses and debt costs.
+
+### v1.3 — Market-based accounts
+
+Money market, investment accounts, and crypto. All producing comparable /day rates through the same engine as every other account.
+
+### v2 and beyond
+
+Multi-currency support is planned before v2. v2 targets a paid hosted offering of the full v1 suite and begins expanding the Active/Passive model toward liquidity-based classification. v3 completes that — accounts that can initiate an immediate transfer become eligible to be Active regardless of type.
+
+### Not planned
+
+- AI-generated financial advice or recommendations
 - Tax preparation or reporting
-- Bill payment or transaction initiation
-- Multi-currency support
-- Mobile native apps (web-first, mobile-responsive)
-- AI-generated financial advice
+- Bill payment or financial transaction initiation
