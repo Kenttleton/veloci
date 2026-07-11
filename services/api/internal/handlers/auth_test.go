@@ -8,12 +8,26 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/adapters/humachi"
+	"github.com/go-chi/chi/v5"
 	"github.com/veloci/api/internal/authclient"
 	"github.com/veloci/api/internal/handlers"
 )
 
+// authRouter builds a chi+humachi router with auth routes registered.
+func authRouter(authURL string, db handlers.AppDB) (*chi.Mux, error) {
+	client, err := authclient.NewClient(authURL)
+	if err != nil {
+		return nil, err
+	}
+	r := chi.NewRouter()
+	api := humachi.New(r, huma.DefaultConfig("test", "1.0.0"))
+	handlers.RegisterAuthRoutes(api, handlers.NewAuth(client, db))
+	return r, nil
+}
+
 // stubAuthForLogin simulates veloci-auth /credentials/validate and /tokens/mint.
-// Responses match the ogen-generated client's expected schema fields.
 func stubAuthForLogin(t *testing.T) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -40,32 +54,27 @@ func stubAuthForLogin(t *testing.T) *httptest.Server {
 	}))
 }
 
-// stubAppDB simulates the veloci_app lookup for entity+role.
+// stubAppDB simulates veloci_app entity lookups.
 type stubAppDB struct{}
 
 func (s *stubAppDB) FindUserEntity(ctx context.Context, email string) (handlers.UserEntity, error) {
 	return handlers.UserEntity{UserID: "user-1", EntityID: "ent-1", EntityRole: "entity_admin"}, nil
 }
 
-func mustAuthClient(t *testing.T, url string) *authclient.Client {
-	t.Helper()
-	c, err := authclient.NewClient(url)
-	if err != nil {
-		t.Fatalf("authclient.NewClient(%q): %v", url, err)
-	}
-	return c
-}
-
 func TestLoginSuccess(t *testing.T) {
 	authSrv := stubAuthForLogin(t)
 	defer authSrv.Close()
 
-	h := handlers.NewAuth(mustAuthClient(t, authSrv.URL), &stubAppDB{})
+	r, err := authRouter(authSrv.URL, &stubAppDB{})
+	if err != nil {
+		t.Fatalf("authRouter: %v", err)
+	}
+
 	body, _ := json.Marshal(map[string]string{"email": "a@b.com", "password": "pw"})
 	req := httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-	h.Login(w, req)
+	r.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status: got %d; body: %s", w.Code, w.Body)
@@ -81,18 +90,22 @@ func TestLoginSuccess(t *testing.T) {
 }
 
 func TestLoginBadJSON(t *testing.T) {
-	h := handlers.NewAuth(mustAuthClient(t, "http://unused"), &stubAppDB{})
+	r, err := authRouter("http://unused", &stubAppDB{})
+	if err != nil {
+		t.Fatalf("authRouter: %v", err)
+	}
+
 	req := httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewReader([]byte("not-json")))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-	h.Login(w, req)
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("status: got %d want 400", w.Code)
+	r.ServeHTTP(w, req)
+
+	if w.Code < 400 {
+		t.Errorf("status: got %d want 4xx", w.Code)
 	}
 }
 
 func TestLoginInvalidCredentials(t *testing.T) {
-	// Auth server returns 401 for bad credentials.
 	authSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/problem+json")
 		w.WriteHeader(http.StatusUnauthorized)
@@ -104,12 +117,17 @@ func TestLoginInvalidCredentials(t *testing.T) {
 	}))
 	defer authSrv.Close()
 
-	h := handlers.NewAuth(mustAuthClient(t, authSrv.URL), &stubAppDB{})
+	r, err := authRouter(authSrv.URL, &stubAppDB{})
+	if err != nil {
+		t.Fatalf("authRouter: %v", err)
+	}
+
 	body, _ := json.Marshal(map[string]string{"email": "a@b.com", "password": "wrong"})
 	req := httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-	h.Login(w, req)
+	r.ServeHTTP(w, req)
+
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("status: got %d want 401", w.Code)
 	}

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/veloci/api/internal/authclient"
 )
 
@@ -16,54 +17,67 @@ type UserEntity struct {
 	EntityRole string
 }
 
-// appDB abstracts veloci_app database queries needed by the auth handler.
-type appDB interface {
+// AppDB abstracts veloci_app database queries needed by the auth handler.
+type AppDB interface {
 	FindUserEntity(ctx context.Context, email string) (UserEntity, error)
 }
 
 // Auth handles authentication-related HTTP requests.
 type Auth struct {
 	auth *authclient.Client
-	db   appDB
+	db   AppDB
 }
 
 // NewAuth creates a new Auth handler with the given ogen-generated auth client.
-func NewAuth(auth *authclient.Client, db appDB) *Auth {
+func NewAuth(auth *authclient.Client, db AppDB) *Auth {
 	return &Auth{auth: auth, db: db}
 }
 
-// Login validates credentials, looks up the user entity, and mints a JWT pair.
-func (h *Auth) Login(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"code":"BAD_REQUEST"}`, http.StatusBadRequest)
-		return
-	}
+// ── Input / output types ──────────────────────────────────────────────────────
 
-	cred, err := h.auth.ValidateCredential(r.Context(), &authclient.ValidateCredentialInputBody{
-		Email:    req.Email,
-		Password: req.Password,
+type LoginInput struct {
+	Body struct {
+		Email    string `json:"email"    required:"true" doc:"User email address"`
+		Password string `json:"password" required:"true" doc:"Plaintext password"`
+	}
+}
+
+type LoginOutput struct {
+	Body struct {
+		Token     string `json:"token"      doc:"Short-lived access token"`
+		ExpiresAt string `json:"expires_at" doc:"Token expiry as RFC 3339 timestamp"`
+	}
+}
+
+type LogoutInput struct {
+	Body struct {
+		JTI string `json:"jti" required:"true" doc:"Access token JTI to revoke"`
+	}
+}
+
+// ── Handlers ──────────────────────────────────────────────────────────────────
+
+// Login validates credentials, looks up the user entity, and mints a JWT pair.
+func (h *Auth) Login(ctx context.Context, input *LoginInput) (*LoginOutput, error) {
+	cred, err := h.auth.ValidateCredential(ctx, &authclient.ValidateCredentialInputBody{
+		Email:    input.Body.Email,
+		Password: input.Body.Password,
 	})
 	if err != nil {
-		http.Error(w, `{"code":"INVALID_CREDENTIALS"}`, http.StatusUnauthorized)
-		return
+		return nil, huma.Error401Unauthorized("invalid credentials")
 	}
 
-	ue, err := h.db.FindUserEntity(r.Context(), req.Email)
+	ue, err := h.db.FindUserEntity(ctx, input.Body.Email)
 	if err != nil {
-		http.Error(w, `{"code":"INVALID_CREDENTIALS"}`, http.StatusUnauthorized)
-		return
+		return nil, huma.Error401Unauthorized("invalid credentials")
 	}
 
-	// Build claims as map[string]jx.Raw. jx.Raw is type Raw []byte, and []byte is
+	// Build claims as map[string]jx.Raw. jx.Raw is type Raw []byte; []byte is
 	// assignable to it — no jx import required.
 	claims := make(authclient.MintTokenInputBodyClaims)
 	for k, v := range map[string]any{
 		"sub":         ue.UserID,
-		"email":       req.Email,
+		"email":       input.Body.Email,
 		"system_role": string(cred.SystemRole),
 		"entity_id":   ue.EntityID,
 		"entity_role": ue.EntityRole,
@@ -72,30 +86,43 @@ func (h *Auth) Login(w http.ResponseWriter, r *http.Request) {
 		claims[k] = b
 	}
 
-	minted, err := h.auth.MintToken(r.Context(), &authclient.MintTokenInputBody{
+	minted, err := h.auth.MintToken(ctx, &authclient.MintTokenInputBody{
 		CredentialID: cred.CredentialID,
 		Claims:       claims,
 	})
 	if err != nil {
-		http.Error(w, `{"code":"INTERNAL"}`, http.StatusInternalServerError)
-		return
+		return nil, huma.Error500InternalServerError("internal error")
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
-		"token":      minted.AccessToken,
-		"expires_at": minted.ExpiresAt,
-	})
+	out := &LoginOutput{}
+	out.Body.Token = minted.AccessToken
+	out.Body.ExpiresAt = minted.ExpiresAt
+	return out, nil
 }
 
 // Logout revokes the token identified by the jti field in the request body.
-func (h *Auth) Logout(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		JTI string `json:"jti"`
-	}
-	json.NewDecoder(r.Body).Decode(&req)
-	if req.JTI != "" {
-		h.auth.RevokeToken(r.Context(), authclient.RevokeTokenParams{Jti: req.JTI}) //nolint:errcheck
-	}
-	w.WriteHeader(http.StatusNoContent)
+func (h *Auth) Logout(ctx context.Context, input *LogoutInput) (*struct{}, error) {
+	h.auth.RevokeToken(ctx, authclient.RevokeTokenParams{Jti: input.Body.JTI}) //nolint:errcheck
+	return nil, nil
+}
+
+// ── Route registration ────────────────────────────────────────────────────────
+
+func RegisterAuthRoutes(api huma.API, h *Auth) {
+	huma.Register(api, huma.Operation{
+		OperationID: "login",
+		Method:      http.MethodPost,
+		Path:        "/auth/login",
+		Summary:     "Login with email and password",
+		Tags:        []string{"auth"},
+	}, h.Login)
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "logout",
+		Method:        http.MethodPost,
+		Path:          "/auth/logout",
+		Summary:       "Revoke an access token",
+		Tags:          []string{"auth"},
+		DefaultStatus: http.StatusNoContent,
+	}, h.Logout)
 }

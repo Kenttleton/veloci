@@ -2,12 +2,15 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"strings"
 
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spf13/cobra"
@@ -103,13 +106,22 @@ func runServe(_ *cobra.Command, _ []string) error {
 	authHandler := handlers.NewAuth(authClient, &appDBImpl{pool: pool})
 
 	r := chi.NewRouter()
-	r.Get("/health", handlers.Health)
-	r.Post("/auth/login", authHandler.Login)
-	r.Post("/auth/logout", authHandler.Logout)
+	api := humachi.New(r, huma.DefaultConfig("Veloci API", "1.0.0"))
+
+	handlers.RegisterHealthRoutes(api)
+	handlers.RegisterAuthRoutes(api, authHandler)
 
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Authenticate(authClient))
 		// Financial routes added in service-specific implementation plans
+	})
+
+	// Serve the live OpenAPI spec — tools like Insomnia can import from this URL.
+	r.Get("/openapi.json", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		if err := json.NewEncoder(w).Encode(api.OpenAPI()); err != nil {
+			http.Error(w, "failed to encode spec", http.StatusInternalServerError)
+		}
 	})
 
 	port := viper.GetInt("api.port")

@@ -1,12 +1,32 @@
 package handlers
 
 import (
-	"encoding/json"
+	"context"
 	"net/http"
+
+	"github.com/danielgtaylor/huma/v2"
 )
 
-// Health responds with {"status":"ok"} and a 200 status code.
-func Health(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+type HealthOutput struct {
+	Body struct {
+		Status string `json:"status" doc:"Always 'ok' when the service is up"`
+	}
+}
+
+// Health returns the service liveness status.
+func Health(ctx context.Context, _ *struct{}) (*HealthOutput, error) {
+	out := &HealthOutput{}
+	out.Body.Status = "ok"
+	return out, nil
+}
+
+// RegisterHealthRoutes registers the health check endpoint.
+func RegisterHealthRoutes(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "health",
+		Method:      http.MethodGet,
+		Path:        "/health",
+		Summary:     "Service health check",
+		Tags:        []string{"system"},
+	}, Health)
 }

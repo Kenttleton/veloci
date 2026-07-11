@@ -213,6 +213,14 @@ func runServe(_ *cobra.Command, _ []string) error {
 	handlers.RegisterTokenRoutes(api, toks)
 	handlers.RegisterInviteRoutes(api, inv)
 
+	// Serve the live OpenAPI spec — tools like Insomnia can import from this URL.
+	r.Get("/openapi.json", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		if err := json.NewEncoder(w).Encode(api.OpenAPI()); err != nil {
+			http.Error(w, "failed to encode spec", http.StatusInternalServerError)
+		}
+	})
+
 	port := viper.GetInt("auth.port")
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", port),
