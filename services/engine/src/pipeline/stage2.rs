@@ -23,7 +23,7 @@ use uuid::Uuid;
 use crate::pipeline::{stage0::lcs_ratio, types::Stage2Output};
 
 // ---------------------------------------------------------------------------
-// Confidence threshold constants
+// Classification constants
 // ---------------------------------------------------------------------------
 
 /// Clusters below this confidence are not surfaced to the user.
@@ -32,12 +32,42 @@ const MIN_CONFIDENCE: f64 = 0.3;
 /// LCS ratio threshold for grouping into the same merchant cluster.
 const MERCHANT_SIMILARITY_THRESHOLD: f64 = 0.70;
 
-/// Amount variance threshold for classifying as `standing` vs `variable`.
-/// Within ±2% of cluster median = consistent amount.
+/// Amount variance threshold for standing classification.
+/// All transactions must be within ±2% of the cluster median.
 const AMOUNT_VARIANCE_THRESHOLD_PCT: f64 = 0.02;
 
-/// Timing variance (in days) for classifying as standing vs hit.
+/// Base timing sensitivity: std dev ≤ this many days → timing_score = 1.0.
+/// Chosen to absorb billing cycle drift (weekend shifts, month-end rounding).
 const TIMING_VARIANCE_THRESHOLD_DAYS: f64 = 5.0;
+
+// --- Classification cascade gates ---
+//
+// Classification tries Standing first, then Variable, then Hit/Boost.
+// Each level has two gates:
+//   1. A signal gate (minimum timing/amount quality to attempt that level).
+//   2. A confidence gate (minimum composite score to commit to that level).
+// If either gate fails the level is skipped and the next is tried.
+
+/// Minimum timing score to attempt Standing. Maps to std dev ≤ ~6.7 days —
+/// absorbs weekend billing shifts and short-month drift on monthly charges.
+const STANDING_TIMING_GATE: f64 = 0.75;
+
+/// Minimum composite confidence to commit to Standing. High because a wrong
+/// Standing classification drives incorrect recurring-expense projections.
+const STANDING_CONFIDENCE_GATE: f64 = 0.70;
+
+/// Minimum observations needed for Standing. Requires at least 2 intervals
+/// so timing variance is measurable; 2 transactions produce std_dev = 0
+/// regardless of the actual gap, which would falsely pass the timing gate.
+const STANDING_MIN_OBSERVATIONS: usize = 3;
+
+/// Minimum timing score to attempt Variable. Maps to std dev ≤ ~11 days —
+/// looser than Standing, just requires recognisably periodic.
+const VARIABLE_TIMING_GATE: f64 = 0.45;
+
+/// Minimum composite confidence to commit to Variable. Lower bar because
+/// Variable is a softer claim and its rate projection uses an average anyway.
+const VARIABLE_CONFIDENCE_GATE: f64 = 0.45;
 
 // ---------------------------------------------------------------------------
 // Internal types
@@ -67,6 +97,10 @@ pub struct ClusterScore {
     pub suggested_name:      String,
     pub median_amount_cents: i64,
     pub sample_merchants:    Vec<String>,
+    /// Mean days between transactions, if there are ≥ 2. Used to compute
+    /// `rate_per_day` from the actual detected period rather than a hardcoded
+    /// 30-day assumption (which underestimates biweekly patterns by 2×).
+    pub mean_interval_days:  Option<f64>,
 }
 
 // ---------------------------------------------------------------------------
@@ -151,12 +185,20 @@ pub(crate) fn cluster_by_merchant(txns: Vec<UnmatchedTxn>) -> Vec<Cluster> {
 
 /// Compute a confidence score and suggested entry type for a cluster.
 ///
-/// Signals:
-/// - **Observation count**: more observations → higher base confidence.
-/// - **Amount consistency**: low variance → higher confidence, suggests
-///   `standing` or `hit`.
-/// - **Timing regularity**: near-constant intervals → higher confidence,
-///   distinguishes `standing` from `hit`.
+/// Uses a strict-to-loose cascade: Standing → Variable → Hit/Boost.
+/// Each level has a signal gate (minimum timing quality) and a confidence
+/// gate (minimum composite score). Failing either gate falls through to
+/// the next level.
+///
+/// Confidence weights differ per level:
+/// - **Standing**: timing-heavy (0.40) + amount (0.30) + observation (0.30).
+///   Amount consistency is required to reach this level, so its weight is
+///   fixed at 1.0; the score reflects how much we trust the timing pattern.
+/// - **Variable**: timing-dominant (0.60) + observation (0.40).
+///   Amount variance is expected, so only timing and depth matter.
+/// - **Hit/Boost**: observation-dominant (0.60) + residual timing (0.40).
+///   Primarily a depth signal — more sightings of the same merchant is still
+///   useful context even without a clear period.
 pub fn score_cluster(cluster: &Cluster) -> ClusterScore {
     let n = cluster.transactions.len();
     let suggested_name = cluster.representative_merchant.clone();
@@ -170,17 +212,20 @@ pub fn score_cluster(cluster: &Cluster) -> ClusterScore {
         .collect();
 
     let median_amount_cents = median_amount(&cluster.transactions);
+    // --- Shared signals ---
 
-    // --- Amount consistency ---
     let amount_consistent = cluster.transactions.iter().all(|t| {
         let diff = (t.amount_cents - median_amount_cents).abs() as f64;
         let threshold = median_amount_cents.unsigned_abs() as f64 * AMOUNT_VARIANCE_THRESHOLD_PCT;
         diff <= threshold
     });
 
-    // --- Timing regularity ---
-    let timing_score = if n < 2 {
-        0.0
+    // timing_score: 1.0 when std dev ≤ TIMING_VARIANCE_THRESHOLD_DAYS,
+    // decays as threshold/std_dev. Zero for single-transaction clusters.
+    // mean_interval_days is kept separately — it drives rate_per_day so that
+    // biweekly patterns aren't halved by a hardcoded 30-day denominator.
+    let (timing_score, mean_interval_days): (f64, Option<f64>) = if n < 2 {
+        (0.0, None)
     } else {
         let mut dates: Vec<NaiveDate> = cluster.transactions.iter().map(|t| t.date).collect();
         dates.sort_unstable();
@@ -195,36 +240,76 @@ pub fn score_cluster(cluster: &Cluster) -> ClusterScore {
             .sum::<f64>()
             / intervals.len() as f64;
         let std_dev = variance.sqrt();
-        // Low std deviation → high timing regularity score.
-        if std_dev <= TIMING_VARIANCE_THRESHOLD_DAYS {
+        let score = if std_dev <= TIMING_VARIANCE_THRESHOLD_DAYS {
             1.0
         } else {
             (TIMING_VARIANCE_THRESHOLD_DAYS / std_dev).min(1.0)
-        }
+        };
+        (score, Some(mean_interval))
     };
 
-    // --- Entry type classification ---
-    let entry_type: &'static str = match (amount_consistent, timing_score >= 0.7, n) {
-        (true, true, _) if n >= 2  => "standing",  // consistent amount + timing
-        (true, false, 1)           => "hit",        // single occurrence, consistent amount
-        (false, _, _)              => "variable",   // variable amount
-        _                         => "hit",
-    };
-
-    // --- Composite confidence ---
-    // Base: logarithmic observation count (diminishing returns after ~5).
+    // observation_score: logarithmic, saturates at ~5 observations.
     let observation_score = ((n as f64).ln() / 5_f64.ln()).min(1.0);
-    let amount_score      = if amount_consistent { 1.0 } else { 0.4 };
 
-    let confidence = (observation_score * 0.4 + amount_score * 0.3 + timing_score * 0.3)
+    // --- Cascade ---
+
+    // Standing: consistent amount + regular timing + enough observations to
+    // measure at least 2 intervals (n >= STANDING_MIN_OBSERVATIONS = 3).
+    // With only 2 transactions there is exactly 1 interval and std_dev = 0,
+    // which would always pass the timing gate — require 3 to avoid this.
+    if n >= STANDING_MIN_OBSERVATIONS
+        && amount_consistent
+        && timing_score >= STANDING_TIMING_GATE
+    {
+        let confidence = (observation_score * 0.30
+            + timing_score * 0.40
+            + 1.0_f64 * 0.30) // amount_consistent guaranteed here; fixed at 1.0
+            .clamp(0.0, 1.0);
+        if confidence >= STANDING_CONFIDENCE_GATE {
+            return ClusterScore {
+                entry_type: "standing",
+                confidence,
+                suggested_name,
+                median_amount_cents,
+                sample_merchants,
+                mean_interval_days,
+            };
+        }
+    }
+
+    // Variable: timing is regular but amounts differ (or timing wasn't
+    // confident enough for standing). Requires n >= 2.
+    if n >= 2 && timing_score >= VARIABLE_TIMING_GATE {
+        let confidence = (observation_score * 0.40 + timing_score * 0.60).clamp(0.0, 1.0);
+        if confidence >= VARIABLE_CONFIDENCE_GATE {
+            return ClusterScore {
+                entry_type: "variable",
+                confidence,
+                suggested_name,
+                median_amount_cents,
+                sample_merchants,
+                mean_interval_days,
+            };
+        }
+    }
+
+    // One-time: doesn't fit any recurring pattern. Direction (income/expense)
+    // is carried by the rule's `direction` field — entry_type doesn't repeat it.
+    //
+    // Amount consistency contributes a baseline (0.30 weight) so single-
+    // observation clusters still surface in the review queue at confidence ≥ 0.30.
+    // Without it, n=1 produces observation_score=0 and timing_score=0, giving
+    // confidence=0.0 which falls below MIN_CONFIDENCE and drops the cluster entirely.
+    let amount_score = if amount_consistent { 1.0_f64 } else { 0.4 };
+    let confidence = (observation_score * 0.35 + amount_score * 0.30 + timing_score * 0.35)
         .clamp(0.0, 1.0);
-
     ClusterScore {
-        entry_type,
+        entry_type: "one_time",
         confidence,
         suggested_name,
         median_amount_cents,
         sample_merchants,
+        mean_interval_days,
     }
 }
 
@@ -301,7 +386,11 @@ async fn persist_cluster(
         }]
     });
 
-    let rate_per_day = score.median_amount_cents.abs() as f64 / 30.0;
+    // Use the detected period for rate; fall back to 30 days for single-
+    // transaction clusters where no interval can be measured.
+    let period = score.mean_interval_days.unwrap_or(30.0).max(1.0);
+    let rate_per_day = score.median_amount_cents.abs() as f64 / period;
+    let direction = if score.median_amount_cents > 0 { "income" } else { "expense" };
 
     // INSERT rule using gen_random_uuid() so the DB generates the UUID.
     let rule_id: (Uuid,) = sqlx::query_as(
@@ -309,7 +398,7 @@ async fn persist_cluster(
         INSERT INTO rules
           (entity_id, name, direction, entry_type, period_days,
            conditions, status, source, project_tentatively)
-        VALUES ($1, $2, 'expense', $3, 30, $4, 'pending_review', 'engine', false)
+        VALUES ($1, $2, $5, $3, 30, $4, 'pending_review', 'engine', false)
         RETURNING id
         "#,
     )
@@ -317,6 +406,7 @@ async fn persist_cluster(
     .bind(&score.suggested_name)
     .bind(score.entry_type)
     .bind(&suggested_conditions)
+    .bind(direction)
     .fetch_one(pool)
     .await
     .context("failed to insert pending_review rule")?;
@@ -439,7 +529,22 @@ mod tests {
     }
 
     #[test]
-    fn score_single_transaction_confidence_below_threshold_or_hit() {
+    fn score_single_positive_transaction_is_one_time() {
+        let cluster = Cluster {
+            representative_merchant: "IRS Treas 310".to_string(),
+            transactions: vec![make_txn(
+                "00000000-0000-0000-0000-000000000001",
+                "2026-04-08",
+                124300, // positive = income
+                "IRS Treas 310",
+            )],
+        };
+        let score = score_cluster(&cluster);
+        assert_eq!(score.entry_type, "one_time", "one-time income should be one_time");
+    }
+
+    #[test]
+    fn score_single_transaction_is_one_time_with_low_confidence() {
         let cluster = Cluster {
             representative_merchant: "OneTime".to_string(),
             transactions: vec![make_txn(
@@ -450,8 +555,10 @@ mod tests {
             )],
         };
         let score = score_cluster(&cluster);
-        assert_eq!(score.entry_type, "hit");
-        // Single observation — confidence should be low.
+        assert_eq!(score.entry_type, "one_time");
+        // Single observation: confidence must be >= MIN_CONFIDENCE (survives the
+        // creation gate) but low enough to signal thin evidence.
+        assert!(score.confidence >= MIN_CONFIDENCE, "single observation dropped below creation threshold: {}", score.confidence);
         assert!(score.confidence < 0.5, "single observation confidence too high: {}", score.confidence);
     }
 
@@ -472,7 +579,8 @@ mod tests {
     }
 
     #[test]
-    fn score_variable_amounts_classify_as_variable() {
+    fn score_variable_amounts_with_regular_timing_classify_as_variable() {
+        // Weekly grocery runs with varying amounts — timing is regular, amounts differ.
         let cluster = Cluster {
             representative_merchant: "Grocery".to_string(),
             transactions: vec![
@@ -483,6 +591,64 @@ mod tests {
         };
         let score = score_cluster(&cluster);
         assert_eq!(score.entry_type, "variable");
+    }
+
+    #[test]
+    fn biweekly_pattern_captures_correct_interval() {
+        // Biweekly $2000 payroll: mean interval ≈ 14 days.
+        // rate_per_day should be ~$142/day, not ~$66/day (the 30-day fallback).
+        let cluster = Cluster {
+            representative_merchant: "Payroll".to_string(),
+            transactions: vec![
+                make_txn("00000000-0000-0000-0000-000000000001", "2026-01-15", 200000, "Payroll"),
+                make_txn("00000000-0000-0000-0000-000000000002", "2026-01-31", 200000, "Payroll"),
+                make_txn("00000000-0000-0000-0000-000000000003", "2026-02-15", 200000, "Payroll"),
+            ],
+        };
+        let score = score_cluster(&cluster);
+        let interval = score.mean_interval_days.expect("biweekly cluster must have interval");
+        assert!(
+            interval < 20.0,
+            "biweekly interval should be ~14–16 days, got {interval:.1}"
+        );
+        // rate_per_day with 30-day fallback would be 200000/30 ≈ 6667.
+        // With detected interval it should be ~200000/15 ≈ 13333.
+        let rate = score.median_amount_cents.abs() as f64 / interval;
+        assert!(
+            rate > 10_000.0,
+            "biweekly rate_per_day should be >10000 cents/day, got {rate:.0}"
+        );
+    }
+
+    #[test]
+    fn two_same_amount_transactions_do_not_classify_as_standing() {
+        // With only 2 txns there is exactly 1 interval → std_dev = 0 → timing_score = 1.0.
+        // This would falsely pass the timing gate, so STANDING_MIN_OBSERVATIONS = 3 blocks it.
+        let cluster = Cluster {
+            representative_merchant: "Uber Eats".to_string(),
+            transactions: vec![
+                make_txn("00000000-0000-0000-0000-000000000001", "2026-05-20", -2975, "Uber Eats"),
+                make_txn("00000000-0000-0000-0000-000000000002", "2026-08-23", -2975, "Uber Eats"),
+            ],
+        };
+        let score = score_cluster(&cluster);
+        assert_ne!(score.entry_type, "standing", "2 transactions should not qualify as standing");
+    }
+
+    #[test]
+    fn consistent_amount_irregular_timing_falls_through_to_one_time() {
+        // Same amount every time but random gaps — should not be standing or variable.
+        let cluster = Cluster {
+            representative_merchant: "DoorDash".to_string(),
+            transactions: vec![
+                make_txn("00000000-0000-0000-0000-000000000001", "2026-01-10", -3850, "DoorDash"),
+                make_txn("00000000-0000-0000-0000-000000000002", "2026-02-02", -3850, "DoorDash"), // 23d
+                make_txn("00000000-0000-0000-0000-000000000003", "2026-04-08", -3850, "DoorDash"), // 65d
+                make_txn("00000000-0000-0000-0000-000000000004", "2026-06-19", -3850, "DoorDash"), // 72d
+            ],
+        };
+        let score = score_cluster(&cluster);
+        assert_eq!(score.entry_type, "one_time", "consistent amount with irregular timing should be one_time");
     }
 
     #[test]

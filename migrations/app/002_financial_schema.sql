@@ -18,7 +18,7 @@ CREATE TABLE institution_mappings (
   dedup_window_days      INTEGER      NOT NULL DEFAULT 3,
   -- amount tolerance for fuzzy matching (handles FX rounding across imports)
   -- csv default: 0.5%; integration default: 2%
-  amount_tolerance_pct   NUMERIC(5,4) NOT NULL DEFAULT 0.005,
+  amount_tolerance_pct   FLOAT8       NOT NULL DEFAULT 0.005,
   date_col               TEXT         NOT NULL,
   amount_col             TEXT         NOT NULL,
   merchant_col           TEXT         NOT NULL,
@@ -159,7 +159,7 @@ CREATE TABLE rules (
   name                   TEXT        NOT NULL,
   direction              TEXT        NOT NULL CHECK (direction IN ('income', 'expense')),
   entry_type             TEXT        NOT NULL
-                         CHECK (entry_type IN ('standing', 'hit', 'boost', 'variable')),
+                         CHECK (entry_type IN ('standing', 'variable', 'one_time')),
   period_days  INTEGER     NOT NULL DEFAULT 30,
   variable_method        TEXT        CHECK (variable_method IN ('avg', 'max')),
   projected_rate_per_day NUMERIC(12,4),
@@ -337,3 +337,6 @@ CREATE TABLE rate_projections (
 );
 
 CREATE INDEX ON rate_projections (entity_id, account_id, projected_date);
+
+GRANT ALL ON ALL TABLES IN SCHEMA public TO veloci_app_user;
+GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO veloci_app_user;

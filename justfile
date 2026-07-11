@@ -118,6 +118,15 @@ sqlx-prepare:
         DATABASE_URL="postgresql://{{ app_user }}:{{ app_pass }}@localhost:5432/{{ app_db }}" \
         cargo sqlx prepare
 
+# ─── Dev seed ────────────────────────────────────────────────────────────────
+
+# Seed dev data: entity, user, institution mapping, and test checking account.
+# Run after: just migrate (and after logging in once via the API on a fresh volume).
+# Prints entity_id and account_id on success — use these with enqueue-import.
+dev-seed:
+    cat scripts/dev-seed.sql | docker compose exec -T postgres psql -U "{{ pg_user }}" -d "{{ app_db }}" \
+        -v ON_ERROR_STOP=1
+
 # ─── Queue ────────────────────────────────────────────────────────────────────
 
 # Check RabbitMQ management API and veloci.jobs queue status

@@ -56,7 +56,7 @@ pub async fn run_import(
     // Stage 0: CSV normalization + dedup → raw_transactions
     let stage0_out = stage0::run(entity_id, job_id, pending_import_id, pools).await?;
 
-    tracing::debug!(%entity_id, imported = stage0_out.imported_count, skipped = stage0_out.skipped_count, "stage 0 complete");
+    tracing::info!(%entity_id, imported = stage0_out.imported_count, skipped = stage0_out.skipped_count, computed_as_of = %stage0_out.computed_as_of, "stage 0 complete");
 
     // Stages 1–7 share the same computed_as_of horizon from Stage 0.
     run_from_stage1(entity_id, job_id, stage0_out.computed_as_of, pools).await
@@ -121,11 +121,11 @@ async fn run_from_stage1(
 ) -> Result<()> {
     // Stage 1: Rule matching → transaction_rule_assignments
     let stage1_out = stage1::run(entity_id, &pools.read).await?;
-    tracing::debug!(%entity_id, assignments = stage1_out.total_assignments, "stage 1 complete");
+    tracing::info!(%entity_id, assignments = stage1_out.total_assignments, unmatched = stage1_out.unmatched_tx_ids.len(), "stage 1 complete");
 
     // Stage 2: Pattern detection on unmatched transactions → pending_review rules
     let stage2_out = stage2::run(entity_id, job_id, &stage1_out.unmatched_tx_ids, &pools.read).await?;
-    tracing::debug!(%entity_id, clusters = stage2_out.clusters_created, "stage 2 complete");
+    tracing::info!(%entity_id, clusters = stage2_out.clusters_created, "stage 2 complete");
 
     run_from_stage3(entity_id, job_id, computed_as_of, pools).await
 }
@@ -144,7 +144,7 @@ async fn run_from_stage3(
 
     let flux_start = computed_as_of - chrono::Duration::days(i64::from(settlement_cfg.settlement_window_days));
 
-    tracing::debug!(%entity_id, ?flux_start, ?computed_as_of, "beginning flux window day-crawl");
+    tracing::info!(%entity_id, %flux_start, %computed_as_of, window_days = settlement_cfg.settlement_window_days, "beginning flux window day-crawl");
 
     // Day-crawl: Stages 3–6 run once per calendar day in the flux window.
     // Stage 7 runs once at the end with the final computed_as_of.
@@ -183,7 +183,7 @@ async fn run_from_stage3(
         snapshot_date += chrono::Duration::days(1);
     }
 
-    tracing::debug!(%entity_id, "flux window day-crawl complete");
+    tracing::info!(%entity_id, "flux window day-crawl complete");
 
     // Stage 7: Cash flow projection (write pool for final INSERT)
     run_stage7(entity_id, job_id, computed_as_of, pools).await
@@ -196,6 +196,6 @@ async fn run_stage7(
     pools: &Pools,
 ) -> Result<()> {
     stage7::run(entity_id, job_id, computed_as_of, pools).await?;
-    tracing::debug!(%entity_id, "stage 7 complete");
+    tracing::info!(%entity_id, %job_id, "pipeline complete");
     Ok(())
 }

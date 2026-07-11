@@ -16,6 +16,7 @@ use lapin::{
     types::FieldTable,
     Connection, ConnectionProperties,
 };
+use uuid::Uuid;
 
 use crate::{config::AppConfig, db::Pools, jobs};
 
@@ -63,14 +64,24 @@ pub async fn run(cfg: &AppConfig, pools: Pools) -> Result<()> {
         )
         .await?;
 
-    tracing::info!("consuming from {} (prefetch=1)", QUEUE);
+    tracing::info!("consuming from {QUEUE} (prefetch=1)");
     while let Some(delivery) = consumer.next().await {
         let d = delivery?;
         match serde_json::from_slice::<jobs::JobMessage>(&d.data) {
             Ok(msg) => {
-                let (eid, jt) = (msg.entity_id, msg.job_type.clone());
-                if let Err(e) = jobs::dispatch(&jt, eid, msg.job_id, msg.metadata, &pools).await {
-                    tracing::error!(entity_id = %eid, job_type = %jt, "job failed: {:?}", e);
+                let (eid, jt, jid) = (msg.entity_id, msg.job_type.clone(), msg.job_id);
+                tracing::info!(entity_id = %eid, job_type = %jt, job_id = %jid, "job received");
+                set_job_status(jid, "processing", None, &pools).await;
+                match jobs::dispatch(&jt, eid, jid, msg.metadata, &pools).await {
+                    Ok(()) => {
+                        tracing::info!(entity_id = %eid, job_type = %jt, job_id = %jid, "job succeeded");
+                        set_job_status(jid, "complete", None, &pools).await;
+                    }
+                    Err(e) => {
+                        let msg = format!("{e:?}");
+                        tracing::error!(entity_id = %eid, job_type = %jt, job_id = %jid, "job failed: {}", msg);
+                        set_job_status(jid, "failed", Some(&msg), &pools).await;
+                    }
                 }
             }
             Err(e) => tracing::error!("malformed job payload: {:?}", e),
@@ -78,4 +89,19 @@ pub async fn run(cfg: &AppConfig, pools: Pools) -> Result<()> {
         d.ack(BasicAckOptions::default()).await?;
     }
     Ok(())
+}
+
+async fn set_job_status(job_id: Uuid, status: &str, error: Option<&str>, pools: &Pools) {
+    let result = sqlx::query(
+        "UPDATE processing_jobs SET status = $1, started_at = CASE WHEN $1 = 'processing' THEN NOW() ELSE started_at END, completed_at = CASE WHEN $1 IN ('complete', 'failed') THEN NOW() ELSE NULL END, error = $3 WHERE id = $2",
+    )
+    .bind(status)
+    .bind(job_id)
+    .bind(error)
+    .execute(&pools.write)
+    .await;
+
+    if let Err(e) = result {
+        tracing::warn!(job_id = %job_id, status, "failed to update job status: {e}");
+    }
 }

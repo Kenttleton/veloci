@@ -24,7 +24,7 @@ import sys
 import urllib.error
 import urllib.request
 import uuid
-from datetime import date, datetime
+from datetime import date
 
 
 def die(msg: str) -> None:
@@ -44,6 +44,7 @@ def psql(sql: str, pg_user: str, pg_pass: str, pg_host: str, pg_port: str, pg_db
             "-d", pg_db,
             "-t",   # tuples only (no headers/footers)
             "-A",   # unaligned output
+            "-q",   # quiet: suppress command-completion tags (INSERT 0 1, etc.)
             "-c", sql,
         ],
         capture_output=True,
@@ -133,12 +134,22 @@ def main() -> None:
 
     # ── 2. Resolve a user for this entity (for uploaded_by / triggered_by) ────
     user_id = db(
-        f"SELECT id FROM users WHERE entity_id = '{entity_id}' ORDER BY created_at LIMIT 1"
+        f"SELECT eu.user_id FROM entity_users eu WHERE eu.entity_id = '{entity_id}' ORDER BY eu.user_id LIMIT 1"
     )
     if not user_id:
         die(
             f"No users found for entity {entity_id}.\n"
             "Create at least one user via the API before enqueuing an import."
+        )
+
+    # ── 2b. Resolve institution_id from the account ───────────────────────────
+    institution_id = db(
+        f"SELECT institution_id FROM accounts WHERE id = '{account_id}' AND entity_id = '{entity_id}'"
+    )
+    if not institution_id:
+        die(
+            f"Account {account_id} not found or has no institution mapping.\n"
+            "Run: just dev-seed — then verify the account has an institution_id set."
         )
 
     # ── 3. Create processing_jobs record ──────────────────────────────────────
@@ -154,11 +165,12 @@ def main() -> None:
     print("Inserting CSV into pending_imports...")
     import_id = db(f"""
         INSERT INTO pending_imports
-          (entity_id, account_id, uploaded_by, uploaded_at,
+          (entity_id, account_id, institution_id, uploaded_by, uploaded_at,
            csv_bytes, date_range_start, date_range_end, status, job_id)
         VALUES (
           '{entity_id}',
           '{account_id}',
+          '{institution_id}',
           '{user_id}',
           NOW(),
           decode('{csv_b64}', 'base64'),
@@ -206,3 +218,7 @@ def main() -> None:
     print(f"  job_id           = {job_id}")
     print(f"  pending_import_id = {import_id}")
     print(f"  entity_id        = {entity_id}")
+
+
+if __name__ == "__main__":
+    main()

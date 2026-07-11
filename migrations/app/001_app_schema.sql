@@ -37,3 +37,6 @@ CREATE TABLE entity_users (
   entity_role TEXT NOT NULL CHECK (entity_role IN ('entity_admin', 'entity_user')),
   PRIMARY KEY (user_id, entity_id)
 );
+
+GRANT ALL ON ALL TABLES IN SCHEMA public TO veloci_app_user;
+GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO veloci_app_user;

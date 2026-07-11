@@ -85,22 +85,9 @@ pub async fn run(
         .iter()
         .filter(|c| matches!(c.action, DedupAction::Skip))
         .count() as u32;
+    let imported_count = imported.len() as u32;
 
-    // Batch INSERT accepted candidates (sequential — no partial writes).
-    let imported_count = batch_insert(
-        entity_id,
-        pending.account_id,
-        &imported,
-        pending.uploaded_at,
-        mapping.settlement_window_days,
-        pool,
-    )
-    .await?;
-
-    // Compute computed_as_of = MAX(raw_transactions.date) for this entity.
-    let computed_as_of = query_computed_as_of(entity_id, pool).await?;
-
-    // Record the import batch.
+    // Record the import batch first — raw_transactions has a NOT NULL FK to it.
     let batch_id = Uuid::new_v4();
     sqlx::query(
         r#"
@@ -122,6 +109,21 @@ pub async fn run(
     .execute(pool)
     .await
     .context("failed to record import batch")?;
+
+    // Batch INSERT accepted candidates (sequential — no partial writes).
+    batch_insert(
+        entity_id,
+        pending.account_id,
+        batch_id,
+        &imported,
+        pending.uploaded_at,
+        mapping.settlement_window_days,
+        pool,
+    )
+    .await?;
+
+    // Compute computed_as_of = MAX(raw_transactions.date) for this entity.
+    let computed_as_of = query_computed_as_of(entity_id, pool).await?;
 
     let _ = job_id; // job_id available for audit if needed
 
@@ -743,13 +745,14 @@ async fn classify_one(
 async fn batch_insert(
     entity_id: Uuid,
     account_id: Uuid,
+    batch_id: Uuid,
     classified: &[&ClassifiedCandidate],
     _uploaded_at: chrono::DateTime<Utc>,
     _settlement_window_days: i32,
     pool: &PgPool,
-) -> Result<u32> {
+) -> Result<()> {
     if classified.is_empty() {
-        return Ok(0);
+        return Ok(());
     }
 
     let mut tx = pool.begin().await.context("failed to begin import transaction")?;
@@ -774,8 +777,6 @@ async fn batch_insert(
             .context("failed to delete superseded rows")?;
     }
 
-    let count = classified.len() as u32;
-
     let mut dates:     Vec<NaiveDate>       = Vec::with_capacity(classified.len());
     let mut amounts:   Vec<i64>             = Vec::with_capacity(classified.len());
     let mut payees:    Vec<String>          = Vec::with_capacity(classified.len());
@@ -795,9 +796,9 @@ async fn batch_insert(
     sqlx::query(
         r#"
         INSERT INTO raw_transactions
-          (entity_id, account_id, date, amount_cents,
+          (entity_id, account_id, import_batch_id, date, amount_cents,
            imported_payee, merchant_normalized, imported_id, settlement_status)
-        SELECT $1, $2, d, a, p, m, i, s
+        SELECT $1, $2, $9, d, a, p, m, i, s
         FROM UNNEST(
           $3::date[],
           $4::bigint[],
@@ -816,12 +817,13 @@ async fn batch_insert(
     .bind(&merchants)
     .bind(&imp_ids as &[Option<String>])
     .bind(&statuses)
+    .bind(batch_id)
     .execute(&mut *tx)
     .await
     .context("batch insert into raw_transactions failed")?;
 
     tx.commit().await.context("failed to commit import transaction")?;
-    Ok(count)
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
