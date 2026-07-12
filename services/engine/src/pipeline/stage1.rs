@@ -157,6 +157,17 @@ pub async fn run(entity_id: Uuid, pool: &PgPool) -> Result<Stage1Output> {
     // Persist assignments — idempotent: delete existing for this entity first.
     persist_assignments(entity_id, &results, pool).await?;
 
+    // Update next_due_date on rules that received new assignments this run.
+    // next_due_date = max(matched_tx.date) + period_days; used by Stage 7 for
+    // absence detection. Stage 2 handles this for newly created rules.
+    let matched_rule_ids: Vec<Uuid> = results
+        .iter()
+        .flat_map(|(_, rule_ids, _)| rule_ids.iter().copied())
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .collect();
+    update_next_due_dates(entity_id, &matched_rule_ids, pool).await?;
+
     Ok(Stage1Output {
         total_assignments,
         unmatched_tx_ids,
@@ -496,6 +507,36 @@ async fn persist_assignments(
     .await
     .context("failed to insert rule assignments")?;
 
+    Ok(())
+}
+
+async fn update_next_due_dates(
+    entity_id: Uuid,
+    rule_ids: &[Uuid],
+    pool: &PgPool,
+) -> Result<()> {
+    if rule_ids.is_empty() {
+        return Ok(());
+    }
+    sqlx::query(
+        r#"
+        UPDATE rules r
+        SET next_due_date = (
+            SELECT (MAX(rt.date) + (r.period_days * INTERVAL '1 day'))::date
+            FROM transaction_rule_assignments tra
+            JOIN raw_transactions rt ON rt.id = tra.transaction_id
+            WHERE tra.rule_id = r.id
+        )
+        WHERE r.id = ANY($1)
+          AND r.entity_id = $2
+          AND r.status = 'active'
+        "#,
+    )
+    .bind(rule_ids)
+    .bind(entity_id)
+    .execute(pool)
+    .await
+    .context("failed to update next_due_date for matched rules")?;
     Ok(())
 }
 

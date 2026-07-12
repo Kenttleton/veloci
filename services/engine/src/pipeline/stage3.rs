@@ -1,4 +1,4 @@
-//! Stage 3: Rate computation per active rule.
+//! Stage 3: Rate computation per active rule (day-crawl).
 //!
 //! **Input:** `transaction_rule_assignments` joined to `rules WHERE status = 'active'`
 //! with open `rule_epochs`.
@@ -13,7 +13,9 @@
 //!    `snapshot_date` for the flux window day-crawl).
 //! 3. `rayon::par_iter` over active rules — each rule's rate is computed
 //!    independently from its own transaction data.
-//! 4. Apply signal expiry logic (EPOCH_TERMINATION_MULTIPLIER).
+//!
+//! This stage is read-only with respect to rule metadata. `next_due_date` is
+//! maintained by Stage 1 (active rules) and Stage 2 (new detections).
 
 use anyhow::{Context, Result};
 use chrono::NaiveDate;
@@ -21,10 +23,7 @@ use rayon::prelude::*;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::pipeline::{
-    types::{Direction, EntryType, RuleRate, Stage3Output},
-    EPOCH_TERMINATION_MULTIPLIER,
-};
+use crate::pipeline::types::{Direction, EntryType, RuleRate, Stage3Output};
 
 // ---------------------------------------------------------------------------
 // Internal DB row types
@@ -39,8 +38,6 @@ pub(crate) struct ActiveRule {
     period_days:            i32,
     variable_method:        Option<String>,
     projected_rate_per_day: Option<f64>,
-    recurrence_anchor:      Option<String>,
-    next_due_date:          Option<NaiveDate>,
     epoch_id:               Uuid,
     epoch_start:            NaiveDate,
 }
@@ -79,9 +76,8 @@ pub async fn run(
         map
     };
 
-    let prior_by_rule: std::collections::HashMap<Uuid, f64> = prior_rates
-        .into_iter()
-        .collect();
+    let prior_by_rule: std::collections::HashMap<Uuid, f64> =
+        prior_rates.into_iter().collect();
 
     // Parallel rate computation — each rule is fully independent.
     let rule_rates: Vec<RuleRate> = rules
@@ -91,9 +87,7 @@ pub async fn run(
                 .get(&rule.id)
                 .map(Vec::as_slice)
                 .unwrap_or(&[]);
-
             let prior_projected = prior_by_rule.get(&rule.id).copied();
-
             compute_rule_rate(rule, rule_txns, snapshot_date, prior_projected)
         })
         .collect();
@@ -147,25 +141,15 @@ pub(crate) fn compute_rule_rate(
 
     let transaction_count = epoch_txns.len() as i32;
 
-    // Check signal expiry.
-    let is_expired = check_expiry(rule, snapshot_date, entry_type);
+    let actual_rate_per_day =
+        compute_actual_rate(entry_type, rolling_window_total_cents, period_days, window_days_used, &epoch_txns, snapshot_date);
 
-    let actual_rate_per_day = if is_expired {
-        0.0
-    } else {
-        compute_actual_rate(entry_type, rolling_window_total_cents, period_days, window_days_used, &epoch_txns, snapshot_date)
-    };
-
-    let projected_rate_per_day = if is_expired {
-        match is_warning_zone(rule, snapshot_date, entry_type) {
-            true  => prior_projected_rate.unwrap_or(actual_rate_per_day),
-            false => 0.0,
-        }
-    } else if let Some(user_rate) = rule.projected_rate_per_day {
+    // User-set projected rate takes precedence. Otherwise use the prior snapshot
+    // as a baseline (smooths one-import spikes). New rules with no prior default
+    // to current actual.
+    let projected_rate_per_day = if let Some(user_rate) = rule.projected_rate_per_day {
         user_rate
     } else {
-        // Use prior snapshot's actual rate as projection baseline.
-        // For brand-new rules with no prior snapshot, use current actual.
         prior_projected_rate.unwrap_or(actual_rate_per_day)
     };
 
@@ -239,59 +223,14 @@ fn compute_actual_rate(
             rolling_window_total_cents.abs() as f64 / f64::from(window_days_used)
         }
 
-        EntryType::Hit | EntryType::Boost => {
-            // One-time event: amount / amortization window.
+        EntryType::OneTime => {
+            // One-time event: most recent amount amortized over period_days.
             let amount = epoch_txns
                 .iter()
                 .max_by_key(|t| t.txn_date)
                 .map(|t| t.amount_cents.abs())
                 .unwrap_or(0);
             amount as f64 / f64::from(period_days)
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Signal expiry logic (pure)
-// ---------------------------------------------------------------------------
-
-/// Returns `true` if the rule signal is fully terminated (actual_rate → 0).
-fn check_expiry(rule: &ActiveRule, snapshot_date: NaiveDate, entry_type: EntryType) -> bool {
-    match entry_type {
-        EntryType::Hit | EntryType::Boost => {
-            // Amortization completion: expired when snapshot_date ≥ last_tx + period_days.
-            // We can't determine last_tx here without the txns slice — caller should
-            // pass through. For now, this is handled by the caller via rolling_window_total.
-            // If no transactions in window, actual_rate will be 0 naturally.
-            false
-        }
-        EntryType::Standing | EntryType::Variable => {
-            // Three-strike mechanism using next_due_date.
-            let Some(next_due) = rule.next_due_date else {
-                return false;
-            };
-            let period_days = i64::from(rule.period_days);
-            let termination_threshold = i64::from(EPOCH_TERMINATION_MULTIPLIER) * period_days;
-            let staleness = (snapshot_date - next_due).num_days();
-            staleness >= termination_threshold
-        }
-    }
-}
-
-/// Returns `true` if in the warning zone (staleness ∈ [period_days, 3*period_days)).
-///
-/// In the warning zone: actual_rate = 0, projected_rate persists.
-fn is_warning_zone(rule: &ActiveRule, snapshot_date: NaiveDate, entry_type: EntryType) -> bool {
-    match entry_type {
-        EntryType::Hit | EntryType::Boost => false,
-        EntryType::Standing | EntryType::Variable => {
-            let Some(next_due) = rule.next_due_date else {
-                return false;
-            };
-            let period_days = i64::from(rule.period_days);
-            let termination_threshold = i64::from(EPOCH_TERMINATION_MULTIPLIER) * period_days;
-            let staleness = (snapshot_date - next_due).num_days();
-            staleness >= period_days && staleness < termination_threshold
         }
     }
 }
@@ -310,8 +249,6 @@ async fn load_active_rules(entity_id: Uuid, pool: &PgPool) -> Result<Vec<ActiveR
         period_days:            i32,
         variable_method:        Option<String>,
         projected_rate_per_day: Option<sqlx::types::BigDecimal>,
-        recurrence_anchor:      Option<String>,
-        next_due_date:          Option<NaiveDate>,
         epoch_id:               Uuid,
         epoch_start:            NaiveDate,
     }
@@ -319,8 +256,7 @@ async fn load_active_rules(entity_id: Uuid, pool: &PgPool) -> Result<Vec<ActiveR
     let rows: Vec<Row> = sqlx::query_as(
         r#"
         SELECT r.id, r.label_id, r.direction, r.entry_type, r.period_days,
-               r.variable_method, r.projected_rate_per_day, r.recurrence_anchor,
-               r.next_due_date,
+               r.variable_method, r.projected_rate_per_day,
                re.id AS epoch_id, re.epoch_start
         FROM rules r
         JOIN rule_epochs re ON re.rule_id = r.id AND re.epoch_end IS NULL
@@ -344,8 +280,6 @@ async fn load_active_rules(entity_id: Uuid, pool: &PgPool) -> Result<Vec<ActiveR
             variable_method:        r.variable_method,
             projected_rate_per_day: r.projected_rate_per_day
                 .and_then(|v| v.to_string().parse::<f64>().ok()),
-            recurrence_anchor:      r.recurrence_anchor,
-            next_due_date:          r.next_due_date,
             epoch_id:               r.epoch_id,
             epoch_start:            r.epoch_start,
         })
@@ -445,28 +379,7 @@ mod tests {
         NaiveDate::parse_from_str(s, "%Y-%m-%d").unwrap()
     }
 
-    fn rule(
-        entry_type: &str,
-        period_days: i32,
-        next_due_date: Option<&str>,
-        epoch_start: &str,
-    ) -> ActiveRule {
-        ActiveRule {
-            id:                     Uuid::nil(),
-            label_id:               None,
-            direction:              "expense".to_string(),
-            entry_type:             entry_type.to_string(),
-            period_days,
-            variable_method:        None,
-            projected_rate_per_day: None,
-            recurrence_anchor:      None,
-            next_due_date:          next_due_date.map(|s| date(s)),
-            epoch_id:               Uuid::nil(),
-            epoch_start:            date(epoch_start),
-        }
-    }
-
-    fn txn(date_str: &str, amount_cents: i64) -> AssignedTxn {
+fn txn(date_str: &str, amount_cents: i64) -> AssignedTxn {
         AssignedTxn {
             rule_id:      Uuid::nil(),
             txn_date:     date(date_str),
@@ -474,72 +387,35 @@ mod tests {
         }
     }
 
-    // Spec §7: standing rate = amount / period_days
+    // standing rate = last amount / detected period
     #[test]
     fn standing_single_txn_rate() {
         let t = txn("2026-02-01", -3000);
         let txns_ref: Vec<&AssignedTxn> = vec![&t];
         let rate = compute_actual_rate(EntryType::Standing, -3000, 30, 30, &txns_ref, date("2026-03-01"));
-        // 3000 / 30 = 100 cents/day
         assert!((rate - 100.0).abs() < 0.01, "expected 100.0, got {rate}");
     }
 
-    // Spec §7: variable actual_rate = rolling_window_total / period_days
+    // variable rate = rolling_window_total / window_days_used
     #[test]
     fn variable_rate_rolling_window() {
         let t1 = txn("2026-02-10", -5000);
         let t2 = txn("2026-02-20", -3000);
         let txns_ref: Vec<&AssignedTxn> = vec![&t1, &t2];
-        // rolling_window_total = 8000, period = 30, window_days = 30
         let rate = compute_actual_rate(EntryType::Variable, -8000, 30, 30, &txns_ref, date("2026-03-01"));
         assert!((rate - (8000.0 / 30.0)).abs() < 0.01, "got {rate}");
     }
 
-    // Spec §7: hit rate = amount / period_days (amortization)
+    // one_time rate = most recent amount / period_days (amortized)
     #[test]
-    fn hit_rate_amortized() {
+    fn one_time_rate_amortized() {
         let t = txn("2026-01-15", -15000);
         let txns_ref: Vec<&AssignedTxn> = vec![&t];
-        let rate = compute_actual_rate(EntryType::Hit, -15000, 30, 30, &txns_ref, date("2026-02-01"));
-        // 15000 / 30 = 500 cents/day
+        let rate = compute_actual_rate(EntryType::OneTime, -15000, 30, 30, &txns_ref, date("2026-02-01"));
         assert!((rate - 500.0).abs() < 0.01, "expected 500.0, got {rate}");
     }
 
-    // Spec §13: EPOCH_TERMINATION_MULTIPLIER is 3
-    #[test]
-    fn epoch_termination_multiplier_constant() {
-        assert_eq!(EPOCH_TERMINATION_MULTIPLIER, 3);
-    }
-
-    // Signal expiry: staleness >= 3 * period_days → expired
-    #[test]
-    fn signal_expiry_at_three_periods() {
-        let r = rule("standing", 30, Some("2026-01-01"), "2026-01-01");
-        // snapshot_date = epoch_start + 3*30 = epoch_start + 90 days
-        let snapshot = date("2026-04-01"); // 90 days after 2026-01-01
-        let staleness = (snapshot - date("2026-01-01")).num_days();
-        assert_eq!(staleness, 90);
-        assert!(check_expiry(&r, snapshot, EntryType::Standing), "should be expired at 3x period");
-    }
-
-    // Warning zone: staleness ∈ [period_days, 3*period_days)
-    #[test]
-    fn signal_warning_zone() {
-        let r = rule("standing", 30, Some("2026-01-01"), "2025-12-01");
-        let snapshot = date("2026-02-01"); // 31 days after next_due = 2026-01-01
-        assert!(is_warning_zone(&r, snapshot, EntryType::Standing), "should be in warning zone");
-        assert!(!check_expiry(&r, snapshot, EntryType::Standing), "should not be expired yet");
-    }
-
-    // No next_due_date → never expires
-    #[test]
-    fn no_next_due_date_never_expires() {
-        let r = rule("standing", 30, None, "2026-01-01");
-        assert!(!check_expiry(&r, date("2030-01-01"), EntryType::Standing));
-    }
-
-    // Spec §13 point 1: engine never calls NOW() — rate computed deterministically
-    // from transaction data, not wall clock.
+    // Rate computation is deterministic — engine never calls NOW()
     #[test]
     fn rate_computation_is_deterministic() {
         let t = txn("2026-02-01", -3000);

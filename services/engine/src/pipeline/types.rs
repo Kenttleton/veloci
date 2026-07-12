@@ -35,14 +35,12 @@ impl RuleStage {
 /// Entry type of a rule — determines rate computation semantics.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EntryType {
-    /// Recurring commitment with consistent timing. Rate = amount / period_days.
+    /// Recurring commitment with consistent timing and amount. Rate = amount / period_days.
     Standing,
-    /// Recurring commitment with variable amounts.
+    /// Recurring commitment with variable amounts. Rate = rolling_window_total / window_days.
     Variable,
-    /// One-time expense, amortized over `period_days`.
-    Hit,
-    /// One-time income, amortized over `period_days`.
-    Boost,
+    /// One-time transaction (income or expense). Direction is on the rule; amortized over period_days.
+    OneTime,
 }
 
 impl EntryType {
@@ -50,8 +48,7 @@ impl EntryType {
         match s {
             "standing" => Some(Self::Standing),
             "variable" => Some(Self::Variable),
-            "hit"      => Some(Self::Hit),
-            "boost"    => Some(Self::Boost),
+            "one_time" => Some(Self::OneTime),
             _          => None,
         }
     }
@@ -282,9 +279,9 @@ mod tests {
     fn entry_type_from_str() {
         assert_eq!(EntryType::from_str("standing"), Some(EntryType::Standing));
         assert_eq!(EntryType::from_str("variable"), Some(EntryType::Variable));
-        assert_eq!(EntryType::from_str("hit"),      Some(EntryType::Hit));
-        assert_eq!(EntryType::from_str("boost"),    Some(EntryType::Boost));
-        assert_eq!(EntryType::from_str("single"),   None); // deprecated
+        assert_eq!(EntryType::from_str("one_time"), Some(EntryType::OneTime));
+        assert_eq!(EntryType::from_str("hit"),      None); // removed
+        assert_eq!(EntryType::from_str("boost"),    None); // removed
     }
 
     #[test]

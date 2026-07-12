@@ -3,14 +3,24 @@
 // integration tests and will all be exercised once a test DB is available.
 #![allow(dead_code)]
 //!
-//! Each function runs a contiguous suffix of the 8-stage pipeline:
+//! Each function runs a contiguous suffix of the pipeline:
 //!
-//! | Job type          | Stages         |
-//! |-------------------|----------------|
+//! | Job type          | Stages                        |
+//! |-------------------|-------------------------------|
 //! | `import.process`  | 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 |
-//! | `rules.reprocess` | 1 → 2 → 3 → 4 → 5 → 6 → 7 |
-//! | `account.analyze` | 3 → 4 → 5 → 6 → 7 |
-//! | `balance.project` | 7 |
+//! | `rules.reprocess` | 1 → 2 → 3 → 4 → 5 → 6 → 7  |
+//! | `account.analyze` | 3 → 4 → 5 → 6 → 7           |
+//! | `balance.project` | 7                            |
+//!
+//! Stage responsibilities:
+//!   0 — CSV dedup + normalization → raw_transactions
+//!   1 — Active rule matching → transaction_rule_assignments; updates next_due_date
+//!   2 — Pattern detection on unmatched txns → pending_review rules + review_queue; sets next_due_date
+//!   3 — Per-rule rate computation (day-crawl) — pure calculation, no rule metadata writes
+//!   4 — Label rate aggregation
+//!   5 — Slope + drift regression
+//!   6 — Snapshot UPSERT
+//!   7 — Cash flow projection; raises review_queue alerts for missed expected transactions
 
 pub mod stage0;
 pub mod stage1;
@@ -26,16 +36,6 @@ use anyhow::Result;
 use uuid::Uuid;
 
 use crate::db::Pools;
-
-// ---------------------------------------------------------------------------
-// Invariant constants
-// ---------------------------------------------------------------------------
-
-/// Rules auto-terminate after this many signal periods of staleness.
-///
-/// Used in Stage 3 signal expiry. Defined once here so it can never appear
-/// as a magic number elsewhere in the codebase.
-pub const EPOCH_TERMINATION_MULTIPLIER: u32 = 3;
 
 // ---------------------------------------------------------------------------
 // Pipeline entry points
