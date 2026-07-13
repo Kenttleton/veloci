@@ -175,6 +175,11 @@ CREATE TABLE rules (
   -- Stage 2 sets this when a pending_review rule has next_due_date + recurrence_anchor.
   -- Cleared on rejection; superseded by open epoch on approval.
   project_tentatively    BOOLEAN     NOT NULL DEFAULT FALSE,
+  -- Forward versioning: user-known future price change. veloci-api applies
+  -- pending_amount_cents automatically when computed_as_of >= pending_effective_date,
+  -- then clears both fields. Engine reads projected_rate_per_day after API applies.
+  pending_amount_cents   BIGINT,
+  pending_effective_date DATE,
   created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -187,7 +192,8 @@ CREATE INDEX ON rules (entity_id, next_due_date);
 -- Stage 3 data horizon: only transactions WHERE date >= current epoch's epoch_start.
 -- Stage 5 regression scope: only snapshots WHERE epoch_id = current epoch's id.
 -- Stage 7 eligibility: active rules require an open epoch (epoch_end IS NULL).
--- epoch_end set by engine (terminated_by='auto', 3-strike) or user (terminated_by='manual').
+-- epoch_end set by engine (auto, 3-strike) or user (terminated_by_user_id IS NOT NULL).
+-- terminated_by_user_id NULL = engine closed; non-NULL = user manually closed.
 -- Reactivation = new row with epoch_end IS NULL; prior epoch preserved with its epoch_end.
 
 CREATE TABLE rule_epochs (
@@ -197,7 +203,7 @@ CREATE TABLE rule_epochs (
   epoch_start             DATE        NOT NULL,
   epoch_end               DATE,
   epoch_transaction_count INTEGER     NOT NULL DEFAULT 0,
-  terminated_by           TEXT        CHECK (terminated_by IN ('auto', 'manual')),
+  terminated_by_user_id   UUID        REFERENCES users(id),
   created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (rule_id, epoch_start)
 );
@@ -241,6 +247,9 @@ CREATE INDEX ON rules (entity_id, label_id);
 -- ── REVIEW QUEUE ────────────────────────────────────────────────────────────
 -- Engine-detected candidate rules awaiting user approval.
 -- suggested_conditions is transparent and editable before the user approves.
+-- alert_type: 'new' = first detection, 'drift' = rate changed significantly,
+--             'ended' = signal no longer seen in recent transactions.
+-- *_confidence: per-component breakdown from Stage 2 scoring (NULL on older jobs).
 
 CREATE TABLE review_queue (
   id                        UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -252,7 +261,12 @@ CREATE TABLE review_queue (
   suggested_conditions      JSONB        NOT NULL,
   suggested_rate_per_day    NUMERIC(12,4) NOT NULL,
   matched_transaction_count INTEGER      NOT NULL,
+  alert_type                TEXT         NOT NULL DEFAULT 'new'
+                            CHECK (alert_type IN ('new', 'drift', 'ended')),
   confidence                NUMERIC(4,3) NOT NULL,
+  merchant_confidence       NUMERIC(4,3),
+  timing_confidence         NUMERIC(4,3),
+  amount_confidence         NUMERIC(4,3),
   sample_merchants          TEXT[]       NOT NULL,
   status                    TEXT         NOT NULL DEFAULT 'pending'
                             CHECK (status IN ('pending', 'approved', 'rejected', 'modified')),
