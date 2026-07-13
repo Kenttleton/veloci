@@ -1,4 +1,4 @@
-package handlers_test
+package auth_test
 
 import (
 	"bytes"
@@ -11,23 +11,21 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
+	"github.com/veloci/api/internal/auth"
 	"github.com/veloci/api/internal/authclient"
-	"github.com/veloci/api/internal/handlers"
 )
 
-// authRouter builds a chi+humachi router with auth routes registered.
-func authRouter(authURL string, db handlers.AppDB) (*chi.Mux, error) {
+func authRouter(authURL string, db auth.AppDB) (*chi.Mux, error) {
 	client, err := authclient.NewClient(authURL)
 	if err != nil {
 		return nil, err
 	}
 	r := chi.NewRouter()
 	api := humachi.New(r, huma.DefaultConfig("test", "1.0.0"))
-	handlers.RegisterAuthRoutes(api, handlers.NewAuth(client, db))
+	auth.RegisterRoutes(api, auth.NewHandler(client, db))
 	return r, nil
 }
 
-// stubAuthForLogin simulates veloci-auth /credentials/validate and /tokens/mint.
 func stubAuthForLogin(t *testing.T) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -54,11 +52,10 @@ func stubAuthForLogin(t *testing.T) *httptest.Server {
 	}))
 }
 
-// stubAppDB simulates veloci_app entity lookups.
 type stubAppDB struct{}
 
-func (s *stubAppDB) FindUserEntity(ctx context.Context, email string) (handlers.UserEntity, error) {
-	return handlers.UserEntity{UserID: "user-1", EntityID: "ent-1", EntityRole: "entity_admin"}, nil
+func (s *stubAppDB) FindUserEntity(ctx context.Context, email string) (auth.UserEntity, error) {
+	return auth.UserEntity{UserID: "user-1", EntityID: "ent-1", EntityRole: "entity_admin"}, nil
 }
 
 func TestLoginSuccess(t *testing.T) {

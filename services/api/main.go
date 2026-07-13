@@ -16,9 +16,9 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/veloci/api/internal/auth"
 	"github.com/veloci/api/internal/authclient"
-	"github.com/veloci/api/internal/handlers"
-	"github.com/veloci/api/internal/middleware"
+	"github.com/veloci/api/internal/health"
 	"github.com/veloci/api/internal/queue"
 )
 
@@ -26,8 +26,8 @@ type appDBImpl struct {
 	pool *pgxpool.Pool
 }
 
-func (d *appDBImpl) FindUserEntity(ctx context.Context, email string) (handlers.UserEntity, error) {
-	var ue handlers.UserEntity
+func (d *appDBImpl) FindUserEntity(ctx context.Context, email string) (auth.UserEntity, error) {
+	var ue auth.UserEntity
 	err := d.pool.QueryRow(ctx, `
 		SELECT u.id::text, eu.entity_id::text, eu.entity_role
 		FROM users u
@@ -103,20 +103,19 @@ func runServe(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("authclient: %w", err)
 	}
 
-	authHandler := handlers.NewAuth(authClient, &appDBImpl{pool: pool})
+	authHandler := auth.NewHandler(authClient, &appDBImpl{pool: pool})
 
 	r := chi.NewRouter()
 	api := humachi.New(r, huma.DefaultConfig("Veloci API", "1.0.0"))
 
-	handlers.RegisterHealthRoutes(api)
-	handlers.RegisterAuthRoutes(api, authHandler)
+	health.RegisterRoutes(api)
+	auth.RegisterRoutes(api, authHandler)
 
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.Authenticate(authClient))
+		r.Use(auth.Authenticate(authClient))
 		// Financial routes added in service-specific implementation plans
 	})
 
-	// Serve the live OpenAPI spec — tools like Insomnia can import from this URL.
 	r.Get("/openapi.json", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		if err := json.NewEncoder(w).Encode(api.OpenAPI()); err != nil {

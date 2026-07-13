@@ -1,5 +1,4 @@
-// Package middleware provides HTTP middleware for the veloci-api service.
-package middleware
+package auth
 
 import (
 	"context"
@@ -42,8 +41,6 @@ func Authenticate(client *authclient.Client) func(http.Handler) http.Handler {
 				return
 			}
 
-			// Extract string claims from the DB-authoritative claims map.
-			// jx.Raw is assignable to []byte — no jx import needed.
 			ctx := r.Context()
 			for k, raw := range result.Claims {
 				var s string

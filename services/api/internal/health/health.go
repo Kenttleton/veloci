@@ -1,4 +1,4 @@
-package handlers
+package health
 
 import (
 	"context"
@@ -20,8 +20,8 @@ func Health(ctx context.Context, _ *struct{}) (*HealthOutput, error) {
 	return out, nil
 }
 
-// RegisterHealthRoutes registers the health check endpoint.
-func RegisterHealthRoutes(api huma.API) {
+// RegisterRoutes registers the health check endpoint.
+func RegisterRoutes(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "health",
 		Method:      http.MethodGet,

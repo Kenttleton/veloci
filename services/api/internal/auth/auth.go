@@ -1,5 +1,4 @@
-// Package handlers contains HTTP handlers for the veloci-api service.
-package handlers
+package auth
 
 import (
 	"context"
@@ -22,15 +21,15 @@ type AppDB interface {
 	FindUserEntity(ctx context.Context, email string) (UserEntity, error)
 }
 
-// Auth handles authentication-related HTTP requests.
-type Auth struct {
+// Handler handles authentication-related HTTP requests.
+type Handler struct {
 	auth *authclient.Client
 	db   AppDB
 }
 
-// NewAuth creates a new Auth handler with the given ogen-generated auth client.
-func NewAuth(auth *authclient.Client, db AppDB) *Auth {
-	return &Auth{auth: auth, db: db}
+// NewHandler creates a new Handler with the given ogen-generated auth client.
+func NewHandler(auth *authclient.Client, db AppDB) *Handler {
+	return &Handler{auth: auth, db: db}
 }
 
 // ── Input / output types ──────────────────────────────────────────────────────
@@ -58,7 +57,7 @@ type LogoutInput struct {
 // ── Handlers ──────────────────────────────────────────────────────────────────
 
 // Login validates credentials, looks up the user entity, and mints a JWT pair.
-func (h *Auth) Login(ctx context.Context, input *LoginInput) (*LoginOutput, error) {
+func (h *Handler) Login(ctx context.Context, input *LoginInput) (*LoginOutput, error) {
 	cred, err := h.auth.ValidateCredential(ctx, &authclient.ValidateCredentialInputBody{
 		Email:    input.Body.Email,
 		Password: input.Body.Password,
@@ -72,8 +71,6 @@ func (h *Auth) Login(ctx context.Context, input *LoginInput) (*LoginOutput, erro
 		return nil, huma.Error401Unauthorized("invalid credentials")
 	}
 
-	// Build claims as map[string]jx.Raw. jx.Raw is type Raw []byte; []byte is
-	// assignable to it — no jx import required.
 	claims := make(authclient.MintTokenInputBodyClaims)
 	for k, v := range map[string]any{
 		"sub":         ue.UserID,
@@ -101,14 +98,14 @@ func (h *Auth) Login(ctx context.Context, input *LoginInput) (*LoginOutput, erro
 }
 
 // Logout revokes the token identified by the jti field in the request body.
-func (h *Auth) Logout(ctx context.Context, input *LogoutInput) (*struct{}, error) {
+func (h *Handler) Logout(ctx context.Context, input *LogoutInput) (*struct{}, error) {
 	h.auth.RevokeToken(ctx, authclient.RevokeTokenParams{Jti: input.Body.JTI}) //nolint:errcheck
 	return nil, nil
 }
 
 // ── Route registration ────────────────────────────────────────────────────────
 
-func RegisterAuthRoutes(api huma.API, h *Auth) {
+func RegisterRoutes(api huma.API, h *Handler) {
 	huma.Register(api, huma.Operation{
 		OperationID: "login",
 		Method:      http.MethodPost,
