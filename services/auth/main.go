@@ -19,89 +19,12 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"github.com/veloci/auth/internal/db"
-	"github.com/veloci/auth/internal/handlers"
-	authsync "github.com/veloci/auth/internal/sync"
+	"github.com/veloci/auth/internal/admin"
+	"github.com/veloci/auth/internal/credentials"
+	"github.com/veloci/auth/internal/invites"
+	"github.com/veloci/auth/internal/sessions"
+	"github.com/veloci/auth/internal/store"
 )
-
-// dbCredAdapter adapts *db.DB to satisfy handlers.credentialStore.
-type dbCredAdapter struct{ d *db.DB }
-
-func (a *dbCredAdapter) FindCredentialByEmail(ctx context.Context, email string) (*handlers.CredentialRow, error) {
-	c, err := a.d.FindCredentialByEmail(ctx, email)
-	if err != nil {
-		return nil, err
-	}
-	return &handlers.CredentialRow{ID: c.ID, PasswordHash: c.PasswordHash, SystemRole: c.SystemRole}, nil
-}
-
-func (a *dbCredAdapter) CreateCredential(ctx context.Context, id, email, hash, role string) error {
-	return a.d.CreateCredential(ctx, id, email, hash, role)
-}
-
-func (a *dbCredAdapter) UpdateCredentialPassword(ctx context.Context, id, hash string) (bool, error) {
-	return a.d.UpdateCredentialPassword(ctx, id, hash)
-}
-
-func (a *dbCredAdapter) DeleteCredential(ctx context.Context, id string) (bool, bool, error) {
-	return a.d.DeleteCredential(ctx, id)
-}
-
-// dbTokenAdapter adapts *db.DB to satisfy handlers.tokenStore.
-type dbTokenAdapter struct{ d *db.DB }
-
-func (a *dbTokenAdapter) StoreToken(ctx context.Context, id, userID, jti string, claims json.RawMessage, exp time.Time, tokenType string, parentID *string) error {
-	return a.d.StoreToken(ctx, id, userID, jti, claims, exp, tokenType, parentID)
-}
-
-func (a *dbTokenAdapter) FindToken(ctx context.Context, jti string) (*handlers.TokenRow, error) {
-	row, err := a.d.FindToken(ctx, jti)
-	if err != nil {
-		return nil, err
-	}
-	return &handlers.TokenRow{
-		CredentialID: row.CredentialID,
-		Claims:       row.Claims,
-		ExpiresAt:    row.ExpiresAt,
-		TokenType:    row.TokenType,
-		RotatedAt:    row.RotatedAt,
-	}, nil
-}
-
-func (a *dbTokenAdapter) DeleteToken(ctx context.Context, jti string) error {
-	return a.d.DeleteToken(ctx, jti)
-}
-
-func (a *dbTokenAdapter) DeleteUserTokens(ctx context.Context, credentialID string) error {
-	return a.d.DeleteUserTokens(ctx, credentialID)
-}
-
-func (a *dbTokenAdapter) RotateRefreshToken(ctx context.Context, oldJTI string, graceWindow time.Duration) error {
-	return a.d.RotateRefreshToken(ctx, oldJTI, graceWindow)
-}
-
-func (a *dbTokenAdapter) FindInviteToken(ctx context.Context, tokenHash string) (*handlers.InviteTokenRow, error) {
-	row, err := a.d.FindInviteToken(ctx, tokenHash)
-	if err != nil {
-		return nil, err
-	}
-	return &handlers.InviteTokenRow{
-		Claims:     row.Claims,
-		ExpiresAt:  row.ExpiresAt,
-		AcceptedAt: row.AcceptedAt,
-	}, nil
-}
-
-// dbInviteAdapter adapts *db.DB to satisfy handlers.inviteStore.
-type dbInviteAdapter struct{ d *db.DB }
-
-func (a *dbInviteAdapter) StoreInviteToken(ctx context.Context, tokenHash, createdBy string, claims []byte, expiresAt time.Time) error {
-	return a.d.StoreInviteToken(ctx, tokenHash, createdBy, claims, expiresAt)
-}
-
-func (a *dbInviteAdapter) ConsumeInviteToken(ctx context.Context, tokenHash string) (bool, bool, bool, error) {
-	return a.d.ConsumeInviteToken(ctx, tokenHash)
-}
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
@@ -125,7 +48,6 @@ func init() {
 }
 
 func runServe(_ *cobra.Command, _ []string) error {
-	// Root context: cancelled on SIGINT or SIGTERM for graceful shutdown.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -147,12 +69,11 @@ func runServe(_ *cobra.Command, _ []string) error {
 		viper.GetString("database.auth.name"),
 	)
 
-	database, err := db.New(ctx, dsn)
+	database, err := store.New(ctx, dsn)
 	if err != nil {
 		return fmt.Errorf("db: %w", err)
 	}
 
-	// Exponential backoff retry until postgres is reachable.
 	bo := backoff.NewExponentialBackOff()
 	bo.InitialInterval = 500 * time.Millisecond
 	bo.MaxInterval = 30 * time.Second
@@ -172,7 +93,7 @@ func runServe(_ *cobra.Command, _ []string) error {
 	adminEmail := viper.GetString("auth.admin.email")
 	adminPass := viper.GetString("auth.admin.password")
 	if adminEmail != "" && adminPass != "" {
-		if err := authsync.SyncServerAdmin(ctx, database, adminEmail, adminPass); err != nil {
+		if err := admin.SyncServerAdmin(ctx, database, adminEmail, adminPass); err != nil {
 			return fmt.Errorf("admin sync: %w", err)
 		}
 	}
@@ -183,8 +104,7 @@ func runServe(_ *cobra.Command, _ []string) error {
 	}
 	warnWeakSecret(string(secret))
 
-	// Token lifetime configuration from viper with defaults.
-	tokenCfg := handlers.TokenConfig{
+	tokenCfg := sessions.Config{
 		AccessTTL:  time.Duration(viper.GetInt("session.access_token_ttl_minutes")) * time.Minute,
 		RefreshTTL: time.Duration(viper.GetInt("session.refresh_token_ttl_hours")) * time.Hour,
 	}
@@ -195,25 +115,25 @@ func runServe(_ *cobra.Command, _ []string) error {
 		tokenCfg.RefreshTTL = 24 * time.Hour
 	}
 
-	inviteCfg := handlers.InviteConfig{
+	inviteCfg := invites.Config{
 		TTL: time.Duration(viper.GetInt("invite.ttl_hours")) * time.Hour,
 	}
 	if inviteCfg.TTL <= 0 {
 		inviteCfg.TTL = 72 * time.Hour
 	}
 
-	creds := handlers.NewCredentials(&dbCredAdapter{database})
-	toks := handlers.NewTokens(&dbTokenAdapter{database}, secret, tokenCfg)
-	inv := handlers.NewInvite(&dbInviteAdapter{database}, inviteCfg)
+	// *store.DB satisfies all domain store interfaces directly — no adapters needed.
+	creds := credentials.NewHandler(database)
+	toks := sessions.NewHandler(database, secret, tokenCfg)
+	inv := invites.NewHandler(database, inviteCfg)
 
 	r := chi.NewRouter()
 	api := humachi.New(r, huma.DefaultConfig("Veloci Auth", "1.0.0"))
 
-	handlers.RegisterCredentialRoutes(api, creds)
-	handlers.RegisterTokenRoutes(api, toks)
-	handlers.RegisterInviteRoutes(api, inv)
+	credentials.RegisterRoutes(api, creds)
+	sessions.RegisterRoutes(api, toks)
+	invites.RegisterRoutes(api, inv)
 
-	// Serve the live OpenAPI spec — tools like Insomnia can import from this URL.
 	r.Get("/openapi.json", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		if err := json.NewEncoder(w).Encode(api.OpenAPI()); err != nil {
@@ -227,7 +147,6 @@ func runServe(_ *cobra.Command, _ []string) error {
 		Handler: r,
 	}
 
-	// Graceful shutdown: wait for signal then give in-flight requests 10 seconds.
 	go func() {
 		<-ctx.Done()
 		log.Printf("veloci-auth: shutting down gracefully")
@@ -245,8 +164,6 @@ func runServe(_ *cobra.Command, _ []string) error {
 	return nil
 }
 
-// warnWeakSecret logs a prominent warning if the JWT secret looks low-entropy.
-// Non-fatal — local dev can run with a weak secret.
 func warnWeakSecret(secret string) {
 	low := strings.ToLower(secret)
 	placeholders := []string{"changeme", "replace", "your-secret", "example"}
@@ -256,7 +173,6 @@ func warnWeakSecret(secret string) {
 			return
 		}
 	}
-	// Detect all-lowercase alpha with no digits or symbols.
 	allLowerAlpha := true
 	for _, c := range secret {
 		if !unicode.IsLower(c) || unicode.IsDigit(c) {

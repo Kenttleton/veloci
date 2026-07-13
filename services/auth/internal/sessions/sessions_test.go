@@ -1,4 +1,4 @@
-package handlers_test
+package sessions_test
 
 import (
 	"bytes"
@@ -14,32 +14,34 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
-	"github.com/veloci/auth/internal/handlers"
+	"github.com/veloci/auth/internal/invites"
+	"github.com/veloci/auth/internal/sessions"
+	"github.com/veloci/auth/internal/store"
 )
 
-// stubTokenDB implements tokenStore and inviteStore for tests.
+// stubTokenDB implements sessionStore and inviteStore for tests.
 type stubTokenDB struct {
-	stored    map[string]*handlers.TokenRow
-	invites   map[string]*handlers.InviteTokenRow
+	stored    map[string]*store.TokenRow
+	invites   map[string]*store.InviteTokenRow
 	rotateErr error
 }
 
 func newStubTokenDB() *stubTokenDB {
 	return &stubTokenDB{
-		stored:  map[string]*handlers.TokenRow{},
-		invites: map[string]*handlers.InviteTokenRow{},
+		stored:  map[string]*store.TokenRow{},
+		invites: map[string]*store.InviteTokenRow{},
 	}
 }
 
 func (s *stubTokenDB) StoreToken(_ context.Context, id, userID, jti string, claims json.RawMessage, exp time.Time, tokenType string, parentID *string) error {
-	s.stored[jti] = &handlers.TokenRow{CredentialID: userID, Claims: claims, ExpiresAt: exp, TokenType: tokenType}
+	s.stored[jti] = &store.TokenRow{CredentialID: userID, Claims: claims, ExpiresAt: exp, TokenType: tokenType}
 	return nil
 }
 
-func (s *stubTokenDB) FindToken(_ context.Context, jti string) (*handlers.TokenRow, error) {
+func (s *stubTokenDB) FindToken(_ context.Context, jti string) (*store.TokenRow, error) {
 	row, ok := s.stored[jti]
 	if !ok {
-		return nil, handlers.ErrNotFound
+		return nil, sessions.ErrNotFound
 	}
 	return row, nil
 }
@@ -69,16 +71,16 @@ func (s *stubTokenDB) RotateRefreshToken(_ context.Context, oldJTI string, _ tim
 	return nil
 }
 
-func (s *stubTokenDB) FindInviteToken(_ context.Context, tokenHash string) (*handlers.InviteTokenRow, error) {
+func (s *stubTokenDB) FindInviteToken(_ context.Context, tokenHash string) (*store.InviteTokenRow, error) {
 	row, ok := s.invites[tokenHash]
 	if !ok {
-		return nil, handlers.ErrNotFound
+		return nil, sessions.ErrNotFound
 	}
 	return row, nil
 }
 
 func (s *stubTokenDB) StoreInviteToken(_ context.Context, tokenHash, createdBy string, claims []byte, expiresAt time.Time) error {
-	s.invites[tokenHash] = &handlers.InviteTokenRow{
+	s.invites[tokenHash] = &store.InviteTokenRow{
 		Claims:    json.RawMessage(claims),
 		ExpiresAt: expiresAt,
 	}
@@ -108,24 +110,22 @@ func sha256hex(s string) string {
 
 var testSecret = []byte("test-secret-at-least-32-characters!!")
 
-func newTestHandlers() (*handlers.Tokens, *handlers.Invite, *stubTokenDB) {
+func newTestHandlers() (*sessions.Handler, *invites.Handler, *stubTokenDB) {
 	db := newStubTokenDB()
-	cfg := handlers.TokenConfig{AccessTTL: 15 * time.Minute, RefreshTTL: 24 * time.Hour}
-	toks := handlers.NewTokens(db, testSecret, cfg)
-	inv := handlers.NewInvite(db, handlers.InviteConfig{TTL: 72 * time.Hour})
-	return toks, inv, db
+	cfg := sessions.Config{AccessTTL: 15 * time.Minute, RefreshTTL: 24 * time.Hour}
+	sess := sessions.NewHandler(db, testSecret, cfg)
+	inv := invites.NewHandler(db, invites.Config{TTL: 72 * time.Hour})
+	return sess, inv, db
 }
 
-// tokenRouter wires a chi+humachi router with token and invite routes registered.
-func tokenRouter(toks *handlers.Tokens, inv *handlers.Invite) *chi.Mux {
+func tokenRouter(sess *sessions.Handler, inv *invites.Handler) *chi.Mux {
 	r := chi.NewRouter()
 	api := humachi.New(r, huma.DefaultConfig("test", "1.0.0"))
-	handlers.RegisterTokenRoutes(api, toks)
-	handlers.RegisterInviteRoutes(api, inv)
+	sessions.RegisterRoutes(api, sess)
+	invites.RegisterRoutes(api, inv)
 	return r
 }
 
-// mintToken calls POST /tokens/mint and returns the parsed response body.
 func mintToken(t *testing.T, r *chi.Mux, credentialID string) map[string]any {
 	t.Helper()
 	body, _ := json.Marshal(map[string]any{
@@ -145,8 +145,8 @@ func mintToken(t *testing.T, r *chi.Mux, credentialID string) map[string]any {
 }
 
 func TestMintAndValidateToken(t *testing.T) {
-	toks, inv, _ := newTestHandlers()
-	r := tokenRouter(toks, inv)
+	sess, inv, _ := newTestHandlers()
+	r := tokenRouter(sess, inv)
 	mintResp := mintToken(t, r, "cred-1")
 
 	accessTok, _ := mintResp["access_token"].(string)
@@ -174,8 +174,8 @@ func TestMintAndValidateToken(t *testing.T) {
 }
 
 func TestMint_NilClaimsRejected(t *testing.T) {
-	toks, inv, _ := newTestHandlers()
-	r := tokenRouter(toks, inv)
+	sess, inv, _ := newTestHandlers()
+	r := tokenRouter(sess, inv)
 
 	body := []byte(`{"credential_id":"cred-1","claims":null}`)
 	req := httptest.NewRequest(http.MethodPost, "/tokens/mint", bytes.NewReader(body))
@@ -189,12 +189,11 @@ func TestMint_NilClaimsRejected(t *testing.T) {
 }
 
 func TestValidate_UserNotFound(t *testing.T) {
-	toks, inv, db := newTestHandlers()
-	r := tokenRouter(toks, inv)
+	sess, inv, db := newTestHandlers()
+	r := tokenRouter(sess, inv)
 	mintResp := mintToken(t, r, "cred-1")
 	accessTok, _ := mintResp["access_token"].(string)
 
-	// Remove all stored tokens to simulate not-found.
 	for k := range db.stored {
 		delete(db.stored, k)
 	}
@@ -211,14 +210,13 @@ func TestValidate_UserNotFound(t *testing.T) {
 }
 
 func TestRevokeAndValidate(t *testing.T) {
-	toks, inv, _ := newTestHandlers()
-	r := tokenRouter(toks, inv)
+	sess, inv, _ := newTestHandlers()
+	r := tokenRouter(sess, inv)
 	mintResp := mintToken(t, r, "cred-1")
 
 	accessTok, _ := mintResp["access_token"].(string)
 	jti, _ := mintResp["jti"].(string)
 
-	// Revoke via the router — chi extracts {jti} from the URL path.
 	req := httptest.NewRequest(http.MethodDelete, "/tokens/"+jti, nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -226,7 +224,6 @@ func TestRevokeAndValidate(t *testing.T) {
 		t.Fatalf("revoke: got %d; body: %s", w.Code, w.Body)
 	}
 
-	// Validate the revoked token — must be 401.
 	validateBody, _ := json.Marshal(map[string]string{"token": accessTok})
 	req2 := httptest.NewRequest(http.MethodPost, "/tokens/validate", bytes.NewReader(validateBody))
 	req2.Header.Set("Content-Type", "application/json")
@@ -238,14 +235,13 @@ func TestRevokeAndValidate(t *testing.T) {
 }
 
 func TestValidate_ExpiredDBRecord(t *testing.T) {
-	toks, inv, db := newTestHandlers()
-	r := tokenRouter(toks, inv)
+	sess, inv, db := newTestHandlers()
+	r := tokenRouter(sess, inv)
 	mintResp := mintToken(t, r, "cred-1")
 
 	jti, _ := mintResp["jti"].(string)
 	accessTok, _ := mintResp["access_token"].(string)
 
-	// Backdate the expiry in the stub.
 	if row, ok := db.stored[jti]; ok {
 		row.ExpiresAt = time.Now().Add(-time.Minute)
 	}
@@ -262,10 +258,9 @@ func TestValidate_ExpiredDBRecord(t *testing.T) {
 }
 
 func TestValidate_InviteToken(t *testing.T) {
-	toks, inv, _ := newTestHandlers()
-	r := tokenRouter(toks, inv)
+	sess, inv, _ := newTestHandlers()
+	r := tokenRouter(sess, inv)
 
-	// Create an invite token.
 	body, _ := json.Marshal(map[string]any{
 		"created_by": "cred-admin",
 		"claims":     map[string]string{"email": "invited@example.com", "entity_id": "ent-1"},
@@ -284,7 +279,6 @@ func TestValidate_InviteToken(t *testing.T) {
 		t.Fatal("expected token in invite response")
 	}
 
-	// Validate the raw invite token via the unified validate endpoint.
 	validateBody, _ := json.Marshal(map[string]string{"token": rawToken})
 	req2 := httptest.NewRequest(http.MethodPost, "/tokens/validate", bytes.NewReader(validateBody))
 	req2.Header.Set("Content-Type", "application/json")
@@ -302,10 +296,9 @@ func TestValidate_InviteToken(t *testing.T) {
 }
 
 func TestConsumeInvite_AlreadyConsumed(t *testing.T) {
-	toks, inv, _ := newTestHandlers()
-	r := tokenRouter(toks, inv)
+	sess, inv, _ := newTestHandlers()
+	r := tokenRouter(sess, inv)
 
-	// Create invite.
 	body, _ := json.Marshal(map[string]any{
 		"created_by": "cred-admin",
 		"claims":     map[string]string{"email": "invited@example.com"},
@@ -336,10 +329,9 @@ func TestConsumeInvite_AlreadyConsumed(t *testing.T) {
 }
 
 func TestConsumeInvite_Expired(t *testing.T) {
-	toks, inv, db := newTestHandlers()
-	r := tokenRouter(toks, inv)
+	sess, inv, db := newTestHandlers()
+	r := tokenRouter(sess, inv)
 
-	// Create invite.
 	body, _ := json.Marshal(map[string]any{
 		"created_by": "cred-admin",
 		"claims":     map[string]string{"email": "invited@example.com"},
@@ -352,7 +344,6 @@ func TestConsumeInvite_Expired(t *testing.T) {
 	json.NewDecoder(w.Body).Decode(&invResp)
 	rawToken := invResp["token"]
 
-	// Backdate the expiry directly in the stub.
 	hash := sha256hex(rawToken)
 	if row, ok := db.invites[hash]; ok {
 		row.ExpiresAt = time.Now().Add(-time.Minute)

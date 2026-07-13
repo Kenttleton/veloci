@@ -1,4 +1,4 @@
-package handlers_test
+package credentials_test
 
 import (
 	"bytes"
@@ -11,7 +11,8 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
-	"github.com/veloci/auth/internal/handlers"
+	"github.com/veloci/auth/internal/credentials"
+	"github.com/veloci/auth/internal/store"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -24,11 +25,11 @@ type stubCredDB struct {
 	deleteRoleBlocked bool
 }
 
-func (s *stubCredDB) FindCredentialByEmail(_ context.Context, _ string) (*handlers.CredentialRow, error) {
+func (s *stubCredDB) FindCredentialByEmail(_ context.Context, _ string) (*store.Credential, error) {
 	if s.miss {
-		return nil, handlers.ErrNotFound
+		return nil, credentials.ErrNotFound
 	}
-	return &handlers.CredentialRow{ID: "cred-1", PasswordHash: s.hash, SystemRole: s.role}, nil
+	return &store.Credential{ID: "cred-1", PasswordHash: s.hash, SystemRole: s.role}, nil
 }
 
 func (s *stubCredDB) CreateCredential(_ context.Context, id, email, hash, role string) error {
@@ -43,11 +44,10 @@ func (s *stubCredDB) DeleteCredential(_ context.Context, id string) (bool, bool,
 	return s.deleteFound, s.deleteRoleBlocked, nil
 }
 
-// credRouter wires a chi+humachi router with credential routes registered.
 func credRouter(db *stubCredDB) *chi.Mux {
 	r := chi.NewRouter()
 	api := humachi.New(r, huma.DefaultConfig("test", "1.0.0"))
-	handlers.RegisterCredentialRoutes(api, handlers.NewCredentials(db))
+	credentials.RegisterRoutes(api, credentials.NewHandler(db))
 	return r
 }
 

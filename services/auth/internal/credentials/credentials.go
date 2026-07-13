@@ -1,4 +1,4 @@
-package handlers
+package credentials
 
 import (
 	"context"
@@ -9,34 +9,28 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/veloci/auth/internal/store"
 	"golang.org/x/crypto/bcrypt"
 )
 
-// ErrNotFound is returned by stub implementations in tests when a record is missing.
+// ErrNotFound is returned by test stubs when a record is missing.
 var ErrNotFound = errors.New("not found")
 
 // ErrForbidden is returned when an operation is not permitted on the target record.
 var ErrForbidden = errors.New("forbidden")
 
-// CredentialRow is the view of a credential row exposed to handlers and test stubs.
-type CredentialRow struct {
-	ID           string
-	PasswordHash string
-	SystemRole   string
-}
-
 type credentialStore interface {
-	FindCredentialByEmail(ctx context.Context, email string) (*CredentialRow, error)
+	FindCredentialByEmail(ctx context.Context, email string) (*store.Credential, error)
 	CreateCredential(ctx context.Context, id, email, hash, role string) error
 	UpdateCredentialPassword(ctx context.Context, id, hash string) (found bool, err error)
 	DeleteCredential(ctx context.Context, id string) (found bool, systemRoleBlocked bool, err error)
 }
 
-// Credentials handles credential-related HTTP endpoints.
-type Credentials struct{ db credentialStore }
+// Handler handles credential-related HTTP endpoints.
+type Handler struct{ db credentialStore }
 
-// NewCredentials constructs a Credentials handler with the given store.
-func NewCredentials(db credentialStore) *Credentials { return &Credentials{db: db} }
+// NewHandler constructs a Handler with the given store.
+func NewHandler(db credentialStore) *Handler { return &Handler{db: db} }
 
 // ── Input / output types ──────────────────────────────────────────────────────
 
@@ -79,7 +73,7 @@ type DeleteCredentialInput struct {
 // ── Handlers ──────────────────────────────────────────────────────────────────
 
 // Validate checks email+password and returns credential_id and system_role on success.
-func (h *Credentials) Validate(ctx context.Context, input *ValidateCredentialInput) (*ValidateCredentialOutput, error) {
+func (h *Handler) Validate(ctx context.Context, input *ValidateCredentialInput) (*ValidateCredentialOutput, error) {
 	cred, err := h.db.FindCredentialByEmail(ctx, input.Body.Email)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, ErrNotFound) {
@@ -97,7 +91,7 @@ func (h *Credentials) Validate(ctx context.Context, input *ValidateCredentialInp
 }
 
 // Create registers a new credential with system_role "user".
-func (h *Credentials) Create(ctx context.Context, input *CreateCredentialInput) (*CreateCredentialOutput, error) {
+func (h *Handler) Create(ctx context.Context, input *CreateCredentialInput) (*CreateCredentialOutput, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(input.Body.Password), 12)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("internal error")
@@ -116,7 +110,7 @@ func (h *Credentials) Create(ctx context.Context, input *CreateCredentialInput) 
 }
 
 // UpdatePassword replaces the password hash for an existing credential.
-func (h *Credentials) UpdatePassword(ctx context.Context, input *UpdateCredentialPasswordInput) (*struct{}, error) {
+func (h *Handler) UpdatePassword(ctx context.Context, input *UpdateCredentialPasswordInput) (*struct{}, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(input.Body.Password), 12)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("internal error")
@@ -132,7 +126,7 @@ func (h *Credentials) UpdatePassword(ctx context.Context, input *UpdateCredentia
 }
 
 // Delete permanently removes a credential and all its tokens via FK cascade.
-func (h *Credentials) Delete(ctx context.Context, input *DeleteCredentialInput) (*struct{}, error) {
+func (h *Handler) Delete(ctx context.Context, input *DeleteCredentialInput) (*struct{}, error) {
 	found, systemRoleBlocked, err := h.db.DeleteCredential(ctx, input.ID)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("internal error")
@@ -148,7 +142,7 @@ func (h *Credentials) Delete(ctx context.Context, input *DeleteCredentialInput) 
 
 // ── Route registration ────────────────────────────────────────────────────────
 
-func RegisterCredentialRoutes(api huma.API, h *Credentials) {
+func RegisterRoutes(api huma.API, h *Handler) {
 	huma.Register(api, huma.Operation{
 		OperationID: "validate-credential",
 		Method:      http.MethodPost,

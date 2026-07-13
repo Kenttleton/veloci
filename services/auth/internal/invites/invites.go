@@ -1,9 +1,11 @@
-package handlers
+package invites
 
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -16,25 +18,25 @@ type inviteStore interface {
 	ConsumeInviteToken(ctx context.Context, tokenHash string) (found bool, alreadyConsumed bool, expired bool, err error)
 }
 
-// InviteConfig holds invite token configuration.
-type InviteConfig struct {
+// Config holds invite token configuration.
+type Config struct {
 	TTL time.Duration
 }
 
-// DefaultInviteConfig returns sensible production defaults.
-func DefaultInviteConfig() InviteConfig {
-	return InviteConfig{TTL: 72 * time.Hour}
+// DefaultConfig returns sensible production defaults.
+func DefaultConfig() Config {
+	return Config{TTL: 72 * time.Hour}
 }
 
-// Invite handles invite token creation and consumption endpoints.
-type Invite struct {
+// Handler handles invite token creation and consumption endpoints.
+type Handler struct {
 	db  inviteStore
-	cfg InviteConfig
+	cfg Config
 }
 
-// NewInvite constructs an Invite handler with the given store and config.
-func NewInvite(db inviteStore, cfg InviteConfig) *Invite {
-	return &Invite{db: db, cfg: cfg}
+// NewHandler constructs a Handler with the given store and config.
+func NewHandler(db inviteStore, cfg Config) *Handler {
+	return &Handler{db: db, cfg: cfg}
 }
 
 // ── Input / output types ──────────────────────────────────────────────────────
@@ -62,7 +64,7 @@ type ConsumeInviteInput struct {
 // ── Handlers ──────────────────────────────────────────────────────────────────
 
 // CreateInvite generates a new invite token, stores its SHA-256 hash, and returns the raw token.
-func (h *Invite) CreateInvite(ctx context.Context, input *CreateInviteInput) (*CreateInviteOutput, error) {
+func (h *Handler) CreateInvite(ctx context.Context, input *CreateInviteInput) (*CreateInviteOutput, error) {
 	claimsBytes, err := json.Marshal(input.Body.Claims)
 	if err != nil {
 		return nil, huma.Error400BadRequest("invalid claims")
@@ -87,7 +89,7 @@ func (h *Invite) CreateInvite(ctx context.Context, input *CreateInviteInput) (*C
 }
 
 // ConsumeInvite atomically marks an invite token as accepted.
-func (h *Invite) ConsumeInvite(ctx context.Context, input *ConsumeInviteInput) (*struct{}, error) {
+func (h *Handler) ConsumeInvite(ctx context.Context, input *ConsumeInviteInput) (*struct{}, error) {
 	hash := hashToken(input.Body.Token)
 	found, alreadyConsumed, expired, err := h.db.ConsumeInviteToken(ctx, hash)
 	if err != nil {
@@ -107,7 +109,7 @@ func (h *Invite) ConsumeInvite(ctx context.Context, input *ConsumeInviteInput) (
 
 // ── Route registration ────────────────────────────────────────────────────────
 
-func RegisterInviteRoutes(api huma.API, h *Invite) {
+func RegisterRoutes(api huma.API, h *Handler) {
 	huma.Register(api, huma.Operation{
 		OperationID:   "create-invite",
 		Method:        http.MethodPost,
@@ -127,4 +129,10 @@ func RegisterInviteRoutes(api huma.API, h *Invite) {
 		Tags:          []string{"invite"},
 		DefaultStatus: http.StatusNoContent,
 	}, h.ConsumeInvite)
+}
+
+// hashToken returns the hex-encoded SHA-256 hash of rawToken.
+func hashToken(rawToken string) string {
+	sum := sha256.Sum256([]byte(rawToken))
+	return hex.EncodeToString(sum[:])
 }

@@ -1,69 +1,59 @@
-package handlers
+package sessions
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/veloci/auth/internal/db"
-	"github.com/veloci/auth/internal/tokens"
+	"github.com/veloci/auth/internal/store"
 )
 
-// TokenRow is the view of a token record exposed to handlers and test stubs.
-type TokenRow struct {
-	CredentialID string
-	Claims       json.RawMessage
-	ExpiresAt    time.Time
-	TokenType    string
-	RotatedAt    *time.Time
-}
+// ErrNotFound is returned by test stubs when a token record is missing.
+var ErrNotFound = errors.New("not found")
 
-// InviteTokenRow is the view of an invite_tokens record exposed to handlers and test stubs.
-type InviteTokenRow struct {
-	Claims     json.RawMessage
-	ExpiresAt  time.Time
-	AcceptedAt *time.Time
-}
-
-type tokenStore interface {
+type sessionStore interface {
 	StoreToken(ctx context.Context, id, userID, jti string, claims json.RawMessage, exp time.Time, tokenType string, parentID *string) error
-	FindToken(ctx context.Context, jti string) (*TokenRow, error)
+	FindToken(ctx context.Context, jti string) (*store.TokenRow, error)
 	DeleteToken(ctx context.Context, jti string) error
 	DeleteUserTokens(ctx context.Context, credentialID string) error
 	RotateRefreshToken(ctx context.Context, oldJTI string, graceWindow time.Duration) error
-	FindInviteToken(ctx context.Context, tokenHash string) (*InviteTokenRow, error)
+	FindInviteToken(ctx context.Context, tokenHash string) (*store.InviteTokenRow, error)
 }
 
-// TokenConfig holds token lifetime configuration.
-type TokenConfig struct {
+// Config holds token lifetime configuration.
+type Config struct {
 	AccessTTL  time.Duration
 	RefreshTTL time.Duration
 }
 
-// DefaultTokenConfig returns sensible production defaults.
-func DefaultTokenConfig() TokenConfig {
-	return TokenConfig{
+// DefaultConfig returns sensible production defaults.
+func DefaultConfig() Config {
+	return Config{
 		AccessTTL:  15 * time.Minute,
 		RefreshTTL: 24 * time.Hour,
 	}
 }
 
-// Tokens handles token lifecycle HTTP endpoints.
-type Tokens struct {
-	db     tokenStore
+// Handler handles token lifecycle HTTP endpoints.
+type Handler struct {
+	db     sessionStore
 	secret []byte
-	cfg    TokenConfig
+	cfg    Config
 }
 
-// NewTokens constructs a Tokens handler with the given store, signing secret, and config.
-func NewTokens(db tokenStore, secret []byte, cfg TokenConfig) *Tokens {
-	return &Tokens{db: db, secret: secret, cfg: cfg}
+// NewHandler constructs a Handler with the given store, signing secret, and config.
+func NewHandler(db sessionStore, secret []byte, cfg Config) *Handler {
+	return &Handler{db: db, secret: secret, cfg: cfg}
 }
 
 // ── Input / output types ──────────────────────────────────────────────────────
@@ -115,10 +105,56 @@ type RevokeUserTokensInput struct {
 	CredentialID string `path:"credential_id" doc:"Credential UUID"`
 }
 
+// ── JWT functions ─────────────────────────────────────────────────────────────
+
+// mintJWT signs a JWT with jti, iat, exp, and token_type added automatically.
+func mintJWT(secret []byte, jti string, claims json.RawMessage, expiresAt time.Time, tokenType string) (string, error) {
+	var m map[string]any
+	if err := json.Unmarshal(claims, &m); err != nil {
+		return "", fmt.Errorf("invalid claims JSON: %w", err)
+	}
+	m["jti"] = jti
+	m["iat"] = time.Now().Unix()
+	m["exp"] = expiresAt.Unix()
+	m["token_type"] = tokenType
+	return jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims(m)).SignedString(secret)
+}
+
+// verifyJWT validates signature and expiry. Returns jti, token_type, and the original claims
+// (jti/iat/exp/token_type stripped). Does NOT check the token DB.
+func verifyJWT(secret []byte, tokenStr string) (jti string, tokenType string, claims json.RawMessage, err error) {
+	token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (any, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+		}
+		return secret, nil
+	})
+	if err != nil {
+		return "", "", nil, err
+	}
+	mc, ok := token.Claims.(jwt.MapClaims)
+	if !ok || !token.Valid {
+		return "", "", nil, fmt.Errorf("invalid token")
+	}
+	jtiVal, _ := mc["jti"].(string)
+	tokenTypeVal, _ := mc["token_type"].(string)
+	delete(mc, "jti")
+	delete(mc, "iat")
+	delete(mc, "exp")
+	delete(mc, "token_type")
+	raw, err := json.Marshal(map[string]any(mc))
+	return jtiVal, tokenTypeVal, raw, err
+}
+
+// hashToken returns the hex-encoded SHA-256 hash of rawToken.
+func hashToken(rawToken string) string {
+	sum := sha256.Sum256([]byte(rawToken))
+	return hex.EncodeToString(sum[:])
+}
+
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
-// mintPair issues an access+refresh token pair and stores both in the DB.
-func (h *Tokens) mintPair(ctx context.Context, credentialID string, claims json.RawMessage) (accessTok, refreshTok, accessJTI string, accessExp time.Time, err error) {
+func (h *Handler) mintPair(ctx context.Context, credentialID string, claims json.RawMessage) (accessTok, refreshTok, accessJTI string, accessExp time.Time, err error) {
 	now := time.Now()
 	accessExp = now.Add(h.cfg.AccessTTL)
 	refreshExp := now.Add(h.cfg.RefreshTTL)
@@ -126,7 +162,7 @@ func (h *Tokens) mintPair(ctx context.Context, credentialID string, claims json.
 	accessJTI = uuid.New().String()
 	accessID := uuid.New().String()
 
-	accessTok, err = tokens.Mint(h.secret, accessJTI, claims, accessExp, "access")
+	accessTok, err = mintJWT(h.secret, accessJTI, claims, accessExp, "access")
 	if err != nil {
 		return "", "", "", time.Time{}, err
 	}
@@ -138,7 +174,7 @@ func (h *Tokens) mintPair(ctx context.Context, credentialID string, claims json.
 	refreshID := uuid.New().String()
 	refreshClaims := json.RawMessage(`{}`)
 
-	refreshTok, err = tokens.Mint(h.secret, refreshJTI, refreshClaims, refreshExp, "refresh")
+	refreshTok, err = mintJWT(h.secret, refreshJTI, refreshClaims, refreshExp, "refresh")
 	if err != nil {
 		return "", "", "", time.Time{}, err
 	}
@@ -152,7 +188,7 @@ func (h *Tokens) mintPair(ctx context.Context, credentialID string, claims json.
 // ── Handlers ──────────────────────────────────────────────────────────────────
 
 // Mint signs a new access+refresh JWT pair and persists both to the token store.
-func (h *Tokens) Mint(ctx context.Context, input *MintTokenInput) (*TokenPairOutput, error) {
+func (h *Handler) Mint(ctx context.Context, input *MintTokenInput) (*TokenPairOutput, error) {
 	claimsBytes, err := json.Marshal(input.Body.Claims)
 	if err != nil {
 		return nil, huma.Error400BadRequest("invalid claims")
@@ -174,15 +210,15 @@ func (h *Tokens) Mint(ctx context.Context, input *MintTokenInput) (*TokenPairOut
 
 // Validate verifies a token — JWT or OTU invite — and confirms it exists in the appropriate store.
 // Token type is detected by structure: JWTs have two dots; OTU tokens do not.
-func (h *Tokens) Validate(ctx context.Context, input *ValidateTokenInput) (*ValidateTokenOutput, error) {
+func (h *Handler) Validate(ctx context.Context, input *ValidateTokenInput) (*ValidateTokenOutput, error) {
 	if strings.Count(input.Body.Token, ".") == 2 {
 		return h.validateJWT(ctx, input.Body.Token)
 	}
 	return h.validateInviteToken(ctx, input.Body.Token)
 }
 
-func (h *Tokens) validateJWT(ctx context.Context, tokenStr string) (*ValidateTokenOutput, error) {
-	jti, tokenType, _, err := tokens.Verify(h.secret, tokenStr)
+func (h *Handler) validateJWT(ctx context.Context, tokenStr string) (*ValidateTokenOutput, error) {
+	jti, tokenType, _, err := verifyJWT(h.secret, tokenStr)
 	if err != nil {
 		return nil, huma.Error401Unauthorized("unauthorized")
 	}
@@ -190,7 +226,6 @@ func (h *Tokens) validateJWT(ctx context.Context, tokenStr string) (*ValidateTok
 		return nil, huma.Error401Unauthorized("unauthorized")
 	}
 
-	// DB claims are authoritative; JWT claims used only to extract jti for DB lookup.
 	row, err := h.db.FindToken(ctx, jti)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, ErrNotFound) {
@@ -215,7 +250,7 @@ func (h *Tokens) validateJWT(ctx context.Context, tokenStr string) (*ValidateTok
 	return out, nil
 }
 
-func (h *Tokens) validateInviteToken(ctx context.Context, rawToken string) (*ValidateTokenOutput, error) {
+func (h *Handler) validateInviteToken(ctx context.Context, rawToken string) (*ValidateTokenOutput, error) {
 	hash := hashToken(rawToken)
 	row, err := h.db.FindInviteToken(ctx, hash)
 	if err != nil {
@@ -240,8 +275,8 @@ func (h *Tokens) validateInviteToken(ctx context.Context, rawToken string) (*Val
 }
 
 // Refresh validates a refresh token and issues a new access+refresh pair.
-func (h *Tokens) Refresh(ctx context.Context, input *RefreshTokenInput) (*TokenPairOutput, error) {
-	jti, tokenType, _, err := tokens.Verify(h.secret, input.Body.RefreshToken)
+func (h *Handler) Refresh(ctx context.Context, input *RefreshTokenInput) (*TokenPairOutput, error) {
+	jti, tokenType, _, err := verifyJWT(h.secret, input.Body.RefreshToken)
 	if err != nil {
 		return nil, huma.Error401Unauthorized("refresh token invalid")
 	}
@@ -262,7 +297,7 @@ func (h *Tokens) Refresh(ctx context.Context, input *RefreshTokenInput) (*TokenP
 
 	const graceWindow = 30 * time.Second
 	if err := h.db.RotateRefreshToken(ctx, jti, graceWindow); err != nil {
-		if errors.Is(err, db.ErrReplayDetected) || errors.Is(err, db.ErrTokenNotFound) {
+		if errors.Is(err, store.ErrReplayDetected) || errors.Is(err, store.ErrTokenNotFound) {
 			return nil, huma.Error401Unauthorized("refresh token invalid")
 		}
 		return nil, huma.Error500InternalServerError("internal error")
@@ -283,20 +318,20 @@ func (h *Tokens) Refresh(ctx context.Context, input *RefreshTokenInput) (*TokenP
 }
 
 // Revoke deletes a token record by jti. Always 204 — idempotent.
-func (h *Tokens) Revoke(ctx context.Context, input *RevokeTokenInput) (*struct{}, error) {
+func (h *Handler) Revoke(ctx context.Context, input *RevokeTokenInput) (*struct{}, error) {
 	h.db.DeleteToken(ctx, input.JTI) //nolint:errcheck
 	return nil, nil
 }
 
 // RevokeUser removes all active token records for a credential without deleting the credential.
-func (h *Tokens) RevokeUser(ctx context.Context, input *RevokeUserTokensInput) (*struct{}, error) {
+func (h *Handler) RevokeUser(ctx context.Context, input *RevokeUserTokensInput) (*struct{}, error) {
 	h.db.DeleteUserTokens(ctx, input.CredentialID) //nolint:errcheck
 	return nil, nil
 }
 
 // ── Route registration ────────────────────────────────────────────────────────
 
-func RegisterTokenRoutes(api huma.API, h *Tokens) {
+func RegisterRoutes(api huma.API, h *Handler) {
 	huma.Register(api, huma.Operation{
 		OperationID:   "mint-token",
 		Method:        http.MethodPost,
@@ -324,8 +359,6 @@ func RegisterTokenRoutes(api huma.API, h *Tokens) {
 		Tags:        []string{"tokens"},
 	}, h.Refresh)
 
-	// Register /tokens/user/{credential_id} before /tokens/{jti} — chi's radix tree
-	// prioritises the static "user" segment, but explicit ordering makes intent clear.
 	huma.Register(api, huma.Operation{
 		OperationID:   "revoke-user-tokens",
 		Method:        http.MethodDelete,

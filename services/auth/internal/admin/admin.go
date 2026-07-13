@@ -1,4 +1,4 @@
-package authsync
+package admin
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/veloci/auth/internal/db"
+	"github.com/veloci/auth/internal/store"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -15,7 +15,7 @@ import (
 // On first run it hashes and inserts. On subsequent restarts it compares the config
 // password against the stored hash — bcrypt work only runs when the password has changed.
 // Changing the config password and restarting is the intentional admin-reset UX.
-func SyncServerAdmin(ctx context.Context, d *db.DB, email, password string) error {
+func SyncServerAdmin(ctx context.Context, d *store.DB, email, password string) error {
 	existing, err := d.FindAdminCredential(ctx, email)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return err

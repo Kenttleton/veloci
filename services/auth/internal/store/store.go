@@ -1,4 +1,4 @@
-package db
+package store
 
 import (
 	"context"
@@ -11,17 +11,20 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// DB wraps a pgxpool.Pool providing auth-domain query methods.
-type DB struct{ pool *pgxpool.Pool }
+// ErrTokenNotFound is returned when a token row is not found by JTI.
+var ErrTokenNotFound = errors.New("token not found")
 
-// Credential holds the stored credential fields returned from auth_credentials.
+// ErrReplayDetected is returned when a refresh token is presented outside the grace window.
+var ErrReplayDetected = errors.New("refresh token replay detected")
+
+// Credential holds auth_credentials row fields.
 type Credential struct {
 	ID           string
 	PasswordHash string
 	SystemRole   string
 }
 
-// TokenRow holds the stored token fields returned from tokens.
+// TokenRow holds tokens row fields.
 type TokenRow struct {
 	CredentialID string
 	Claims       json.RawMessage
@@ -30,15 +33,15 @@ type TokenRow struct {
 	RotatedAt    *time.Time
 }
 
-// InviteTokenRow holds fields from invite_tokens.
+// InviteTokenRow holds invite_tokens fields needed by the sessions handler.
 type InviteTokenRow struct {
-	ID         string
-	TokenHash  string
-	CreatedBy  string
 	Claims     json.RawMessage
 	ExpiresAt  time.Time
 	AcceptedAt *time.Time
 }
+
+// DB wraps a pgxpool.Pool providing auth-domain query methods.
+type DB struct{ pool *pgxpool.Pool }
 
 // New creates a DB from the given DSN. It does not verify connectivity — call Ping.
 func New(ctx context.Context, dsn string) (*DB, error) {
@@ -177,8 +180,7 @@ func (d *DB) DeleteUserTokens(ctx context.Context, credentialID string) error {
 
 // RotateRefreshToken stamps rotated_at on the old refresh token row within a transaction.
 // It enforces the replay window: if rotated_at is already set and older than graceWindow, it
-// returns ErrReplayDetected. The caller is responsible for inserting the new token pair after
-// this call succeeds.
+// returns ErrReplayDetected.
 func (d *DB) RotateRefreshToken(ctx context.Context, oldJTI string, graceWindow time.Duration) error {
 	tx, err := d.pool.Begin(ctx)
 	if err != nil {
@@ -205,7 +207,6 @@ func (d *DB) RotateRefreshToken(ctx context.Context, oldJTI string, graceWindow 
 		}
 		// Within grace window — already rotated but within tolerance; allow
 	} else {
-		// First rotation — stamp rotated_at
 		_, err = tx.Exec(ctx, `UPDATE tokens SET rotated_at = NOW() WHERE id = $1`, rowID)
 		if err != nil {
 			return fmt.Errorf("stamp rotated_at: %w", err)
@@ -214,12 +215,6 @@ func (d *DB) RotateRefreshToken(ctx context.Context, oldJTI string, graceWindow 
 
 	return tx.Commit(ctx)
 }
-
-// ErrTokenNotFound is returned when a token row is not found by JTI.
-var ErrTokenNotFound = errors.New("token not found")
-
-// ErrReplayDetected is returned when a refresh token is presented outside the grace window.
-var ErrReplayDetected = errors.New("refresh token replay detected")
 
 // StoreInviteToken persists a new invite token record.
 func (d *DB) StoreInviteToken(ctx context.Context, tokenHash, createdBy string, claims []byte, expiresAt time.Time) error {
@@ -235,10 +230,9 @@ func (d *DB) StoreInviteToken(ctx context.Context, tokenHash, createdBy string, 
 func (d *DB) FindInviteToken(ctx context.Context, tokenHash string) (*InviteTokenRow, error) {
 	row := new(InviteTokenRow)
 	err := d.pool.QueryRow(ctx,
-		`SELECT id, token_hash, created_by, claims, expires_at, accepted_at
-		 FROM invite_tokens WHERE token_hash = $1`,
+		`SELECT claims, expires_at, accepted_at FROM invite_tokens WHERE token_hash = $1`,
 		tokenHash,
-	).Scan(&row.ID, &row.TokenHash, &row.CreatedBy, &row.Claims, &row.ExpiresAt, &row.AcceptedAt)
+	).Scan(&row.Claims, &row.ExpiresAt, &row.AcceptedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -251,12 +245,13 @@ func (d *DB) FindInviteToken(ctx context.Context, tokenHash string) (*InviteToke
 //   - alreadyConsumed=true when accepted_at is already set
 //   - expired=true when expires_at is in the past (but accepted_at is null)
 func (d *DB) ConsumeInviteToken(ctx context.Context, tokenHash string) (found bool, alreadyConsumed bool, expired bool, err error) {
-	// Read the current row first to distinguish states.
-	row := new(InviteTokenRow)
+	var id string
+	var expiresAt time.Time
+	var acceptedAt *time.Time
 	err = d.pool.QueryRow(ctx,
 		`SELECT id, expires_at, accepted_at FROM invite_tokens WHERE token_hash = $1`,
 		tokenHash,
-	).Scan(&row.ID, &row.ExpiresAt, &row.AcceptedAt)
+	).Scan(&id, &expiresAt, &acceptedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, false, false, nil
 	}
@@ -264,23 +259,21 @@ func (d *DB) ConsumeInviteToken(ctx context.Context, tokenHash string) (found bo
 		return false, false, false, err
 	}
 
-	if row.AcceptedAt != nil {
+	if acceptedAt != nil {
 		return true, true, false, nil
 	}
-	if time.Now().After(row.ExpiresAt) {
+	if time.Now().After(expiresAt) {
 		return true, false, true, nil
 	}
 
-	// Atomically consume: UPDATE WHERE accepted_at IS NULL ensures only one winner.
 	tag, err := d.pool.Exec(ctx,
 		`UPDATE invite_tokens SET accepted_at = NOW() WHERE id = $1 AND accepted_at IS NULL`,
-		row.ID,
+		id,
 	)
 	if err != nil {
 		return true, false, false, err
 	}
 	if tag.RowsAffected() == 0 {
-		// A concurrent request won the race.
 		return true, true, false, nil
 	}
 	return true, false, false, nil
