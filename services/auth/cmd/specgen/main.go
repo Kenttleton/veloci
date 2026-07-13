@@ -15,7 +15,9 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
-	"github.com/veloci/auth/internal/handlers"
+	"github.com/veloci/auth/internal/credentials"
+	"github.com/veloci/auth/internal/invites"
+	"github.com/veloci/auth/internal/sessions"
 )
 
 func main() {
@@ -24,9 +26,9 @@ func main() {
 
 	// Handlers need no real DB or signing key — routes register purely from types.
 	placeholder := make([]byte, 32)
-	creds := handlers.NewCredentials(nil)
-	toks := handlers.NewTokens(nil, placeholder, handlers.DefaultTokenConfig())
-	inv := handlers.NewInvite(nil, handlers.DefaultInviteConfig())
+	creds := credentials.NewHandler(nil)
+	toks := sessions.NewHandler(nil, placeholder, sessions.DefaultConfig())
+	inv := invites.NewHandler(nil, invites.DefaultConfig())
 
 	r := chi.NewRouter()
 	api := humachi.New(r, huma.Config{
@@ -40,9 +42,9 @@ func main() {
 		DefaultFormat: "application/json",
 	})
 
-	handlers.RegisterCredentialRoutes(api, creds)
-	handlers.RegisterTokenRoutes(api, toks)
-	handlers.RegisterInviteRoutes(api, inv)
+	credentials.RegisterRoutes(api, creds)
+	sessions.RegisterRoutes(api, toks)
+	invites.RegisterRoutes(api, inv)
 
 	spec := api.OpenAPI()
 	b, err := json.MarshalIndent(spec, "", "  ")
