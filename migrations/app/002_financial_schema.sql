@@ -146,6 +146,20 @@ CREATE INDEX ON raw_transactions (entity_id, account_id, date);
 CREATE INDEX ON raw_transactions (entity_id, date);
 CREATE INDEX ON raw_transactions (entity_id, account_id, settlement_status, imported_at);
 
+-- ── LABELS ──────────────────────────────────────────────────────────────────
+-- User-facing named groupings. Each rule produces one label (rules.label_id FK).
+-- The label hierarchy (leaf → aggregate) is implicit in post-stage rule conditions
+-- that reference other label UUIDs as inputs. No separate membership table needed.
+-- Name is freely mutable; all downstream references use id, never name.
+
+CREATE TABLE labels (
+  id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  entity_id  UUID        NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+  name       TEXT        NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (entity_id, name)
+);
+
 -- ── RULES ───────────────────────────────────────────────────────────────────
 -- Match configuration. Each rule produces one label (label_id FK).
 -- Composability: post-stage rule conditions reference label UUIDs, enabling
@@ -180,12 +194,16 @@ CREATE TABLE rules (
   -- then clears both fields. Engine reads projected_rate_per_day after API applies.
   pending_amount_cents   BIGINT,
   pending_effective_date DATE,
+  -- A rule without a label_id is valid only transiently during creation;
+  -- active rules always have a label_id set.
+  label_id               UUID        REFERENCES labels(id) ON DELETE SET NULL,
   created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX ON rules (entity_id, status);
 CREATE INDEX ON rules (entity_id, stage, priority);
 CREATE INDEX ON rules (entity_id, next_due_date);
+CREATE INDEX ON rules (entity_id, label_id);
 
 -- ── RULE EPOCHS ──────────────────────────────────────────────────────────────
 -- One row per signal instance of a rule. Append-only — never update epoch_start.
@@ -223,26 +241,6 @@ CREATE TABLE transaction_rule_assignments (
 );
 
 CREATE INDEX ON transaction_rule_assignments (rule_id);
-
--- ── LABELS ──────────────────────────────────────────────────────────────────
--- User-facing named groupings. Each rule produces one label (rules.label_id FK).
--- The label hierarchy (leaf → aggregate) is implicit in post-stage rule conditions
--- that reference other label UUIDs as inputs. No separate membership table needed.
--- Name is freely mutable; all downstream references use id, never name.
-
-CREATE TABLE labels (
-  id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  entity_id  UUID        NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-  name       TEXT        NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (entity_id, name)
-);
-
--- rules.label_id added here (after labels) to satisfy FK ordering.
--- A rule without a label_id is valid only transiently during creation;
--- active rules always have a label_id set.
-ALTER TABLE rules ADD COLUMN label_id UUID REFERENCES labels(id) ON DELETE SET NULL;
-CREATE INDEX ON rules (entity_id, label_id);
 
 -- ── REVIEW QUEUE ────────────────────────────────────────────────────────────
 -- Engine-detected candidate rules awaiting user approval.
