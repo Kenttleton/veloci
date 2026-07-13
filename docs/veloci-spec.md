@@ -62,13 +62,13 @@ Every financial event exists in two lanes simultaneously. The gap between them i
 
 ## 2.3 Expense Classification
 
-Every expense entry is classified into one of five types. Classification drives how the system calculates rates and applies Smoothing.
+Every expense entry is classified into one of three types. Classification drives how the system calculates rates and applies Smoothing.
 
-| **Type** | **Description*
-| **Standing** | Recurring commitment with consistent amount and frequency. Rent, subscriptions, loan minimums. Rate is exact. > *Single** | One-time expected expense. Annual insurance payment, registration fee, planned purchase. Rate is Smoothed over a window. |
-| **Hit** | Unexpected negative event. Car repair, medical bill, emergency expense. Rate is Smoothed over a short default window. |
-| **Boost** | Unexpected positive event. Tax refund, gift, work bonus. Smoothed short to avoid artificially inflating the rate picture. |
+| **Type** | **Description** |
+| --- | --- |
+| **Standing** | Recurring commitment with consistent amount and frequency. Rent, subscriptions, loan minimums. Rate is exact. |
 | **Variable** | Fluctuating but regular expense. Groceries, utilities, fuel. User chooses average or maximum for rate calculation on a per-entry basis. |
+| **One-time** | A single non-recurring event — car repair, tax refund, annual insurance, work bonus. Direction (income or expense) carries the meaning; the type signals there is no expected cadence. Also referred to as Single; the two terms are synonymous. Rate is Smoothed over a configurable window. |
 
 ## 2.4 Smoothing
 
@@ -76,9 +76,10 @@ Smoothing is Veloci's amortization system. Rather than letting large infrequent 
 
 Smoothing defaults are applied by classification and can be overridden per entry:
 
-| **Classification** | **Default Window*
-| **Hit / Boost** | 30 days — short window reflects the temporary nature of unexpected events > *Single (short-term)** | 30 days — one-time purchases and irregular small spikes |
-| **Single (planned annual)** | 365 days — known annual events like insurance or registration |
+| **Classification** | **Default Window** |
+| --- | --- |
+| **One-time (short-term)** | 30 days — unexpected events and one-time purchases |
+| **One-time (planned annual)** | 365 days — known annual events like insurance or registration |
 | **Variable** | Rolling average or user-selected maximum, recalculated each cycle |
 | **User override** | Any entry can have its Smoothing window set manually |
 
