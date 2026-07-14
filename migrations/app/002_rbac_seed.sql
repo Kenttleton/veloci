@@ -8,6 +8,7 @@ INSERT INTO permissions (name) VALUES
   ('rules:write'),
   ('labels:write'),
   ('entries:write'),
+  ('review:write'),
   ('reports:read'),
   ('users:manage'),
   ('entity:configure');
