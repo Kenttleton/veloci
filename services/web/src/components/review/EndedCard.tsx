@@ -30,8 +30,8 @@ export function EndedCard({ item, onAction }: EndedCardProps) {
       if (choice === 'gap') {
         await rejectReview(item.id)
       } else {
-        await updateReview(item.id, { epoch_end: endedDate })
-        await approveReview(item.id, { epoch_end: endedDate })
+        await updateReview(item.id, { end_date: endedDate })
+        await approveReview(item.id, { end_date: endedDate })
       }
       onAction()
     } catch {
@@ -78,7 +78,7 @@ export function EndedCard({ item, onAction }: EndedCardProps) {
       </div>
 
       <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>
-        {item.rule_name}
+        {item.suggested_name}
       </h3>
 
       {/* Info */}
@@ -134,7 +134,7 @@ export function EndedCard({ item, onAction }: EndedCardProps) {
               style={{ accentColor: 'var(--accent)' }}
             />
             <span style={{ fontSize: 13, color: 'var(--text)' }}>
-              Temporary gap — keep rule active
+              Temporary gap — keep entry active
             </span>
           </label>
 

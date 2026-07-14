@@ -10,13 +10,13 @@ interface JobCardProps {
 
 const JOB_TYPE_LABELS: Record<string, string> = {
   'import.process': 'Import',
-  'rules.reprocess': 'Rules reprocess',
+  'entries.reprocess': 'Entries reprocess',
   'account.analyze': 'Recalculate',
 }
 
 const STAGE_DISPLAY_NAMES: Record<number, string> = {
   0: 'CSV import',
-  1: 'Rule matching',
+  1: 'Entry matching',
   2: 'Pattern detection',
   3: 'Rate computation',
   4: 'Label mapping',
@@ -78,8 +78,8 @@ function summaryLine(job: Job): string {
         parts.push(`${job.metadata.transactions_skipped_duplicate} duplicates skipped`)
       }
     }
-    if (job.job_type === 'rules.reprocess' && job.metadata.rules_processed != null) {
-      parts.push(`${job.metadata.rules_processed} rules processed`)
+    if (job.job_type === 'entries.reprocess' && job.metadata.entries_processed != null) {
+      parts.push(`${job.metadata.entries_processed} entries reprocessed`)
     }
     if (job.job_type === 'account.analyze' && job.metadata.snapshots_written != null) {
       parts.push(`${job.metadata.snapshots_written} snapshots written`)

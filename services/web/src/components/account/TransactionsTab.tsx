@@ -9,9 +9,9 @@ interface TransactionsTabProps {
   accountId: string
 }
 
-interface RuleGroup {
-  ruleId: string | null
-  ruleName: string | null
+interface EntryGroup {
+  entryId: string | null
+  entryName: string | null
   labelId: string | null
   labelName: string | null
   isPendingReview: boolean
@@ -35,7 +35,7 @@ function formatDate(dateStr: string): string {
 
 export function TransactionsTab({ accountId }: TransactionsTabProps) {
   const navigate = useNavigate()
-  const [groups, setGroups] = useState<RuleGroup[]>([])
+  const [groups, setGroups] = useState<EntryGroup[]>([])
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
   const [expandedRows, setExpandedRows] = useState<Map<string, string>>(new Map()) // groupKey -> txId
   const [loading, setLoading] = useState(true)
@@ -45,14 +45,13 @@ export function TransactionsTab({ accountId }: TransactionsTabProps) {
     setLoading(true)
     getTransactions({ account_id: accountId, limit: 50 })
       .then(({ data }) => {
-        // Group by rule
-        const map = new Map<string, RuleGroup>()
+        const map = new Map<string, EntryGroup>()
         for (const tx of data) {
-          const key = tx.rule_id ?? '__unmatched__'
+          const key = tx.entry_id ?? '__unmatched__'
           if (!map.has(key)) {
             map.set(key, {
-              ruleId: tx.rule_id,
-              ruleName: tx.rule_name,
+              entryId: tx.entry_id,
+              entryName: tx.entry_name,
               labelId: tx.label_id,
               labelName: null,
               isPendingReview: tx.pending_review,
@@ -96,25 +95,25 @@ export function TransactionsTab({ accountId }: TransactionsTabProps) {
   }
 
   function loadMoreForGroup(groupKey: string) {
-    const group = groups.find((g) => (g.ruleId ?? '__unmatched__') === groupKey)
+    const group = groups.find((g) => (g.entryId ?? '__unmatched__') === groupKey)
     if (!group || !group.hasMore || group.loading) return
 
     setGroups((prev) =>
       prev.map((g) =>
-        (g.ruleId ?? '__unmatched__') === groupKey ? { ...g, loading: true } : g,
+        (g.entryId ?? '__unmatched__') === groupKey ? { ...g, loading: true } : g,
       ),
     )
 
     getTransactions({
       account_id: accountId,
-      rule_id: group.ruleId ?? undefined,
+      entry_id: group.entryId ?? undefined,
       after: group.cursor ?? undefined,
       limit: 50,
     })
       .then(({ data, meta }) => {
         setGroups((prev) =>
           prev.map((g) => {
-            if ((g.ruleId ?? '__unmatched__') !== groupKey) return g
+            if ((g.entryId ?? '__unmatched__') !== groupKey) return g
             return {
               ...g,
               transactions: [...g.transactions, ...data],
@@ -128,7 +127,7 @@ export function TransactionsTab({ accountId }: TransactionsTabProps) {
       .catch(() => {
         setGroups((prev) =>
           prev.map((g) =>
-            (g.ruleId ?? '__unmatched__') === groupKey ? { ...g, loading: false } : g,
+            (g.entryId ?? '__unmatched__') === groupKey ? { ...g, loading: false } : g,
           ),
         )
       })
@@ -152,7 +151,7 @@ export function TransactionsTab({ accountId }: TransactionsTabProps) {
         <p style={{ color: 'var(--text2)', marginBottom: 8 }}>No matched transactions yet.</p>
         <p style={{ color: 'var(--text3)', fontSize: 13, marginBottom: 16 }}>
           Transactions appear here once the engine has processed this account's imports
-          and patterns have been matched to rules.
+          and patterns have been matched to entries.
         </p>
         <button
           onClick={() => navigate('/review')}
@@ -173,7 +172,7 @@ export function TransactionsTab({ accountId }: TransactionsTabProps) {
   return (
     <div>
       {filteredGroups.map((group) => {
-        const groupKey = group.ruleId ?? '__unmatched__'
+        const groupKey = group.entryId ?? '__unmatched__'
         const isExpanded = expandedGroups.has(groupKey)
         const expandedTxId = expandedRows.get(groupKey)
         const totalCents = group.transactions.reduce((s, t) => s + t.amount_cents, 0)
@@ -213,7 +212,7 @@ export function TransactionsTab({ accountId }: TransactionsTabProps) {
                   whiteSpace: 'nowrap',
                 }}
               >
-                {group.ruleName ?? 'Unmatched'}
+                {group.entryName ?? 'Unmatched'}
               </span>
               {group.isPendingReview && (
                 <span
@@ -297,14 +296,14 @@ export function TransactionsTab({ accountId }: TransactionsTabProps) {
                         >
                           <div style={{ marginBottom: 10 }}>
                             <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                              Rules matched
+                              Entries matched
                             </div>
-                            {group.ruleId ? (
+                            {group.entryId ? (
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <button
                                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', fontSize: 13, padding: 0, display: 'flex', alignItems: 'center', gap: 4 }}
                                 >
-                                  {group.ruleName}
+                                  {group.entryName}
                                   <ExternalLink size={11} />
                                 </button>
                                 {tx.confidence !== null && (
@@ -312,7 +311,7 @@ export function TransactionsTab({ accountId }: TransactionsTabProps) {
                                 )}
                               </div>
                             ) : (
-                              <span style={{ color: 'var(--text3)', fontSize: 13 }}>No rules matched</span>
+                              <span style={{ color: 'var(--text3)', fontSize: 13 }}>No entries matched</span>
                             )}
                           </div>
 

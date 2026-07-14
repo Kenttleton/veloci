@@ -269,7 +269,7 @@ export function SettingsPage() {
                       )}
                     </div>
                     <span style={{ fontSize: 12, color: 'var(--text2)' }}>
-                      {label.rule_count != null ? `${label.rule_count} rules` : '—'}
+                      {label.entry_count != null ? `${label.entry_count} entries` : '—'}
                     </span>
                     <div style={{ display: 'flex', gap: 6 }}>
                       {isEditing ? (

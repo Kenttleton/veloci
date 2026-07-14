@@ -30,27 +30,28 @@ export interface Account {
 
 export interface Label {
   id: string
-  entity_id: string
   name: string
   created_at: string
-  rule_count?: number
+  entry_count?: number
 }
 
-export interface Rule {
+export interface EntryConfig {
   id: string
   entity_id: string
-  name: string
+  label_id: string | null
   direction: 'income' | 'expense'
-  entry_type: 'standing' | 'variable' | 'one_time'
+  entry_type: 'standing' | 'variable' | 'irregular'
   period_days: number
   variable_method: 'avg' | 'max' | null
   projected_rate_per_day: number | null
   conditions: unknown
-  label_id: string | null
-  stage: 'pre' | 'post'
   priority: number
   status: 'pending_review' | 'active' | 'inactive'
   source: 'user' | 'engine'
+  recurrence_anchor: string | null
+  next_due_date: string | null
+  start_date: string
+  end_date: string | null
   created_at: string
 }
 
@@ -75,8 +76,8 @@ export interface SnapshotCandle {
   projected_rate_per_day: number
   drift_per_day: number
   slope_per_day: number
-  epoch_start: string
-  epoch_end: string | null
+  entry_start_date: string
+  entry_end_date: string | null
 }
 
 export interface SnapshotHistoryResponse {
@@ -87,10 +88,9 @@ export interface SnapshotHistoryResponse {
 
 export interface Entry {
   id: string
-  rule_id: string
   name: string
   direction: 'income' | 'expense'
-  entry_type: 'standing' | 'variable' | 'one_time'
+  entry_type: 'standing' | 'variable' | 'irregular'
   label_id: string | null
   label_name: string | null
   actual_rate: number
@@ -104,8 +104,8 @@ export interface Entry {
 export interface Transaction {
   id: string
   account_id: string
-  rule_id: string | null
-  rule_name: string | null
+  entry_id: string | null
+  entry_name: string | null
   label_id: string | null
   imported_payee: string
   merchant_normalized: string
@@ -140,15 +140,15 @@ export interface ImportTransaction {
 
 export interface ReviewItem {
   id: string
-  rule_id: string
-  rule_name: string
+  entry_id: string
+  suggested_name: string
   alert_type: 'new' | 'drift' | 'ended'
   status: 'pending' | 'approved' | 'rejected'
   confidence: number
   merchant_confidence: number
   timing_confidence: number
   amount_confidence: number
-  suggested_entry_type: 'standing' | 'variable' | 'one_time'
+  suggested_entry_type: 'standing' | 'variable' | 'irregular'
   suggested_rate_per_day: number
   recurrence_anchor: string | null
   sample_merchants: Array<{ date: string; payee: string; amount_cents: number }>
@@ -172,7 +172,7 @@ export interface ReviewItem {
 export interface Job {
   id: string
   entity_id: string
-  job_type: 'import.process' | 'rules.reprocess' | 'account.analyze'
+  job_type: 'import.process' | 'entries.reprocess' | 'account.analyze'
   status: 'queued' | 'processing' | 'complete' | 'failed'
   error: string | null
   retriable: boolean
@@ -187,7 +187,7 @@ export interface Job {
   metadata: {
     transactions_imported?: number
     transactions_skipped_duplicate?: number
-    rules_processed?: number
+    entries_processed?: number
     snapshots_written?: number
   }
   stages: Array<{
@@ -201,7 +201,7 @@ export interface Job {
 
 export interface SseJobEvent {
   job_id: string
-  job_type: 'import.process' | 'rules.reprocess' | 'account.analyze'
+  job_type: 'import.process' | 'entries.reprocess' | 'account.analyze'
   status: 'queued' | 'processing' | 'complete' | 'failed'
   error: string | null
   queued_at: string
@@ -246,13 +246,13 @@ export async function getEntries(): Promise<Entry[]> {
 
 export async function getTransactions(params: {
   account_id?: string
-  rule_id?: string
+  entry_id?: string
   after?: string
   limit?: number
 }): Promise<{ data: Transaction[]; meta: ApiMeta }> {
   const search = new URLSearchParams()
   if (params.account_id) search.set('account_id', params.account_id)
-  if (params.rule_id) search.set('rule_id', params.rule_id)
+  if (params.entry_id) search.set('entry_id', params.entry_id)
   if (params.after) search.set('after', params.after)
   if (params.limit) search.set('limit', String(params.limit))
   const qs = search.toString()
@@ -308,7 +308,7 @@ export async function getReview(params: {
 
 export async function approveReview(
   id: string,
-  payload?: { correction?: boolean; version?: boolean; epoch_end?: string },
+  payload?: { correction?: boolean; version?: boolean; end_date?: string },
 ): Promise<void> {
   await apiFetch<unknown>(`/review/${id}/approve`, { method: 'POST', data: payload ?? {} })
 }
@@ -327,7 +327,7 @@ export async function updateReview(
     projected_rate_per_day: number
     correction: boolean
     version: boolean
-    epoch_end: string
+    end_date: string
   }>,
 ): Promise<void> {
   await apiFetch<unknown>(`/review/${id}`, { method: 'PUT', data: payload })
@@ -354,8 +354,8 @@ export async function updateLabel(id: string, name: string): Promise<Label> {
   return res.data
 }
 
-export async function getLabelRuleCount(id: string): Promise<number> {
-  const res = await apiFetch<ApiResponse<Rule[]>>(`/labels/${id}/rules`)
+export async function getLabelEntryCount(id: string): Promise<number> {
+  const res = await apiFetch<ApiResponse<EntryConfig[]>>(`/labels/${id}/entries`)
   return res.data.length
 }
 

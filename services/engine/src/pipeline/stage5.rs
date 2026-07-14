@@ -1,7 +1,7 @@
 //! Stage 5: Slope + drift computation using linear regression.
 //!
 //! **Input:** Current per-node rates from Stages 3 and 4; prior
-//! `computed_snapshots` bulk-loaded for all nodes.
+//! `snapshots` bulk-loaded for all nodes.
 //!
 //! **Output:** Per-node `NodeTrend` structs with `drift_per_day`, `slope_per_day`,
 //! and `r_squared`.
@@ -12,8 +12,8 @@
 //! 2. Bulk-load all snapshot history for all nodes in ONE query (before par_iter).
 //! 3. Group into `HashMap<Uuid, Vec<SnapshotRow>>`.
 //! 4. `rayon::par_iter` over all nodes — no DB access inside the loop.
-//!    - Rule nodes: filter by `epoch_id == current_epoch_id` + date window.
-//!    - Label nodes: filter by date window only (epoch_id IS NULL).
+//!    - Entry nodes: filter by date window (start_date absorbed into entries table).
+//!    - Classification nodes: filter by date window only.
 //! 5. Linear regression (OLS) over `(days_since_first, actual_rate)` pairs.
 //! 6. Compute drift using direction-aware sign convention.
 
@@ -24,7 +24,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::pipeline::types::{
-    Direction, LabelRate, NodeTrend, NodeType, RuleRate, SnapshotRow, Stage3Output, Stage4Output,
+    Direction, EntryRate, LabelRate, NodeTrend, NodeType, SnapshotRow, Stage3Output, Stage4Output,
     Stage5Output,
 };
 
@@ -44,62 +44,62 @@ pub async fn run(
     let _ = computed_as_of; // used by stage3/4 callers
 
     // Collect all node IDs + their regression windows.
-    let rule_nodes: Vec<(Uuid, i32, Option<Uuid>)> = stage3
-        .rule_rates
+    let entry_nodes: Vec<(Uuid, i32)> = stage3
+        .entry_rates
         .iter()
-        .map(|r| (r.rule_id, r.period_days * 3, r.epoch_id))
+        .map(|r| (r.entry_id, r.period_days * 3))
         .collect();
 
-    let label_nodes: Vec<(Uuid, i32)> = stage4
+    let classification_nodes: Vec<(Uuid, i32)> = stage4
         .label_rates
         .iter()
         .map(|l| (l.label_id, l.period_days * 3))
         .collect();
 
     // Compute max window for the bulk SQL query.
-    let max_window_days = rule_nodes
+    let max_window_days = entry_nodes
         .iter()
-        .map(|(_, w, _)| *w)
-        .chain(label_nodes.iter().map(|(_, w)| *w))
+        .map(|(_, w)| *w)
+        .chain(classification_nodes.iter().map(|(_, w)| *w))
         .max()
         .unwrap_or(90);
 
     // Collect all node IDs for the bulk query.
-    let all_node_ids: Vec<Uuid> = rule_nodes
+    let all_node_ids: Vec<Uuid> = entry_nodes
         .iter()
-        .map(|(id, _, _)| *id)
-        .chain(label_nodes.iter().map(|(id, _)| *id))
+        .map(|(id, _)| *id)
+        .chain(classification_nodes.iter().map(|(id, _)| *id))
         .collect();
 
     if all_node_ids.is_empty() {
         return Ok(Stage5Output {
-            rule_trends:  Vec::new(),
-            label_trends: Vec::new(),
+            entry_trends:          Vec::new(),
+            classification_trends: Vec::new(),
         });
     }
 
     // Bulk-load all snapshot history before par_iter (spec §9).
     let history_map = bulk_load_history(entity_id, &all_node_ids, snapshot_date, max_window_days, pool).await?;
 
-    // Build a lookup from rule_id → current Direction (from Stage 3).
-    let rule_direction: std::collections::HashMap<Uuid, Direction> = stage3
-        .rule_rates
+    // Build a lookup from entry_id → current Direction (from Stage 3).
+    let entry_direction: std::collections::HashMap<Uuid, Direction> = stage3
+        .entry_rates
         .iter()
-        .map(|r| (r.rule_id, r.direction))
+        .map(|r| (r.entry_id, r.direction))
         .collect();
 
     // Build lookup for label → direction (from Stage 4).
-    let label_direction: std::collections::HashMap<Uuid, Direction> = stage4
+    let classification_direction: std::collections::HashMap<Uuid, Direction> = stage4
         .label_rates
         .iter()
         .map(|l| (l.label_id, l.direction))
         .collect();
 
     // Build lookup for current rates.
-    let rule_rate_map: std::collections::HashMap<Uuid, &RuleRate> = stage3
-        .rule_rates
+    let entry_rate_map: std::collections::HashMap<Uuid, &EntryRate> = stage3
+        .entry_rates
         .iter()
-        .map(|r| (r.rule_id, r))
+        .map(|r| (r.entry_id, r))
         .collect();
 
     let label_rate_map: std::collections::HashMap<Uuid, &LabelRate> = stage4
@@ -108,35 +108,34 @@ pub async fn run(
         .map(|l| (l.label_id, l))
         .collect();
 
-    // Parallel computation for rule nodes.
-    let rule_trends: Vec<NodeTrend> = rule_nodes
+    // Parallel computation for entry nodes.
+    let entry_trends: Vec<NodeTrend> = entry_nodes
         .par_iter()
-        .map(|(node_id, window_days, epoch_id)| {
+        .map(|(node_id, window_days)| {
             let node_history = history_map.get(node_id).map(Vec::as_slice).unwrap_or(&[]);
 
-            // Filter: current epoch + date window (spec §9).
+            // Filter: date window only (epochs absorbed into entries.start_date).
             let history: Vec<&SnapshotRow> = node_history
                 .iter()
-                .filter(|r| r.epoch_id == *epoch_id)
                 .filter(|r| r.snapshot_date >= snapshot_date - chrono::Duration::days(i64::from(*window_days)))
                 .collect();
 
-            let current_rate = rule_rate_map
+            let current_rate = entry_rate_map
                 .get(node_id)
                 .map(|r| r.actual_rate_per_day)
                 .unwrap_or(0.0);
-            let current_projected = rule_rate_map
+            let current_projected = entry_rate_map
                 .get(node_id)
                 .map(|r| r.projected_rate_per_day)
                 .unwrap_or(0.0);
-            let direction = rule_direction.get(node_id).copied().unwrap_or(Direction::Expense);
+            let direction = entry_direction.get(node_id).copied().unwrap_or(Direction::Expense);
 
             let (slope, r_squared) = linear_regression_from_history(&history, snapshot_date, current_rate);
             let drift = compute_drift(current_rate, current_projected, direction);
 
             NodeTrend {
                 node_id:       *node_id,
-                node_type:     NodeType::Rule,
+                node_type:     NodeType::Entry,
                 drift_per_day: drift,
                 slope_per_day: slope,
                 r_squared,
@@ -144,13 +143,12 @@ pub async fn run(
         })
         .collect();
 
-    // Parallel computation for label nodes.
-    let label_trends: Vec<NodeTrend> = label_nodes
+    // Parallel computation for classification nodes (label aggregates).
+    let classification_trends: Vec<NodeTrend> = classification_nodes
         .par_iter()
         .map(|(node_id, window_days)| {
             let node_history = history_map.get(node_id).map(Vec::as_slice).unwrap_or(&[]);
 
-            // Label nodes: filter by date window only (epoch_id IS NULL).
             let history: Vec<&SnapshotRow> = node_history
                 .iter()
                 .filter(|r| r.snapshot_date >= snapshot_date - chrono::Duration::days(i64::from(*window_days)))
@@ -164,14 +162,14 @@ pub async fn run(
                 .get(node_id)
                 .map(|l| l.projected_rate_per_day)
                 .unwrap_or(0.0);
-            let direction = label_direction.get(node_id).copied().unwrap_or(Direction::Expense);
+            let direction = classification_direction.get(node_id).copied().unwrap_or(Direction::Expense);
 
             let (slope, r_squared) = linear_regression_from_history(&history, snapshot_date, current_rate);
             let drift = compute_drift(current_rate, current_projected, direction);
 
             NodeTrend {
                 node_id:       *node_id,
-                node_type:     NodeType::Label,
+                node_type:     NodeType::Classification,
                 drift_per_day: drift,
                 slope_per_day: slope,
                 r_squared,
@@ -179,7 +177,7 @@ pub async fn run(
         })
         .collect();
 
-    Ok(Stage5Output { rule_trends, label_trends })
+    Ok(Stage5Output { entry_trends, classification_trends })
 }
 
 // ---------------------------------------------------------------------------
@@ -325,7 +323,6 @@ async fn bulk_load_history(
         snapshot_date:       NaiveDate,
         computed_as_of:      NaiveDate,
         actual_rate_per_day: sqlx::types::BigDecimal,
-        epoch_id:            Option<Uuid>,
     }
 
     let window_start = snapshot_date - chrono::Duration::days(i64::from(max_window_days));
@@ -333,8 +330,8 @@ async fn bulk_load_history(
     let rows: Vec<Row> = sqlx::query_as(
         r#"
         SELECT node_id, node_type, snapshot_date, computed_as_of,
-               actual_rate_per_day, epoch_id
-        FROM computed_snapshots
+               actual_rate_per_day
+        FROM snapshots
         WHERE entity_id = $1
           AND node_id = ANY($2)
           AND snapshot_date >= $3
@@ -352,7 +349,7 @@ async fn bulk_load_history(
         std::collections::HashMap::new();
 
     for r in rows {
-        let node_type = NodeType::from_str(&r.node_type).unwrap_or(NodeType::Rule);
+        let node_type = NodeType::from_str(&r.node_type).unwrap_or(NodeType::Entry);
         let rate = r.actual_rate_per_day.to_string().parse::<f64>().unwrap_or(0.0);
         map.entry(r.node_id).or_default().push(SnapshotRow {
             node_id:             r.node_id,
@@ -360,7 +357,6 @@ async fn bulk_load_history(
             snapshot_date:       r.snapshot_date,
             computed_as_of:      r.computed_as_of,
             actual_rate_per_day: rate,
-            epoch_id:            r.epoch_id,
         });
     }
 

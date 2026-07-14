@@ -1,49 +1,48 @@
 //! Stage 4: Label rate mapping.
 //!
-//! **Input:** Per-rule rates from Stage 3; `rules.label_id` FK.
+//! **Input:** Per-entry rates from Stage 3; `entries.label_id` FK.
 //!
 //! **Output:** Per-label `LabelRate` structs.
 //!
 //! ## Model
 //!
-//! Each rule has exactly one output label (`rules.label_id`). Stage 4 groups
-//! Stage 3 rule rates by their `label_id` to produce label-level rates.
+//! Each entry has exactly one output label (`entries.label_id`). Stage 4 groups
+//! Stage 3 entry rates by their `label_id` to produce label-level rates.
 //!
-//! Since each rule maps to exactly one label, and a transaction can match
-//! multiple rules at different hierarchy levels (pre → leaf label, post →
-//! aggregate label), there is no set-union deduplication needed. Each rule's
+//! Since each entry maps to exactly one label, and a transaction can match
+//! multiple entries, there is no set-union deduplication needed. Each entry's
 //! rate is mapped to its label independently.
 //!
-//! `contributing_rule_count` is the count of transactions assigned to the
-//! rule in Stage 3.
+//! `contributing_entry_count` is the sum of transaction counts across all
+//! entries contributing to the label in Stage 3.
 
 use anyhow::Result;
 use rayon::prelude::*;
 use uuid::Uuid;
 
-use crate::pipeline::types::{Direction, LabelRate, RuleRate, Stage4Output};
+use crate::pipeline::types::{Direction, EntryRate, LabelRate, Stage4Output};
 
 // ---------------------------------------------------------------------------
 // Public entry point
 // ---------------------------------------------------------------------------
 
-/// Run Stage 4: map rule rates to label rates.
+/// Run Stage 4: map entry rates to label rates.
 ///
 /// This is a pure in-memory transformation — no DB access required.
-/// Labels with no active rule (label_id not referenced by any active rule)
+/// Labels with no active entry (label_id not referenced by any active entry)
 /// produce no output.
 pub async fn run(
     entity_id: Uuid,
-    rule_rates: &[RuleRate],
+    entry_rates: &[EntryRate],
     _pool: &sqlx::PgPool,
 ) -> Result<Stage4Output> {
-    let _ = entity_id; // entity context implicit in rule_rates (all scoped to entity)
+    let _ = entity_id; // entity context implicit in entry_rates (all scoped to entity)
 
-    // Group rule rates by label_id. Rules without a label_id are skipped.
-    let mut label_map: std::collections::HashMap<Uuid, Vec<&RuleRate>> =
+    // Group entry rates by label_id. Entries without a label_id are skipped.
+    let mut label_map: std::collections::HashMap<Uuid, Vec<&EntryRate>> =
         std::collections::HashMap::new();
 
-    for rate in rule_rates {
+    for rate in entry_rates {
         if let Some(label_id) = rate.label_id {
             label_map.entry(label_id).or_default().push(rate);
         }
@@ -62,25 +61,22 @@ pub async fn run(
 // Label rate computation (pure)
 // ---------------------------------------------------------------------------
 
-/// Compute the aggregate rate for a label from its contributing rule rates.
+/// Compute the aggregate rate for a label from its contributing entry rates.
 ///
-/// Each label is defined by exactly one rule (`rules.label_id = $label_id`).
-/// The spec states: "for each active label, read the rate of the rule whose
-/// `label_id` matches." This means there should be exactly one rule per label.
-///
-/// If multiple rules share the same label_id (which should not happen per
-/// spec invariants, but handled defensively), their rates are summed.
-pub fn compute_label_rate(label_id: Uuid, rates: &[&RuleRate]) -> LabelRate {
+/// In the common case, one entry maps to one label. Multiple entries may share
+/// the same label_id (e.g. Netflix v1 closed + Netflix v2 active); their rates
+/// are summed defensively.
+pub fn compute_label_rate(label_id: Uuid, rates: &[&EntryRate]) -> LabelRate {
     let actual_rate_per_day: f64 = rates.iter().map(|r| r.actual_rate_per_day).sum();
     let projected_rate_per_day: f64 = rates.iter().map(|r| r.projected_rate_per_day).sum();
-    let contributing_rule_count: i32 = rates.iter().map(|r| r.transaction_count).sum();
+    let contributing_entry_count: i32 = rates.iter().map(|r| r.transaction_count).sum();
     let period_days: i32 = rates
         .iter()
         .map(|r| r.period_days)
         .max()
         .unwrap_or(30);
 
-    // Direction: income if ANY rule is income (short-circuit, spec §9).
+    // Direction: income if ANY entry is income (short-circuit, spec §9).
     let direction = if rates.iter().any(|r| r.direction == Direction::Income) {
         Direction::Income
     } else {
@@ -93,7 +89,7 @@ pub fn compute_label_rate(label_id: Uuid, rates: &[&RuleRate]) -> LabelRate {
         period_days,
         actual_rate_per_day,
         projected_rate_per_day,
-        contributing_rule_count,
+        contributing_entry_count,
     }
 }
 
@@ -166,25 +162,24 @@ pub fn detect_label_cycles(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pipeline::types::{Direction, EntryType, RuleRate};
+    use crate::pipeline::types::{Direction, EntryRate, EntryType};
     use uuid::Uuid;
 
-    fn rule_rate(
-        rule_id: &str,
+    fn entry_rate(
+        entry_id: &str,
         label_id: Option<&str>,
         direction: Direction,
         actual: f64,
         projected: f64,
         period_days: i32,
         tx_count: i32,
-    ) -> RuleRate {
-        RuleRate {
-            rule_id:                    Uuid::parse_str(rule_id).unwrap_or(Uuid::nil()),
+    ) -> EntryRate {
+        EntryRate {
+            entry_id:                   Uuid::parse_str(entry_id).unwrap_or(Uuid::nil()),
             label_id:                   label_id.and_then(|s| Uuid::parse_str(s).ok()),
             direction,
             entry_type:                 EntryType::Standing,
             period_days,
-            epoch_id:                   None,
             actual_rate_per_day:        actual,
             projected_rate_per_day:     projected,
             transaction_count:          tx_count,
@@ -199,7 +194,7 @@ mod tests {
     #[test]
     fn single_rule_per_label() {
         let rates = vec![
-            rule_rate(
+            entry_rate(
                 "00000000-0000-0000-0000-000000000001",
                 Some(LABEL_A),
                 Direction::Expense,
@@ -210,16 +205,16 @@ mod tests {
             ),
         ];
         let label_id = Uuid::parse_str(LABEL_A).unwrap();
-        let rate_refs: Vec<&RuleRate> = rates.iter().collect();
+        let rate_refs: Vec<&EntryRate> = rates.iter().collect();
         let label = compute_label_rate(label_id, &rate_refs);
         assert!((label.actual_rate_per_day - 100.0).abs() < 0.01);
-        assert_eq!(label.contributing_rule_count, 3);
+        assert_eq!(label.contributing_entry_count, 3);
     }
 
     #[test]
     fn rules_without_label_id_are_skipped() {
         // Rule with no label_id should not appear in label output.
-        let rates = vec![rule_rate(
+        let rates = vec![entry_rate(
             "00000000-0000-0000-0000-000000000001",
             None, // no label
             Direction::Expense,
@@ -229,7 +224,7 @@ mod tests {
             1,
         )];
         // There are no label_id-bearing rates — label_map should be empty.
-        let mut label_map: std::collections::HashMap<Uuid, Vec<&RuleRate>> =
+        let mut label_map: std::collections::HashMap<Uuid, Vec<&EntryRate>> =
             std::collections::HashMap::new();
         for r in &rates {
             if let Some(lid) = r.label_id {
@@ -243,7 +238,7 @@ mod tests {
     fn direction_income_short_circuits() {
         // Mix of income + expense rules → income wins.
         let rates = vec![
-            rule_rate(
+            entry_rate(
                 "00000000-0000-0000-0000-000000000001",
                 Some(LABEL_A),
                 Direction::Expense,
@@ -252,7 +247,7 @@ mod tests {
                 30,
                 2,
             ),
-            rule_rate(
+            entry_rate(
                 "00000000-0000-0000-0000-000000000002",
                 Some(LABEL_A),
                 Direction::Income,
@@ -263,7 +258,7 @@ mod tests {
             ),
         ];
         let label_id = Uuid::parse_str(LABEL_A).unwrap();
-        let rate_refs: Vec<&RuleRate> = rates.iter().collect();
+        let rate_refs: Vec<&EntryRate> = rates.iter().collect();
         let label = compute_label_rate(label_id, &rate_refs);
         assert_eq!(label.direction, Direction::Income);
         // Rates are summed across both rules.
@@ -272,7 +267,7 @@ mod tests {
 
     #[test]
     fn all_expense_direction_is_expense() {
-        let rates = vec![rule_rate(
+        let rates = vec![entry_rate(
             "00000000-0000-0000-0000-000000000001",
             Some(LABEL_A),
             Direction::Expense,
@@ -282,7 +277,7 @@ mod tests {
             1,
         )];
         let label_id = Uuid::parse_str(LABEL_A).unwrap();
-        let rate_refs: Vec<&RuleRate> = rates.iter().collect();
+        let rate_refs: Vec<&EntryRate> = rates.iter().collect();
         let label = compute_label_rate(label_id, &rate_refs);
         assert_eq!(label.direction, Direction::Expense);
     }

@@ -134,19 +134,19 @@ pub async fn run(
     })
 }
 
-/// Query `MAX(raw_transactions.date)` for an entity.
+/// Query `MAX(transactions.date)` for an entity.
 ///
 /// Returns an error when no transactions exist yet (caller handles the
 /// first-import case at the pipeline level).
 pub async fn query_computed_as_of(entity_id: Uuid, pool: &PgPool) -> Result<NaiveDate> {
     let row: (Option<NaiveDate>,) =
-        sqlx::query_as("SELECT MAX(date) FROM raw_transactions WHERE entity_id = $1")
+        sqlx::query_as("SELECT MAX(date) FROM transactions WHERE entity_id = $1")
             .bind(entity_id)
             .fetch_one(pool)
             .await
-            .context("failed to query MAX(raw_transactions.date)")?;
+            .context("failed to query MAX(transactions.date)")?;
 
-    row.0.ok_or_else(|| anyhow!("no raw_transactions found for entity {entity_id}"))
+    row.0.ok_or_else(|| anyhow!("no transactions found for entity {entity_id}"))
 }
 
 // ---------------------------------------------------------------------------
@@ -619,7 +619,7 @@ async fn classify_one(
         let existing: Option<ExistingRowDb> = sqlx::query_as(
             r#"
             SELECT id, merchant_normalized, amount_cents, settlement_status, imported_at
-            FROM raw_transactions
+            FROM transactions
             WHERE entity_id = $1 AND account_id = $2 AND imported_id = $3
             LIMIT 1
             "#,
@@ -665,7 +665,7 @@ async fn classify_one(
     let exact_match: Option<ExistingRowDb> = sqlx::query_as(
         r#"
         SELECT id, merchant_normalized, amount_cents, settlement_status, imported_at
-        FROM raw_transactions
+        FROM transactions
         WHERE entity_id = $1
           AND account_id = $2
           AND merchant_normalized = $3
@@ -699,7 +699,7 @@ async fn classify_one(
     let fuzzy_candidates: Vec<ExistingRowDb> = sqlx::query_as(
         r#"
         SELECT id, merchant_normalized, amount_cents, settlement_status, imported_at
-        FROM raw_transactions
+        FROM transactions
         WHERE entity_id = $1
           AND account_id = $2
           AND date BETWEEN ($3::date - $4 * INTERVAL '1 day')
@@ -770,7 +770,7 @@ async fn batch_insert(
         .collect();
 
     if !supersede_ids.is_empty() {
-        sqlx::query("DELETE FROM raw_transactions WHERE id = ANY($1)")
+        sqlx::query("DELETE FROM transactions WHERE id = ANY($1)")
             .bind(&supersede_ids)
             .execute(&mut *tx)
             .await
@@ -795,7 +795,7 @@ async fn batch_insert(
 
     sqlx::query(
         r#"
-        INSERT INTO raw_transactions
+        INSERT INTO transactions
           (entity_id, account_id, import_batch_id, date, amount_cents,
            imported_payee, merchant_normalized, imported_id, settlement_status)
         SELECT $1, $2, $9, d, a, p, m, i, s
@@ -820,7 +820,7 @@ async fn batch_insert(
     .bind(batch_id)
     .execute(&mut *tx)
     .await
-    .context("batch insert into raw_transactions failed")?;
+    .context("batch insert into transactions failed")?;
 
     tx.commit().await.context("failed to commit import transaction")?;
     Ok(())

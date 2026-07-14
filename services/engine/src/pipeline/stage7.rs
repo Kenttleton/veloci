@@ -3,7 +3,7 @@
 //! **Input:** Eligible rules with `period_days`, `recurrence_anchor`, and
 //! `next_due_date`; `accounts.balance_cents` as starting point.
 //!
-//! **Output:** Rows in `rate_projections` — a forward-looking 90-day signal
+//! **Output:** Rows in `projections` — a forward-looking 90-day signal
 //! superposition per account (and entity aggregate).
 //!
 //! ## Eligibility
@@ -42,7 +42,7 @@ const PROJECTION_DAYS: i64 = 90;
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone)]
-struct EligibleRule {
+struct EligibleEntry {
     id:               Uuid,
     account_id:       Option<Uuid>,
     direction:        String,
@@ -56,7 +56,7 @@ struct EligibleRule {
 struct ProjectionRow {
     entity_id:               Uuid,
     account_id:              Option<Uuid>,
-    projection_date:         NaiveDate,
+    projected_date:          NaiveDate,
     income_rate_per_day:     i64,
     commitment_rate_per_day: i64,
     margin_rate_per_day:     i64,
@@ -84,7 +84,7 @@ pub async fn run(
     // Load starting balance per account.
     let balances = load_account_balances(entity_id, pool).await?;
 
-    // Load latest actual_rate from computed_snapshots for variable rules.
+    // Load latest actual_rate from snapshots for variable entries.
     let snapshot_rates = load_latest_snapshot_rates(entity_id, computed_as_of, pool).await?;
 
     if rules.is_empty() {
@@ -110,7 +110,7 @@ pub async fn run(
     };
 
     for account_id in account_ids {
-        let account_rules: Vec<&EligibleRule> = if account_id.is_some() {
+        let account_rules: Vec<&EligibleEntry> = if account_id.is_some() {
             rules.iter().filter(|r| r.account_id == account_id).collect()
         } else {
             rules.iter().collect() // entity aggregate = all rules
@@ -135,7 +135,7 @@ pub async fn run(
     // Write projection rows in a single transaction (committed together with Stage 6
     // per spec, but Stage 7 runs after Stage 6 commits in this implementation;
     // they share the same job_id for audit traceability).
-    write_projections(entity_id, job_id, computed_as_of, all_rows, write_pool).await
+    write_projections(entity_id, job_id, all_rows, write_pool).await
 }
 
 // ---------------------------------------------------------------------------
@@ -146,7 +146,7 @@ pub async fn run(
 fn project_account(
     entity_id: Uuid,
     account_id: Option<Uuid>,
-    rules: &[&EligibleRule],
+    rules: &[&EligibleEntry],
     start_balance: i64,
     computed_as_of: NaiveDate,
     snapshot_rates: &std::collections::HashMap<Uuid, f64>,
@@ -175,7 +175,7 @@ fn project_account(
         rows.push(ProjectionRow {
             entity_id,
             account_id,
-            projection_date:         day,
+            projected_date:          day,
             income_rate_per_day:     income_rate,
             commitment_rate_per_day: commitment_rate,
             margin_rate_per_day:     margin_rate,
@@ -192,7 +192,7 @@ fn project_account(
 /// A rule's window covers day D when D falls within `[fire_date, fire_date + period_days)`.
 /// `next_due_date` is the phase anchor; `recurrence_anchor` determines periodicity.
 fn window_covers(
-    rule: &EligibleRule,
+    rule: &EligibleEntry,
     day: NaiveDate,
     _computed_as_of: NaiveDate,
     _snapshot_rates: &std::collections::HashMap<Uuid, f64>,
@@ -233,7 +233,7 @@ fn window_covers(
 /// For variable rules, uses the actual_rate from the most recent snapshot.
 /// For all others, uses `amount_cents / period_days`.
 fn rate_for_day(
-    rule: &EligibleRule,
+    rule: &EligibleEntry,
     snapshot_rates: &std::collections::HashMap<Uuid, f64>,
 ) -> i64 {
     if rule.period_days == 0 {
@@ -250,7 +250,7 @@ fn rate_for_day(
 // DB loaders
 // ---------------------------------------------------------------------------
 
-async fn load_eligible_rules(entity_id: Uuid, pool: &PgPool) -> Result<Vec<EligibleRule>> {
+async fn load_eligible_rules(entity_id: Uuid, pool: &PgPool) -> Result<Vec<EligibleEntry>> {
     #[derive(sqlx::FromRow)]
     struct Row {
         id:                Uuid,
@@ -263,28 +263,26 @@ async fn load_eligible_rules(entity_id: Uuid, pool: &PgPool) -> Result<Vec<Eligi
 
     let rows: Vec<Row> = sqlx::query_as(
         r#"
-        SELECT r.id, r.direction, r.period_days, r.recurrence_anchor, r.next_due_date,
+        SELECT e.id, e.direction, e.period_days, e.recurrence_anchor, e.next_due_date,
                a.id AS account_id
-        FROM rules r
-        LEFT JOIN accounts a ON a.entity_id = r.entity_id AND a.status = 'active'
-        LEFT JOIN rule_epochs re ON re.rule_id = r.id AND re.epoch_end IS NULL
-        WHERE r.entity_id = $1
-          AND r.status IN ('active', 'pending_review')
+        FROM entries e
+        LEFT JOIN accounts a ON a.entity_id = e.entity_id AND a.status = 'active'
+        WHERE e.entity_id = $1
           AND (
-            (r.status = 'active' AND re.id IS NOT NULL)
+            (e.status = 'active' AND e.end_date IS NULL)
             OR
-            (r.status = 'pending_review' AND r.project_tentatively = TRUE)
+            (e.status = 'pending_review' AND e.project_tentatively = TRUE)
           )
         "#,
     )
     .bind(entity_id)
     .fetch_all(pool)
     .await
-    .context("failed to load eligible rules for stage 7")?;
+    .context("failed to load eligible entries for stage 7")?;
 
     Ok(rows
         .into_iter()
-        .map(|r| EligibleRule {
+        .map(|r| EligibleEntry {
             id:                r.id,
             account_id:        r.account_id,
             direction:         r.direction,
@@ -327,9 +325,9 @@ async fn load_latest_snapshot_rates(
         SELECT DISTINCT ON (node_id)
           node_id,
           actual_rate_per_day
-        FROM computed_snapshots
+        FROM snapshots
         WHERE entity_id = $1
-          AND node_type = 'rule'
+          AND node_type = 'entry'
           AND snapshot_date <= $2
         ORDER BY node_id, snapshot_date DESC
         "#,
@@ -356,7 +354,6 @@ async fn load_latest_snapshot_rates(
 async fn write_projections(
     entity_id: Uuid,
     job_id: Uuid,
-    computed_as_of: NaiveDate,
     rows: Vec<ProjectionRow>,
     pool: &PgPool,
 ) -> Result<()> {
@@ -367,24 +364,24 @@ async fn write_projections(
     // Delete existing projections for this entity before writing new ones.
     let mut tx = pool.begin().await.context("failed to begin stage 7 transaction")?;
 
-    sqlx::query("DELETE FROM rate_projections WHERE entity_id = $1")
+    sqlx::query("DELETE FROM projections WHERE entity_id = $1")
         .bind(entity_id)
         .execute(&mut *tx)
         .await
-        .context("failed to delete existing rate_projections")?;
+        .context("failed to delete existing projections")?;
 
     let n = rows.len();
-    let mut account_ids:    Vec<Option<Uuid>> = Vec::with_capacity(n);
-    let mut proj_dates:     Vec<NaiveDate>    = Vec::with_capacity(n);
-    let mut income_rates:   Vec<i64>          = Vec::with_capacity(n);
-    let mut commit_rates:   Vec<i64>          = Vec::with_capacity(n);
-    let mut margin_rates:   Vec<i64>          = Vec::with_capacity(n);
-    let mut balances:       Vec<i64>          = Vec::with_capacity(n);
-    let mut pinch_points:   Vec<bool>         = Vec::with_capacity(n);
+    let mut account_ids:  Vec<Option<Uuid>> = Vec::with_capacity(n);
+    let mut proj_dates:   Vec<NaiveDate>    = Vec::with_capacity(n);
+    let mut income_rates: Vec<i64>          = Vec::with_capacity(n);
+    let mut commit_rates: Vec<i64>          = Vec::with_capacity(n);
+    let mut margin_rates: Vec<i64>          = Vec::with_capacity(n);
+    let mut balances:     Vec<i64>          = Vec::with_capacity(n);
+    let mut pinch_points: Vec<bool>         = Vec::with_capacity(n);
 
     for row in rows {
         account_ids.push(row.account_id);
-        proj_dates.push(row.projection_date);
+        proj_dates.push(row.projected_date);
         income_rates.push(row.income_rate_per_day);
         commit_rates.push(row.commitment_rate_per_day);
         margin_rates.push(row.margin_rate_per_day);
@@ -394,21 +391,20 @@ async fn write_projections(
 
     sqlx::query(
         r#"
-        INSERT INTO rate_projections
-          (entity_id, account_id, job_id, computed_as_of, projection_date,
+        INSERT INTO projections
+          (entity_id, account_id, job_id, projected_date,
            income_rate_per_day, commitment_rate_per_day, margin_rate_per_day,
            projected_balance_cents, is_pinch_point)
-        SELECT $1, acct, $2, $3, pd, ir, cr, mr, bal, pp
+        SELECT $1, acct, $2, pd, ir, cr, mr, bal, pp
         FROM UNNEST(
-          $4::uuid[], $5::date[],
-          $6::int8[], $7::int8[], $8::int8[],
-          $9::int8[], $10::bool[]
+          $3::uuid[], $4::date[],
+          $5::int8[], $6::int8[], $7::int8[],
+          $8::int8[], $9::bool[]
         ) AS u(acct, pd, ir, cr, mr, bal, pp)
         "#,
     )
     .bind(entity_id)
     .bind(job_id)
-    .bind(computed_as_of)
     .bind(&account_ids as &[Option<Uuid>])
     .bind(&proj_dates)
     .bind(&income_rates)
@@ -418,7 +414,7 @@ async fn write_projections(
     .bind(&pinch_points)
     .execute(&mut *tx)
     .await
-    .context("failed to insert rate_projections")?;
+    .context("failed to insert projections")?;
 
     tx.commit().await.context("failed to commit stage 7 transaction")?;
     Ok(())
@@ -445,8 +441,8 @@ mod tests {
         amount_cents: i64,
         next_due: Option<&str>,
         recurrence: bool,
-    ) -> EligibleRule {
-        EligibleRule {
+    ) -> EligibleEntry {
+        EligibleEntry {
             id:                Uuid::parse_str(id).unwrap_or(Uuid::nil()),
             account_id:        None,
             direction:         direction.to_string(),
@@ -526,7 +522,7 @@ mod tests {
             computed_as_of,
             &rates,
         );
-        assert_eq!(rows[0].projection_date, computed_as_of, "first row must be at computed_as_of");
+        assert_eq!(rows[0].projected_date, computed_as_of, "first row must be at computed_as_of");
     }
 
     // window_covers: rule with no next_due_date never fires

@@ -2,7 +2,7 @@
 //!
 //! **Input:** Per-node computed values from Stages 3–5.
 //!
-//! **Output:** Rows in `computed_snapshots`.
+//! **Output:** Rows in `snapshots`.
 //!
 //! All snapshots for a given job run commit in a single Postgres transaction.
 //! Partial writes are not possible — either all snapshots commit or none do.
@@ -39,7 +39,6 @@ struct SnapshotInsert {
     window_days_used:           i32,
     rolling_window_total_cents: i64,
     balance_cents:              i64,
-    epoch_id:                   Option<Uuid>,
 }
 
 // ---------------------------------------------------------------------------
@@ -60,24 +59,24 @@ pub async fn run(
     pool: &PgPool,
 ) -> Result<()> {
     // Build lookup maps for Stage 5 trends.
-    let rule_trends: std::collections::HashMap<Uuid, &crate::pipeline::types::NodeTrend> =
-        stage5.rule_trends.iter().map(|t| (t.node_id, t)).collect();
-    let label_trends: std::collections::HashMap<Uuid, &crate::pipeline::types::NodeTrend> =
-        stage5.label_trends.iter().map(|t| (t.node_id, t)).collect();
+    let entry_trends: std::collections::HashMap<Uuid, &crate::pipeline::types::NodeTrend> =
+        stage5.entry_trends.iter().map(|t| (t.node_id, t)).collect();
+    let classification_trends: std::collections::HashMap<Uuid, &crate::pipeline::types::NodeTrend> =
+        stage5.classification_trends.iter().map(|t| (t.node_id, t)).collect();
 
     // Build all snapshot rows in parallel (CPU work).
     let mut rows: Vec<SnapshotInsert> = Vec::new();
 
-    // Rule snapshots.
-    let rule_rows: Vec<SnapshotInsert> = stage3
-        .rule_rates
+    // Entry snapshots.
+    let entry_rows: Vec<SnapshotInsert> = stage3
+        .entry_rates
         .par_iter()
         .map(|rate| {
-            let trend = rule_trends.get(&rate.rule_id);
+            let trend = entry_trends.get(&rate.entry_id);
             SnapshotInsert {
                 entity_id,
-                node_id:                    rate.rule_id,
-                node_type:                  NodeType::Rule.as_str(),
+                node_id:                    rate.entry_id,
+                node_type:                  NodeType::Entry.as_str(),
                 snapshot_date,
                 computed_as_of,
                 job_id,
@@ -89,22 +88,21 @@ pub async fn run(
                 transaction_count:          rate.transaction_count,
                 window_days_used:           rate.window_days_used,
                 rolling_window_total_cents: rate.rolling_window_total_cents,
-                balance_cents:              0, // label-level only
-                epoch_id:                   rate.epoch_id,
+                balance_cents:              0,
             }
         })
         .collect();
 
-    // Label snapshots.
-    let label_rows: Vec<SnapshotInsert> = stage4
+    // Classification snapshots (label aggregates).
+    let classification_rows: Vec<SnapshotInsert> = stage4
         .label_rates
         .par_iter()
         .map(|rate| {
-            let trend = label_trends.get(&rate.label_id);
+            let trend = classification_trends.get(&rate.label_id);
             SnapshotInsert {
                 entity_id,
                 node_id:                    rate.label_id,
-                node_type:                  NodeType::Label.as_str(),
+                node_type:                  NodeType::Classification.as_str(),
                 snapshot_date,
                 computed_as_of,
                 job_id,
@@ -113,17 +111,16 @@ pub async fn run(
                 drift_per_day:              trend.map(|t| t.drift_per_day).unwrap_or(0.0),
                 slope_per_day:              trend.map(|t| t.slope_per_day).unwrap_or(0.0),
                 r_squared:                  trend.map(|t| t.r_squared).unwrap_or(0.0),
-                transaction_count:          rate.contributing_rule_count,
+                transaction_count:          rate.contributing_entry_count,
                 window_days_used:           rate.period_days,
                 rolling_window_total_cents: 0,
                 balance_cents:              0,
-                epoch_id:                   None, // label nodes always have NULL epoch_id
             }
         })
         .collect();
 
-    rows.extend(rule_rows);
-    rows.extend(label_rows);
+    rows.extend(entry_rows);
+    rows.extend(classification_rows);
 
     if rows.is_empty() {
         return Ok(());
@@ -140,22 +137,21 @@ pub async fn run(
 async fn upsert_snapshots(rows: Vec<SnapshotInsert>, pool: &PgPool) -> Result<()> {
     // Decompose into column vectors for unnest-based batch insert.
     let n = rows.len();
-    let mut entity_ids:     Vec<Uuid>   = Vec::with_capacity(n);
-    let mut node_ids:       Vec<Uuid>   = Vec::with_capacity(n);
-    let mut node_types:     Vec<String> = Vec::with_capacity(n);
+    let mut entity_ids:     Vec<Uuid>      = Vec::with_capacity(n);
+    let mut node_ids:       Vec<Uuid>      = Vec::with_capacity(n);
+    let mut node_types:     Vec<String>    = Vec::with_capacity(n);
     let mut snapshot_dates: Vec<NaiveDate> = Vec::with_capacity(n);
     let mut computed_as_ofs: Vec<NaiveDate> = Vec::with_capacity(n);
-    let mut job_ids:        Vec<Uuid>   = Vec::with_capacity(n);
-    let mut actuals:        Vec<f64>    = Vec::with_capacity(n);
-    let mut projecteds:     Vec<f64>    = Vec::with_capacity(n);
-    let mut drifts:         Vec<f64>    = Vec::with_capacity(n);
-    let mut slopes:         Vec<f64>    = Vec::with_capacity(n);
-    let mut r_squareds:     Vec<f64>    = Vec::with_capacity(n);
-    let mut tx_counts:      Vec<i32>    = Vec::with_capacity(n);
-    let mut window_days:    Vec<i32>    = Vec::with_capacity(n);
-    let mut rolling_totals: Vec<i64>    = Vec::with_capacity(n);
-    let mut balances:       Vec<i64>    = Vec::with_capacity(n);
-    let mut epoch_ids:      Vec<Option<Uuid>> = Vec::with_capacity(n);
+    let mut job_ids:        Vec<Uuid>      = Vec::with_capacity(n);
+    let mut actuals:        Vec<f64>       = Vec::with_capacity(n);
+    let mut projecteds:     Vec<f64>       = Vec::with_capacity(n);
+    let mut drifts:         Vec<f64>       = Vec::with_capacity(n);
+    let mut slopes:         Vec<f64>       = Vec::with_capacity(n);
+    let mut r_squareds:     Vec<f64>       = Vec::with_capacity(n);
+    let mut tx_counts:      Vec<i32>       = Vec::with_capacity(n);
+    let mut window_days:    Vec<i32>       = Vec::with_capacity(n);
+    let mut rolling_totals: Vec<i64>       = Vec::with_capacity(n);
+    let mut balances:       Vec<i64>       = Vec::with_capacity(n);
 
     for row in rows {
         entity_ids.push(row.entity_id);
@@ -173,7 +169,6 @@ async fn upsert_snapshots(rows: Vec<SnapshotInsert>, pool: &PgPool) -> Result<()
         window_days.push(row.window_days_used);
         rolling_totals.push(row.rolling_window_total_cents);
         balances.push(row.balance_cents);
-        epoch_ids.push(row.epoch_id);
     }
 
     // Single transaction for atomicity (spec invariant §13 point 4).
@@ -181,21 +176,21 @@ async fn upsert_snapshots(rows: Vec<SnapshotInsert>, pool: &PgPool) -> Result<()
 
     sqlx::query(
         r#"
-        INSERT INTO computed_snapshots (
+        INSERT INTO snapshots (
           entity_id, node_id, node_type, snapshot_date, computed_as_of, job_id,
           actual_rate_per_day, projected_rate_per_day, drift_per_day,
           slope_per_day, r_squared,
           transaction_count, window_days_used, rolling_window_total_cents,
-          balance_cents, epoch_id
+          balance_cents
         )
-        SELECT e, n, nt, sd, ca, j, a, p, d, sl, r2, tc, wd, rt, b, ei
+        SELECT e, n, nt, sd, ca, j, a, p, d, sl, r2, tc, wd, rt, b
         FROM UNNEST(
           $1::uuid[], $2::uuid[], $3::text[], $4::date[], $5::date[], $6::uuid[],
           $7::float8[], $8::float8[], $9::float8[],
           $10::float8[], $11::float8[],
           $12::int4[], $13::int4[], $14::int8[],
-          $15::int8[], $16::uuid[]
-        ) AS u(e, n, nt, sd, ca, j, a, p, d, sl, r2, tc, wd, rt, b, ei)
+          $15::int8[]
+        ) AS u(e, n, nt, sd, ca, j, a, p, d, sl, r2, tc, wd, rt, b)
         ON CONFLICT (entity_id, node_id, snapshot_date) DO UPDATE SET
           computed_as_of                = EXCLUDED.computed_as_of,
           job_id                        = EXCLUDED.job_id,
@@ -207,8 +202,7 @@ async fn upsert_snapshots(rows: Vec<SnapshotInsert>, pool: &PgPool) -> Result<()
           transaction_count             = EXCLUDED.transaction_count,
           window_days_used              = EXCLUDED.window_days_used,
           rolling_window_total_cents    = EXCLUDED.rolling_window_total_cents,
-          balance_cents                 = EXCLUDED.balance_cents,
-          epoch_id                      = EXCLUDED.epoch_id
+          balance_cents                 = EXCLUDED.balance_cents
         "#,
     )
     .bind(&entity_ids)
@@ -226,10 +220,9 @@ async fn upsert_snapshots(rows: Vec<SnapshotInsert>, pool: &PgPool) -> Result<()
     .bind(&window_days)
     .bind(&rolling_totals)
     .bind(&balances)
-    .bind(&epoch_ids as &[Option<Uuid>])
     .execute(&mut *tx)
     .await
-    .context("failed to upsert computed_snapshots")?;
+    .context("failed to upsert snapshots")?;
 
     tx.commit().await.context("failed to commit snapshot transaction")?;
     Ok(())
@@ -242,7 +235,7 @@ async fn upsert_snapshots(rows: Vec<SnapshotInsert>, pool: &PgPool) -> Result<()
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pipeline::types::{Direction, EntryType, NodeTrend, RuleRate, LabelRate, NodeType};
+    use crate::pipeline::types::{Direction, EntryRate, EntryType, LabelRate, NodeType};
     use chrono::NaiveDate;
     use uuid::Uuid;
 
@@ -250,51 +243,28 @@ mod tests {
         NaiveDate::parse_from_str(s, "%Y-%m-%d").unwrap()
     }
 
-    // Spec invariant §13 point 4: snapshot writes are atomic.
-    // This test verifies the structure of the row builder — the DB commit
-    // atomicity is verified by integration tests.
+    // Spec invariant: snapshot writes are atomic (verified by integration tests).
+    // This test verifies node_type strings match the DB constraint.
     #[test]
-    fn rule_rows_include_epoch_id() {
-        let rule_rate = RuleRate {
-            rule_id:                    Uuid::nil(),
-            label_id:                   None,
-            direction:                  Direction::Expense,
-            entry_type:                 EntryType::Standing,
-            period_days:                30,
-            epoch_id:                   Some(Uuid::nil()),
-            actual_rate_per_day:        100.0,
-            projected_rate_per_day:     100.0,
-            transaction_count:          3,
-            window_days_used:           30,
-            rolling_window_total_cents: 3000,
-        };
-        let trend = NodeTrend {
-            node_id:       Uuid::nil(),
-            node_type:     NodeType::Rule,
-            drift_per_day: 0.0,
-            slope_per_day: 0.0,
-            r_squared:     0.0,
-        };
-        // Verify epoch_id is preserved.
-        assert!(rule_rate.epoch_id.is_some(), "rule snapshot must carry epoch_id");
+    fn entry_snapshot_uses_entry_node_type() {
+        assert_eq!(NodeType::Entry.as_str(), "entry");
+        assert_eq!(NodeType::Classification.as_str(), "classification");
     }
 
     #[test]
-    fn label_rows_have_null_epoch_id() {
+    fn classification_snapshot_built_from_label_rate() {
         let label_rate = LabelRate {
             label_id:                 Uuid::nil(),
             direction:                Direction::Expense,
             period_days:              30,
             actual_rate_per_day:      100.0,
             projected_rate_per_day:   100.0,
-            contributing_rule_count:  3,
+            contributing_entry_count: 3,
         };
-        // Label nodes must have epoch_id = NULL per spec.
-        // In our SnapshotInsert builder, epoch_id is hardcoded to None for labels.
         let snapshot = SnapshotInsert {
             entity_id:                  Uuid::nil(),
             node_id:                    label_rate.label_id,
-            node_type:                  NodeType::Label.as_str(),
+            node_type:                  NodeType::Classification.as_str(),
             snapshot_date:              date("2026-03-01"),
             computed_as_of:             date("2026-03-01"),
             job_id:                     Uuid::nil(),
@@ -303,12 +273,12 @@ mod tests {
             drift_per_day:              0.0,
             slope_per_day:              0.0,
             r_squared:                  0.0,
-            transaction_count:          label_rate.contributing_rule_count,
+            transaction_count:          label_rate.contributing_entry_count,
             window_days_used:           label_rate.period_days,
             rolling_window_total_cents: 0,
             balance_cents:              0,
-            epoch_id:                   None,
         };
-        assert!(snapshot.epoch_id.is_none(), "label snapshot epoch_id must be NULL");
+        assert_eq!(snapshot.node_type, "classification");
+        assert_eq!(snapshot.transaction_count, 3);
     }
 }

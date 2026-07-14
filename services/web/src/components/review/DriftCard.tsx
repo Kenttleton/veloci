@@ -88,7 +88,7 @@ export function DriftCard({ item, onAction }: DriftCardProps) {
       </div>
 
       <h3 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>
-        {item.rule_name}
+        {item.suggested_name}
       </h3>
 
       <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text3)' }}>Pattern changed</p>
@@ -193,7 +193,7 @@ export function DriftCard({ item, onAction }: DriftCardProps) {
             <div>
               <div style={{ fontSize: 13, color: 'var(--text)', fontWeight: 500 }}>Correction</div>
               <div style={{ fontSize: 12, color: 'var(--text3)' }}>
-                Update this rule in place and recompute history from the start of the current epoch
+                Update this entry in place and recompute history from its start date
               </div>
             </div>
           </label>
@@ -209,7 +209,7 @@ export function DriftCard({ item, onAction }: DriftCardProps) {
             <div>
               <div style={{ fontSize: 13, color: 'var(--text)', fontWeight: 500 }}>Version</div>
               <div style={{ fontSize: 12, color: 'var(--text3)' }}>
-                Close the current rule version and open a new one starting today
+                Close this entry and open a new version starting today
               </div>
             </div>
           </label>
@@ -248,7 +248,7 @@ export function DriftCard({ item, onAction }: DriftCardProps) {
             padding: '6px 12px',
           }}
         >
-          Edit rule
+          Edit entry
         </button>
         <button
           onClick={() => void handleAccept()}

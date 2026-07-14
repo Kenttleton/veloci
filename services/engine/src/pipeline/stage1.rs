@@ -1,19 +1,19 @@
-//! Stage 1: Rule matching (pre/post, boolean condition trees).
+//! Stage 1: Entry matching (boolean condition trees against transactions).
 //!
-//! **Input:** `raw_transactions` for an entity; all active `rules` with their
+//! **Input:** `transactions` for an entity; all active `entries` with their
 //! JSONB condition trees.
 //!
-//! **Output:** `transaction_rule_assignments` rows (many-to-many — intentional).
+//! **Output:** `transaction_entry_assignments` rows (many-to-many — intentional).
 //!
 //! ## Algorithm
 //!
-//! 1. Load all active rules from DB.
-//! 2. Pre-compile each rule's JSONB conditions into a [`CompiledRule`] struct.
-//!    Regex patterns are compiled once here; malformed rules are logged and
+//! 1. Load all active entries from DB (status='active', end_date IS NULL).
+//! 2. Pre-compile each entry's JSONB conditions into a [`CompiledEntry`] struct.
+//!    Regex patterns are compiled once here; malformed entries are logged and
 //!    skipped without aborting the job.
-//! 3. Sort `compiled_rules` by `(stage ASC, priority ASC)` — pre-stage first.
-//! 4. `rayon::par_iter` over all transactions, evaluate each rule in order.
-//! 5. Each match → one `transaction_rule_assignments` row with `confidence = 1.0`.
+//! 3. Sort `compiled_entries` by `priority ASC`.
+//! 4. `rayon::par_iter` over all transactions, evaluate each entry in order.
+//! 5. Each match → one `transaction_entry_assignments` row with `confidence = 1.0`.
 //! 6. Collect unmatched transaction IDs for Stage 2.
 //! 7. Bulk INSERT assignments (delete-then-insert for idempotency).
 
@@ -25,20 +25,19 @@ use regex::Regex;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::pipeline::types::{RuleStage, Stage1Output};
+use crate::pipeline::types::Stage1Output;
 
 // ---------------------------------------------------------------------------
-// Compiled rule tree
+// Compiled entry tree
 // ---------------------------------------------------------------------------
 
-/// A rule with its condition tree pre-compiled for zero-allocation evaluation.
+/// An entry with its condition tree pre-compiled for zero-allocation evaluation.
 ///
 /// `regex::Regex` is `Send + Sync` — compiled patterns are shared across
 /// rayon worker threads with no cloning or locking.
 #[derive(Debug)]
-pub struct CompiledRule {
-    pub rule_id:    Uuid,
-    pub stage:      RuleStage,
+pub struct CompiledEntry {
+    pub entry_id:   Uuid,
     pub priority:   i32,
     pub conditions: CompiledConditionTree,
 }
@@ -70,17 +69,16 @@ pub enum CompiledConditionTree {
     },
     AccountId(Uuid),
     /// Post-stage only: matches when the transaction has been assigned to any
-    /// rule whose `label_id` equals the referenced label UUID.
+    /// entry whose `label_id` equals the referenced label UUID.
     LabelMatched(Uuid),
 }
 
 // ---------------------------------------------------------------------------
-// Raw DB row for a rule
+// Raw DB row for an entry
 // ---------------------------------------------------------------------------
 
-struct RuleRow {
+struct EntryRow {
     id:         Uuid,
-    stage:      String,
     priority:   i32,
     conditions: serde_json::Value,
 }
@@ -102,45 +100,43 @@ pub(crate) struct TransactionRow {
 // Public entry point
 // ---------------------------------------------------------------------------
 
-/// Run Stage 1 for an entity: load transactions + rules, compile, match.
+/// Run Stage 1 for an entity: load transactions + entries, compile, match.
 pub async fn run(entity_id: Uuid, pool: &PgPool) -> Result<Stage1Output> {
-    // Load all raw_transactions for the entity.
+    // Load all transactions for the entity.
     let txns = load_transactions(entity_id, pool).await?;
 
-    // Load all active rules.
-    let rule_rows = load_rules(entity_id, pool).await?;
+    // Load all active entries.
+    let entry_rows = load_entries(entity_id, pool).await?;
 
-    // Pre-compile rules; skip malformed rules (log and continue).
-    let mut compiled_rules: Vec<CompiledRule> = rule_rows
+    // Pre-compile entries; skip malformed entries (log and continue).
+    let mut compiled_entries: Vec<CompiledEntry> = entry_rows
         .into_iter()
         .filter_map(|row| {
-            let rule_id = row.id;
-            match compile_rule(row) {
-                Ok(r) => Some(r),
+            let entry_id = row.id;
+            match compile_entry(row) {
+                Ok(e) => Some(e),
                 Err(e) => {
-                    tracing::warn!(%rule_id, "rule compile error (skipped): {e:?}");
+                    tracing::warn!(%entry_id, "entry compile error (skipped): {e:?}");
                     None
                 }
             }
         })
         .collect();
 
-    // Sort: pre-stage first, then by priority ascending within each stage.
-    compiled_rules.sort_by(|a, b| {
-        a.stage.cmp(&b.stage).then_with(|| a.priority.cmp(&b.priority))
-    });
+    // Sort by priority ascending.
+    compiled_entries.sort_by_key(|e| e.priority);
 
-    tracing::debug!(rules = compiled_rules.len(), txns = txns.len(), "stage 1: compiled rules, starting match");
+    tracing::debug!(entries = compiled_entries.len(), txns = txns.len(), "stage 1: compiled entries, starting match");
 
     // Parallel match: each transaction is independent.
-    // Returns (matched_rule_ids, was_unmatched) per transaction.
+    // Returns (matched_entry_ids, was_unmatched) per transaction.
     let results: Vec<(Uuid, Vec<Uuid>, bool)> = txns
         .par_iter()
         .map(|txn| {
-            let matched: Vec<Uuid> = compiled_rules
+            let matched: Vec<Uuid> = compiled_entries
                 .iter()
-                .filter(|rule| evaluate_rule(&rule.conditions, txn, &compiled_rules))
-                .map(|rule| rule.rule_id)
+                .filter(|entry| evaluate_entry(&entry.conditions, txn))
+                .map(|entry| entry.entry_id)
                 .collect();
             let unmatched = matched.is_empty();
             (txn.id, matched, unmatched)
@@ -157,16 +153,16 @@ pub async fn run(entity_id: Uuid, pool: &PgPool) -> Result<Stage1Output> {
     // Persist assignments — idempotent: delete existing for this entity first.
     persist_assignments(entity_id, &results, pool).await?;
 
-    // Update next_due_date on rules that received new assignments this run.
+    // Update next_due_date on entries that received new assignments this run.
     // next_due_date = max(matched_tx.date) + period_days; used by Stage 7 for
-    // absence detection. Stage 2 handles this for newly created rules.
-    let matched_rule_ids: Vec<Uuid> = results
+    // absence detection. Stage 2 handles this for newly created entries.
+    let matched_entry_ids: Vec<Uuid> = results
         .iter()
-        .flat_map(|(_, rule_ids, _)| rule_ids.iter().copied())
+        .flat_map(|(_, entry_ids, _)| entry_ids.iter().copied())
         .collect::<std::collections::HashSet<_>>()
         .into_iter()
         .collect();
-    update_next_due_dates(entity_id, &matched_rule_ids, pool).await?;
+    update_next_due_dates(entity_id, &matched_entry_ids, pool).await?;
 
     Ok(Stage1Output {
         total_assignments,
@@ -179,16 +175,9 @@ pub async fn run(entity_id: Uuid, pool: &PgPool) -> Result<Stage1Output> {
 // ---------------------------------------------------------------------------
 
 /// Evaluate a compiled condition tree against a transaction.
-///
-/// The `all_rules` slice is provided for `LabelMatched` leaf evaluation:
-/// in practice, post-stage rules are evaluated after pre-stage assignments
-/// have been accumulated into the transaction's label set. For the current
-/// single-pass implementation, `LabelMatched` always returns `false` on the
-/// first pass and is re-evaluated in a second post-stage pass if needed.
-pub fn evaluate_rule(
+pub fn evaluate_entry(
     tree: &CompiledConditionTree,
     txn: &TransactionRow,
-    _all_rules: &[CompiledRule],
 ) -> bool {
     evaluate(tree, txn)
 }
@@ -233,11 +222,9 @@ fn evaluate(node: &CompiledConditionTree, txn: &TransactionRow) -> bool {
 
         CompiledConditionTree::AccountId(id) => txn.account_id == *id,
 
-        // LabelMatched is post-stage only: evaluated after pre-stage pass.
-        // In the current implementation this leaf always returns false during
-        // the pre-stage pass, which is correct (post rules don't fire until
-        // after pre-stage assignments are accumulated in a second pass).
-        // A full two-pass implementation is deferred.
+        // LabelMatched is for classification rules (post-stage): evaluated after
+        // pre-stage entry assignments are accumulated. In the current single-pass
+        // implementation this always returns false during transaction matching.
         CompiledConditionTree::LabelMatched(_label_id) => false,
     }
 }
@@ -246,14 +233,11 @@ fn evaluate(node: &CompiledConditionTree, txn: &TransactionRow) -> bool {
 // Compilation (pure — can panic on invalid JSONB, returns Result)
 // ---------------------------------------------------------------------------
 
-fn compile_rule(row: RuleRow) -> Result<CompiledRule> {
-    let stage = RuleStage::from_str(&row.stage)
-        .ok_or_else(|| anyhow::anyhow!("invalid stage value: {}", row.stage))?;
+fn compile_entry(row: EntryRow) -> Result<CompiledEntry> {
     let conditions = compile_tree(&row.conditions)
-        .with_context(|| format!("failed to compile conditions for rule {}", row.id))?;
-    Ok(CompiledRule {
-        rule_id: row.id,
-        stage,
+        .with_context(|| format!("failed to compile conditions for entry {}", row.id))?;
+    Ok(CompiledEntry {
+        entry_id: row.id,
         priority: row.priority,
         conditions,
     })
@@ -398,7 +382,7 @@ async fn load_transactions(entity_id: Uuid, pool: &PgPool) -> Result<Vec<Transac
     let rows: Vec<Row> = sqlx::query_as(
         r#"
         SELECT id, account_id, date, amount_cents, merchant_normalized
-        FROM raw_transactions
+        FROM transactions
         WHERE entity_id = $1
         ORDER BY date ASC
         "#,
@@ -406,7 +390,7 @@ async fn load_transactions(entity_id: Uuid, pool: &PgPool) -> Result<Vec<Transac
     .bind(entity_id)
     .fetch_all(pool)
     .await
-    .context("failed to load raw_transactions for stage 1")?;
+    .context("failed to load transactions for stage 1")?;
 
     Ok(rows
         .into_iter()
@@ -420,34 +404,34 @@ async fn load_transactions(entity_id: Uuid, pool: &PgPool) -> Result<Vec<Transac
         .collect())
 }
 
-async fn load_rules(entity_id: Uuid, pool: &PgPool) -> Result<Vec<RuleRow>> {
+async fn load_entries(entity_id: Uuid, pool: &PgPool) -> Result<Vec<EntryRow>> {
     #[derive(sqlx::FromRow)]
     struct Row {
         id:         Uuid,
-        stage:      String,
         priority:   i32,
         conditions: serde_json::Value,
     }
 
     let rows: Vec<Row> = sqlx::query_as(
         r#"
-        SELECT id, stage, priority, conditions
-        FROM rules
+        SELECT id, priority, conditions
+        FROM entries
         WHERE entity_id = $1
           AND status = 'active'
-        ORDER BY stage ASC, priority ASC
+          AND end_date IS NULL
+          AND conditions IS NOT NULL
+        ORDER BY priority ASC
         "#,
     )
     .bind(entity_id)
     .fetch_all(pool)
     .await
-    .context("failed to load active rules for stage 1")?;
+    .context("failed to load active entries for stage 1")?;
 
     Ok(rows
         .into_iter()
-        .map(|r| RuleRow {
+        .map(|r| EntryRow {
             id:         r.id,
-            stage:      r.stage,
             priority:   r.priority,
             conditions: r.conditions,
         })
@@ -464,12 +448,12 @@ async fn persist_assignments(
     pool: &PgPool,
 ) -> Result<()> {
     // Delete all existing assignments for transactions of this entity.
-    // This makes Stage 1 idempotent on re-runs (rules.reprocess).
+    // This makes Stage 1 idempotent on re-runs (entries.reprocess).
     sqlx::query(
         r#"
-        DELETE FROM transaction_rule_assignments
+        DELETE FROM transaction_entry_assignments
         WHERE transaction_id IN (
-            SELECT id FROM raw_transactions WHERE entity_id = $1
+            SELECT id FROM transactions WHERE entity_id = $1
         )
         "#,
     )
@@ -478,14 +462,14 @@ async fn persist_assignments(
     .await
     .context("failed to delete existing assignments")?;
 
-    // Collect all (transaction_id, rule_id) pairs.
-    let mut txn_ids: Vec<Uuid> = Vec::new();
-    let mut rule_ids: Vec<Uuid> = Vec::new();
+    // Collect all (transaction_id, entry_id) pairs.
+    let mut txn_ids:   Vec<Uuid> = Vec::new();
+    let mut entry_ids: Vec<Uuid> = Vec::new();
 
-    for (txn_id, matched_rules, _) in results {
-        for rule_id in matched_rules {
+    for (txn_id, matched_entries, _) in results {
+        for entry_id in matched_entries {
             txn_ids.push(*txn_id);
-            rule_ids.push(*rule_id);
+            entry_ids.push(*entry_id);
         }
     }
 
@@ -495,48 +479,48 @@ async fn persist_assignments(
 
     sqlx::query(
         r#"
-        INSERT INTO transaction_rule_assignments (transaction_id, rule_id, confidence)
-        SELECT t, r, 1.0
-        FROM UNNEST($1::uuid[], $2::uuid[]) AS u(t, r)
-        ON CONFLICT (transaction_id, rule_id) DO NOTHING
+        INSERT INTO transaction_entry_assignments (transaction_id, entry_id, confidence)
+        SELECT t, e, 1.0
+        FROM UNNEST($1::uuid[], $2::uuid[]) AS u(t, e)
+        ON CONFLICT (transaction_id, entry_id) DO NOTHING
         "#,
     )
     .bind(&txn_ids)
-    .bind(&rule_ids)
+    .bind(&entry_ids)
     .execute(pool)
     .await
-    .context("failed to insert rule assignments")?;
+    .context("failed to insert entry assignments")?;
 
     Ok(())
 }
 
 async fn update_next_due_dates(
     entity_id: Uuid,
-    rule_ids: &[Uuid],
+    entry_ids: &[Uuid],
     pool: &PgPool,
 ) -> Result<()> {
-    if rule_ids.is_empty() {
+    if entry_ids.is_empty() {
         return Ok(());
     }
     sqlx::query(
         r#"
-        UPDATE rules r
+        UPDATE entries e
         SET next_due_date = (
-            SELECT (MAX(rt.date) + (r.period_days * INTERVAL '1 day'))::date
-            FROM transaction_rule_assignments tra
-            JOIN raw_transactions rt ON rt.id = tra.transaction_id
-            WHERE tra.rule_id = r.id
+            SELECT (MAX(t.date) + (e.period_days * INTERVAL '1 day'))::date
+            FROM transaction_entry_assignments tea
+            JOIN transactions t ON t.id = tea.transaction_id
+            WHERE tea.entry_id = e.id
         )
-        WHERE r.id = ANY($1)
-          AND r.entity_id = $2
-          AND r.status = 'active'
+        WHERE e.id = ANY($1)
+          AND e.entity_id = $2
+          AND e.status = 'active'
         "#,
     )
-    .bind(rule_ids)
+    .bind(entry_ids)
     .bind(entity_id)
     .execute(pool)
     .await
-    .context("failed to update next_due_date for matched rules")?;
+    .context("failed to update next_due_date for matched entries")?;
     Ok(())
 }
 
@@ -625,13 +609,10 @@ mod tests {
 
     #[test]
     fn date_day_of_month_exact() {
-        // Transaction on day 15, target day 15, tolerance 0.
         let txn = make_txn(any_uuid(), any_uuid(), "2026-03-15", -1000, "Test");
         assert!(eval(json!({"type": "date_day_of_month", "day": 15, "tolerance_days": 0}), &txn));
-        // Tolerance 2 — day 13 should match.
         let txn2 = make_txn(any_uuid(), any_uuid(), "2026-03-13", -1000, "Test");
         assert!(eval(json!({"type": "date_day_of_month", "day": 15, "tolerance_days": 2}), &txn2));
-        // Day 10 — outside tolerance 2.
         let txn3 = make_txn(any_uuid(), any_uuid(), "2026-03-10", -1000, "Test");
         assert!(!eval(json!({"type": "date_day_of_month", "day": 15, "tolerance_days": 2}), &txn3));
     }
@@ -665,7 +646,6 @@ mod tests {
             ]
         });
         assert!(eval(cond.clone(), &txn));
-        // Amount outside range — AND should fail.
         let txn2 = make_txn(any_uuid(), any_uuid(), "2026-03-01", -500, "Netflix");
         assert!(!eval(cond, &txn2));
     }
@@ -696,7 +676,6 @@ mod tests {
     #[test]
     fn xor_exclusive() {
         let txn = make_txn(any_uuid(), any_uuid(), "2026-03-15", -1500, "Netflix");
-        // amount_range matches, payee_exact matches → XOR = false
         let cond_both = json!({
             "op": "XOR",
             "children": [
@@ -705,7 +684,6 @@ mod tests {
             ]
         });
         assert!(!eval(cond_both, &txn));
-        // Only payee matches → XOR = true
         let cond_one = json!({
             "op": "XOR",
             "children": [
@@ -749,26 +727,23 @@ mod tests {
         assert!(result.is_err());
     }
 
-    // Spec invariant: pre-stage rules sort before post-stage.
+    // Entries sort by priority ascending — lower number runs first.
     #[test]
-    fn rule_sort_pre_before_post() {
-        use crate::pipeline::types::RuleStage;
-        let mut rules = vec![
-            CompiledRule {
-                rule_id: Uuid::nil(),
-                stage: RuleStage::Post,
-                priority: 10,
+    fn entries_sort_by_priority() {
+        let mut entries = vec![
+            CompiledEntry {
+                entry_id:   Uuid::nil(),
+                priority:   200,
                 conditions: CompiledConditionTree::And(vec![]),
             },
-            CompiledRule {
-                rule_id: Uuid::nil(),
-                stage: RuleStage::Pre,
-                priority: 200,
+            CompiledEntry {
+                entry_id:   Uuid::nil(),
+                priority:   10,
                 conditions: CompiledConditionTree::And(vec![]),
             },
         ];
-        rules.sort_by(|a, b| a.stage.cmp(&b.stage).then_with(|| a.priority.cmp(&b.priority)));
-        assert_eq!(rules[0].stage, RuleStage::Pre);
-        assert_eq!(rules[1].stage, RuleStage::Post);
+        entries.sort_by_key(|e| e.priority);
+        assert_eq!(entries[0].priority, 10);
+        assert_eq!(entries[1].priority, 200);
     }
 }

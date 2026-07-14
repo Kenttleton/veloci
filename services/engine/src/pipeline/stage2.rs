@@ -2,7 +2,7 @@
 //!
 //! **Input:** UUIDs of transactions that produced no Stage 1 assignments.
 //!
-//! **Output:** Candidate `rules` with `status = 'pending_review'` and linked
+//! **Output:** Candidate `entries` with `status = 'pending_review'` and linked
 //! `review_queue` records.
 //!
 //! ## Algorithm
@@ -10,8 +10,8 @@
 //! 1. Load the full unmatched transaction rows.
 //! 2. Sequential global clustering pass using LCS similarity (≥ 0.70 ratio).
 //! 3. `rayon::par_iter` over clusters for confidence scoring.
-//! 4. Clusters above 0.3 confidence produce one `rules` row + one
-//!    `review_queue` row, and `transaction_rule_assignments` rows with the
+//! 4. Clusters above 0.3 confidence produce one `entries` row + one
+//!    `review_queue` row, and `transaction_entry_assignments` rows with the
 //!    cluster confidence score.
 
 use anyhow::{Context, Result};
@@ -49,7 +49,7 @@ const TIMING_VARIANCE_THRESHOLD_DAYS: f64 = 5.0;
 //
 // Standing requires: tight timing + tight amounts + enough observations.
 // Variable requires: regular timing, amounts may vary.
-// one_time: fallthrough — no periodic cadence detected.
+// irregular: fallthrough — no periodic cadence detected.
 
 /// Minimum timing_confidence required to classify as Standing.
 const STANDING_TIMING_GATE: f64 = 0.75;
@@ -227,17 +227,17 @@ pub(crate) fn cluster_by_merchant(txns: Vec<UnmatchedTxn>) -> Vec<Cluster> {
 
 /// Compute three component scores and classify the cluster.
 ///
-/// Classification cascade: Standing → Variable → OneTime (fallthrough).
+/// Classification cascade: Standing → Variable → Irregular (fallthrough).
 ///
 /// Component weights per type:
-/// | type     | merchant | timing | amount |
-/// |----------|----------|--------|--------|
-/// | standing | 0.20     | 0.40   | 0.40   |
-/// | variable | 0.30     | 0.55   | 0.15   |
-/// | one_time | 0.60     | 0.20   | 0.20   |
+/// | type      | merchant | timing | amount |
+/// |-----------|----------|--------|--------|
+/// | standing  | 0.20     | 0.40   | 0.40   |
+/// | variable  | 0.30     | 0.55   | 0.15   |
+/// | irregular | 0.60     | 0.20   | 0.20   |
 ///
 /// A single-transaction cluster scores merchant=1.0, timing=0.0, amount=1.0
-/// → one_time confidence=0.80, with timing=0.0 visibly signalling no cadence.
+/// → irregular confidence=0.80, with timing=0.0 visibly signalling no cadence.
 pub fn score_cluster(cluster: &Cluster) -> ClusterScore {
     let n = cluster.transactions.len();
     let suggested_name = cluster.representative_merchant.clone();
@@ -299,7 +299,7 @@ pub fn score_cluster(cluster: &Cluster) -> ClusterScore {
             let c = (merchant_confidence * 0.60
                    + timing_confidence  * 0.20
                    + amount_confidence  * 0.20).clamp(0.0, 1.0);
-            ("one_time", c)
+            ("irregular", c)
         };
 
     ClusterScore {
@@ -350,7 +350,7 @@ async fn load_unmatched(
     let rows: Vec<Row> = sqlx::query_as(
         r#"
         SELECT id, date, amount_cents, merchant_normalized
-        FROM raw_transactions
+        FROM transactions
         WHERE entity_id = $1
           AND id = ANY($2)
         ORDER BY date ASC
@@ -394,36 +394,56 @@ async fn persist_cluster(
     let rate_per_day = score.median_amount_cents.abs() as f64 / period_days as f64;
     let direction = if score.median_amount_cents > 0 { "income" } else { "expense" };
 
+    // start_date = earliest transaction in the cluster.
+    let start_date = cluster.transactions.iter().map(|t| t.date).min()
+        .unwrap_or_else(|| NaiveDate::from_ymd_opt(1970, 1, 1).unwrap());
+
     // next_due_date = last transaction date + detected period.
     let last_tx_date = cluster.transactions.iter().map(|t| t.date).max();
     let next_due_date = last_tx_date
         .map(|d| d + Duration::days(i64::from(period_days)));
 
-    let rule_id: (Uuid,) = sqlx::query_as(
+    // Lookup-or-create a global label for this merchant name.
+    let label_id: (Uuid,) = sqlx::query_as(
         r#"
-        INSERT INTO rules
-          (entity_id, name, direction, entry_type, period_days, next_due_date,
-           conditions, status, source, project_tentatively)
-        VALUES ($1, $2, $6, $3, $4, $5, $7, 'pending_review', 'engine', false)
+        INSERT INTO labels (name)
+        VALUES ($1)
+        ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+        RETURNING id
+        "#,
+    )
+    .bind(&score.suggested_name)
+    .fetch_one(pool)
+    .await
+    .context("failed to upsert label for stage 2 cluster")?;
+    let label_id = label_id.0;
+
+    let entry_id: (Uuid,) = sqlx::query_as(
+        r#"
+        INSERT INTO entries
+          (entity_id, label_id, direction, entry_type, period_days, next_due_date,
+           conditions, status, source, project_tentatively, start_date)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending_review', 'engine', false, $8)
         RETURNING id
         "#,
     )
     .bind(entity_id)
-    .bind(&score.suggested_name)
+    .bind(label_id)
+    .bind(direction)
     .bind(score.entry_type)
     .bind(period_days)
     .bind(next_due_date)
-    .bind(direction)
     .bind(&suggested_conditions)
+    .bind(start_date)
     .fetch_one(pool)
     .await
-    .context("failed to insert pending_review rule")?;
-    let rule_id = rule_id.0;
+    .context("failed to insert pending_review entry")?;
+    let entry_id = entry_id.0;
 
     sqlx::query(
         r#"
         INSERT INTO review_queue
-          (entity_id, rule_id, job_id, suggested_name, suggested_entry_type,
+          (entity_id, entry_id, job_id, suggested_name, suggested_entry_type,
            suggested_conditions, suggested_rate_per_day, matched_transaction_count,
            confidence, sample_merchants,
            alert_type, merchant_confidence, timing_confidence, amount_confidence)
@@ -431,7 +451,7 @@ async fn persist_cluster(
         "#,
     )
     .bind(entity_id)
-    .bind(rule_id)
+    .bind(entry_id)
     .bind(job_id)
     .bind(&score.suggested_name)
     .bind(score.entry_type)
@@ -448,23 +468,23 @@ async fn persist_cluster(
     .context("failed to insert review_queue record")?;
 
     let tx_ids: Vec<Uuid> = cluster.transactions.iter().map(|t| t.id).collect();
-    let rule_ids: Vec<Uuid> = vec![rule_id; tx_ids.len()];
+    let entry_ids: Vec<Uuid> = vec![entry_id; tx_ids.len()];
     let confidences: Vec<f64> = vec![score.confidence; tx_ids.len()];
 
     sqlx::query(
         r#"
-        INSERT INTO transaction_rule_assignments (transaction_id, rule_id, confidence)
-        SELECT t, r, c
-        FROM UNNEST($1::uuid[], $2::uuid[], $3::float8[]) AS u(t, r, c)
-        ON CONFLICT (transaction_id, rule_id) DO UPDATE SET confidence = EXCLUDED.confidence
+        INSERT INTO transaction_entry_assignments (transaction_id, entry_id, confidence)
+        SELECT t, e, c
+        FROM UNNEST($1::uuid[], $2::uuid[], $3::float8[]) AS u(t, e, c)
+        ON CONFLICT (transaction_id, entry_id) DO UPDATE SET confidence = EXCLUDED.confidence
         "#,
     )
     .bind(&tx_ids)
-    .bind(&rule_ids)
+    .bind(&entry_ids)
     .bind(&confidences)
     .execute(pool)
     .await
-    .context("failed to insert stage 2 assignments")?;
+    .context("failed to insert stage 2 entry assignments")?;
 
     Ok(())
 }
@@ -541,7 +561,7 @@ mod tests {
     }
 
     #[test]
-    fn score_single_positive_transaction_is_one_time() {
+    fn score_irregular_income_detection() {
         let cluster = Cluster {
             representative_merchant: "IRS Treas 310".to_string(),
             transactions: vec![make_txn(
@@ -552,11 +572,11 @@ mod tests {
             )],
         };
         let score = score_cluster(&cluster);
-        assert_eq!(score.entry_type, "one_time", "one-time income should be one_time");
+        assert_eq!(score.entry_type, "irregular", "no-cadence income should be irregular");
     }
 
     #[test]
-    fn score_single_transaction_is_one_time_with_low_confidence() {
+    fn score_irregular_single_transaction_low_confidence() {
         let cluster = Cluster {
             representative_merchant: "OneTime".to_string(),
             transactions: vec![make_txn(
@@ -567,13 +587,13 @@ mod tests {
             )],
         };
         let score = score_cluster(&cluster);
-        assert_eq!(score.entry_type, "one_time");
-        // Single observation: merchant=1.0, timing=0.0 (no cadence), amount=1.0
+        assert_eq!(score.entry_type, "irregular");
+        // Irregular observation: merchant=1.0, timing=0.0 (no cadence), amount=1.0
         // → confidence = 1.0*0.60 + 0.0*0.20 + 1.0*0.20 = 0.80.
         // timing=0.0 is the honest signal — no cadence data yet.
-        assert!(score.confidence >= MIN_CONFIDENCE, "single observation dropped below creation threshold: {}", score.confidence);
-        assert_eq!(score.timing_confidence, 0.0, "single txn must have timing=0.0 (no cadence)");
-        assert_eq!(score.merchant_confidence, 1.0, "single txn must have merchant=1.0");
+        assert!(score.confidence >= MIN_CONFIDENCE, "irregular observation dropped below creation threshold: {}", score.confidence);
+        assert_eq!(score.timing_confidence, 0.0, "irregular txn must have timing=0.0 (no cadence)");
+        assert_eq!(score.merchant_confidence, 1.0, "irregular txn must have merchant=1.0");
     }
 
     #[test]
@@ -662,7 +682,7 @@ mod tests {
             ],
         };
         let score = score_cluster(&cluster);
-        assert_eq!(score.entry_type, "one_time", "consistent amount with irregular timing should be one_time");
+        assert_eq!(score.entry_type, "irregular", "consistent amount with irregular timing should be irregular");
     }
 
     #[test]

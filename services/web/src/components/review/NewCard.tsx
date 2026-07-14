@@ -9,12 +9,12 @@ interface NewCardProps {
   onAction: () => void
 }
 
-type EntryType = 'standing' | 'variable' | 'one_time'
+type EntryType = 'standing' | 'variable' | 'irregular'
 
 const ENTRY_TYPE_LABELS: Record<EntryType, string> = {
   standing: 'Standing',
   variable: 'Variable',
-  one_time: 'One-time',
+  irregular: 'Irregular',
 }
 
 function formatDate(dateStr: string): string {
@@ -110,9 +110,8 @@ export function NewCard({ item, onAction }: NewCardProps) {
         </span>
       </div>
 
-      {/* Rule name */}
       <h3 style={{ margin: '0 0 8px', fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>
-        {item.rule_name}
+        {item.suggested_name}
       </h3>
 
       {/* Summary line */}
@@ -282,11 +281,10 @@ export function NewCard({ item, onAction }: NewCardProps) {
         >
           <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 8 }}>
             Inline editor — common fields (name, type, label, period, projected rate).
-            For condition logic, use the full rule editor.
+            For condition logic, use the full entry editor.
           </div>
-          {/* Simple fields placeholder — full rule editor is out of scope for this spec */}
           <div style={{ fontSize: 12, color: 'var(--text3)' }}>
-            Name: {item.rule_name} · Rate: {formatRate(item.suggested_rate_per_day)}
+            Name: {item.suggested_name} · Rate: {formatRate(item.suggested_rate_per_day)}
           </div>
         </div>
       )}
@@ -319,7 +317,7 @@ export function NewCard({ item, onAction }: NewCardProps) {
             padding: '6px 12px',
           }}
         >
-          Edit rule
+          Edit entry
         </button>
         <button
           onClick={() => void handleApprove()}

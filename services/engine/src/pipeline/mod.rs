@@ -5,22 +5,22 @@
 //!
 //! Each function runs a contiguous suffix of the pipeline:
 //!
-//! | Job type          | Stages                        |
-//! |-------------------|-------------------------------|
-//! | `import.process`  | 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 |
-//! | `rules.reprocess` | 1 → 2 → 3 → 4 → 5 → 6 → 7  |
-//! | `account.analyze` | 3 → 4 → 5 → 6 → 7           |
-//! | `balance.project` | 7                            |
+//! | Job type              | Stages                          |
+//! |-----------------------|---------------------------------|
+//! | `import.process`      | 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 |
+//! | `entries.reprocess`   | 1 → 2 → 3 → 4 → 5 → 6 → 7     |
+//! | `account.analyze`     | 3 → 4 → 5 → 6 → 7              |
+//! | `balance.project`     | 7                               |
 //!
 //! Stage responsibilities:
-//!   0 — CSV dedup + normalization → raw_transactions
-//!   1 — Active rule matching → transaction_rule_assignments; updates next_due_date
-//!   2 — Pattern detection on unmatched txns → pending_review rules + review_queue; sets next_due_date
-//!   3 — Per-rule rate computation (day-crawl) — pure calculation, no rule metadata writes
-//!   4 — Label rate aggregation
-//!   5 — Slope + drift regression
-//!   6 — Snapshot UPSERT
-//!   7 — Cash flow projection; raises review_queue alerts for missed expected transactions
+//!   0 — CSV dedup + normalization → transactions
+//!   1 — Active entry matching → transaction_entry_assignments; updates next_due_date
+//!   2 — Pattern detection on unmatched txns → pending_review entries + review_queue; sets next_due_date
+//!   3 — Per-entry rate computation (day-crawl) — pure calculation, no entry metadata writes
+//!   4 — Label rate aggregation from entry rates
+//!   5 — Slope + drift regression over snapshot history
+//!   6 — Snapshot UPSERT into `snapshots`
+//!   7 — Cash flow projection into `projections`; raises review_queue alerts for missed expected transactions
 
 pub mod stage0;
 pub mod stage1;
@@ -43,7 +43,7 @@ use crate::db::Pools;
 
 /// Run all 8 stages for an `import.process` job.
 ///
-/// Stage 0 writes to `raw_transactions`. All subsequent stages are read-then-
+/// Stage 0 writes to `transactions`. All subsequent stages are read-then-
 /// write. The final commit (Stage 6 + 7) is a single Postgres transaction.
 pub async fn run_import(
     entity_id: Uuid,
@@ -53,7 +53,7 @@ pub async fn run_import(
 ) -> Result<()> {
     tracing::info!(%entity_id, %job_id, %pending_import_id, "import.process starting");
 
-    // Stage 0: CSV normalization + dedup → raw_transactions
+    // Stage 0: CSV normalization + dedup → transactions
     let stage0_out = stage0::run(entity_id, job_id, pending_import_id, pools).await?;
 
     tracing::info!(%entity_id, imported = stage0_out.imported_count, skipped = stage0_out.skipped_count, computed_as_of = %stage0_out.computed_as_of, "stage 0 complete");
@@ -62,16 +62,16 @@ pub async fn run_import(
     run_from_stage1(entity_id, job_id, stage0_out.computed_as_of, pools).await
 }
 
-/// Run stages 1 → 7 for a `rules.reprocess` job.
+/// Run stages 1 → 7 for an `entries.reprocess` job.
 ///
-/// Re-reads all `raw_transactions` for the entity; rebuilds assignments,
+/// Re-reads all `transactions` for the entity; rebuilds assignments,
 /// patterns, rates, trends, snapshots, and projections.
 pub async fn run_rules_reprocess(
     entity_id: Uuid,
     job_id: Uuid,
     pools: &Pools,
 ) -> Result<()> {
-    tracing::info!(%entity_id, %job_id, "rules.reprocess starting");
+    tracing::info!(%entity_id, %job_id, "entries.reprocess starting");
 
     let computed_as_of = stage0::query_computed_as_of(entity_id, &pools.read).await?;
     run_from_stage1(entity_id, job_id, computed_as_of, pools).await
@@ -96,7 +96,7 @@ pub async fn run_account_analyze(
 /// Run stage 7 only for a `balance.project` job.
 ///
 /// Triggered when an account's balance is updated manually. Rebuilds the
-/// 90-day cash flow projection using the existing `computed_snapshots`.
+/// 90-day cash flow projection using the existing `snapshots`.
 pub async fn run_balance_project(
     entity_id: Uuid,
     job_id: Uuid,
@@ -119,11 +119,11 @@ async fn run_from_stage1(
     computed_as_of: chrono::NaiveDate,
     pools: &Pools,
 ) -> Result<()> {
-    // Stage 1: Rule matching → transaction_rule_assignments
+    // Stage 1: Entry matching → transaction_entry_assignments
     let stage1_out = stage1::run(entity_id, &pools.read).await?;
     tracing::info!(%entity_id, assignments = stage1_out.total_assignments, unmatched = stage1_out.unmatched_tx_ids.len(), "stage 1 complete");
 
-    // Stage 2: Pattern detection on unmatched transactions → pending_review rules
+    // Stage 2: Pattern detection on unmatched transactions → pending_review entries
     let stage2_out = stage2::run(entity_id, job_id, &stage1_out.unmatched_tx_ids, &pools.read).await?;
     tracing::info!(%entity_id, clusters = stage2_out.clusters_created, "stage 2 complete");
 
@@ -150,11 +150,11 @@ async fn run_from_stage3(
     // Stage 7 runs once at the end with the final computed_as_of.
     let mut snapshot_date = flux_start;
     while snapshot_date <= computed_as_of {
-        // Stage 3: Rate computation per active rule
+        // Stage 3: Rate computation per active entry
         let stage3_out = stage3::run(entity_id, snapshot_date, &pools.read).await?;
 
-        // Stage 4: Label rate mapping
-        let stage4_out = stage4::run(entity_id, &stage3_out.rule_rates, &pools.read).await?;
+        // Stage 4: Label rate aggregation from entry rates
+        let stage4_out = stage4::run(entity_id, &stage3_out.entry_rates, &pools.read).await?;
 
         // Stage 5: Slope + drift
         let stage5_out = stage5::run(

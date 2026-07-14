@@ -9,38 +9,18 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 // ---------------------------------------------------------------------------
-// Rule domain types
+// Entry domain types
 // ---------------------------------------------------------------------------
 
-/// The execution stage of a rule (determines ordering in Stage 1).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum RuleStage {
-    /// Runs first. Matches transaction attributes (merchant, amount, date).
-    Pre,
-    /// Runs after `Pre`. Can match on label UUIDs from pre-stage output.
-    Post,
-}
-
-impl RuleStage {
-    /// Parse from the DB string representation.
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s {
-            "pre"  => Some(Self::Pre),
-            "post" => Some(Self::Post),
-            _      => None,
-        }
-    }
-}
-
-/// Entry type of a rule — determines rate computation semantics.
+/// Entry type of an entry — determines rate computation semantics.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EntryType {
     /// Recurring commitment with consistent timing and amount. Rate = amount / period_days.
     Standing,
     /// Recurring commitment with variable amounts. Rate = rolling_window_total / window_days.
     Variable,
-    /// One-time transaction (income or expense). Direction is on the rule; amortized over period_days.
-    OneTime,
+    /// No detectable cadence or consistent amount. Groups by merchant; amortized over period_days.
+    Irregular,
 }
 
 impl EntryType {
@@ -48,13 +28,13 @@ impl EntryType {
         match s {
             "standing" => Some(Self::Standing),
             "variable" => Some(Self::Variable),
-            "one_time" => Some(Self::OneTime),
+            "irregular" => Some(Self::Irregular),
             _          => None,
         }
     }
 }
 
-/// Variable rule projection method.
+/// Variable entry projection method.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VariableMethod {
     /// Project the mean of recent observed amounts.
@@ -94,19 +74,18 @@ impl Direction {
 // Rate output types
 // ---------------------------------------------------------------------------
 
-/// Per-rule rate computed by Stage 3.
+/// Per-entry rate computed by Stage 3.
 #[derive(Debug, Clone)]
-pub struct RuleRate {
-    pub rule_id:                  Uuid,
-    pub label_id:                 Option<Uuid>,
-    pub direction:                Direction,
-    pub entry_type:               EntryType,
-    pub period_days:              i32,
-    pub epoch_id:                 Option<Uuid>,
-    pub actual_rate_per_day:      f64,
-    pub projected_rate_per_day:   f64,
-    pub transaction_count:        i32,
-    pub window_days_used:         i32,
+pub struct EntryRate {
+    pub entry_id:                  Uuid,
+    pub label_id:                  Option<Uuid>,
+    pub direction:                 Direction,
+    pub entry_type:                EntryType,
+    pub period_days:               i32,
+    pub actual_rate_per_day:       f64,
+    pub projected_rate_per_day:    f64,
+    pub transaction_count:         i32,
+    pub window_days_used:          i32,
     pub rolling_window_total_cents: i64,
 }
 
@@ -118,7 +97,7 @@ pub struct LabelRate {
     pub period_days:               i32,
     pub actual_rate_per_day:       f64,
     pub projected_rate_per_day:    f64,
-    pub contributing_rule_count:   i32,
+    pub contributing_entry_count:  i32,
 }
 
 /// Trend values computed by Stage 5 for a single node.
@@ -131,26 +110,26 @@ pub struct NodeTrend {
     pub r_squared:          f64,
 }
 
-/// Discriminates rule nodes from label nodes in `computed_snapshots`.
+/// Discriminates entry nodes from classification nodes in `snapshots`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NodeType {
-    Rule,
-    Label,
+    Entry,
+    Classification,
 }
 
 impl NodeType {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Rule  => "rule",
-            Self::Label => "label",
+            Self::Entry          => "entry",
+            Self::Classification => "classification",
         }
     }
 
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
-            "rule"  => Some(Self::Rule),
-            "label" => Some(Self::Label),
-            _       => None,
+            "entry"          => Some(Self::Entry),
+            "classification" => Some(Self::Classification),
+            _                => None,
         }
     }
 }
@@ -167,7 +146,6 @@ pub struct SnapshotRow {
     pub snapshot_date:        NaiveDate,
     pub computed_as_of:       NaiveDate,
     pub actual_rate_per_day:  f64,
-    pub epoch_id:             Option<Uuid>,
 }
 
 // ---------------------------------------------------------------------------
@@ -177,7 +155,7 @@ pub struct SnapshotRow {
 /// Output from Stage 0.
 #[derive(Debug, Clone)]
 pub struct Stage0Output {
-    /// The `MAX(date)` from raw_transactions — used as the flux window anchor.
+    /// The `MAX(date)` from transactions — used as the flux window anchor.
     pub computed_as_of:   NaiveDate,
     pub imported_count:   u32,
     pub skipped_count:    u32,
@@ -187,7 +165,7 @@ pub struct Stage0Output {
 #[derive(Debug, Clone)]
 pub struct Stage1Output {
     pub total_assignments: u64,
-    /// UUIDs of transactions that matched no rule — passed to Stage 2.
+    /// UUIDs of transactions that matched no entry — passed to Stage 2.
     pub unmatched_tx_ids:  Vec<Uuid>,
 }
 
@@ -200,7 +178,7 @@ pub struct Stage2Output {
 /// Output from Stage 3.
 #[derive(Debug, Clone)]
 pub struct Stage3Output {
-    pub rule_rates: Vec<RuleRate>,
+    pub entry_rates: Vec<EntryRate>,
 }
 
 /// Output from Stage 4.
@@ -212,8 +190,8 @@ pub struct Stage4Output {
 /// Output from Stage 5.
 #[derive(Debug, Clone)]
 pub struct Stage5Output {
-    pub rule_trends:  Vec<NodeTrend>,
-    pub label_trends: Vec<NodeTrend>,
+    pub entry_trends:          Vec<NodeTrend>,
+    pub classification_trends: Vec<NodeTrend>,
 }
 
 // ---------------------------------------------------------------------------
@@ -263,25 +241,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn rule_stage_ordering() {
-        // Pre must sort before Post for Stage 1 ordering.
-        assert!(RuleStage::Pre < RuleStage::Post);
-    }
-
-    #[test]
-    fn rule_stage_from_str() {
-        assert_eq!(RuleStage::from_str("pre"),  Some(RuleStage::Pre));
-        assert_eq!(RuleStage::from_str("post"), Some(RuleStage::Post));
-        assert_eq!(RuleStage::from_str("PRE"),  None);
-    }
-
-    #[test]
     fn entry_type_from_str() {
         assert_eq!(EntryType::from_str("standing"), Some(EntryType::Standing));
         assert_eq!(EntryType::from_str("variable"), Some(EntryType::Variable));
-        assert_eq!(EntryType::from_str("one_time"), Some(EntryType::OneTime));
-        assert_eq!(EntryType::from_str("hit"),      None); // removed
-        assert_eq!(EntryType::from_str("boost"),    None); // removed
+        assert_eq!(EntryType::from_str("irregular"), Some(EntryType::Irregular));
+        assert_eq!(EntryType::from_str("single"),   None); // old name removed
+        assert_eq!(EntryType::from_str("one_time"), None); // older name removed
+        assert_eq!(EntryType::from_str("hit"),      None);
+        assert_eq!(EntryType::from_str("boost"),    None);
     }
 
     #[test]
@@ -293,10 +260,11 @@ mod tests {
 
     #[test]
     fn node_type_roundtrip() {
-        assert_eq!(NodeType::Rule.as_str(),  "rule");
-        assert_eq!(NodeType::Label.as_str(), "label");
-        assert_eq!(NodeType::from_str("rule"),  Some(NodeType::Rule));
-        assert_eq!(NodeType::from_str("label"), Some(NodeType::Label));
-        assert_eq!(NodeType::from_str("entry"), None);
+        assert_eq!(NodeType::Entry.as_str(),          "entry");
+        assert_eq!(NodeType::Classification.as_str(), "classification");
+        assert_eq!(NodeType::from_str("entry"),          Some(NodeType::Entry));
+        assert_eq!(NodeType::from_str("classification"), Some(NodeType::Classification));
+        assert_eq!(NodeType::from_str("rule"),  None);
+        assert_eq!(NodeType::from_str("label"), None);
     }
 }

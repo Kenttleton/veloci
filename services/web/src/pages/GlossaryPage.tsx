@@ -59,14 +59,14 @@ const GLOSSARY_TERMS: GlossaryTerm[] = [
   },
   // From 2026-07-12-ui-design-account-review-labels.md
   {
-    term: 'Rule',
+    term: 'Entry',
     shortDef: 'A named pattern that matches transactions and converts them to a $/day rate.',
-    fullDef: 'A Rule is the core configuration unit in Veloci. Each rule has conditions that match transactions (by merchant, amount, timing), converts the matched transactions into a $/day rate, and outputs to exactly one label. Rules are created during the Review process and can be edited in the rule editor.',
+    fullDef: 'An Entry is the core signal unit in Veloci. Each entry has conditions that match transactions (by merchant, amount, timing), converts the matched transactions into a $/day rate, and is associated with a label. Entries are created during the Review process and can be edited in the entry editor. An entry\'s type (standing, variable, irregular) determines how its rate is computed.',
   },
   {
     term: 'Label',
-    shortDef: 'A named group that one or more rules output to. Labels are the categories you see in the Stack.',
-    fullDef: 'Labels are named groupings that rules output to. Each rule outputs exactly one label. Labels are the category headers in the Stack panel. You can create new labels during Review or in Settings > Labels. Labels cannot be deleted — they are permanent identifiers. The name can be changed at any time.',
+    shortDef: 'A named group that one or more entries output to. Labels are the categories you see in the Stack.',
+    fullDef: 'Labels are named groupings that entries output to. Each entry is associated with exactly one label. Labels are the category headers in the Stack panel. You can create new labels during Review or in Settings > Labels. Labels are global — renaming a label requires no recalculation, only a UI refresh. The name can be changed at any time.',
   },
   {
     term: 'Confidence',
@@ -74,24 +74,19 @@ const GLOSSARY_TERMS: GlossaryTerm[] = [
     fullDef: 'Confidence is a composite score from 0 to 1 that indicates how reliably the engine detected a pattern. It is composed of three sub-scores: merchant (consistency of the business name), timing (regularity of the cadence), and amount (consistency of the charge amount). Scores above 0.7 indicate high confidence.',
   },
   {
-    term: 'Epoch',
-    shortDef: 'The active lifespan of a rule\'s signal. A new epoch begins when a rule is approved; it ends when the commitment stops.',
-    fullDef: 'An epoch is a bounded period during which a rule was actively generating transactions. When you approve a new rule, the epoch begins. When you confirm a rule has ended, the epoch closes. A rule can have multiple epochs if it was temporarily paused and resumed. History is preserved per-epoch.',
-  },
-  {
     term: 'Pending',
-    shortDef: 'A rule detected by the engine but not yet reviewed. Pending rules are excluded from your budget until approved.',
-    fullDef: 'A Pending rule is one the engine has proposed but you have not yet reviewed. Pending rules are displayed in the Transactions tab with a muted treatment and an accent border, indicating the grouping is provisional. Pending rules do not contribute to your budget rates until you approve them in Review.',
+    shortDef: 'An entry detected by the engine but not yet reviewed. Pending entries are excluded from your budget until approved.',
+    fullDef: 'A Pending entry is one the engine has proposed but you have not yet reviewed. Pending entries are displayed in the Transactions tab with a muted treatment and an accent border, indicating the grouping is provisional. Pending entries do not contribute to your budget rates until you approve them in Review.',
   },
   {
-    term: 'Drift (rule)',
-    shortDef: 'A detected change in an active rule\'s amount or timing pattern. Requires review to accept or dismiss.',
-    fullDef: 'Rule drift occurs when the engine detects that an active rule\'s pattern has changed — for example, a subscription price increase. A drift card appears in Review showing the old and new patterns. You choose whether to record the change as a Correction (in-place update) or a Version (new epoch with the updated amount).',
+    term: 'Drift (entry)',
+    shortDef: 'A detected change in an active entry\'s amount or timing pattern. Requires review to accept or dismiss.',
+    fullDef: 'Entry drift occurs when the engine detects that an active entry\'s pattern has changed — for example, a subscription price increase. A drift card appears in Review showing the old and new patterns. You choose whether to record the change as a Correction (in-place update) or a Version (a new entry starting today with the updated rate).',
   },
   {
     term: 'Ended',
-    shortDef: 'An active rule whose expected transaction has not arrived. May indicate a cancelled subscription or temporary gap.',
-    fullDef: 'An Ended alert appears when an active rule\'s expected transaction is overdue by multiple cycles (the 3-strike mechanism). You decide whether it is a temporary gap (keep the rule active) or a true end (close the epoch on a specific date). Ended rules retain their historical data in the Horizon chart.',
+    shortDef: 'An active entry whose expected transaction has not arrived. May indicate a cancelled subscription or temporary gap.',
+    fullDef: 'An Ended alert appears when an active entry\'s expected transaction is overdue. You decide whether it is a temporary gap (keep the entry active) or a true end (close the entry on a specific date). Ended entries retain their historical data in the Horizon chart.',
   },
   // From 2026-07-13-ui-design-job-status.md
   {
@@ -107,7 +102,7 @@ const GLOSSARY_TERMS: GlossaryTerm[] = [
   {
     term: 'Job',
     shortDef: 'A unit of background work triggered by an import or a rule change. Jobs run through multiple stages before completing.',
-    fullDef: 'A Job is a unit of asynchronous processing work. Three job types exist: Import (processes a CSV file through all stages), Rules reprocess (reprocesses all transactions against the current rule set), and Recalculate (recalculates snapshots and projections for an account). Jobs run through up to 8 stages and update the UI via SSE events as each stage completes.',
+    fullDef: 'A Job is a unit of asynchronous processing work. Three job types exist: Import (processes a CSV file through all stages), Entries reprocess (reprocesses all transactions against the current entry set), and Recalculate (recalculates snapshots and projections for an account). Jobs run through up to 8 stages and update the UI via SSE events as each stage completes.',
   },
 ]
 
