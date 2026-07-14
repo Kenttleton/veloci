@@ -108,6 +108,19 @@ _migrate-app-seed:
     docker compose exec -T postgres psql -U "{{ pg_user }}" -d "{{ app_db }}" \
         -v ON_ERROR_STOP=1 -f /migrations/app/002_rbac_seed.sql
 
+# ─── Code generation ─────────────────────────────────────────────────────────
+
+# Generate auth OpenAPI spec → services/auth/api/openapi.json
+gen-auth:
+    cd services/auth && go run ./cmd/specgen -o api/openapi.json
+
+# Regenerate api authclient (ogen), patch unknown-field handling, and generate api OpenAPI spec
+gen-api: gen-auth
+    cd services/api && go generate ./generate.go
+
+# Run full generation chain (auth spec → api client → api spec)
+gen: gen-api
+
 # ─── sqlx compile-time SQL verification ──────────────────────────────────────
 # Requires a running postgres (just infra). Generates .sqlx/ offline query cache.
 # Once queries are converted from sqlx::query_as (runtime) to sqlx::query_as!

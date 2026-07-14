@@ -12,6 +12,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
+	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -124,6 +125,7 @@ func runServe(_ *cobra.Command, _ []string) error {
 	authHandler := handler.NewAuthHandler(authClient, &appDBImpl{pool: pool})
 
 	r := chi.NewRouter()
+	r.Use(chimiddleware.Logger)
 	api := humachi.New(r, huma.DefaultConfig("Veloci API", "1.0.0"))
 
 	handler.RegisterHealthRoutes(api)
@@ -261,13 +263,24 @@ func runSeed(_ *cobra.Command, _ []string) error {
 
 	ctx := context.Background()
 
-	cred, err := authClient.CreateCredential(ctx, &authclient.CreateCredentialInputBody{
+	var credentialID string
+	created, err := authClient.CreateCredential(ctx, &authclient.CreateCredentialInputBody{
 		Email:    email,
 		Password: password,
 	})
 	if err != nil {
-		log.Printf("seed: credential already exists or error: %v — continuing", err)
-		return nil
+		// Credential likely already exists; validate to retrieve the credential ID.
+		existing, verifyErr := authClient.ValidateCredential(ctx, &authclient.ValidateCredentialInputBody{
+			Email:    email,
+			Password: password,
+		})
+		if verifyErr != nil {
+			return fmt.Errorf("create credential: %w; validate: %w", err, verifyErr)
+		}
+		credentialID = existing.CredentialID
+		log.Printf("seed: credential already exists (id=%s)", credentialID)
+	} else {
+		credentialID = created.CredentialID
 	}
 
 	pool, err := pgxpool.New(ctx, buildDBDSN())
@@ -277,11 +290,11 @@ func runSeed(_ *cobra.Command, _ []string) error {
 	defer pool.Close()
 
 	s := store.New(pool)
-	userID, err := s.EnsureUser(ctx, email, cred.CredentialID)
+	userID, err := s.EnsureUser(ctx, email, credentialID)
 	if err != nil {
 		return fmt.Errorf("ensure user: %w", err)
 	}
 
-	log.Printf("seed: admin user ready (id=%s, credential_id=%s)", userID, cred.CredentialID)
+	log.Printf("seed: admin user ready (id=%s, credential_id=%s)", userID, credentialID)
 	return nil
 }

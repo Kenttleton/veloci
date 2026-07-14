@@ -17,6 +17,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
+	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/veloci/auth/admin"
@@ -100,7 +101,7 @@ func runServe(_ *cobra.Command, _ []string) error {
 
 	secret := []byte(viper.GetString("auth.jwt_secret"))
 	if len(secret) < 32 {
-		return fmt.Errorf("auth.jwt_secret must be at least 32 characters")
+		log.Printf("WARNING: auth.jwt_secret must be at least 32 characters — rotate before exposing to a network")
 	}
 	warnWeakSecret(string(secret))
 
@@ -128,7 +129,10 @@ func runServe(_ *cobra.Command, _ []string) error {
 	inv := invites.NewHandler(database, inviteCfg)
 
 	r := chi.NewRouter()
-	api := humachi.New(r, huma.DefaultConfig("Veloci Auth", "1.0.0"))
+	r.Use(chimiddleware.Logger)
+	authCfg := huma.DefaultConfig("Veloci Auth", "1.0.0")
+	authCfg.SchemasPath = ""
+	api := humachi.New(r, authCfg)
 
 	credentials.RegisterRoutes(api, creds)
 	sessions.RegisterRoutes(api, toks)

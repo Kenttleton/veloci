@@ -53,7 +53,9 @@ func (s *ConsumeInviteInputBody) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"token\"")
 			}
 		default:
-			return errors.Errorf("unexpected field %q", k)
+			if err := d.Skip(); err != nil {
+				return errors.Wrap(err, "skip unknown field")
+			}
 		}
 		return nil
 	}); err != nil {
@@ -166,7 +168,9 @@ func (s *CreateCredentialInputBody) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"password\"")
 			}
 		default:
-			return errors.Errorf("unexpected field %q", k)
+			if err := d.Skip(); err != nil {
+				return errors.Wrap(err, "skip unknown field")
+			}
 		}
 		return nil
 	}); err != nil {
@@ -262,7 +266,9 @@ func (s *CreateCredentialOutputBody) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"credential_id\"")
 			}
 		default:
-			return errors.Errorf("unexpected field %q", k)
+			if err := d.Skip(); err != nil {
+				return errors.Wrap(err, "skip unknown field")
+			}
 		}
 		return nil
 	}); err != nil {
@@ -373,7 +379,9 @@ func (s *CreateInviteInputBody) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"created_by\"")
 			}
 		default:
-			return errors.Errorf("unexpected field %q", k)
+			if err := d.Skip(); err != nil {
+				return errors.Wrap(err, "skip unknown field")
+			}
 		}
 		return nil
 	}); err != nil {
@@ -544,7 +552,9 @@ func (s *CreateInviteOutputBody) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"token\"")
 			}
 		default:
-			return errors.Errorf("unexpected field %q", k)
+			if err := d.Skip(); err != nil {
+				return errors.Wrap(err, "skip unknown field")
+			}
 		}
 		return nil
 	}); err != nil {
@@ -674,7 +684,9 @@ func (s *ErrorDetail) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"value\"")
 			}
 		default:
-			return errors.Errorf("unexpected field %q", k)
+			if err := d.Skip(); err != nil {
+				return errors.Wrap(err, "skip unknown field")
+			}
 		}
 		return nil
 	}); err != nil {
@@ -823,7 +835,9 @@ func (s *ErrorModel) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"type\"")
 			}
 		default:
-			return errors.Errorf("unexpected field %q", k)
+			if err := d.Skip(); err != nil {
+				return errors.Wrap(err, "skip unknown field")
+			}
 		}
 		return nil
 	}); err != nil {
@@ -902,7 +916,9 @@ func (s *MintTokenInputBody) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"credential_id\"")
 			}
 		default:
-			return errors.Errorf("unexpected field %q", k)
+			if err := d.Skip(); err != nil {
+				return errors.Wrap(err, "skip unknown field")
+			}
 		}
 		return nil
 	}); err != nil {
@@ -1222,7 +1238,9 @@ func (s *RefreshTokenInputBody) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"refresh_token\"")
 			}
 		default:
-			return errors.Errorf("unexpected field %q", k)
+			if err := d.Skip(); err != nil {
+				return errors.Wrap(err, "skip unknown field")
+			}
 		}
 		return nil
 	}); err != nil {
@@ -1386,7 +1404,9 @@ func (s *TokenPairOutputBody) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"refresh_token\"")
 			}
 		default:
-			return errors.Errorf("unexpected field %q", k)
+			if err := d.Skip(); err != nil {
+				return errors.Wrap(err, "skip unknown field")
+			}
 		}
 		return nil
 	}); err != nil {
@@ -1482,7 +1502,9 @@ func (s *UpdateCredentialPasswordInputBody) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"password\"")
 			}
 		default:
-			return errors.Errorf("unexpected field %q", k)
+			if err := d.Skip(); err != nil {
+				return errors.Wrap(err, "skip unknown field")
+			}
 		}
 		return nil
 	}); err != nil {
@@ -1595,7 +1617,9 @@ func (s *ValidateCredentialInputBody) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"password\"")
 			}
 		default:
-			return errors.Errorf("unexpected field %q", k)
+			if err := d.Skip(); err != nil {
+				return errors.Wrap(err, "skip unknown field")
+			}
 		}
 		return nil
 	}); err != nil {
@@ -1706,7 +1730,9 @@ func (s *ValidateCredentialOutputBody) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"system_role\"")
 			}
 		default:
-			return errors.Errorf("unexpected field %q", k)
+			if err := d.Skip(); err != nil {
+				return errors.Wrap(err, "skip unknown field")
+			}
 		}
 		return nil
 	}); err != nil {
@@ -1842,7 +1868,9 @@ func (s *ValidateTokenInputBody) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"token\"")
 			}
 		default:
-			return errors.Errorf("unexpected field %q", k)
+			if err := d.Skip(); err != nil {
+				return errors.Wrap(err, "skip unknown field")
+			}
 		}
 		return nil
 	}); err != nil {
@@ -1985,7 +2013,9 @@ func (s *ValidateTokenOutputBody) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"token_type\"")
 			}
 		default:
-			return errors.Errorf("unexpected field %q", k)
+			if err := d.Skip(); err != nil {
+				return errors.Wrap(err, "skip unknown field")
+			}
 		}
 		return nil
 	}); err != nil {

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -46,14 +47,21 @@ func DefaultConfig() Config {
 
 // Handler handles token lifecycle HTTP endpoints.
 type Handler struct {
-	db     sessionStore
-	secret []byte
-	cfg    Config
+	db           sessionStore
+	secret       []byte
+	cfg          Config
+	weakSecret   bool
 }
 
 // NewHandler constructs a Handler with the given store, signing secret, and config.
 func NewHandler(db sessionStore, secret []byte, cfg Config) *Handler {
-	return &Handler{db: db, secret: secret, cfg: cfg}
+	return &Handler{db: db, secret: secret, cfg: cfg, weakSecret: len(secret) < 32}
+}
+
+func (h *Handler) warnWeakSecret(op string) {
+	if h.weakSecret {
+		log.Printf("WARNING: jwt_secret is shorter than 32 characters — %s is insecure; rotate before exposing to a network", op)
+	}
 }
 
 // ── Input / output types ──────────────────────────────────────────────────────
@@ -155,6 +163,7 @@ func hashToken(rawToken string) string {
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
 func (h *Handler) mintPair(ctx context.Context, credentialID string, claims json.RawMessage) (accessTok, refreshTok, accessJTI string, accessExp time.Time, err error) {
+	h.warnWeakSecret("minting")
 	now := time.Now()
 	accessExp = now.Add(h.cfg.AccessTTL)
 	refreshExp := now.Add(h.cfg.RefreshTTL)
@@ -218,6 +227,7 @@ func (h *Handler) Validate(ctx context.Context, input *ValidateTokenInput) (*Val
 }
 
 func (h *Handler) validateJWT(ctx context.Context, tokenStr string) (*ValidateTokenOutput, error) {
+	h.warnWeakSecret("validating")
 	jti, tokenType, _, err := verifyJWT(h.secret, tokenStr)
 	if err != nil {
 		return nil, huma.Error401Unauthorized("unauthorized")
@@ -276,6 +286,7 @@ func (h *Handler) validateInviteToken(ctx context.Context, rawToken string) (*Va
 
 // Refresh validates a refresh token and issues a new access+refresh pair.
 func (h *Handler) Refresh(ctx context.Context, input *RefreshTokenInput) (*TokenPairOutput, error) {
+	h.warnWeakSecret("refreshing")
 	jti, tokenType, _, err := verifyJWT(h.secret, input.Body.RefreshToken)
 	if err != nil {
 		return nil, huma.Error401Unauthorized("refresh token invalid")

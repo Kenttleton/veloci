@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -59,11 +60,13 @@ func (h *AuthHandler) Login(ctx context.Context, input *loginInput) (*loginOutpu
 		Password: input.Body.Password,
 	})
 	if err != nil {
+		log.Printf("login: ValidateCredential failed for %s: %v", input.Body.Email, err)
 		return nil, huma.Error401Unauthorized("invalid credentials")
 	}
 
 	ue, err := h.db.FindUserEntity(ctx, input.Body.Email)
 	if err != nil {
+		log.Printf("login: FindUserEntity failed for %s: %v", input.Body.Email, err)
 		return nil, huma.Error401Unauthorized("invalid credentials")
 	}
 
