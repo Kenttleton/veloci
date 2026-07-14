@@ -15,7 +15,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/veloci/auth/internal/store"
+	"github.com/veloci/auth/store"
 )
 
 // ErrNotFound is returned by test stubs when a token record is missing.

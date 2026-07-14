@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/veloci/api/internal/queue"
+	"github.com/veloci/api/queue"
 )
 
 func TestJobSerializesCorrectly(t *testing.T) {

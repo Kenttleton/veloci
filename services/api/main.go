@@ -16,18 +16,18 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/veloci/api/internal/auth"
-	"github.com/veloci/api/internal/authclient"
-	"github.com/veloci/api/internal/health"
-	"github.com/veloci/api/internal/queue"
+	"github.com/veloci/api/authclient"
+	"github.com/veloci/api/handler"
+	"github.com/veloci/api/middleware"
+	"github.com/veloci/api/queue"
 )
 
 type appDBImpl struct {
 	pool *pgxpool.Pool
 }
 
-func (d *appDBImpl) FindUserEntity(ctx context.Context, email string) (auth.UserEntity, error) {
-	var ue auth.UserEntity
+func (d *appDBImpl) FindUserEntity(ctx context.Context, email string) (handler.UserEntity, error) {
+	var ue handler.UserEntity
 	err := d.pool.QueryRow(ctx, `
 		SELECT u.id::text, eu.entity_id::text, eu.entity_role
 		FROM users u
@@ -103,16 +103,16 @@ func runServe(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("authclient: %w", err)
 	}
 
-	authHandler := auth.NewHandler(authClient, &appDBImpl{pool: pool})
+	authHandler := handler.NewAuthHandler(authClient, &appDBImpl{pool: pool})
 
 	r := chi.NewRouter()
 	api := humachi.New(r, huma.DefaultConfig("Veloci API", "1.0.0"))
 
-	health.RegisterRoutes(api)
-	auth.RegisterRoutes(api, authHandler)
+	handler.RegisterHealthRoutes(api)
+	handler.RegisterAuthRoutes(api, authHandler)
 
 	r.Group(func(r chi.Router) {
-		r.Use(auth.Authenticate(authClient))
+		r.Use(middleware.Authenticate(authClient))
 		// Financial routes added in service-specific implementation plans
 	})
 

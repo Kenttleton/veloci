@@ -1,4 +1,4 @@
-package auth
+package handler
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/veloci/api/internal/authclient"
+	"github.com/veloci/api/authclient"
 )
 
 // UserEntity holds the resolved entity context for a user looked up in veloci_app.
@@ -21,43 +21,39 @@ type AppDB interface {
 	FindUserEntity(ctx context.Context, email string) (UserEntity, error)
 }
 
-// Handler handles authentication-related HTTP requests.
-type Handler struct {
+// AuthHandler handles authentication-related HTTP requests.
+type AuthHandler struct {
 	auth *authclient.Client
 	db   AppDB
 }
 
-// NewHandler creates a new Handler with the given ogen-generated auth client.
-func NewHandler(auth *authclient.Client, db AppDB) *Handler {
-	return &Handler{auth: auth, db: db}
+// NewAuthHandler creates an AuthHandler with the given ogen-generated auth client.
+func NewAuthHandler(auth *authclient.Client, db AppDB) *AuthHandler {
+	return &AuthHandler{auth: auth, db: db}
 }
 
-// ── Input / output types ──────────────────────────────────────────────────────
-
-type LoginInput struct {
+type loginInput struct {
 	Body struct {
 		Email    string `json:"email"    required:"true" doc:"User email address"`
 		Password string `json:"password" required:"true" doc:"Plaintext password"`
 	}
 }
 
-type LoginOutput struct {
+type loginOutput struct {
 	Body struct {
 		Token     string `json:"token"      doc:"Short-lived access token"`
 		ExpiresAt string `json:"expires_at" doc:"Token expiry as RFC 3339 timestamp"`
 	}
 }
 
-type LogoutInput struct {
+type logoutInput struct {
 	Body struct {
 		JTI string `json:"jti" required:"true" doc:"Access token JTI to revoke"`
 	}
 }
 
-// ── Handlers ──────────────────────────────────────────────────────────────────
-
 // Login validates credentials, looks up the user entity, and mints a JWT pair.
-func (h *Handler) Login(ctx context.Context, input *LoginInput) (*LoginOutput, error) {
+func (h *AuthHandler) Login(ctx context.Context, input *loginInput) (*loginOutput, error) {
 	cred, err := h.auth.ValidateCredential(ctx, &authclient.ValidateCredentialInputBody{
 		Email:    input.Body.Email,
 		Password: input.Body.Password,
@@ -91,21 +87,20 @@ func (h *Handler) Login(ctx context.Context, input *LoginInput) (*LoginOutput, e
 		return nil, huma.Error500InternalServerError("internal error")
 	}
 
-	out := &LoginOutput{}
+	out := &loginOutput{}
 	out.Body.Token = minted.AccessToken
 	out.Body.ExpiresAt = minted.ExpiresAt
 	return out, nil
 }
 
 // Logout revokes the token identified by the jti field in the request body.
-func (h *Handler) Logout(ctx context.Context, input *LogoutInput) (*struct{}, error) {
+func (h *AuthHandler) Logout(ctx context.Context, input *logoutInput) (*struct{}, error) {
 	h.auth.RevokeToken(ctx, authclient.RevokeTokenParams{Jti: input.Body.JTI}) //nolint:errcheck
 	return nil, nil
 }
 
-// ── Route registration ────────────────────────────────────────────────────────
-
-func RegisterRoutes(api huma.API, h *Handler) {
+// RegisterAuthRoutes registers auth endpoints on the given Huma API.
+func RegisterAuthRoutes(api huma.API, h *AuthHandler) {
 	huma.Register(api, huma.Operation{
 		OperationID: "login",
 		Method:      http.MethodPost,

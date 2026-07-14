@@ -14,9 +14,9 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
-	"github.com/veloci/auth/internal/invites"
-	"github.com/veloci/auth/internal/sessions"
-	"github.com/veloci/auth/internal/store"
+	"github.com/veloci/auth/invites"
+	"github.com/veloci/auth/sessions"
+	"github.com/veloci/auth/store"
 )
 
 // stubTokenDB implements sessionStore and inviteStore for tests.

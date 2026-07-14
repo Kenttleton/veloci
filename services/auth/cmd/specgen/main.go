@@ -15,9 +15,9 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
-	"github.com/veloci/auth/internal/credentials"
-	"github.com/veloci/auth/internal/invites"
-	"github.com/veloci/auth/internal/sessions"
+	"github.com/veloci/auth/credentials"
+	"github.com/veloci/auth/invites"
+	"github.com/veloci/auth/sessions"
 )
 
 func main() {

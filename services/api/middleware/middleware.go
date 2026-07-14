@@ -1,4 +1,4 @@
-package auth
+package middleware
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/veloci/api/internal/authclient"
+	"github.com/veloci/api/authclient"
 )
 
 type contextKey string

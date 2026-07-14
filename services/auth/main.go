@@ -19,11 +19,11 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"github.com/veloci/auth/internal/admin"
-	"github.com/veloci/auth/internal/credentials"
-	"github.com/veloci/auth/internal/invites"
-	"github.com/veloci/auth/internal/sessions"
-	"github.com/veloci/auth/internal/store"
+	"github.com/veloci/auth/admin"
+	"github.com/veloci/auth/credentials"
+	"github.com/veloci/auth/invites"
+	"github.com/veloci/auth/sessions"
+	"github.com/veloci/auth/store"
 )
 
 func main() {

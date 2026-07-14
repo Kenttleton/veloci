@@ -1,4 +1,4 @@
-package auth_test
+package handler_test
 
 import (
 	"bytes"
@@ -11,18 +11,18 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
-	"github.com/veloci/api/internal/auth"
-	"github.com/veloci/api/internal/authclient"
+	"github.com/veloci/api/authclient"
+	"github.com/veloci/api/handler"
 )
 
-func authRouter(authURL string, db auth.AppDB) (*chi.Mux, error) {
+func authRouter(authURL string, db handler.AppDB) (*chi.Mux, error) {
 	client, err := authclient.NewClient(authURL)
 	if err != nil {
 		return nil, err
 	}
 	r := chi.NewRouter()
 	api := humachi.New(r, huma.DefaultConfig("test", "1.0.0"))
-	auth.RegisterRoutes(api, auth.NewHandler(client, db))
+	handler.RegisterAuthRoutes(api, handler.NewAuthHandler(client, db))
 	return r, nil
 }
 
@@ -54,8 +54,8 @@ func stubAuthForLogin(t *testing.T) *httptest.Server {
 
 type stubAppDB struct{}
 
-func (s *stubAppDB) FindUserEntity(ctx context.Context, email string) (auth.UserEntity, error) {
-	return auth.UserEntity{UserID: "user-1", EntityID: "ent-1", EntityRole: "entity_admin"}, nil
+func (s *stubAppDB) FindUserEntity(ctx context.Context, email string) (handler.UserEntity, error) {
+	return handler.UserEntity{UserID: "user-1", EntityID: "ent-1", EntityRole: "entity_admin"}, nil
 }
 
 func TestLoginSuccess(t *testing.T) {

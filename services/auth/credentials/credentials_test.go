@@ -11,8 +11,8 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
-	"github.com/veloci/auth/internal/credentials"
-	"github.com/veloci/auth/internal/store"
+	"github.com/veloci/auth/credentials"
+	"github.com/veloci/auth/store"
 	"golang.org/x/crypto/bcrypt"
 )
 

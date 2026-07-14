@@ -1,7 +1,8 @@
 # Veloci — API Service Design
 
-**Date:** 2026-06-30
-**Status:** Approved
+**Date:** 2026-06-30  
+**Revised:** 2026-07-13  
+**Status:** Approved  
 **Scope:** veloci-api service — REST endpoints, RBAC enforcement, job orchestration, SSE job streaming, data model
 
 ---
@@ -10,7 +11,7 @@
 
 `veloci-api` is the single entry point for the frontend. It has four responsibilities:
 
-1. **Auth proxy** — transparent passthrough to veloci-auth for credential and token operations
+1. **Auth orchestration** — veloci-api exposes all auth-facing routes; the UI never calls veloci-auth directly
 2. **Financial data CRUD** — all permanent configuration and transient read access
 3. **Job orchestration** — publish jobs to RabbitMQ, stream status via SSE
 4. **RBAC** — own and enforce the permissions model; seed roles and permissions at migration
@@ -22,29 +23,93 @@ Two categories of data live in `veloci_app`:
 | Category | Tables | Characteristics |
 | --- | --- | --- |
 | Permanent | `rules`, `labels`, `institution_mappings`, `accounts`, `users`, `entities`, `entity_users` | User-owned configuration. Full CRUD. |
-| Transient | `raw_transactions`, `computed_snapshots`, `processing_jobs`, `review_queue` | Engine output. Read-only via API. Rebuilt when rules change. |
+| Transient | `raw_transactions`, `computed_snapshots`, `rate_projections`, `processing_jobs`, `review_queue` | Engine output. Read-only via API. Rebuilt when rules change. |
 
 **`raw_transactions` is append-only** — never modified after import.
 
 **Entries are not a stored table** — an "entry" in the UI is the join of a `rule` (permanent config) with its most recent `computed_snapshot`. `GET /entries` is a read-only computed view, not a writable resource.
 
-> **Note:** This spec supersedes the data model in the engine spec (`2026-06-29-processing-engine-design.md`) for the following tables: `entries` and `entry_rules` are replaced by `rules`; `groups` and `group_members` are replaced by `labels`; `label_members` and `label_rules` are removed — the label hierarchy is expressed via `rules.label_id` and post-stage JSONB conditions; `transaction_entry_assignments` is renamed `transaction_rule_assignments`; `computed_snapshots.node_type` values change from `entry|group` to `rule|label`.
+---
+
+## 2. Package Structure
+
+Each veloci service is its own Go module. There is no `internal/` directory — module boundaries already prevent cross-service imports.
+
+### veloci-auth (domain-based)
+
+Auth is a focused service with four cohesive domains; one package per domain is natural.
+
+```text
+services/auth/
+  credentials/      ← credential CRUD handlers + store interface
+  sessions/         ← token mint/refresh/revoke handlers + JWT
+  invites/          ← invite create/consume handlers
+  store/            ← all veloci_auth DB queries; *store.DB satisfies domain interfaces
+  admin/            ← server-admin seeding utility (CLI only)
+  cmd/specgen/      ← generates api/openapi.json from registered routes
+  main.go
+```
+
+### veloci-api (layer-based)
+
+The API surface is wide (14 route groups). A domain-per-package approach would produce 14+ packages with thin files. The layer-based layout keeps related concerns together and scales without proliferating packages.
+
+```text
+services/api/
+  handler/          ← all HTTP route handlers; one file per domain group
+  store/            ← all veloci_app DB queries; one file per domain group
+  middleware/       ← HTTP middleware (auth token extraction + claim injection)
+  authclient/       ← ogen-generated client for veloci-auth (never edit by hand)
+  queue/            ← RabbitMQ publisher
+  response/         ← Envelope[T] shared response type
+  main.go
+```
+
+Handler files mirror the route groups in Section 7:
+
+```text
+handler/
+  auth.go           ← login, logout, refresh, invite/accept
+  users.go
+  institutions.go
+  accounts.go
+  rules.go
+  labels.go
+  imports.go
+  transactions.go
+  entries.go
+  review.go
+  snapshots.go
+  projections.go
+  jobs.go           ← includes SSE stream handler
+  admin.go
+  health.go
+```
+
+Store files mirror the handler files and are the only code that touches `pgxpool.Pool` directly. Handlers receive a `*store.Store` (or a narrow interface for testability) and call store methods — no SQL outside `store/`.
 
 ---
 
-## 2. Request Lifecycle
+## 3. Request Lifecycle
 
-### Auth proxy routes
+### Auth-facing routes (no JWT required)
 
-Forwarded directly to veloci-auth. No JWT validation, no RBAC check:
+These routes are exposed by veloci-api. The UI calls these — never veloci-auth directly.
 
 ```text
-POST  /auth/register
-POST  /auth/login
-POST  /auth/refresh
-POST  /auth/logout
-POST  /auth/users/invite/:token/accept
+POST  /auth/login               validate credentials → mint token pair → return access token
+POST  /auth/logout              revoke token by JTI
+POST  /auth/refresh             exchange refresh token for new token pair
+POST  /auth/invite/accept       consume invite token + create credential + create user record
 ```
+
+`POST /auth/invite/accept` orchestrates three calls to veloci-auth:
+
+1. `ValidateToken(invite_token)` — extract claims (email, entity_id, entity_role)
+2. `CreateCredential(email, password)` — create the credential
+3. `ConsumeInvite(token)` — mark invite as consumed (one-time use enforcement)
+
+Then creates `users` + `entity_users` rows in veloci_app and returns an access token.
 
 ### Protected routes — middleware chain
 
@@ -57,22 +122,46 @@ POST  /auth/users/invite/:token/accept
 6. Handler executes — all queries scoped by claims.entity_id
 ```
 
-Permissions are seeded by `veloci-api migrate` and cached at startup. No per-request DB lookup for permission definitions; the role→permission mapping is a startup-time read.
+Permissions are seeded by `veloci-api migrate` and cached at startup. No per-request DB lookup.
 
 ### Cobra subcommands
 
 ```bash
 veloci-api serve     — start HTTP server, load permission cache
 veloci-api migrate   — run migrations + seed roles, permissions, role_permissions
+veloci-api seed      — create server admin from config (idempotent; safe to re-run)
 ```
 
-### Viper config
+`veloci-api seed` reads `admin.email` and `admin.password` from `veloci.toml` and calls `veloci-auth /credentials/create`. It is idempotent — re-running against an existing credential is a no-op.
 
-```yaml
-port: 8080
-auth_service_url: http://veloci-auth:8081
-database_url: postgres://veloci_app_user:...@postgres/veloci_app
-rabbitmq_url: amqp://...
+### Viper config (veloci.toml)
+
+```toml
+[api]
+port = 8080
+
+[api.auth]
+host = "veloci-auth"
+port = 8081
+
+[database]
+host     = "postgres"
+port     = 5432
+
+[database.app]
+name     = "veloci_app"
+user     = "veloci_app_user"
+password = "..."
+
+[rabbitmq]
+host     = "rabbitmq"
+port     = 5672
+user     = "veloci"
+password = "..."
+
+[admin]
+email    = "admin@example.com"
+password = "changeme"
 ```
 
 ---
@@ -81,16 +170,29 @@ rabbitmq_url: amqp://...
 
 ### Envelope
 
-All responses use a consistent envelope:
+All non-empty responses use a consistent envelope implemented as a Go generic:
 
-```json
-{
-  "data": { ... },
-  "meta": {}
+```go
+// internal/response/envelope.go
+type Envelope[T any] struct {
+    Data T    `json:"data"`
+    Meta Meta `json:"meta"`
+}
+
+type Meta struct {
+    NextCursor *string `json:"next_cursor,omitempty"`
+    Limit      *int    `json:"limit,omitempty"`
+    HasMore    *bool   `json:"has_more,omitempty"`
 }
 ```
 
-For paginated lists, `meta` carries cursor fields:
+Wire format — single resource:
+
+```json
+{ "data": { ... }, "meta": {} }
+```
+
+Wire format — paginated list:
 
 ```json
 {
@@ -103,25 +205,20 @@ For paginated lists, `meta` carries cursor fields:
 }
 ```
 
-`meta` is an empty object on non-paginated responses. It is never omitted.
+204 No Content responses (DELETE, logout, etc.) carry no body and no envelope.
+
+Errors use Huma's native RFC 7807 `application/problem+json` — no envelope wrapper.
 
 ### Pagination
 
-Cursor pagination everywhere — `?limit=50&after=<cursor>`. The cursor is a base64-encoded `{id, created_at}` pair. Consistent across all list endpoints regardless of resource type. Default limit: 50. Maximum limit: 200.
+Cursor pagination everywhere — `?limit=50&after=<cursor>`. The cursor is a base64-encoded `{id, created_at}` pair. Default limit: 50. Maximum limit: 200.
 
-### Errors
+Helpers:
 
-```json
-{
-  "code": "RULE_NOT_FOUND",
-  "message": "rule not found",
-  "details": [
-    { "field": "conditions.value", "issue": "must be a non-empty string" }
-  ]
-}
+```go
+response.Single(data)                           // non-paginated
+response.Page(data, nextCursor, limit, hasMore) // paginated list
 ```
-
-`details` is omitted when empty. `code` is a machine-readable screaming snake case string. Standard HTTP status codes apply.
 
 ---
 
@@ -164,7 +261,7 @@ CREATE TABLE entity_users (
 
 ### RBAC tables
 
-Seeded by `veloci-api migrate`. Not modified at runtime in v1.
+Seeded by `veloci-api migrate`.
 
 ```sql
 CREATE TABLE roles (
@@ -174,7 +271,7 @@ CREATE TABLE roles (
 
 CREATE TABLE permissions (
   id   UUID PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE   -- 'accounts:read', 'rules:write', etc.
+  name TEXT NOT NULL UNIQUE
 );
 
 CREATE TABLE role_permissions (
@@ -188,17 +285,23 @@ CREATE TABLE role_permissions (
 
 ```sql
 CREATE TABLE institution_mappings (
-  id                     UUID PRIMARY KEY,
-  entity_id              UUID NOT NULL,
-  institution_name       TEXT NOT NULL,
-  date_col               TEXT NOT NULL,
-  amount_col             TEXT NOT NULL,
-  merchant_col           TEXT NOT NULL,
+  id                     UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+  entity_id              UUID         NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+  institution_name       TEXT         NOT NULL,
+  source_type            TEXT         NOT NULL DEFAULT 'csv'
+                         CHECK (source_type IN ('csv', 'integration')),
+  settlement_window_days INTEGER      NOT NULL DEFAULT 14,
+  dedup_window_days      INTEGER      NOT NULL DEFAULT 3,
+  amount_tolerance_pct   FLOAT8       NOT NULL DEFAULT 0.005,
+  date_col               TEXT         NOT NULL,
+  amount_col             TEXT         NOT NULL,
+  merchant_col           TEXT         NOT NULL,
   imported_id_col        TEXT,
   balance_col            TEXT,
   debit_credit_col       TEXT,
-  amount_sign_convention TEXT NOT NULL
-    CHECK (amount_sign_convention IN ('positive_is_credit', 'positive_is_debit'))
+  amount_sign_convention TEXT         NOT NULL
+    CHECK (amount_sign_convention IN ('positive_is_credit', 'positive_is_debit')),
+  UNIQUE (entity_id, institution_name)
 );
 ```
 
@@ -206,112 +309,235 @@ CREATE TABLE institution_mappings (
 
 ```sql
 CREATE TABLE accounts (
-  id                 UUID PRIMARY KEY,
-  entity_id          UUID NOT NULL,
-  institution_id     UUID REFERENCES institution_mappings(id),
-  name               TEXT NOT NULL,
-  account_type       TEXT NOT NULL
+  id                 UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  entity_id          UUID        NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+  institution_id     UUID        REFERENCES institution_mappings(id),
+  name               TEXT        NOT NULL,
+  account_type       TEXT        NOT NULL
     CHECK (account_type IN ('checking','savings','credit','loan','mortgage','investment')),
-  status             TEXT NOT NULL DEFAULT 'active'
+  status             TEXT        NOT NULL DEFAULT 'active'
     CHECK (status IN ('active','passive')),
   interest_rate      NUMERIC(8,4),
   balance_cents      BIGINT,
   credit_limit_cents BIGINT,
-  created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (entity_id, name)
+);
+```
+
+### processing_jobs
+
+```sql
+CREATE TABLE processing_jobs (
+  id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  entity_id    UUID        NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+  job_type     TEXT        NOT NULL
+               CHECK (job_type IN ('import.process', 'rules.reprocess', 'account.analyze', 'balance.project')),
+  triggered_by UUID        NOT NULL REFERENCES users(id),
+  status       TEXT        NOT NULL DEFAULT 'queued'
+               CHECK (status IN ('queued', 'processing', 'complete', 'failed')),
+  queued_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  started_at   TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  error        TEXT,
+  metadata     JSONB
+);
+
+-- at most one active job per (entity, type)
+CREATE UNIQUE INDEX processing_jobs_one_active
+  ON processing_jobs (entity_id, job_type)
+  WHERE status IN ('queued', 'processing');
+```
+
+### pending_imports
+
+```sql
+CREATE TABLE pending_imports (
+  id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  entity_id        UUID        NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+  account_id       UUID        NOT NULL REFERENCES accounts(id),
+  institution_id   UUID        REFERENCES institution_mappings(id),
+  uploaded_by      UUID        NOT NULL REFERENCES users(id),
+  uploaded_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  csv_bytes        BYTEA       NOT NULL,
+  date_range_start DATE        NOT NULL,
+  date_range_end   DATE        NOT NULL,
+  row_count        INTEGER,
+  status           TEXT        NOT NULL DEFAULT 'pending'
+                   CHECK (status IN ('pending', 'processing', 'complete', 'failed')),
+  job_id           UUID        REFERENCES processing_jobs(id),
+  error            TEXT
+);
+```
+
+### import_batches
+
+```sql
+CREATE TABLE import_batches (
+  id                             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  pending_import_id              UUID        NOT NULL REFERENCES pending_imports(id),
+  entity_id                      UUID        NOT NULL REFERENCES entities(id),
+  account_id                     UUID        NOT NULL REFERENCES accounts(id),
+  processed_at                   TIMESTAMPTZ NOT NULL,
+  date_range_start               DATE        NOT NULL,
+  date_range_end                 DATE        NOT NULL,
+  transactions_imported          INTEGER     NOT NULL DEFAULT 0,
+  transactions_skipped_duplicate INTEGER     NOT NULL DEFAULT 0,
+  transactions_superseded        INTEGER     NOT NULL DEFAULT 0
+);
+```
+
+### labels
+
+```sql
+CREATE TABLE labels (
+  id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  entity_id  UUID        NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+  name       TEXT        NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (entity_id, name)
 );
 ```
 
 ### rules
 
-Replaces `entries` + `entry_rules` from the engine spec. Permanent configuration for how transactions are identified and converted to a $/day rate. Each rule outputs exactly one label (`label_id`). Rules are composable: post-stage rule conditions may reference other label UUIDs as inputs, building aggregate labels without a separate membership table.
+Permanent match configuration. Each rule outputs exactly one label (`label_id`). Post-stage rule conditions may reference other label UUIDs as inputs, building aggregate labels without a separate membership table.
 
 ```sql
 CREATE TABLE rules (
-  id                     UUID PRIMARY KEY,
-  entity_id              UUID NOT NULL,
-  name                   TEXT NOT NULL,
-  direction              TEXT NOT NULL CHECK (direction IN ('income','expense')),
-  entry_type             TEXT NOT NULL
-    CHECK (entry_type IN ('standing','hit','boost','variable')),
-  period_days            INTEGER NOT NULL DEFAULT 30,
-  variable_method        TEXT CHECK (variable_method IN ('avg','max')),
+  id                     UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  entity_id              UUID        NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+  name                   TEXT        NOT NULL,
+  direction              TEXT        NOT NULL CHECK (direction IN ('income', 'expense')),
+  entry_type             TEXT        NOT NULL
+                         CHECK (entry_type IN ('standing', 'variable', 'one_time')),
+  period_days            INTEGER     NOT NULL DEFAULT 30,
+  variable_method        TEXT        CHECK (variable_method IN ('avg', 'max')),
   projected_rate_per_day NUMERIC(12,4),
-  conditions             JSONB NOT NULL,   -- boolean expression tree; leaf nodes may reference label UUIDs
-  label_id               UUID REFERENCES labels(id) ON DELETE SET NULL,  -- one output label per rule
-  stage                  TEXT NOT NULL DEFAULT 'pre' CHECK (stage IN ('pre','post')),
-  priority               INTEGER NOT NULL DEFAULT 100,
-  status                 TEXT NOT NULL DEFAULT 'pending_review'
-    CHECK (status IN ('pending_review','active','inactive')),
-  source                 TEXT NOT NULL DEFAULT 'user'
-    CHECK (source IN ('user','engine')),
+  conditions             JSONB       NOT NULL,
+  stage                  TEXT        NOT NULL DEFAULT 'pre' CHECK (stage IN ('pre', 'post')),
+  priority               INTEGER     NOT NULL DEFAULT 100,
+  status                 TEXT        NOT NULL DEFAULT 'pending_review'
+                         CHECK (status IN ('pending_review', 'active', 'inactive')),
+  source                 TEXT        NOT NULL DEFAULT 'user' CHECK (source IN ('user', 'engine')),
+  recurrence_anchor      TEXT,
+  next_due_date          DATE,
+  -- TRUE = include in Stage 7 projection before user approval
+  project_tentatively    BOOLEAN     NOT NULL DEFAULT FALSE,
+  -- Forward versioning: upcoming price change applied automatically when
+  -- computed_as_of >= pending_effective_date, then both fields are cleared.
+  pending_amount_cents   BIGINT,
+  pending_effective_date DATE,
+  label_id               UUID        REFERENCES labels(id) ON DELETE SET NULL,
   created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+```
 
-CREATE INDEX ON rules (entity_id, status);
-CREATE INDEX ON rules (entity_id, priority);
+### rule_epochs
+
+One row per signal instance of a rule. Append-only. Engine or user may close an epoch by setting `epoch_end`; `terminated_by_user_id IS NOT NULL` indicates manual user termination.
+
+```sql
+CREATE TABLE rule_epochs (
+  id                      UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  entity_id               UUID        NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+  rule_id                 UUID        NOT NULL REFERENCES rules(id) ON DELETE CASCADE,
+  epoch_start             DATE        NOT NULL,
+  epoch_end               DATE,
+  epoch_transaction_count INTEGER     NOT NULL DEFAULT 0,
+  terminated_by_user_id   UUID        REFERENCES users(id),
+  created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (rule_id, epoch_start)
+);
 ```
 
 ### transaction_rule_assignments
 
 ```sql
 CREATE TABLE transaction_rule_assignments (
-  transaction_id UUID NOT NULL REFERENCES raw_transactions(id),
-  rule_id        UUID NOT NULL REFERENCES rules(id),
-  confidence     NUMERIC(4,3) NOT NULL DEFAULT 1.0,
-  assigned_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  transaction_id UUID           NOT NULL REFERENCES raw_transactions(id) ON DELETE CASCADE,
+  rule_id        UUID           NOT NULL REFERENCES rules(id) ON DELETE CASCADE,
+  confidence     NUMERIC(4,3)   NOT NULL DEFAULT 1.0,
   PRIMARY KEY (transaction_id, rule_id)
 );
 ```
 
-### labels
+### review_queue
 
-User-facing named groupings. Each label is the output of exactly one rule (`rules.label_id`). The label hierarchy (leaf → aggregate) is implicit in post-stage rule conditions that reference other label UUIDs — no separate membership or automation table.
+Engine-detected candidate rules awaiting user approval. `alert_type` distinguishes first detection (`new`), rate drift (`drift`), and signal loss (`ended`). Three-component confidence scores are nullable on older jobs.
 
 ```sql
-CREATE TABLE labels (
-  id         UUID PRIMARY KEY,
-  entity_id  UUID NOT NULL,
-  name       TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (entity_id, name)
+CREATE TABLE review_queue (
+  id                        UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+  entity_id                 UUID          NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+  rule_id                   UUID          NOT NULL REFERENCES rules(id) ON DELETE CASCADE,
+  job_id                    UUID          NOT NULL REFERENCES processing_jobs(id),
+  suggested_name            TEXT          NOT NULL,
+  suggested_entry_type      TEXT          NOT NULL,
+  suggested_conditions      JSONB         NOT NULL,
+  suggested_rate_per_day    NUMERIC(12,4) NOT NULL,
+  matched_transaction_count INTEGER       NOT NULL,
+  alert_type                TEXT          NOT NULL DEFAULT 'new'
+                            CHECK (alert_type IN ('new', 'drift', 'ended')),
+  confidence                NUMERIC(4,3)  NOT NULL,
+  merchant_confidence       NUMERIC(4,3),
+  timing_confidence         NUMERIC(4,3),
+  amount_confidence         NUMERIC(4,3),
+  sample_merchants          TEXT[]        NOT NULL,
+  status                    TEXT          NOT NULL DEFAULT 'pending'
+                            CHECK (status IN ('pending', 'approved', 'rejected', 'modified')),
+  reviewed_by               UUID          REFERENCES users(id),
+  reviewed_at               TIMESTAMPTZ
 );
 ```
 
-Name is user-visible and freely mutable (rename cascades in the UI automatically because all references use `id`). Calculations always reference `id`, never `name`.
-
-To find all rules that feed into a label: `SELECT * FROM rules WHERE label_id = $label_id`.
-To find the aggregate labels a label participates in: query the JSONB conditions of post-stage rules for references to this `label_id`.
-
 ### computed_snapshots
 
-Updated `node_type` values from engine spec (`entry|group` → `rule|label`). One row per calendar day per node — not one per import. The engine crawls the flux window on each import and UPSERTs affected days.
+One row per calendar day per node. The engine UPSERTs the flux window on each import run.
 
-`snapshot_date` is the calendar day identity key. `computed_as_of` is the import's data horizon (MAX transaction date), denormalized here so Stage 5 regression can read the settlement boundary without joining to import_batches.
-
-`epoch_id` is internal — not returned in API responses. Snapshot responses join `rule_epochs` and return `epoch_start`/`epoch_end` directly. OHLC candlestick high/low are **not stored** — the API computes them from the daily `actual_rate_per_day` series at query time (see Snapshots endpoints).
+`epoch_id` is internal — not returned in API responses. Snapshot responses join `rule_epochs` and return `epoch_start`/`epoch_end` directly. OHLC candlestick high/low are **not stored** — computed at query time from the daily series.
 
 ```sql
 CREATE TABLE computed_snapshots (
-  id                     UUID          PRIMARY KEY,
-  entity_id              UUID          NOT NULL,
-  node_id                UUID          NOT NULL,   -- rule_id or label_id
-  node_type              TEXT          NOT NULL CHECK (node_type IN ('rule','label')),
-  snapshot_date          DATE          NOT NULL,   -- calendar day this row represents
-  computed_as_of         DATE          NOT NULL,   -- MAX(raw_transactions.date) from the import run
-  job_id                 UUID          NOT NULL,
-  actual_rate_per_day    NUMERIC(12,4) NOT NULL,
-  projected_rate_per_day NUMERIC(12,4) NOT NULL,
-  drift_per_day          NUMERIC(12,4) NOT NULL,
-  slope_per_day          NUMERIC(14,6) NOT NULL,
-  r_squared              NUMERIC(4,3)  NOT NULL,
-  transaction_count      INTEGER       NOT NULL,
-  window_days_used       INTEGER       NOT NULL,
-  balance_cents          BIGINT        NOT NULL DEFAULT 0,
-  epoch_id               UUID          REFERENCES rule_epochs(id),   -- internal; not returned by API
+  id                         UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+  entity_id                  UUID          NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+  node_id                    UUID          NOT NULL,
+  node_type                  TEXT          NOT NULL CHECK (node_type IN ('rule', 'label')),
+  snapshot_date              DATE          NOT NULL,
+  computed_as_of             DATE          NOT NULL,
+  job_id                     UUID          NOT NULL REFERENCES processing_jobs(id),
+  actual_rate_per_day        NUMERIC(12,4) NOT NULL,
+  projected_rate_per_day     NUMERIC(12,4) NOT NULL,
+  drift_per_day              NUMERIC(12,4) NOT NULL,
+  slope_per_day              NUMERIC(14,6) NOT NULL,
+  r_squared                  NUMERIC(4,3)  NOT NULL,
+  transaction_count          INTEGER       NOT NULL,
+  window_days_used           INTEGER       NOT NULL,
+  rolling_window_total_cents BIGINT        NOT NULL DEFAULT 0,
+  balance_cents              BIGINT        NOT NULL DEFAULT 0,
+  epoch_id                   UUID          REFERENCES rule_epochs(id),
   UNIQUE (entity_id, node_id, snapshot_date)
 );
+```
 
-CREATE INDEX ON computed_snapshots (entity_id, node_id, snapshot_date DESC);
+### rate_projections
+
+Forward-looking signal superposition produced by Stage 7. One row per (entity, optional account, projected date) per job run. Safe to truncate and recompute.
+
+```sql
+CREATE TABLE rate_projections (
+  id                      UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+  entity_id               UUID          NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+  account_id              UUID          REFERENCES accounts(id),  -- NULL = entity-level aggregate
+  job_id                  UUID          NOT NULL REFERENCES processing_jobs(id),
+  projected_date          DATE          NOT NULL,
+  income_rate_per_day     NUMERIC(12,4) NOT NULL DEFAULT 0,
+  commitment_rate_per_day NUMERIC(12,4) NOT NULL DEFAULT 0,
+  margin_rate_per_day     NUMERIC(12,4) NOT NULL,
+  projected_balance_cents BIGINT        NOT NULL,
+  is_pinch_point          BOOLEAN       NOT NULL DEFAULT FALSE,
+  UNIQUE (entity_id, account_id, job_id, projected_date)
+);
 ```
 
 ---
@@ -327,7 +553,7 @@ Seeded at migration time. TBD permissions are provisioned but assignment to `ent
 | `import:create` | ✓ | TBD |
 | `rules:write` | ✓ | TBD |
 | `labels:write` | ✓ | ✓ |
-| `entries:write` | ✓ | TBD |
+| `review:write` | ✓ | TBD |
 | `reports:read` | ✓ | ✓ |
 | `users:manage` | ✓ | — |
 | `entity:configure` | ✓ | — |
@@ -336,31 +562,29 @@ Seeded at migration time. TBD permissions are provisioned but assignment to `ent
 
 ## 6. Endpoints
 
-### Auth proxy
-
-No JWT validation. Forwarded directly to veloci-auth.
+### Auth (no JWT required)
 
 ```text
-POST   /auth/register
-POST   /auth/login
-POST   /auth/refresh
-POST   /auth/logout
-POST   /auth/users/invite/:token/accept
+POST   /auth/login              validate credentials → mint token pair → return access token + expires_at
+POST   /auth/logout             revoke token by JTI (body: { jti })
+POST   /auth/refresh            exchange refresh token for new pair (body: { refresh_token })
+POST   /auth/invite/accept      consume invite + create credential + create user (body: { token, password })
 ```
 
-### Users
-
-Proxied writes to veloci-auth; app-side reads from `veloci_app`.
+### Users (protected)
 
 ```text
 GET    /users/me                        accounts:read    own profile
 PUT    /users/me                        accounts:read    update own name
 GET    /users                           users:manage     list entity members
-POST   /users                           users:manage     admin creates user
 PUT    /users/:id/password              users:manage     admin resets password
-DELETE /users/:id                       users:manage     remove user + revoke tokens
-POST   /users/invite                    users:manage     generate invite link
+DELETE /users/:id                       users:manage     remove user + revoke all tokens
+POST   /users/invite                    users:manage     create invite link (body: { email, entity_role })
 ```
+
+`POST /users/invite` calls `auth.CreateInvite` with claims `{ email, entity_id, entity_role }` and returns `{ token, expires_at }`.
+
+`DELETE /users/:id` calls `auth.DeleteCredential` + `auth.RevokeUserTokens`, then removes veloci_app rows.
 
 ### Institutions and Accounts
 
@@ -379,7 +603,7 @@ PUT    /accounts/:id                    accounts:write
 DELETE /accounts/:id                    accounts:write
 ```
 
-### Rules (permanent — match configuration)
+### Rules
 
 ```text
 GET    /rules                           accounts:read    all rules for entity
@@ -387,14 +611,12 @@ POST   /rules                           rules:write      create rule
 GET    /rules/:id                       accounts:read
 PUT    /rules/:id                       rules:write
 DELETE /rules/:id                       rules:write
-POST   /rules/preview                   accounts:read    which transactions match?
+POST   /rules/preview                   accounts:read    match-test conditions without persisting
 ```
 
-`POST /rules/preview` accepts a partial or complete rule conditions object and returns matching `transaction_id` list and count without persisting anything.
+`POST /rules/preview` accepts a partial or complete rule conditions object and returns matching `transaction_id` list and count.
 
-### Labels (permanent)
-
-Labels are named groupings created independently and then referenced by `rules.label_id`. Label membership (which rules output this label) is managed through the rule, not the label.
+### Labels
 
 ```text
 GET    /labels                          accounts:read    all labels for entity
@@ -403,7 +625,7 @@ GET    /labels/:id                      accounts:read
 PUT    /labels/:id                      labels:write     rename label
 DELETE /labels/:id                      labels:write
 
-GET    /labels/:id/rules                accounts:read    rules that output this label (reads rules.label_id)
+GET    /labels/:id/rules                accounts:read    rules that output this label
 ```
 
 ### Imports
@@ -414,14 +636,14 @@ GET    /imports                         accounts:read    paginated import batch 
 GET    /imports/:id                     accounts:read
 ```
 
-### Transactions (transient — read only)
+### Transactions (read only)
 
 ```text
 GET    /transactions                    accounts:read    filter: account_id, date, rule_id, unmatched
 GET    /transactions/:id                accounts:read
 ```
 
-### Entries (transient — computed view of rules + snapshots)
+### Entries (computed view of rules + latest snapshots)
 
 ```text
 GET    /entries                         accounts:read    rules joined with latest computed_snapshot
@@ -430,61 +652,99 @@ GET    /entries/:id                     accounts:read    rule_id used as entry i
 
 ### Review queue
 
-Engine-generated rule proposals. User edits the match conditions before approving.
-
 ```text
-GET    /review                          accounts:read    pending rule proposals
-PUT    /review/:id                      entries:write    edit rule conditions, name, type before approving
-POST   /review/:id/approve              entries:write    activate rule → triggers account.analyze
-POST   /review/:id/reject               entries:write    discard proposal
+GET    /review                          accounts:read    pending review items; includes alert_type + confidence scores
+PUT    /review/:id                      review:write     edit conditions/name/type before approving
+POST   /review/:id/approve              review:write     activate rule → triggers account.analyze
+POST   /review/:id/reject               review:write     discard proposal
 ```
 
-### Snapshots (transient — read only)
+`GET /review` response shape per item:
+
+```json
+{
+  "id": "uuid",
+  "rule_id": "uuid",
+  "suggested_name": "Netflix",
+  "suggested_entry_type": "standing",
+  "suggested_conditions": { ... },
+  "suggested_rate_per_day": 0.6667,
+  "matched_transaction_count": 12,
+  "alert_type": "new",
+  "confidence": 0.91,
+  "merchant_confidence": 0.95,
+  "timing_confidence": 0.88,
+  "amount_confidence": 0.90,
+  "sample_merchants": ["NETFLIX.COM", "Netflix"],
+  "status": "pending"
+}
+```
+
+### Snapshots (read only)
 
 ```text
 GET    /snapshots                       reports:read     current snapshot, all nodes
 GET    /snapshots/summary               reports:read     entity total: income/expense/margin/drift
-GET    /snapshots/:node_id/history      reports:read     historical daily series for one node (paginated)
+GET    /snapshots/:node_id/history      reports:read     historical daily series (paginated backward)
 ```
 
-#### Snapshot history pagination
+`GET /snapshots/:node_id/history` query parameters:
 
-`GET /snapshots/:node_id/history` supports cursor-based lazy loading for the Horizon graph. The UI fetches the most recent chunk on load and pages backward as the user scrolls.
+| Parameter | Type | Default | Description |
+| --- | --- | --- | --- |
+| `before` | date | latest | Return rows with `snapshot_date < before` |
+| `limit` | int | 60 | Rows per page. Max 180. |
+| `granularity` | string | `day` | `day`, `week`, `month`, `year` — controls OHLC aggregation |
+
+Response row shape (OHLC granularity):
+
+```json
+{
+  "period_start": "2026-02-01",
+  "period_end": "2026-02-28",
+  "open": 0.6667,
+  "close": 0.6667,
+  "high": 0.8000,
+  "low": 0.6667,
+  "actual_rate_per_day": 0.6667,
+  "projected_rate_per_day": 0.6667,
+  "drift_per_day": 0.0000,
+  "slope_per_day": 0.000001,
+  "epoch_start": "2025-01-01",
+  "epoch_end": null
+}
+```
+
+`next_cursor` is the `snapshot_date` of the last row — pass as `before` on the next request.
+
+### Projections (read only)
+
+Stage 7 forward-looking output. Powers the Horizon forward view.
+
+```text
+GET    /projections                     reports:read     forward projection series
+```
 
 Query parameters:
 
 | Parameter | Type | Default | Description |
 | --- | --- | --- | --- |
-| `before` | date | latest | Return rows with `snapshot_date < before` (cursor) |
-| `limit` | int | 60 | Rows per page. Max 180. |
-| `granularity` | string | `day` | `day`, `week`, `month`, `year` — controls OHLC aggregation |
+| `account_id` | uuid | — | Scope to one account; omit for entity-level aggregate |
+| `from` | date | today | Start of projection window |
+| `to` | date | today + 90d | End of projection window |
 
-When `granularity` is `day`, the response returns raw daily snapshot rows. For `week`, `month`, or `year`, the API aggregates the daily series into OHLC candles:
+Response row shape:
 
 ```json
 {
-  "data": [
-    {
-      "period_start": "2026-02-01",
-      "period_end": "2026-02-28",
-      "open": 0.6667,
-      "close": 0.6667,
-      "high": 0.8000,
-      "low": 0.6667,
-      "actual_rate_per_day": 0.6667,
-      "projected_rate_per_day": 0.6667,
-      "drift_per_day": 0.0000,
-      "slope_per_day": 0.000001,
-      "epoch_start": "2025-01-01",
-      "epoch_end": null
-    }
-  ],
-  "next_cursor": "2026-01-31",
-  "has_more": true
+  "projected_date": "2026-08-01",
+  "income_rate_per_day": 136.89,
+  "commitment_rate_per_day": 98.23,
+  "margin_rate_per_day": 38.66,
+  "projected_balance_cents": 118240,
+  "is_pinch_point": false
 }
 ```
-
-`epoch_start`/`epoch_end` are joined from `rule_epochs` on `epoch_id`. `epoch_id` is not returned. `next_cursor` is the `snapshot_date` of the last row returned — pass it as `before` on the next request. `has_more: false` means the full history has been loaded.
 
 ### Jobs
 
@@ -492,16 +752,17 @@ When `granularity` is `day`, the response returns raw daily snapshot rows. For `
 GET    /jobs                            accounts:read    paginated history
 GET    /jobs/stream                     accounts:read    SSE — all entity jobs, entity-scoped
 POST   /jobs/reprocess                  rules:write      trigger rules.reprocess
-POST   /jobs/analyze                    entries:write    trigger account.analyze
+POST   /jobs/analyze                    review:write     trigger account.analyze
+POST   /jobs/project                    reports:read     trigger balance.project
 ```
 
 ### Server admin
 
-Read-only in v1. `system_role: server_admin` required; entity_role ignored.
+`system_role: server_admin` required; entity_role ignored.
 
 ```text
 GET    /admin/status                    server version, uptime, Postgres + RabbitMQ health
-GET    /admin/entities                  list all entities (v2: create, configure, DNS)
+GET    /admin/entities                  list all entities
 ```
 
 ---
@@ -510,7 +771,7 @@ GET    /admin/entities                  list all entities (v2: create, configure
 
 `GET /jobs/stream` opens a persistent Server-Sent Events connection scoped to the authenticated entity.
 
-### Server-side ordering (race condition prevention)
+### Server-side ordering
 
 ```text
 1. Register LISTEN on Postgres NOTIFY channel for entity_id  ← before any query
@@ -520,14 +781,12 @@ GET    /admin/entities                  list all entities (v2: create, configure
 5. Forward all subsequent NOTIFY events
 ```
 
-The LISTEN is registered before the snapshot query. Notifications fired during the query are buffered by Postgres and replayed after the snapshot — nothing falls through the gap.
-
 ### Event shape
 
 ```json
 {
   "job_id": "uuid",
-  "job_type": "import.process | rules.reprocess | account.analyze",
+  "job_type": "import.process | rules.reprocess | account.analyze | balance.project",
   "status": "queued | processing | complete | failed",
   "error": null,
   "queued_at": "2026-06-30T12:00:00Z",
@@ -548,7 +807,7 @@ The LISTEN is registered before the snapshot query. Notifications fired during t
 
 ## 8. Job Publishing
 
-veloci-api publishes to RabbitMQ after any operation that requires engine processing.
+veloci-api publishes to RabbitMQ after any operation that requires engine processing. Before publishing, it checks `processing_jobs` for an existing `queued` or `processing` job of the same type for the same entity — the partial unique index makes this a conflict rather than a race.
 
 ### import.process
 
@@ -565,7 +824,7 @@ Published after `POST /imports` stores the `pending_import` record.
 
 ### rules.reprocess
 
-Published after `POST /jobs/reprocess`, or after a rule is created, updated, or deleted (status changed to `active`).
+Published after `POST /jobs/reprocess`, or after a rule is created, updated, or deleted.
 
 ```json
 {
@@ -589,14 +848,25 @@ Published after `POST /review/:id/approve` or `POST /jobs/analyze`.
 }
 ```
 
-Before publishing any job, veloci-api checks `processing_jobs` for an existing `queued` or `processing` job of the same type for the same entity. If one exists, the new job is deferred — no duplicate concurrent jobs per entity.
+### balance.project
+
+Published after `POST /jobs/project`. Also triggered automatically after any `account.analyze` job completes.
+
+```json
+{
+  "job_id": "uuid",
+  "entity_id": "uuid",
+  "job_type": "balance.project",
+  "metadata": {}
+}
+```
 
 ---
 
 ## 9. Out of Scope for This Spec
 
-- veloci-engine pipeline changes required by this data model (covered in engine spec update)
-- UI component design (covered in UI spec)
+- veloci-engine pipeline changes (covered in engine spec)
+- UI component design (covered in UI specs)
 - Server admin write endpoints (v2 — entity management, DNS, version control)
 - Invite email delivery (v2)
 - Custom role creation and per-user permission overrides (v2)
