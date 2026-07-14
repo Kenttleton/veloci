@@ -66,7 +66,7 @@ services:
       VELOCI_RABBITMQ_HOST: rabbitmq
       VELOCI_RABBITMQ_USER: ${RABBITMQ_USER}
       VELOCI_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
-      VELOCI_AUTH_HOST: veloci-auth
+      VELOCI_API_AUTH_HOST: veloci-auth
     volumes:
       - ./config/veloci.toml:/etc/veloci/veloci.toml:ro
     networks:
