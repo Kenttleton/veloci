@@ -118,8 +118,12 @@ gen-auth:
 gen-api: gen-auth
     cd services/api && go generate ./generate.go
 
-# Run full generation chain (auth spec → api client → api spec)
-gen: gen-api
+# Generate web client from api spec (requires gen-api to have run first)
+gen-web:
+    cd services/web && npx orval
+
+# Run full generation chain (auth spec → api client → api spec → web client)
+gen: gen-api gen-web
 
 # ─── sqlx compile-time SQL verification ──────────────────────────────────────
 # Requires a running postgres (just infra). Generates .sqlx/ offline query cache.
