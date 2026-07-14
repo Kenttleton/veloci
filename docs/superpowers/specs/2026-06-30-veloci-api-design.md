@@ -22,12 +22,12 @@ Two categories of data live in `veloci_app`:
 
 | Category | Tables | Characteristics |
 | --- | --- | --- |
-| Permanent | `rules`, `labels`, `institution_mappings`, `accounts`, `users`, `entities`, `entity_users` | User-owned configuration. Full CRUD. |
-| Transient | `raw_transactions`, `computed_snapshots`, `rate_projections`, `processing_jobs`, `review_queue` | Engine output. Read-only via API. Rebuilt when rules change. |
+| Permanent | `entries`, `classifications`, `labels`, `institution_mappings`, `accounts`, `users`, `entities`, `entity_users` | User-owned configuration. Full CRUD. |
+| Transient | `transactions`, `snapshots`, `projections`, `processing_jobs`, `review_queue` | Engine output. Read-only via API. Rebuilt when entries change. |
 
-**`raw_transactions` is append-only** — never modified after import.
+**`transactions` is append-only** — never modified after import.
 
-**Entries are not a stored table** — an "entry" in the UI is the join of a `rule` (permanent config) with its most recent `computed_snapshot`. `GET /entries` is a read-only computed view, not a writable resource.
+**`entries`** is the core financial signal table — one row per continuous rate signal instance. Absorbs the old `rules` + `rule_epochs` two-table design into a single unified table with `start_date`/`end_date` for lifecycle management.
 
 ---
 
@@ -69,19 +69,19 @@ Handler files mirror the route groups in Section 7:
 
 ```text
 handler/
-  auth.go           ← login, logout, refresh, invite/accept
+  auth.go             ← login, logout, refresh, invite/accept
   users.go
   institutions.go
   accounts.go
-  rules.go
+  entries.go          ← CRUD for entries
+  classifications.go  ← CRUD for classifications
   labels.go
   imports.go
   transactions.go
-  entries.go
   review.go
   snapshots.go
   projections.go
-  jobs.go           ← includes SSE stream handler
+  jobs.go             ← includes SSE stream handler
   admin.go
   health.go
 ```
@@ -238,14 +238,15 @@ CREATE TABLE entities (
 
 ```sql
 CREATE TABLE users (
-  id         UUID PRIMARY KEY,
-  email      TEXT NOT NULL UNIQUE,
-  name       TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id                 UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  auth_credential_id UUID        NOT NULL UNIQUE,
+  email              TEXT        NOT NULL UNIQUE,
+  name               TEXT        NOT NULL,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ```
 
-Matched to `auth_credentials` by email. Created by veloci-api on first login and invite acceptance.
+Linked to `auth_credentials` via `auth_credential_id`. Created by veloci-api during invite acceptance; the server admin user is seeded by `veloci-api seed`.
 
 ### entity_users
 
@@ -332,7 +333,7 @@ CREATE TABLE processing_jobs (
   id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   entity_id    UUID        NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
   job_type     TEXT        NOT NULL
-               CHECK (job_type IN ('import.process', 'rules.reprocess', 'account.analyze', 'balance.project')),
+               CHECK (job_type IN ('import.process', 'entries.reprocess', 'account.analyze', 'balance.project')),
   triggered_by UUID        NOT NULL REFERENCES users(id),
   status       TEXT        NOT NULL DEFAULT 'queued'
                CHECK (status IN ('queued', 'processing', 'complete', 'failed')),
@@ -389,88 +390,86 @@ CREATE TABLE import_batches (
 
 ### labels
 
+Global name registry — no `entity_id`. Used by entries (canonical merchant/signal name) and classifications (output label). Entity-scoping is on operational tables; labels are pure display names referenced by ID. Renaming a label requires no recalculation — only a UI refresh.
+
 ```sql
 CREATE TABLE labels (
   id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  entity_id  UUID        NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
   name       TEXT        NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (entity_id, name)
+  UNIQUE (name)
 );
 ```
 
-### rules
+### entries
 
-Permanent match configuration. Each rule outputs exactly one label (`label_id`). Post-stage rule conditions may reference other label UUIDs as inputs, building aggregate labels without a separate membership table.
+One row per continuous rate signal instance. Absorbs the old `rules` + `rule_epochs` two-table design. `start_date`/`end_date` handle lifecycle. Many entries may share one label (e.g. Netflix at $15.99 closed, Netflix at $18.99 active — both reference the same `labels.id`). `conditions` is nullable for user-created entries that skip auto-matching.
 
 ```sql
-CREATE TABLE rules (
-  id                     UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  entity_id              UUID        NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-  name                   TEXT        NOT NULL,
-  direction              TEXT        NOT NULL CHECK (direction IN ('income', 'expense')),
-  entry_type             TEXT        NOT NULL
-                         CHECK (entry_type IN ('standing', 'variable', 'one_time')),
-  period_days            INTEGER     NOT NULL DEFAULT 30,
-  variable_method        TEXT        CHECK (variable_method IN ('avg', 'max')),
+CREATE TABLE entries (
+  id                     UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+  entity_id              UUID          NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+  label_id               UUID          REFERENCES labels(id) ON DELETE SET NULL,
+  direction              TEXT          NOT NULL CHECK (direction IN ('income', 'expense')),
+  entry_type             TEXT          NOT NULL
+                         CHECK (entry_type IN ('standing', 'variable', 'irregular')),
+  period_days            INTEGER       NOT NULL DEFAULT 30,
+  variable_method        TEXT          CHECK (variable_method IN ('avg', 'max')),
   projected_rate_per_day NUMERIC(12,4),
-  conditions             JSONB       NOT NULL,
-  stage                  TEXT        NOT NULL DEFAULT 'pre' CHECK (stage IN ('pre', 'post')),
-  priority               INTEGER     NOT NULL DEFAULT 100,
-  status                 TEXT        NOT NULL DEFAULT 'pending_review'
+  conditions             JSONB,
+  priority               INTEGER       NOT NULL DEFAULT 100,
+  status                 TEXT          NOT NULL DEFAULT 'pending_review'
                          CHECK (status IN ('pending_review', 'active', 'inactive')),
-  source                 TEXT        NOT NULL DEFAULT 'user' CHECK (source IN ('user', 'engine')),
+  source                 TEXT          NOT NULL DEFAULT 'user' CHECK (source IN ('user', 'engine')),
   recurrence_anchor      TEXT,
   next_due_date          DATE,
-  -- TRUE = include in Stage 7 projection before user approval
-  project_tentatively    BOOLEAN     NOT NULL DEFAULT FALSE,
-  -- Forward versioning: upcoming price change applied automatically when
-  -- computed_as_of >= pending_effective_date, then both fields are cleared.
+  project_tentatively    BOOLEAN       NOT NULL DEFAULT FALSE,
   pending_amount_cents   BIGINT,
   pending_effective_date DATE,
-  label_id               UUID        REFERENCES labels(id) ON DELETE SET NULL,
-  created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  start_date             DATE          NOT NULL,
+  end_date               DATE,
+  created_at             TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );
 ```
 
-### rule_epochs
+### classifications
 
-One row per signal instance of a rule. Append-only. Engine or user may close an epoch by setting `epoch_end`; `terminated_by_user_id IS NOT NULL` indicates manual user termination.
+Post-stage rules: apply labels to entries based on entry attributes and existing label assignments. Entirely user-defined. Do not affect rate calculations — display and grouping only. Conditions reference label UUIDs, enabling aggregate labels built from leaf labels without a separate membership table. The API enforces cycle detection at write time.
 
 ```sql
-CREATE TABLE rule_epochs (
-  id                      UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  entity_id               UUID        NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-  rule_id                 UUID        NOT NULL REFERENCES rules(id) ON DELETE CASCADE,
-  epoch_start             DATE        NOT NULL,
-  epoch_end               DATE,
-  epoch_transaction_count INTEGER     NOT NULL DEFAULT 0,
-  terminated_by_user_id   UUID        REFERENCES users(id),
-  created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (rule_id, epoch_start)
+CREATE TABLE classifications (
+  id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  entity_id  UUID        NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+  label_id   UUID        NOT NULL REFERENCES labels(id) ON DELETE CASCADE,
+  conditions JSONB       NOT NULL,
+  priority   INTEGER     NOT NULL DEFAULT 100,
+  status     TEXT        NOT NULL DEFAULT 'active'
+             CHECK (status IN ('active', 'inactive')),
+  source     TEXT        NOT NULL DEFAULT 'user' CHECK (source IN ('user', 'engine')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ```
 
-### transaction_rule_assignments
+### transaction_entry_assignments
 
 ```sql
-CREATE TABLE transaction_rule_assignments (
-  transaction_id UUID           NOT NULL REFERENCES raw_transactions(id) ON DELETE CASCADE,
-  rule_id        UUID           NOT NULL REFERENCES rules(id) ON DELETE CASCADE,
-  confidence     NUMERIC(4,3)   NOT NULL DEFAULT 1.0,
-  PRIMARY KEY (transaction_id, rule_id)
+CREATE TABLE transaction_entry_assignments (
+  transaction_id UUID         NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+  entry_id       UUID         NOT NULL REFERENCES entries(id) ON DELETE CASCADE,
+  confidence     NUMERIC(4,3) NOT NULL DEFAULT 1.0,
+  PRIMARY KEY (transaction_id, entry_id)
 );
 ```
 
 ### review_queue
 
-Engine-detected candidate rules awaiting user approval. `alert_type` distinguishes first detection (`new`), rate drift (`drift`), and signal loss (`ended`). Three-component confidence scores are nullable on older jobs.
+Engine-detected candidate entries awaiting user approval. `alert_type` distinguishes first detection (`new`), rate drift (`drift`), and signal loss (`ended`). Three-component confidence scores are nullable on older jobs.
 
 ```sql
 CREATE TABLE review_queue (
   id                        UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
   entity_id                 UUID          NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-  rule_id                   UUID          NOT NULL REFERENCES rules(id) ON DELETE CASCADE,
+  entry_id                  UUID          NOT NULL REFERENCES entries(id) ON DELETE CASCADE,
   job_id                    UUID          NOT NULL REFERENCES processing_jobs(id),
   suggested_name            TEXT          NOT NULL,
   suggested_entry_type      TEXT          NOT NULL,
@@ -491,18 +490,21 @@ CREATE TABLE review_queue (
 );
 ```
 
-### computed_snapshots
+### snapshots
 
-One row per calendar day per node. The engine UPSERTs the flux window on each import run.
+Rebuildable engine output. Safe to truncate and recompute at any time. One row per calendar day per node. The engine crawls the flux window on each import and UPSERTs all days in `[computed_as_of − settlement_window_days .. computed_as_of]`. Days outside the flux window have only settled transactions and are not recomputed.
 
-`epoch_id` is internal — not returned in API responses. Snapshot responses join `rule_epochs` and return `epoch_start`/`epoch_end` directly. OHLC candlestick high/low are **not stored** — computed at query time from the daily series.
+`node_type = 'entry'` → entry-level rate signal (Stage 3 output).  
+`node_type = 'classification'` → classification-level aggregate (Stage 4 output).
+
+OHLC candlestick high/low are **not stored** — the API computes `MAX/MIN(actual_rate_per_day)` over the daily series at query time. The API joins `entries` to include `entry_start_date`/`entry_end_date` in snapshot history responses.
 
 ```sql
-CREATE TABLE computed_snapshots (
+CREATE TABLE snapshots (
   id                         UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
   entity_id                  UUID          NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
   node_id                    UUID          NOT NULL,
-  node_type                  TEXT          NOT NULL CHECK (node_type IN ('rule', 'label')),
+  node_type                  TEXT          NOT NULL CHECK (node_type IN ('entry', 'classification')),
   snapshot_date              DATE          NOT NULL,
   computed_as_of             DATE          NOT NULL,
   job_id                     UUID          NOT NULL REFERENCES processing_jobs(id),
@@ -515,17 +517,16 @@ CREATE TABLE computed_snapshots (
   window_days_used           INTEGER       NOT NULL,
   rolling_window_total_cents BIGINT        NOT NULL DEFAULT 0,
   balance_cents              BIGINT        NOT NULL DEFAULT 0,
-  epoch_id                   UUID          REFERENCES rule_epochs(id),
   UNIQUE (entity_id, node_id, snapshot_date)
 );
 ```
 
-### rate_projections
+### projections
 
-Forward-looking signal superposition produced by Stage 7. One row per (entity, optional account, projected date) per job run. Safe to truncate and recompute.
+Forward-looking signal superposition produced by Stage 7. One row per (entity, optional account, projected date) per job run. Safe to truncate and recompute. `account_id NULL` = entity-level aggregate across all active accounts.
 
 ```sql
-CREATE TABLE rate_projections (
+CREATE TABLE projections (
   id                      UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
   entity_id               UUID          NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
   account_id              UUID          REFERENCES accounts(id),  -- NULL = entity-level aggregate
@@ -551,7 +552,8 @@ Seeded at migration time. TBD permissions are provisioned but assignment to `ent
 | `accounts:read` | ✓ | ✓ |
 | `accounts:write` | ✓ | — |
 | `import:create` | ✓ | TBD |
-| `rules:write` | ✓ | TBD |
+| `entries:write` | ✓ | TBD |
+| `classifications:write` | ✓ | TBD |
 | `labels:write` | ✓ | ✓ |
 | `review:write` | ✓ | TBD |
 | `reports:read` | ✓ | ✓ |
@@ -603,29 +605,39 @@ PUT    /accounts/:id                    accounts:write
 DELETE /accounts/:id                    accounts:write
 ```
 
-### Rules
+### Entries
 
 ```text
-GET    /rules                           accounts:read    all rules for entity
-POST   /rules                           rules:write      create rule
-GET    /rules/:id                       accounts:read
-PUT    /rules/:id                       rules:write
-DELETE /rules/:id                       rules:write
-POST   /rules/preview                   accounts:read    match-test conditions without persisting
+GET    /entries                         accounts:read    all entries for entity
+POST   /entries                         entries:write    create entry
+GET    /entries/:id                     accounts:read
+PUT    /entries/:id                     entries:write
+DELETE /entries/:id                     entries:write
+POST   /entries/preview                 accounts:read    match-test conditions without persisting
 ```
 
-`POST /rules/preview` accepts a partial or complete rule conditions object and returns matching `transaction_id` list and count.
+`POST /entries/preview` accepts a partial or complete entry conditions object and returns matching `transaction_id` list and count.
+
+### Classifications
+
+```text
+GET    /classifications                 accounts:read    all classifications for entity
+POST   /classifications                 classifications:write    create classification
+GET    /classifications/:id             accounts:read
+PUT    /classifications/:id             classifications:write
+DELETE /classifications/:id             classifications:write
+```
 
 ### Labels
 
 ```text
-GET    /labels                          accounts:read    all labels for entity
+GET    /labels                          accounts:read    all labels (global)
 POST   /labels                          labels:write     create label (name only)
 GET    /labels/:id                      accounts:read
 PUT    /labels/:id                      labels:write     rename label
 DELETE /labels/:id                      labels:write
 
-GET    /labels/:id/rules                accounts:read    rules that output this label
+GET    /labels/:id/entries              accounts:read    entries that reference this label
 ```
 
 ### Imports
@@ -639,23 +651,16 @@ GET    /imports/:id                     accounts:read
 ### Transactions (read only)
 
 ```text
-GET    /transactions                    accounts:read    filter: account_id, date, rule_id, unmatched
+GET    /transactions                    accounts:read    filter: account_id, date, entry_id, unmatched
 GET    /transactions/:id                accounts:read
-```
-
-### Entries (computed view of rules + latest snapshots)
-
-```text
-GET    /entries                         accounts:read    rules joined with latest computed_snapshot
-GET    /entries/:id                     accounts:read    rule_id used as entry id
 ```
 
 ### Review queue
 
 ```text
 GET    /review                          accounts:read    pending review items; includes alert_type + confidence scores
-PUT    /review/:id                      review:write     edit conditions/name/type before approving
-POST   /review/:id/approve              review:write     activate rule → triggers account.analyze
+PUT    /review/:id                      review:write     edit conditions/name/type/end_date before approving
+POST   /review/:id/approve              review:write     activate entry → triggers account.analyze
 POST   /review/:id/reject               review:write     discard proposal
 ```
 
@@ -664,7 +669,7 @@ POST   /review/:id/reject               review:write     discard proposal
 ```json
 {
   "id": "uuid",
-  "rule_id": "uuid",
+  "entry_id": "uuid",
   "suggested_name": "Netflix",
   "suggested_entry_type": "standing",
   "suggested_conditions": { ... },
@@ -710,8 +715,8 @@ Response row shape (OHLC granularity):
   "projected_rate_per_day": 0.6667,
   "drift_per_day": 0.0000,
   "slope_per_day": 0.000001,
-  "epoch_start": "2025-01-01",
-  "epoch_end": null
+  "entry_start_date": "2025-01-01",
+  "entry_end_date": null
 }
 ```
 
@@ -751,8 +756,8 @@ Response row shape:
 ```text
 GET    /jobs                            accounts:read    paginated history
 GET    /jobs/stream                     accounts:read    SSE — all entity jobs, entity-scoped
-POST   /jobs/reprocess                  rules:write      trigger rules.reprocess
-POST   /jobs/analyze                    review:write     trigger account.analyze
+POST   /jobs/reprocess                  entries:write    trigger entries.reprocess
+POST   /jobs/analyze                    entries:write    trigger account.analyze
 POST   /jobs/project                    reports:read     trigger balance.project
 ```
 
@@ -786,7 +791,7 @@ GET    /admin/entities                  list all entities
 ```json
 {
   "job_id": "uuid",
-  "job_type": "import.process | rules.reprocess | account.analyze | balance.project",
+  "job_type": "import.process | entries.reprocess | account.analyze | balance.project",
   "status": "queued | processing | complete | failed",
   "error": null,
   "queued_at": "2026-06-30T12:00:00Z",
@@ -822,15 +827,15 @@ Published after `POST /imports` stores the `pending_import` record.
 }
 ```
 
-### rules.reprocess
+### entries.reprocess
 
-Published after `POST /jobs/reprocess`, or after a rule is created, updated, or deleted.
+Published after `POST /jobs/reprocess`, or after an entry is created, updated, or deleted.
 
 ```json
 {
   "job_id": "uuid",
   "entity_id": "uuid",
-  "job_type": "rules.reprocess",
+  "job_type": "entries.reprocess",
   "metadata": {}
 }
 ```

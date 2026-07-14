@@ -17,7 +17,7 @@ Veloci is a local-first personal finance application targeting the self-hosting 
 | Service | Language | Responsibility |
 | --- | --- | --- |
 | `veloci-web` | TypeScript / React | Static SPA — UI only, no server-side logic |
-| `veloci-api` | Go + Cobra + Viper | REST API, auth proxy, RBAC enforcement, all CRUD, job publishing. Cobra subcommands: `serve`, `migrate` |
+| `veloci-api` | Go + Cobra + Viper | REST API, auth proxy, RBAC enforcement, all CRUD, job publishing. Cobra subcommands: `serve`, `migrate`, `seed` |
 | `veloci-engine` | Rust | Pattern clustering, rule evaluation, rate/slope calculations. Health via CLI subcommand |
 | `veloci-auth` | Go + Cobra + Viper | Credential validation, token minting and validation, invite lifecycle. Cobra subcommands: `serve` |
 | `postgres` | — | All persistent data |
@@ -36,9 +36,11 @@ REST over HTTP. The React SPA communicates exclusively with `veloci-api`. No ser
 Asynchronous via RabbitMQ. `veloci-api` publishes jobs to a queue. `veloci-engine` consumes jobs, reads and writes Postgres directly for analysis workloads, and acknowledges completion. The API never calls the engine synchronously.
 
 **v1 job types:**
+
 - `import.process` — new transactions imported, run clustering and matching
 - `rules.reprocess` — rules changed, reprocess affected transactions for an entity
 - `account.analyze` — recompute rates and slopes for an account
+- `balance.project` — account balance updated manually, rerun Stage 7 projection only
 
 **Engine reads Postgres directly** for large dataset analysis (rate/slope calculations over full transaction history). Writing results back to Postgres directly avoids routing large payloads through the API.
 
@@ -141,6 +143,7 @@ Seeded by `veloci-api migrate`. The role→permission mapping is cached at start
 | `rules:write` | ✓ | TBD |
 | `labels:write` | ✓ | ✓ |
 | `entries:write` | ✓ | TBD |
+| `review:write` | ✓ | TBD |
 | `reports:read` | ✓ | ✓ |
 | `users:manage` | ✓ | — |
 | `entity:configure` | ✓ | — |

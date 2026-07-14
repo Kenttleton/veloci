@@ -42,9 +42,9 @@ Income rules use the same entry type taxonomy as expense rules. Income direction
 | --- | --- | --- |
 | `standing` | Regular paycheck, direct deposit, salary | `amount_cents / period_days` per day |
 | `variable` | Freelance, tips, commission | Rolling median or max over `period_days` |
-| `boost` | Tax refund, bonus, one-time windfall | `amount_cents / period_days` amortized over declared window |
+| `one_time` | Tax refund, bonus, one-time windfall | `amount_cents / period_days` amortized over declared window |
 
-`hit` is **expense direction only** — it models short-term debt (unplanned expense amortized as a temporary rate drag). It is never an income type.
+`one_time` is valid for both income and expense direction — it covers any non-recurring event regardless of sign.
 
 All income rules carry `direction = 'income'`. They flow through Stages 1–6 identically to expense rules. Sign convention: `positive amount_cents = inflow`. The Margin label sees the net: `income_rate - commitments_rate`.
 
@@ -54,11 +54,13 @@ All income rules carry `direction = 'income'`. They flow through Stages 1–6 id
 
 The rate tells you amplitude and period. The schedule tells you phase. Both are required to answer "will I make it?"
 
-### New columns on `rules`
+### Schedule columns on `rules`
+
+These columns are defined directly in `002_financial_schema.sql`:
 
 ```sql
-ALTER TABLE rules ADD COLUMN next_due_date     DATE;
-ALTER TABLE rules ADD COLUMN recurrence_anchor TEXT;
+recurrence_anchor TEXT,
+next_due_date     DATE,
 ```
 
 ### `recurrence_anchor` — phase encoding (engine input)

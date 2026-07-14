@@ -107,18 +107,22 @@ The raw token is a cryptographically random 32-byte value encoded as URL-safe ba
 
 veloci-auth reads a config file at startup via Viper and syncs the server admin credentials. This is the only mechanism for server admin password management — no endpoint, no CLI exec required.
 
-```yaml
-# veloci-auth.yaml (bind-mounted host volume)
-server_admin:
-  email: admin@example.com
-  password: plaintextpassword        # readable on the host; bcrypt hash stored in DB
-jwt_secret: <long-random-string>     # HS256 signing key; rotate by changing and restarting
-port: 8081
-session:
-  access_token_ttl_minutes: 15       # how long an access JWT is valid
-  refresh_token_ttl_hours: 24        # how long a refresh JWT is valid
-invite:
-  ttl_hours: 72                      # invite link expiry
+```toml
+# veloci.toml (bind-mounted host volume)
+[auth]
+port       = 8081
+jwt_secret = "<long-random-string>"  # HS256 signing key; rotate by changing and restarting
+
+[auth.admin]
+email    = "admin@example.com"
+password = "plaintextpassword"       # readable on the host; bcrypt hash stored in DB
+
+[session]
+access_token_ttl_minutes = 15        # how long an access JWT is valid
+refresh_token_ttl_hours  = 24        # how long a refresh JWT is valid
+
+[invite]
+ttl_hours = 72                       # invite link expiry
 ```
 
 If `session` is absent from config, auth uses hardcoded defaults: 15-minute access tokens, 24-hour refresh tokens.
