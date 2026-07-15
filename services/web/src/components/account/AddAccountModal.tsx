@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import * as Collapsible from '@radix-ui/react-collapsible'
 import { ChevronRight } from 'lucide-react'
 import { Modal } from '../shared/Modal'
@@ -6,10 +7,13 @@ import {
   useListInstitutions,
   useCreateInstitution,
   useCreateInstitutionAccount,
+  useCreateAccount,
+  getListAccountsQueryKey,
 } from '../../api/generated/velociAPI'
 import type {
   CreateInstitutionInputBody,
   CreateInstitutionAccountInputBody,
+  CreateAccountInputBody,
 } from '../../api/generated/velociAPI.schemas'
 
 interface AddAccountModalProps {
@@ -131,11 +135,14 @@ export function AddAccountModal({ open, onClose, defaultStatus }: AddAccountModa
   const [error, setError] = useState('')
   const [pending, setPending] = useState(false)
 
+  const queryClient = useQueryClient()
+
   const institutionsQuery = useListInstitutions()
   const institutions = institutionsQuery.data?.data.data ?? []
 
   const createInstitutionMutation = useCreateInstitution()
   const createInstitutionAccountMutation = useCreateInstitutionAccount()
+  const createAccountMutation = useCreateAccount()
 
   const showInterestRate = accountType === 'credit' || accountType === 'loan' || accountType === 'mortgage'
   const showCreditLimit = accountType === 'credit'
@@ -196,7 +203,6 @@ export function AddAccountModal({ open, onClose, defaultStatus }: AddAccountModa
     setPending(true)
     try {
       if (institutionChoice === 'existing') {
-        // TODO: create the account under the selected existing institution.
         await createInstitutionAccountMutation.mutateAsync({
           id: existingInstitutionId,
           data: accountBody,
@@ -227,22 +233,14 @@ export function AddAccountModal({ open, onClose, defaultStatus }: AddAccountModa
         })
       } else {
         // institutionChoice === 'none' — standalone cash/manual account with no institution.
-        // TODO: there is currently no API endpoint to create an account without an
-        // institution (the only create-account mutation is useCreateInstitutionAccount,
-        // which is nested under /institutions/:id/accounts). Until a standalone
-        // "create account" endpoint exists on the backend, this path cannot actually
-        // submit anything. Surface this to the user rather than silently failing.
-        setError(
-          'Manual accounts without an institution are not supported by the API yet. ' +
-          'Choose "Link to existing institution" or "Create new institution" for now.'
-        )
-        setPending(false)
-        return
+        const noInstitutionBody: CreateAccountInputBody = {
+          ...accountBody,
+          institution_id: null,
+        }
+        await createAccountMutation.mutateAsync({ data: noInstitutionBody })
       }
 
-      // TODO: invalidate/refetch the accounts list (e.g. via queryClient.invalidateQueries
-      // on the accounts query key, or a useListAccounts refetch) so the Sidebar picks up
-      // the newly created account once this modal is wired into Sidebar.tsx.
+      await queryClient.invalidateQueries({ queryKey: getListAccountsQueryKey() })
 
       resetForm()
       onClose()

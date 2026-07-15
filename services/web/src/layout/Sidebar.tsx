@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import {
   BarChart2,
@@ -11,21 +11,11 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../auth/AuthProvider'
 import { useJobs } from '../contexts/JobsContext'
-// TODO(task-6-11): getAccounts will be replaced with useListAccounts from generated API
+import { useListAccounts } from '../api/generated/velociAPI'
 import type { AccountView } from '../api/generated/velociAPI.schemas'
-import { getToken } from '../auth/tokens'
+import { AddAccountModal } from '../components/account/AddAccountModal'
 
 type Account = AccountView
-
-async function getAccounts(): Promise<Account[]> {
-  const token = getToken()
-  const base = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api'
-  const res = await fetch(`${base}/accounts`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  })
-  const json = (await res.json()) as { data: Account[] }
-  return json.data ?? []
-}
 
 function formatBalance(cents: number | null): string {
   if (cents === null) return '—'
@@ -46,14 +36,11 @@ function isNegativeBalance(account: Account): boolean {
 export function Sidebar() {
   const { logout } = useAuth()
   const { hasRunningJobs } = useJobs()
-  const [accounts, setAccounts] = useState<Account[]>([])
   const [reviewCount] = useState(0)
+  const [addAccountStatus, setAddAccountStatus] = useState<'active' | 'passive' | null>(null)
 
-  useEffect(() => {
-    getAccounts()
-      .then(setAccounts)
-      .catch(() => {})
-  }, [])
+  const accountsQuery = useListAccounts()
+  const accounts: Account[] = accountsQuery.data?.data.data ?? []
 
   const activeAccounts = accounts.filter((a) => a.status === 'active')
   const passiveAccounts = accounts.filter((a) => a.status === 'passive')
@@ -178,6 +165,7 @@ export function Sidebar() {
               Active
             </span>
             <button
+              onClick={() => setAddAccountStatus('active')}
               style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', padding: 0 }}
               title="Add account"
             >
@@ -239,6 +227,7 @@ export function Sidebar() {
                 Passive
               </span>
               <button
+                onClick={() => setAddAccountStatus('passive')}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', padding: 0 }}
                 title="Add account"
               >
@@ -323,6 +312,14 @@ export function Sidebar() {
           Sign out
         </button>
       </div>
+
+      {addAccountStatus && (
+        <AddAccountModal
+          open
+          onClose={() => setAddAccountStatus(null)}
+          defaultStatus={addAccountStatus}
+        />
+      )}
     </aside>
   )
 }
