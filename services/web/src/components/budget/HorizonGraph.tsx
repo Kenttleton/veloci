@@ -12,9 +12,41 @@ import {
 import { useRateFormat } from '../../contexts/RateFormatContext'
 import { useJobs } from '../../contexts/JobsContext'
 import { TermTooltip } from '../shared/TermTooltip'
-import { getSnapshotHistory } from '../../api/resources'
-import type { SnapshotCandle } from '../../api/resources'
+// TODO(task-6-11): getSnapshotHistory will be replaced with generated hook
 import { useNavigate } from 'react-router-dom'
+
+// Interim local type until budget components are rebuilt in tasks 6-11
+interface SnapshotCandle {
+  period_start: string
+  period_end: string
+  open: number
+  close: number
+  high: number
+  low: number
+  actual_rate_per_day: number
+  projected_rate_per_day: number
+  drift_per_day: number
+  slope_per_day: number
+  entry_start_date: string
+  entry_end_date: string | null
+}
+
+async function getSnapshotHistory(
+  nodeId: string,
+  params: { before?: string; limit?: number; granularity?: string },
+): Promise<{ data: SnapshotCandle[]; next_cursor: string | null; has_more: boolean }> {
+  const token = localStorage.getItem('token')
+  const base = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api'
+  const p: Record<string, string> = {}
+  if (params.before) p.before = params.before
+  if (params.limit) p.limit = String(params.limit)
+  if (params.granularity) p.granularity = params.granularity
+  const qs = Object.keys(p).length ? '?' + new URLSearchParams(p).toString() : ''
+  const res = await fetch(`${base}/snapshots/${nodeId}/history${qs}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  return res.json() as Promise<{ data: SnapshotCandle[]; next_cursor: string | null; has_more: boolean }>
+}
 
 interface HorizonGraphProps {
   nodeId: string | null

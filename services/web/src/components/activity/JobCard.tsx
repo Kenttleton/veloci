@@ -1,7 +1,17 @@
 import { useState } from 'react'
 import { Check, X, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react'
-import { retryJob } from '../../api/resources'
-import type { Job } from '../../api/resources'
+// TODO(task-6-11): retryJob will be replaced with generated mutation hook
+import type { Job } from '../../contexts/JobsContext'
+
+async function retryJob(jobId: string): Promise<void> {
+  // TODO(task-6-11): stub — will be replaced with useRetryJobMutation from generated API
+  const token = localStorage.getItem('token')
+  const base = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api'
+  await fetch(`${base}/jobs/${jobId}/retry`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+}
 
 interface JobCardProps {
   job: Job

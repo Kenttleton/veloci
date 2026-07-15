@@ -1,7 +1,44 @@
 import { useState, useEffect, useRef } from 'react'
 import { Plus, Check, X } from 'lucide-react'
-import { getLabels, createLabel, updateLabel } from '../api/resources'
-import type { Label } from '../api/resources'
+// TODO(task-6-11): label API calls will be replaced with generated hooks
+import type { LabelView } from '../api/generated/velociAPI.schemas'
+
+type Label = LabelView & { entry_count?: number }
+
+async function _apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
+  const token = localStorage.getItem('token')
+  const base = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api'
+  const res = await fetch(`${base}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options?.headers,
+    },
+  })
+  return res.json() as Promise<T>
+}
+
+async function getLabels(): Promise<Label[]> {
+  const result = await _apiFetch<{ data: Label[] }>('/labels')
+  return result.data ?? []
+}
+
+async function createLabel(name: string): Promise<Label> {
+  const result = await _apiFetch<{ data: Label }>('/labels', {
+    method: 'POST',
+    body: JSON.stringify({ name }),
+  })
+  return result.data
+}
+
+async function updateLabel(id: string, name: string): Promise<Label> {
+  const result = await _apiFetch<{ data: Label }>(`/labels/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ name }),
+  })
+  return result.data
+}
 
 export function SettingsPage() {
   const [labels, setLabels] = useState<Label[]>([])

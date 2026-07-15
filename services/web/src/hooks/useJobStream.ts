@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useJobs } from '../contexts/JobsContext'
-import type { SseJobEvent } from '../api/resources'
+import type { SseJobEvent } from '../contexts/JobsContext'
 
 const BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api'
 const MAX_BACKOFF_MS = 30_000

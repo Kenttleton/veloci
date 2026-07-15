@@ -3,7 +3,15 @@ import { useRateFormat } from '../../contexts/RateFormatContext'
 import { useJobs } from '../../contexts/JobsContext'
 import { TermTooltip } from '../shared/TermTooltip'
 import { PendingDetailsLink } from '../shared/PendingBadge'
-import type { SnapshotSummary } from '../../api/resources'
+// TODO(task-6-11): SnapshotSummary will be replaced with SnapshotSummaryView from generated schemas
+import type { SnapshotSummaryView } from '../../api/generated/velociAPI.schemas'
+
+// SnapshotSummaryView from generated API doesn't have actual/period fields yet
+// Extend with the fields used in this component
+interface SnapshotSummary extends SnapshotSummaryView {
+  period?: string
+  actual?: boolean
+}
 
 interface SummaryStripProps {
   summary: SnapshotSummary | null

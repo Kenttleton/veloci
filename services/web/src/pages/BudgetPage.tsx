@@ -4,8 +4,40 @@ import type { RateFormat } from '../contexts/RateFormatContext'
 import { SummaryStrip } from '../components/budget/SummaryStrip'
 import { HorizonGraph } from '../components/budget/HorizonGraph'
 import { StackPanel } from '../components/budget/StackPanel'
-import { getSnapshotSummary, getEntries } from '../api/resources'
-import type { SnapshotSummary, Entry } from '../api/resources'
+// TODO(task-6-11): getSnapshotSummary/getEntries will be replaced with generated hooks
+import type { EntryView } from '../api/generated/velociAPI.schemas'
+
+// Extend EntryView with period/actual that SummaryStrip needs
+interface SnapshotSummary {
+  income_rate: number
+  commitments_rate: number
+  margin_rate: number
+  projection_rate: number
+  drift_rate: number
+  period: string
+  actual: boolean
+}
+
+type Entry = EntryView
+
+async function _apiFetch<T>(path: string): Promise<T> {
+  const token = localStorage.getItem('token')
+  const base = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api'
+  const res = await fetch(`${base}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  return res.json() as Promise<T>
+}
+
+async function getSnapshotSummary(): Promise<SnapshotSummary> {
+  const result = await _apiFetch<{ data: SnapshotSummary }>('/snapshots/summary')
+  return result.data
+}
+
+async function getEntries(): Promise<Entry[]> {
+  const result = await _apiFetch<{ data: Entry[] }>('/entries')
+  return result.data ?? []
+}
 
 export function BudgetPage() {
   const { format, setFormat } = useRateFormat()

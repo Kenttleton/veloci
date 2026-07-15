@@ -11,8 +11,20 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../auth/AuthProvider'
 import { useJobs } from '../contexts/JobsContext'
-import { getAccounts } from '../api/resources'
-import type { Account } from '../api/resources'
+// TODO(task-6-11): getAccounts will be replaced with useListAccounts from generated API
+import type { AccountView } from '../api/generated/velociAPI.schemas'
+
+type Account = AccountView
+
+async function getAccounts(): Promise<Account[]> {
+  const token = localStorage.getItem('token')
+  const base = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api'
+  const res = await fetch(`${base}/accounts`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  const json = (await res.json()) as { data: Account[] }
+  return json.data ?? []
+}
 
 function formatBalance(cents: number | null): string {
   if (cents === null) return '—'

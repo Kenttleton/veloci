@@ -1,5 +1,44 @@
 import React, { createContext, useContext, useState, useCallback } from 'react'
-import type { Job, SseJobEvent } from '../api/resources'
+
+// TODO(task-6-11): Interim local types — will be replaced when activity/review hooks are rebuilt
+export interface SseJobEvent {
+  job_id: string
+  job_type: 'import.process' | 'entries.reprocess' | 'account.analyze'
+  status: 'queued' | 'processing' | 'complete' | 'failed'
+  error: string | null
+  queued_at: string
+  completed_at: string | null
+}
+
+export interface Job {
+  id: string
+  entity_id: string
+  job_type: 'import.process' | 'entries.reprocess' | 'account.analyze'
+  status: 'queued' | 'processing' | 'complete' | 'failed'
+  error: string | null
+  retriable: boolean
+  queued_at: string
+  completed_at: string | null
+  triggered_by: string
+  account_id: string | null
+  account_name: string | null
+  current_stage: number | null
+  total_stages: number | null
+  current_stage_name: string | null
+  metadata: {
+    transactions_imported?: number
+    transactions_skipped_duplicate?: number
+    entries_processed?: number
+    snapshots_written?: number
+  }
+  stages: Array<{
+    stage_number: number
+    name: string
+    status: 'pending' | 'running' | 'complete' | 'failed'
+    elapsed_ms: number | null
+    error: string | null
+  }>
+}
 
 interface JobsContextValue {
   jobs: Job[]

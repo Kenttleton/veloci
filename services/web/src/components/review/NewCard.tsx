@@ -1,8 +1,90 @@
 import { useState, useEffect } from 'react'
 import { ConfidenceComponent } from './ConfidenceComponent'
 import { useRateFormat } from '../../contexts/RateFormatContext'
-import { approveReview, rejectReview, updateReview, getLabels, createLabel } from '../../api/resources'
-import type { ReviewItem, Label } from '../../api/resources'
+// TODO(task-6-11): all API calls will be replaced with generated hooks
+import type { LabelView } from '../../api/generated/velociAPI.schemas'
+
+type Label = LabelView
+
+// Interim local type until review components are rebuilt in tasks 6-11
+interface ReviewItem {
+  id: string
+  entry_id: string
+  suggested_name: string
+  alert_type: 'new' | 'drift' | 'ended'
+  status: 'pending' | 'approved' | 'rejected'
+  confidence: number | null
+  merchant_confidence: number | null
+  timing_confidence: number | null
+  amount_confidence: number | null
+  suggested_entry_type: string
+  suggested_rate_per_day: number
+  recurrence_anchor: string | null
+  sample_merchants: Array<{ date: string; payee: string; amount_cents: number }>
+  transaction_count: number
+  old_rate_per_day?: number
+  new_rate_per_day?: number
+  old_timing?: string
+  new_timing?: string
+  transaction_evidence?: Array<{ date: string; payee: string; amount_cents: number }>
+  has_manual_projection?: boolean
+  manual_projection_per_day?: number
+  last_seen_date?: string
+  next_due_date?: string
+  days_overdue?: number
+  current_rate_per_day?: number
+  created_at: string
+}
+
+async function _reviewAction(url: string, method = 'POST', data?: unknown): Promise<void> {
+  const token = localStorage.getItem('token')
+  const base = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api'
+  await fetch(`${base}${url}`, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: data ? JSON.stringify(data) : undefined,
+  })
+}
+
+async function approveReview(id: string, payload?: Record<string, unknown>): Promise<void> {
+  await _reviewAction(`/review/${id}/approve`, 'POST', payload ?? {})
+}
+
+async function rejectReview(id: string): Promise<void> {
+  await _reviewAction(`/review/${id}/reject`, 'POST')
+}
+
+async function updateReview(id: string, payload: Record<string, unknown>): Promise<void> {
+  await _reviewAction(`/review/${id}`, 'PUT', payload)
+}
+
+async function getLabels(): Promise<Label[]> {
+  const token = localStorage.getItem('token')
+  const base = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api'
+  const res = await fetch(`${base}/labels`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  const json = (await res.json()) as { data: Label[] }
+  return json.data ?? []
+}
+
+async function createLabel(name: string): Promise<Label> {
+  const token = localStorage.getItem('token')
+  const base = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api'
+  const res = await fetch(`${base}/labels`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ name }),
+  })
+  const json = (await res.json()) as { data: Label }
+  return json.data
+}
 
 interface NewCardProps {
   item: ReviewItem
@@ -30,7 +112,7 @@ export function NewCard({ item, onAction }: NewCardProps) {
   const { formatRate } = useRateFormat()
   const [labels, setLabels] = useState<Label[]>([])
   const [selectedLabel, setSelectedLabel] = useState<string | null>(null)
-  const [selectedType, setSelectedType] = useState<EntryType>(item.suggested_entry_type)
+  const [selectedType, setSelectedType] = useState<EntryType>((item.suggested_entry_type as EntryType) || 'standing')
   const [showNewLabel, setShowNewLabel] = useState(false)
   const [newLabelName, setNewLabelName] = useState('')
   const [showAllSamples, setShowAllSamples] = useState(false)

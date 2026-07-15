@@ -2,7 +2,20 @@ import React, { useEffect, useCallback, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { JobCard } from '../components/activity/JobCard'
 import { useJobs } from '../contexts/JobsContext'
-import { getJobs } from '../api/resources'
+// TODO(task-6-11): getJobs will be replaced with generated hook
+
+async function getJobs(params: { after?: string; limit?: number }): Promise<{ data: import('../contexts/JobsContext').Job[]; meta: { next_cursor?: string; has_more?: boolean } }> {
+  const token = localStorage.getItem('token')
+  const base = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api'
+  const p: Record<string, string> = {}
+  if (params.after) p.after = params.after
+  if (params.limit) p.limit = String(params.limit)
+  const qs = Object.keys(p).length ? '?' + new URLSearchParams(p).toString() : ''
+  const res = await fetch(`${base}/jobs${qs}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  return res.json() as Promise<{ data: import('../contexts/JobsContext').Job[]; meta: { next_cursor?: string; has_more?: boolean } }>
+}
 
 export function ActivityPage() {
   const [searchParams] = useSearchParams()

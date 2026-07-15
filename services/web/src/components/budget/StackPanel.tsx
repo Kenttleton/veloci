@@ -6,7 +6,15 @@ import { TermTooltip } from '../shared/TermTooltip'
 import { LabelPill } from '../shared/LabelPill'
 import { PendingDetailsLink } from '../shared/PendingBadge'
 import { RateValue } from '../shared/RateValue'
-import type { Entry } from '../../api/resources'
+// TODO(task-6-11): Entry will be replaced with EntryView from generated schemas
+import type { EntryView } from '../../api/generated/velociAPI.schemas'
+
+// EntryView from generated API has most fields but some differ; extend for compatibility
+interface Entry extends EntryView {
+  // These fields exist in EntryView: id, name, direction, entry_type, label_id, label_name,
+  // actual_rate, projected_rate, drift_rate, tag, period, status
+  // Interim alias for the fields used in StackPanel
+}
 
 interface LabelGroup {
   labelId: string | null

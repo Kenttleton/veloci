@@ -2,8 +2,50 @@ import { useState, useCallback, useEffect } from 'react'
 import { NewCard } from '../components/review/NewCard'
 import { DriftCard } from '../components/review/DriftCard'
 import { EndedCard } from '../components/review/EndedCard'
-import { getReview } from '../api/resources'
-import type { ReviewItem } from '../api/resources'
+// TODO(task-6-11): getReview will be replaced with generated hook
+
+// Interim local type until review components are rebuilt in tasks 6-11
+interface ReviewItem {
+  id: string
+  entry_id: string
+  suggested_name: string
+  alert_type: 'new' | 'drift' | 'ended'
+  status: 'pending' | 'approved' | 'rejected'
+  confidence: number | null
+  merchant_confidence: number | null
+  timing_confidence: number | null
+  amount_confidence: number | null
+  suggested_entry_type: string | null
+  suggested_rate_per_day: number | null
+  recurrence_anchor: string | null
+  sample_merchants: Array<{ date: string; payee: string; amount_cents: number }>
+  transaction_count: number
+  old_rate_per_day?: number
+  new_rate_per_day?: number
+  old_timing?: string
+  new_timing?: string
+  transaction_evidence?: Array<{ date: string; payee: string; amount_cents: number }>
+  has_manual_projection?: boolean
+  manual_projection_per_day?: number
+  last_seen_date?: string
+  next_due_date?: string
+  days_overdue?: number
+  current_rate_per_day?: number
+  created_at: string
+}
+
+async function getReview(params: { after?: string; limit?: number }): Promise<{ data: ReviewItem[]; meta: { next_cursor?: string; has_more?: boolean } }> {
+  const token = localStorage.getItem('token')
+  const base = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api'
+  const p: Record<string, string> = {}
+  if (params.after) p.after = params.after
+  if (params.limit) p.limit = String(params.limit)
+  const qs = Object.keys(p).length ? '?' + new URLSearchParams(p).toString() : ''
+  const res = await fetch(`${base}/review${qs}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  return res.json() as Promise<{ data: ReviewItem[]; meta: { next_cursor?: string; has_more?: boolean } }>
+}
 
 type AlertType = 'new' | 'drift' | 'ended'
 

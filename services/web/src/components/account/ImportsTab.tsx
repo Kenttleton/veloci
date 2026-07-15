@@ -1,7 +1,55 @@
 import { useState, useEffect } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
-import { getImports, getImportTransactions } from '../../api/resources'
-import type { ImportBatch, ImportTransaction } from '../../api/resources'
+// TODO(task-6-11): getImports/getImportTransactions will be replaced with generated hooks
+
+// Interim local types until account components are rebuilt in tasks 6-11
+interface ImportBatch {
+  id: string
+  account_id: string
+  processed_at: string
+  transactions_imported: number
+  transactions_skipped_duplicate: number
+  source_name: string
+}
+
+interface ImportTransaction {
+  id: string
+  account_id: string
+  import_batch_id: string
+  imported_payee: string
+  merchant_normalized: string
+  amount_cents: number
+  date: string
+  is_duplicate: boolean
+  created_at: string
+}
+
+async function _apiFetch<T>(path: string, params?: Record<string, string>): Promise<T> {
+  const token = localStorage.getItem('token')
+  const base = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api'
+  const qs = params ? '?' + new URLSearchParams(params).toString() : ''
+  const res = await fetch(`${base}${path}${qs}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  return res.json() as Promise<T>
+}
+
+async function getImports(params: { account_id?: string; after?: string; limit?: number }): Promise<{ data: ImportBatch[] }> {
+  const p: Record<string, string> = {}
+  if (params.account_id) p.account_id = params.account_id
+  if (params.after) p.after = params.after
+  if (params.limit) p.limit = String(params.limit)
+  return _apiFetch<{ data: ImportBatch[] }>('/imports', p)
+}
+
+async function getImportTransactions(params: { account_id?: string; import_batch_id?: string; after?: string; limit?: number }): Promise<{ data: ImportTransaction[] }> {
+  const p: Record<string, string> = {}
+  if (params.account_id) p.account_id = params.account_id
+  if (params.import_batch_id) p.import_batch_id = params.import_batch_id
+  if (params.after) p.after = params.after
+  if (params.limit) p.limit = String(params.limit)
+  return _apiFetch<{ data: ImportTransaction[] }>('/transactions', p)
+}
 
 interface ImportsTabProps {
   accountId: string
