@@ -150,13 +150,14 @@ export function ReviewPage() {
         ) : (
           <>
             {filteredItems.map((item) => {
-              if (item.alert_type === 'new') {
-                return <NewCard key={item.id} item={item} onAction={handleAction} />
+              switch (item.alert_type) {
+                case 'new':   return <NewCard key={item.id} item={item} onAction={handleAction} />
+                case 'drift': return <DriftCard key={item.id} item={item} onAction={handleAction} />
+                case 'ended': return <EndedCard key={item.id} item={item} onAction={handleAction} />
+                default:
+                  console.error(`Unknown alert_type: ${item.alert_type}`, item.id)
+                  return null
               }
-              if (item.alert_type === 'drift') {
-                return <DriftCard key={item.id} item={item} onAction={handleAction} />
-              }
-              return <EndedCard key={item.id} item={item} onAction={handleAction} />
             })}
 
             {hasNextPage && (

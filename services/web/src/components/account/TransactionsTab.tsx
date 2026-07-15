@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { format, parseISO } from 'date-fns'
 import {
   useReactTable,
   getCoreRowModel,
@@ -18,15 +19,12 @@ function formatAmount(cents: number): string {
   return (Math.abs(cents) / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
 }
 
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-}
 
 const columns = [
   columnHelper.accessor('date', {
     header: 'Date',
     size: 90,
-    cell: (info) => formatDate(info.getValue()),
+    cell: (info) => format(parseISO(info.getValue()), 'MMM d'),
   }),
   columnHelper.accessor('merchant_normalized', {
     header: 'Merchant',

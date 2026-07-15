@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { format, parseISO, isToday, isYesterday } from 'date-fns'
 import { Check, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react'
 import type { JobView } from '../../api/generated/velociAPI.schemas'
 
@@ -21,16 +22,11 @@ type JobMetadata = {
 }
 
 function formatTimestamp(dateStr: string): string {
-  const d = new Date(dateStr)
-  const today = new Date()
-  const isToday =
-    d.getFullYear() === today.getFullYear() &&
-    d.getMonth() === today.getMonth() &&
-    d.getDate() === today.getDate()
-  if (isToday) {
-    return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-  }
-  return `${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
+  const d = parseISO(dateStr)
+  const time = format(d, 'h:mm a')
+  if (isToday(d)) return time
+  if (isYesterday(d)) return `Yesterday · ${time}`
+  return `${format(d, 'MMM d')} · ${time}`
 }
 
 function StatusDot({ status }: { status: string }) {
@@ -64,7 +60,7 @@ function summaryLine(job: JobView): string {
   if (job.status === 'complete') {
     const start = job.started_at ?? job.queued_at
     const elapsed = job.completed_at && start
-      ? ((new Date(job.completed_at).getTime() - new Date(start).getTime()) / 1000).toFixed(1)
+      ? ((parseISO(job.completed_at).getTime() - parseISO(start).getTime()) / 1000).toFixed(1)
       : null
     const parts: string[] = []
     if (elapsed) parts.push(`Completed in ${elapsed}s`)

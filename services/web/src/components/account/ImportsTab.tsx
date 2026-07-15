@@ -1,3 +1,4 @@
+import { format, parseISO } from 'date-fns'
 import { useListImportsInfinite } from '../../api/cursorQuery'
 import type { ImportView } from '../../api/generated/velociAPI.schemas'
 
@@ -5,17 +6,6 @@ interface ImportsTabProps {
   accountId: string
 }
 
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-}
-
-function formatUploadedAt(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
-}
 
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, { bg: string; text: string }> = {
@@ -105,14 +95,14 @@ export function ImportsTab({ accountId: _accountId }: ImportsTabProps) {
           }}
         >
           <span style={{ width: 120, fontSize: 13, color: 'var(--text)', flexShrink: 0 }}>
-            {formatUploadedAt(imp.uploaded_at)}
+            {format(parseISO(imp.uploaded_at), 'MMM d, yyyy')}
           </span>
           <span style={{ width: 64, fontSize: 13, color: 'var(--text2)', textAlign: 'right', flexShrink: 0 }}>
             {imp.row_count != null ? imp.row_count.toLocaleString() : '—'}
           </span>
           <span style={{ flex: 1, fontSize: 12, color: 'var(--text3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {imp.date_range_start && imp.date_range_end
-              ? `${formatDate(imp.date_range_start)} – ${formatDate(imp.date_range_end)}`
+              ? `${format(parseISO(imp.date_range_start), 'MMM d')} – ${format(parseISO(imp.date_range_end), 'MMM d')}`
               : '—'}
           </span>
           <span style={{ width: 80, flexShrink: 0 }}>

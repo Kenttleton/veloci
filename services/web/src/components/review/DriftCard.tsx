@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { format, parseISO } from 'date-fns'
 import { ConfidenceComponent } from './ConfidenceComponent'
 import { useRateFormat } from '../../contexts/RateFormatContext'
 import { useApproveReview, useRejectReview, useUpdateReview } from '../../api/generated/velociAPI'
@@ -21,14 +22,6 @@ interface DriftConditions {
   manual_projection_per_day?: number
 }
 
-function formatDate(dateStr: string): string {
-  const d = new Date(dateStr)
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-}
-
-function formatAmount(cents: number): string {
-  return (Math.abs(cents) / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
-}
 
 export function DriftCard({ item, onAction }: DriftCardProps) {
   const { formatRate } = useRateFormat()
@@ -152,9 +145,9 @@ export function DriftCard({ item, onAction }: DriftCardProps) {
           </div>
           {conditions.transaction_evidence.map((tx, i) => (
             <div key={i} style={{ display: 'flex', gap: 8, padding: '2px 0', fontSize: 12 }}>
-              <span style={{ width: 56, color: 'var(--text2)', flexShrink: 0 }}>{formatDate(tx.date)}</span>
+              <span style={{ width: 56, color: 'var(--text2)', flexShrink: 0 }}>{format(parseISO(tx.date), 'MMM d')}</span>
               <span style={{ flex: 1, color: 'var(--text2)' }}>{tx.payee}</span>
-              <span style={{ color: 'var(--text2)', flexShrink: 0 }}>{formatAmount(tx.amount_cents)}</span>
+              <span style={{ color: 'var(--text2)', flexShrink: 0 }}>{(Math.abs(tx.amount_cents) / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</span>
             </div>
           ))}
         </div>

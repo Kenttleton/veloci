@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react'
+import { format, parseISO } from 'date-fns'
 import {
   createChart,
   CandlestickSeries,
@@ -34,7 +35,7 @@ export function HorizonGraph({ nodeId }: HorizonGraphProps) {
   const pendingBandRef = useRef<{ start: string; end: string } | null>(null)
 
   // Derive today's date string
-  const todayStr = new Date().toISOString().split('T')[0]
+  const todayStr = format(new Date(), 'yyyy-MM-dd')
 
   const { data, fetchNextPage, isFetching } = useGetSnapshotHistoryInfinite(
     nodeId ?? '',
@@ -130,7 +131,7 @@ export function HorizonGraph({ nodeId }: HorizonGraphProps) {
     if (candles.length === 0) return
 
     const sorted = [...candles].sort(
-      (a, b) => new Date(a.period).getTime() - new Date(b.period).getTime(),
+      (a, b) => parseISO(a.period).getTime() - parseISO(b.period).getTime(),
     )
 
     const candleData: CandlestickData<Time>[] = sorted.map((c) => ({

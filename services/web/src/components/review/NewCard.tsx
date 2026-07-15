@@ -15,7 +15,6 @@ interface NewCardProps {
 
 interface NewConditions {
   recurrence_anchor?: string
-  sample_merchants?: Array<{ date: string; payee: string; amount_cents: number }>
 }
 
 type EntryType = 'standing' | 'variable' | 'irregular'
@@ -26,14 +25,6 @@ const ENTRY_TYPE_LABELS: Record<EntryType, string> = {
   irregular: 'Irregular',
 }
 
-function formatDate(dateStr: string): string {
-  const d = new Date(dateStr)
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-}
-
-function formatAmount(cents: number): string {
-  return (Math.abs(cents) / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
-}
 
 export function NewCard({ item, onAction }: NewCardProps) {
   const { formatRate } = useRateFormat()
@@ -71,7 +62,7 @@ export function NewCard({ item, onAction }: NewCardProps) {
     }
   }
 
-  const sampleMerchants = conditions.sample_merchants ?? []
+  const sampleMerchants = item.sample_merchants ?? []
   const displayedSamples = showAllSamples ? sampleMerchants : sampleMerchants.slice(0, 3)
 
   return (
@@ -120,17 +111,9 @@ export function NewCard({ item, onAction }: NewCardProps) {
           <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             Sample transactions
           </div>
-          {displayedSamples.map((s, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0' }}>
-              <span style={{ width: 56, fontSize: 12, color: 'var(--text2)', flexShrink: 0 }}>
-                {formatDate(s.date)}
-              </span>
-              <span style={{ flex: 1, fontSize: 12, color: 'var(--text2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {s.payee}
-              </span>
-              <span style={{ fontSize: 12, color: 'var(--text2)', flexShrink: 0 }}>
-                {formatAmount(s.amount_cents)}
-              </span>
+          {displayedSamples.map((name, i) => (
+            <div key={i} style={{ padding: '3px 0', fontSize: 12, color: 'var(--text2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {name}
             </div>
           ))}
           {sampleMerchants.length > 3 && !showAllSamples && (

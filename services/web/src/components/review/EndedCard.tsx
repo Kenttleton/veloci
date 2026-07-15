@@ -1,3 +1,4 @@
+import { format, parseISO } from 'date-fns'
 import { useRateFormat } from '../../contexts/RateFormatContext'
 import { useApproveReview, useRejectReview, useUpdateReview } from '../../api/generated/velociAPI'
 import type { ReviewView } from '../../api/generated/velociAPI.schemas'
@@ -17,10 +18,6 @@ interface EndedConditions {
   current_rate_per_day?: number
 }
 
-function formatFullDate(dateStr: string): string {
-  const d = new Date(dateStr)
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-}
 
 export function EndedCard({ item, onAction }: EndedCardProps) {
   const { formatRate } = useRateFormat()
@@ -105,13 +102,13 @@ export function EndedCard({ item, onAction }: EndedCardProps) {
         <div style={{ display: 'flex', gap: 8 }}>
           <span style={{ fontSize: 12, color: 'var(--text3)', width: 100, flexShrink: 0 }}>Last seen:</span>
           <span style={{ fontSize: 12, color: 'var(--text)' }}>
-            {conditions.last_seen_date ? formatFullDate(conditions.last_seen_date) : '—'}
+            {conditions.last_seen_date ? format(parseISO(conditions.last_seen_date), 'MMM d, yyyy') : '—'}
           </span>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <span style={{ fontSize: 12, color: 'var(--text3)', width: 100, flexShrink: 0 }}>Expected next:</span>
           <span style={{ fontSize: 12, color: 'var(--text)' }}>
-            {conditions.next_due_date ? formatFullDate(conditions.next_due_date) : '—'}
+            {conditions.next_due_date ? format(parseISO(conditions.next_due_date), 'MMM d, yyyy') : '—'}
             {conditions.days_overdue !== undefined && conditions.days_overdue > 0 && (
               <span style={{ color: 'var(--commit)', marginLeft: 8 }}>
                 ({conditions.days_overdue} days overdue)
