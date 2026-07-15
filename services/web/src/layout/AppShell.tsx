@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { useJobStream } from '../hooks/useJobStream'
+import { ErrorBoundary } from '../components/shared/ErrorBoundary'
 
 export function AppShell() {
   // Establish SSE connection for the lifetime of the authenticated session
@@ -25,7 +26,9 @@ export function AppShell() {
           minWidth: 0,
         }}
       >
-        <Outlet />
+        <ErrorBoundary>
+          <Outlet />
+        </ErrorBoundary>
       </main>
     </div>
   )

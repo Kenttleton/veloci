@@ -41,6 +41,7 @@ export function Sidebar() {
 
   const accountsQuery = useListAccounts()
   const accounts: Account[] = accountsQuery.data?.data.data ?? []
+  const accountsLoading = accountsQuery.isLoading
 
   const activeAccounts = accounts.filter((a) => a.status === 'active')
   const passiveAccounts = accounts.filter((a) => a.status === 'passive')
@@ -173,46 +174,56 @@ export function Sidebar() {
             </button>
           </div>
 
-          {activeAccounts.map((account) => (
-            <NavLink
-              key={account.id}
-              to={`/accounts/${account.id}`}
-              style={({ isActive }) => ({
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '5px 8px',
-                borderRadius: 5,
-                cursor: 'pointer',
-                textDecoration: 'none',
-                background: isActive ? 'var(--surface2)' : 'transparent',
-              })}
-            >
-              <span style={{ fontSize: 13, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {account.name}
-              </span>
-              <span
-                style={{
-                  fontSize: 12,
-                  color: isNegativeBalance(account) ? 'var(--commit)' : 'var(--text2)',
-                  flexShrink: 0,
-                  marginLeft: 4,
-                }}
-              >
-                {formatBalance(account.balance_cents)}
-              </span>
-            </NavLink>
-          ))}
+          {accountsLoading ? (
+            <>
+              {[80, 110, 95].map((w) => (
+                <div key={w} style={{ height: 28, margin: '2px 8px', borderRadius: 4, background: 'var(--surface2)', width: w, opacity: 0.5 }} />
+              ))}
+            </>
+          ) : (
+            <>
+              {activeAccounts.map((account) => (
+                <NavLink
+                  key={account.id}
+                  to={`/accounts/${account.id}`}
+                  style={({ isActive }) => ({
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '5px 8px',
+                    borderRadius: 5,
+                    cursor: 'pointer',
+                    textDecoration: 'none',
+                    background: isActive ? 'var(--surface2)' : 'transparent',
+                  })}
+                >
+                  <span style={{ fontSize: 13, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {account.name}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      color: isNegativeBalance(account) ? 'var(--commit)' : 'var(--text2)',
+                      flexShrink: 0,
+                      marginLeft: 4,
+                    }}
+                  >
+                    {formatBalance(account.balance_cents)}
+                  </span>
+                </NavLink>
+              ))}
 
-          {activeAccounts.length === 0 && (
-            <p style={{ fontSize: 12, color: 'var(--text3)', padding: '4px 8px', margin: 0 }}>
-              No active accounts
-            </p>
+              {activeAccounts.length === 0 && (
+                <p style={{ fontSize: 12, color: 'var(--text3)', padding: '4px 8px', margin: 0 }}>
+                  No active accounts
+                </p>
+              )}
+            </>
           )}
         </div>
 
         {/* Passive accounts */}
-        {passiveAccounts.length > 0 && (
+        {!accountsLoading && passiveAccounts.length > 0 && (
           <div style={{ marginBottom: 8 }}>
             <div
               style={{

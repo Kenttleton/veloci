@@ -49,18 +49,28 @@ export function AccountPage() {
   const { id } = useParams<{ id: string }>()
   const [account, setAccount] = useState<Account | null>(null)
   const [loading, setLoading] = useState(true)
+  const [fetchError, setFetchError] = useState(false)
   const [activeTab, setActiveTab] = useState<TabId>('transactions')
 
   useEffect(() => {
     if (!id) return
     setLoading(true)
+    setFetchError(false)
     getAccount(id)
       .then(setAccount)
-      .catch(() => {})
+      .catch(() => setFetchError(true))
       .finally(() => setLoading(false))
   }, [id])
 
   if (!id) return null
+
+  if (!loading && fetchError) {
+    return (
+      <div style={{ padding: 32, color: 'var(--text2)', fontSize: 14 }}>
+        Could not load account. Check your connection and try again.
+      </div>
+    )
+  }
 
   const tabStyle = (isActive: boolean): React.CSSProperties => ({
     padding: '10px 16px',
