@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react'
+import React, { useEffect, useRef } from 'react'
 import {
   createChart,
   CandlestickSeries,
@@ -12,41 +12,8 @@ import {
 import { useRateFormat } from '../../contexts/RateFormatContext'
 import { useJobs } from '../../contexts/JobsContext'
 import { TermTooltip } from '../shared/TermTooltip'
-// TODO(task-6-11): getSnapshotHistory will be replaced with generated hook
 import { useNavigate } from 'react-router-dom'
-
-// Interim local type until budget components are rebuilt in tasks 6-11
-interface SnapshotCandle {
-  period_start: string
-  period_end: string
-  open: number
-  close: number
-  high: number
-  low: number
-  actual_rate_per_day: number
-  projected_rate_per_day: number
-  drift_per_day: number
-  slope_per_day: number
-  entry_start_date: string
-  entry_end_date: string | null
-}
-
-async function getSnapshotHistory(
-  nodeId: string,
-  params: { before?: string; limit?: number; granularity?: string },
-): Promise<{ data: SnapshotCandle[]; next_cursor: string | null; has_more: boolean }> {
-  const token = localStorage.getItem('token')
-  const base = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api'
-  const p: Record<string, string> = {}
-  if (params.before) p.before = params.before
-  if (params.limit) p.limit = String(params.limit)
-  if (params.granularity) p.granularity = params.granularity
-  const qs = Object.keys(p).length ? '?' + new URLSearchParams(p).toString() : ''
-  const res = await fetch(`${base}/snapshots/${nodeId}/history${qs}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  })
-  return res.json() as Promise<{ data: SnapshotCandle[]; next_cursor: string | null; has_more: boolean }>
-}
+import { useGetSnapshotHistoryInfinite } from '../../api/cursorQuery'
 
 interface HorizonGraphProps {
   nodeId: string | null
@@ -64,43 +31,18 @@ export function HorizonGraph({ nodeId }: HorizonGraphProps) {
   const lineSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
   const detailsLinkRef = useRef<HTMLAnchorElement | null>(null)
 
-  const [candles, setCandles] = useState<SnapshotCandle[]>([])
-  const [_hasMore, setHasMore] = useState(false)
-  const [cursor, setCursor] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
   const pendingBandRef = useRef<{ start: string; end: string } | null>(null)
 
   // Derive today's date string
   const todayStr = new Date().toISOString().split('T')[0]
 
-  const loadHistory = useCallback(
-    async (before?: string, append = false) => {
-      if (!nodeId) return
-      setLoading(true)
-      try {
-        const result = await getSnapshotHistory(nodeId, {
-          before,
-          limit: 60,
-          granularity,
-        })
-        setCandles((prev) => (append ? [...prev, ...result.data] : result.data))
-        setHasMore(result.has_more)
-        setCursor(result.next_cursor)
-      } catch {
-        // ignore
-      } finally {
-        setLoading(false)
-      }
-    },
-    [nodeId, granularity],
+  const { data, fetchNextPage, isFetching } = useGetSnapshotHistoryInfinite(
+    nodeId ?? '',
+    { limit: 50, granularity },
+    { query: { enabled: !!nodeId } },
   )
 
-  // Initial load
-  useEffect(() => {
-    setCandles([])
-    setCursor(null)
-    void loadHistory()
-  }, [loadHistory])
+  const candles = data?.pages.flatMap((p) => p.data.data ?? []) ?? []
 
   // Create/destroy chart
   useEffect(() => {
@@ -167,8 +109,8 @@ export function HorizonGraph({ nodeId }: HorizonGraphProps) {
     // Subscribe to time scale changes for lazy loading
     chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
       if (!range) return
-      if (range.from < 5 && !loading) {
-        void loadHistory(cursor ?? undefined, true)
+      if (range.from < 5) {
+        void fetchNextPage()
       }
     })
 
@@ -188,20 +130,20 @@ export function HorizonGraph({ nodeId }: HorizonGraphProps) {
     if (candles.length === 0) return
 
     const sorted = [...candles].sort(
-      (a, b) => new Date(a.period_start).getTime() - new Date(b.period_start).getTime(),
+      (a, b) => new Date(a.period).getTime() - new Date(b.period).getTime(),
     )
 
     const candleData: CandlestickData<Time>[] = sorted.map((c) => ({
-      time: c.period_start as Time,
-      open: c.open,
-      high: c.high,
-      low: c.low,
-      close: c.close,
+      time: c.period as Time,
+      open: c.open_rate ?? c.actual_rate_per_day,
+      high: c.high_rate ?? c.actual_rate_per_day,
+      low: c.low_rate ?? c.actual_rate_per_day,
+      close: c.close_rate ?? c.actual_rate_per_day,
     }))
 
     const lineData: LineData<Time>[] = sorted.map((c) => ({
-      time: c.period_start as Time,
-      value: c.projected_rate_per_day,
+      time: c.period as Time,
+      value: c.actual_rate_per_day,
     }))
 
     candleSeriesRef.current.setData(candleData)
@@ -313,7 +255,7 @@ export function HorizonGraph({ nodeId }: HorizonGraphProps) {
           </a>
         )}
 
-        {loading && (
+        {isFetching && (
           <div
             style={{
               position: 'absolute',

@@ -2,11 +2,12 @@ import { useState, useEffect, useRef } from 'react'
 import { Plus, Check, X } from 'lucide-react'
 // TODO(task-6-11): label API calls will be replaced with generated hooks
 import type { LabelView } from '../api/generated/velociAPI.schemas'
+import { getToken } from '../auth/tokens'
 
 type Label = LabelView & { entry_count?: number }
 
 async function _apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const token = localStorage.getItem('token')
+  const token = getToken()
   const base = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api'
   const res = await fetch(`${base}${path}`, {
     ...options,

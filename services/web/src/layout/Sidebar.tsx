@@ -13,11 +13,12 @@ import { useAuth } from '../auth/AuthProvider'
 import { useJobs } from '../contexts/JobsContext'
 // TODO(task-6-11): getAccounts will be replaced with useListAccounts from generated API
 import type { AccountView } from '../api/generated/velociAPI.schemas'
+import { getToken } from '../auth/tokens'
 
 type Account = AccountView
 
 async function getAccounts(): Promise<Account[]> {
-  const token = localStorage.getItem('token')
+  const token = getToken()
   const base = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api'
   const res = await fetch(`${base}/accounts`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},

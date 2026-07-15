@@ -1,68 +1,21 @@
-import { useState } from 'react'
 import { useRateFormat } from '../../contexts/RateFormatContext'
-// TODO(task-6-11): approveReview/rejectReview/updateReview will be replaced with generated mutation hooks
-
-// Interim local type until review components are rebuilt in tasks 6-11
-interface ReviewItem {
-  id: string
-  entry_id: string
-  suggested_name: string
-  alert_type: 'new' | 'drift' | 'ended'
-  status: 'pending' | 'approved' | 'rejected'
-  confidence: number | null
-  merchant_confidence: number | null
-  timing_confidence: number | null
-  amount_confidence: number | null
-  suggested_entry_type: string | null
-  suggested_rate_per_day: number | null
-  recurrence_anchor: string | null
-  sample_merchants: Array<{ date: string; payee: string; amount_cents: number }>
-  transaction_count: number
-  old_rate_per_day?: number
-  new_rate_per_day?: number
-  old_timing?: string
-  new_timing?: string
-  transaction_evidence?: Array<{ date: string; payee: string; amount_cents: number }>
-  has_manual_projection?: boolean
-  manual_projection_per_day?: number
-  last_seen_date?: string
-  next_due_date?: string
-  days_overdue?: number
-  current_rate_per_day?: number
-  created_at: string
-}
-
-async function _reviewAction(url: string, method = 'POST', data?: unknown): Promise<void> {
-  const token = localStorage.getItem('token')
-  const base = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api'
-  await fetch(`${base}${url}`, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: data ? JSON.stringify(data) : undefined,
-  })
-}
-
-async function approveReview(id: string, payload?: Record<string, unknown>): Promise<void> {
-  await _reviewAction(`/review/${id}/approve`, 'POST', payload ?? {})
-}
-
-async function rejectReview(id: string): Promise<void> {
-  await _reviewAction(`/review/${id}/reject`, 'POST')
-}
-
-async function updateReview(id: string, payload: Record<string, unknown>): Promise<void> {
-  await _reviewAction(`/review/${id}`, 'PUT', payload)
-}
+import { useApproveReview, useRejectReview, useUpdateReview } from '../../api/generated/velociAPI'
+import type { ReviewView } from '../../api/generated/velociAPI.schemas'
+import { useState } from 'react'
 
 interface EndedCardProps {
-  item: ReviewItem
+  item: ReviewView
   onAction: () => void
 }
 
 type EndedChoice = 'gap' | 'ended'
+
+interface EndedConditions {
+  last_seen_date?: string
+  next_due_date?: string
+  days_overdue?: number
+  current_rate_per_day?: number
+}
 
 function formatFullDate(dateStr: string): string {
   const d = new Date(dateStr)
@@ -71,35 +24,37 @@ function formatFullDate(dateStr: string): string {
 
 export function EndedCard({ item, onAction }: EndedCardProps) {
   const { formatRate } = useRateFormat()
+  const conditions = (item.suggested_conditions ?? {}) as EndedConditions
+
   const [choice, setChoice] = useState<EndedChoice | null>(null)
-  const [endedDate, setEndedDate] = useState<string>(
-    item.last_seen_date ? item.last_seen_date.split('T')[0] : new Date().toISOString().split('T')[0],
-  )
-  const [submitting, setSubmitting] = useState(false)
+
+  const approveMutation = useApproveReview()
+  const rejectMutation = useRejectReview()
+  const updateMutation = useUpdateReview()
+
+  const submitting = approveMutation.isPending || rejectMutation.isPending || updateMutation.isPending
 
   async function handleConfirm() {
     if (!choice) return
-    setSubmitting(true)
     try {
       if (choice === 'gap') {
-        await rejectReview(item.id)
+        await rejectMutation.mutateAsync({ id: item.id })
       } else {
-        await updateReview(item.id, { end_date: endedDate })
-        await approveReview(item.id, { end_date: endedDate })
+        await updateMutation.mutateAsync({ id: item.id, data: { status: 'ended' } })
+        await approveMutation.mutateAsync({ id: item.id })
       }
       onAction()
     } catch {
-      setSubmitting(false)
+      //
     }
   }
 
   async function handleDismiss() {
-    setSubmitting(true)
     try {
-      await rejectReview(item.id)
+      await rejectMutation.mutateAsync({ id: item.id })
       onAction()
     } catch {
-      setSubmitting(false)
+      //
     }
   }
 
@@ -150,16 +105,16 @@ export function EndedCard({ item, onAction }: EndedCardProps) {
         <div style={{ display: 'flex', gap: 8 }}>
           <span style={{ fontSize: 12, color: 'var(--text3)', width: 100, flexShrink: 0 }}>Last seen:</span>
           <span style={{ fontSize: 12, color: 'var(--text)' }}>
-            {item.last_seen_date ? formatFullDate(item.last_seen_date) : '—'}
+            {conditions.last_seen_date ? formatFullDate(conditions.last_seen_date) : '—'}
           </span>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <span style={{ fontSize: 12, color: 'var(--text3)', width: 100, flexShrink: 0 }}>Expected next:</span>
           <span style={{ fontSize: 12, color: 'var(--text)' }}>
-            {item.next_due_date ? formatFullDate(item.next_due_date) : '—'}
-            {item.days_overdue !== undefined && item.days_overdue > 0 && (
+            {conditions.next_due_date ? formatFullDate(conditions.next_due_date) : '—'}
+            {conditions.days_overdue !== undefined && conditions.days_overdue > 0 && (
               <span style={{ color: 'var(--commit)', marginLeft: 8 }}>
-                ({item.days_overdue} days overdue)
+                ({conditions.days_overdue} days overdue)
               </span>
             )}
           </span>
@@ -167,7 +122,7 @@ export function EndedCard({ item, onAction }: EndedCardProps) {
         <div style={{ display: 'flex', gap: 8 }}>
           <span style={{ fontSize: 12, color: 'var(--text3)', width: 100, flexShrink: 0 }}>Rate:</span>
           <span style={{ fontSize: 12, color: 'var(--text)' }}>
-            {item.current_rate_per_day != null ? formatRate(item.current_rate_per_day) : '—'}
+            {conditions.current_rate_per_day != null ? formatRate(conditions.current_rate_per_day) : '—'}
           </span>
         </div>
       </div>
@@ -192,32 +147,16 @@ export function EndedCard({ item, onAction }: EndedCardProps) {
             </span>
           </label>
 
-          <label style={{ display: 'flex', gap: 8, cursor: 'pointer', alignItems: 'flex-start' }}>
+          <label style={{ display: 'flex', gap: 8, cursor: 'pointer', alignItems: 'center' }}>
             <input
               type="radio"
               name={`ended-choice-${item.id}`}
               value="ended"
               checked={choice === 'ended'}
               onChange={() => setChoice('ended')}
-              style={{ accentColor: 'var(--accent)', marginTop: 2 }}
+              style={{ accentColor: 'var(--accent)' }}
             />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 13, color: 'var(--text)' }}>Ended on:</span>
-              <input
-                type="date"
-                value={endedDate}
-                onChange={(e) => { setEndedDate(e.target.value); setChoice('ended') }}
-                style={{
-                  background: 'var(--surface2)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 4,
-                  padding: '3px 7px',
-                  color: 'var(--text)',
-                  fontSize: 12,
-                  cursor: 'pointer',
-                }}
-              />
-            </div>
+            <span style={{ fontSize: 13, color: 'var(--text)' }}>This entry has ended</span>
           </label>
         </div>
       </div>

@@ -1,56 +1,16 @@
-import React, { useEffect, useCallback, useRef } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { JobCard } from '../components/activity/JobCard'
-import { useJobs } from '../contexts/JobsContext'
-// TODO(task-6-11): getJobs will be replaced with generated hook
-
-async function getJobs(params: { after?: string; limit?: number }): Promise<{ data: import('../contexts/JobsContext').Job[]; meta: { next_cursor?: string; has_more?: boolean } }> {
-  const token = localStorage.getItem('token')
-  const base = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api'
-  const p: Record<string, string> = {}
-  if (params.after) p.after = params.after
-  if (params.limit) p.limit = String(params.limit)
-  const qs = Object.keys(p).length ? '?' + new URLSearchParams(p).toString() : ''
-  const res = await fetch(`${base}/jobs${qs}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  })
-  return res.json() as Promise<{ data: import('../contexts/JobsContext').Job[]; meta: { next_cursor?: string; has_more?: boolean } }>
-}
+import { useListJobsInfinite } from '../api/cursorQuery'
 
 export function ActivityPage() {
   const [searchParams] = useSearchParams()
   const targetJobId = searchParams.get('job')
-  const { jobs, setJobs } = useJobs()
-  const [loading, setLoading] = React.useState(true)
-  const [hasMore, setHasMore] = React.useState(false)
-  const [cursor, setCursor] = React.useState<string | undefined>(undefined)
-  const [loadingMore, setLoadingMore] = React.useState(false)
   const targetRef = useRef<HTMLDivElement>(null)
 
-  const loadJobs = useCallback(async (after?: string, reset = false) => {
-    if (reset) setLoading(true)
-    else setLoadingMore(true)
-    try {
-      const result = await getJobs({ after, limit: 50 })
-      if (reset) {
-        setJobs(result.data)
-      } else {
-        setJobs([...jobs, ...result.data])
-      }
-      setCursor(result.meta.next_cursor)
-      setHasMore(result.meta.has_more ?? false)
-    } catch {
-      //
-    } finally {
-      setLoading(false)
-      setLoadingMore(false)
-    }
-  }, [jobs, setJobs])
-
-  useEffect(() => {
-    void loadJobs(undefined, true)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  const { data, fetchNextPage, hasNextPage, isFetching } = useListJobsInfinite({ limit: 50 })
+  const jobs = data?.pages.flatMap((p) => p.data.data ?? []) ?? []
+  const loading = !data && isFetching
 
   // Scroll to target job
   useEffect(() => {
@@ -115,23 +75,23 @@ export function ActivityPage() {
               </div>
             ))}
 
-            {hasMore && (
+            {hasNextPage && (
               <div style={{ textAlign: 'center', padding: 16 }}>
                 <button
-                  onClick={() => void loadJobs(cursor)}
-                  disabled={loadingMore}
+                  onClick={() => void fetchNextPage()}
+                  disabled={isFetching}
                   style={{
                     background: 'none',
                     border: '1px solid var(--border)',
                     borderRadius: 4,
                     padding: '6px 16px',
-                    cursor: loadingMore ? 'default' : 'pointer',
+                    cursor: isFetching ? 'default' : 'pointer',
                     color: 'var(--text2)',
                     fontSize: 13,
-                    opacity: loadingMore ? 0.5 : 1,
+                    opacity: isFetching ? 0.5 : 1,
                   }}
                 >
-                  {loadingMore ? 'Loading...' : 'Load older'}
+                  {isFetching ? 'Loading...' : 'Load older'}
                 </button>
               </div>
             )}

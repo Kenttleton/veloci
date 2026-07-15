@@ -1,94 +1,21 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { ConfidenceComponent } from './ConfidenceComponent'
 import { useRateFormat } from '../../contexts/RateFormatContext'
-// TODO(task-6-11): all API calls will be replaced with generated hooks
-import type { LabelView } from '../../api/generated/velociAPI.schemas'
-
-type Label = LabelView
-
-// Interim local type until review components are rebuilt in tasks 6-11
-interface ReviewItem {
-  id: string
-  entry_id: string
-  suggested_name: string
-  alert_type: 'new' | 'drift' | 'ended'
-  status: 'pending' | 'approved' | 'rejected'
-  confidence: number | null
-  merchant_confidence: number | null
-  timing_confidence: number | null
-  amount_confidence: number | null
-  suggested_entry_type: string
-  suggested_rate_per_day: number
-  recurrence_anchor: string | null
-  sample_merchants: Array<{ date: string; payee: string; amount_cents: number }>
-  transaction_count: number
-  old_rate_per_day?: number
-  new_rate_per_day?: number
-  old_timing?: string
-  new_timing?: string
-  transaction_evidence?: Array<{ date: string; payee: string; amount_cents: number }>
-  has_manual_projection?: boolean
-  manual_projection_per_day?: number
-  last_seen_date?: string
-  next_due_date?: string
-  days_overdue?: number
-  current_rate_per_day?: number
-  created_at: string
-}
-
-async function _reviewAction(url: string, method = 'POST', data?: unknown): Promise<void> {
-  const token = localStorage.getItem('token')
-  const base = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api'
-  await fetch(`${base}${url}`, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: data ? JSON.stringify(data) : undefined,
-  })
-}
-
-async function approveReview(id: string, payload?: Record<string, unknown>): Promise<void> {
-  await _reviewAction(`/review/${id}/approve`, 'POST', payload ?? {})
-}
-
-async function rejectReview(id: string): Promise<void> {
-  await _reviewAction(`/review/${id}/reject`, 'POST')
-}
-
-async function updateReview(id: string, payload: Record<string, unknown>): Promise<void> {
-  await _reviewAction(`/review/${id}`, 'PUT', payload)
-}
-
-async function getLabels(): Promise<Label[]> {
-  const token = localStorage.getItem('token')
-  const base = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api'
-  const res = await fetch(`${base}/labels`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  })
-  const json = (await res.json()) as { data: Label[] }
-  return json.data ?? []
-}
-
-async function createLabel(name: string): Promise<Label> {
-  const token = localStorage.getItem('token')
-  const base = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api'
-  const res = await fetch(`${base}/labels`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify({ name }),
-  })
-  const json = (await res.json()) as { data: Label }
-  return json.data
-}
+import {
+  useApproveReview,
+  useRejectReview,
+  useUpdateReview,
+} from '../../api/generated/velociAPI'
+import type { ReviewView } from '../../api/generated/velociAPI.schemas'
 
 interface NewCardProps {
-  item: ReviewItem
+  item: ReviewView
   onAction: () => void
+}
+
+interface NewConditions {
+  recurrence_anchor?: string
+  sample_merchants?: Array<{ date: string; payee: string; amount_cents: number }>
 }
 
 type EntryType = 'standing' | 'variable' | 'irregular'
@@ -110,59 +37,42 @@ function formatAmount(cents: number): string {
 
 export function NewCard({ item, onAction }: NewCardProps) {
   const { formatRate } = useRateFormat()
-  const [labels, setLabels] = useState<Label[]>([])
-  const [selectedLabel, setSelectedLabel] = useState<string | null>(null)
+  const conditions = (item.suggested_conditions ?? {}) as NewConditions
+
   const [selectedType, setSelectedType] = useState<EntryType>((item.suggested_entry_type as EntryType) || 'standing')
-  const [showNewLabel, setShowNewLabel] = useState(false)
-  const [newLabelName, setNewLabelName] = useState('')
   const [showAllSamples, setShowAllSamples] = useState(false)
   const [showInlineEditor, setShowInlineEditor] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
 
-  useEffect(() => {
-    getLabels().then(setLabels).catch(() => {})
-  }, [])
+  const approveMutation = useApproveReview()
+  const rejectMutation = useRejectReview()
+  const updateMutation = useUpdateReview()
+
+  const submitting = approveMutation.isPending || rejectMutation.isPending || updateMutation.isPending
 
   async function handleApprove() {
-    setSubmitting(true)
     try {
-      await updateReview(item.id, {
-        entry_type: selectedType,
-        label_id: selectedLabel ?? undefined,
+      await updateMutation.mutateAsync({
+        id: item.id,
+        data: { status: selectedType },
       })
-      await approveReview(item.id)
+      await approveMutation.mutateAsync({ id: item.id })
       onAction()
-    } catch {
-      setSubmitting(false)
-    }
-  }
-
-  async function handleDismiss() {
-    setSubmitting(true)
-    try {
-      await rejectReview(item.id)
-      onAction()
-    } catch {
-      setSubmitting(false)
-    }
-  }
-
-  async function handleCreateLabel() {
-    if (!newLabelName.trim()) return
-    try {
-      const label = await createLabel(newLabelName.trim())
-      setLabels((prev) => [...prev, label])
-      setSelectedLabel(label.id)
-      setShowNewLabel(false)
-      setNewLabelName('')
     } catch {
       //
     }
   }
 
-  const displayedSamples = showAllSamples
-    ? item.sample_merchants
-    : item.sample_merchants.slice(0, 3)
+  async function handleDismiss() {
+    try {
+      await rejectMutation.mutateAsync({ id: item.id })
+      onAction()
+    } catch {
+      //
+    }
+  }
+
+  const sampleMerchants = conditions.sample_merchants ?? []
+  const displayedSamples = showAllSamples ? sampleMerchants : sampleMerchants.slice(0, 3)
 
   return (
     <div
@@ -198,39 +108,41 @@ export function NewCard({ item, onAction }: NewCardProps) {
 
       {/* Summary line */}
       <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--text2)' }}>
-        {item.transaction_count} transactions · {formatRate(item.suggested_rate_per_day)}{' '}
-        {item.recurrence_anchor && (
-          <span style={{ color: 'var(--text3)' }}>· {item.recurrence_anchor}</span>
+        {item.matched_transaction_count} transactions · {formatRate(item.suggested_rate_per_day ?? 0)}{' '}
+        {conditions.recurrence_anchor && (
+          <span style={{ color: 'var(--text3)' }}>· {conditions.recurrence_anchor}</span>
         )}
       </p>
 
       {/* Sample transactions */}
-      <div style={{ marginBottom: 12 }}>
-        <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-          Sample transactions
-        </div>
-        {displayedSamples.map((s, i) => (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0' }}>
-            <span style={{ width: 56, fontSize: 12, color: 'var(--text2)', flexShrink: 0 }}>
-              {formatDate(s.date)}
-            </span>
-            <span style={{ flex: 1, fontSize: 12, color: 'var(--text2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {s.payee}
-            </span>
-            <span style={{ fontSize: 12, color: 'var(--text2)', flexShrink: 0 }}>
-              {formatAmount(s.amount_cents)}
-            </span>
+      {sampleMerchants.length > 0 && (
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            Sample transactions
           </div>
-        ))}
-        {item.sample_merchants.length > 3 && !showAllSamples && (
-          <button
-            onClick={() => setShowAllSamples(true)}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', fontSize: 12, padding: 0, marginTop: 4 }}
-          >
-            show {item.sample_merchants.length - 3} more
-          </button>
-        )}
-      </div>
+          {displayedSamples.map((s, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0' }}>
+              <span style={{ width: 56, fontSize: 12, color: 'var(--text2)', flexShrink: 0 }}>
+                {formatDate(s.date)}
+              </span>
+              <span style={{ flex: 1, fontSize: 12, color: 'var(--text2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {s.payee}
+              </span>
+              <span style={{ fontSize: 12, color: 'var(--text2)', flexShrink: 0 }}>
+                {formatAmount(s.amount_cents)}
+              </span>
+            </div>
+          ))}
+          {sampleMerchants.length > 3 && !showAllSamples && (
+            <button
+              onClick={() => setShowAllSamples(true)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', fontSize: 12, padding: 0, marginTop: 4 }}
+            >
+              show {sampleMerchants.length - 3} more
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Confidence component */}
       <ConfidenceComponent
@@ -241,38 +153,8 @@ export function NewCard({ item, onAction }: NewCardProps) {
         defaultExpanded={true}
       />
 
-      {/* Label + type assignment */}
+      {/* Type assignment */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 12, color: 'var(--text3)' }}>Label:</span>
-          <select
-            value={selectedLabel ?? ''}
-            onChange={(e) => {
-              const val = e.target.value
-              if (val === '__new__') {
-                setShowNewLabel(true)
-              } else {
-                setSelectedLabel(val || null)
-              }
-            }}
-            style={{
-              background: 'var(--surface2)',
-              border: '1px solid var(--border)',
-              borderRadius: 4,
-              padding: '4px 8px',
-              color: selectedLabel ? 'var(--text)' : 'var(--text3)',
-              fontSize: 12,
-              cursor: 'pointer',
-            }}
-          >
-            <option value="">No label</option>
-            {labels.map((l) => (
-              <option key={l.id} value={l.id}>{l.name}</option>
-            ))}
-            <option value="__new__">New label...</option>
-          </select>
-        </div>
-
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 12, color: 'var(--text3)' }}>Type:</span>
           <select
@@ -295,61 +177,6 @@ export function NewCard({ item, onAction }: NewCardProps) {
         </div>
       </div>
 
-      {/* Inline new label input */}
-      {showNewLabel && (
-        <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-          <input
-            type="text"
-            placeholder="Label name"
-            value={newLabelName}
-            autoFocus
-            onChange={(e) => setNewLabelName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') void handleCreateLabel()
-              if (e.key === 'Escape') { setShowNewLabel(false); setNewLabelName('') }
-            }}
-            style={{
-              background: 'var(--surface2)',
-              border: '1px solid var(--accent)',
-              borderRadius: 4,
-              padding: '4px 8px',
-              color: 'var(--text)',
-              fontSize: 12,
-              outline: 'none',
-              flex: 1,
-            }}
-          />
-          <button
-            onClick={() => void handleCreateLabel()}
-            style={{
-              background: 'var(--accent)',
-              border: 'none',
-              borderRadius: 4,
-              padding: '4px 10px',
-              color: '#fff',
-              fontSize: 12,
-              cursor: 'pointer',
-            }}
-          >
-            Create
-          </button>
-          <button
-            onClick={() => { setShowNewLabel(false); setNewLabelName('') }}
-            style={{
-              background: 'none',
-              border: '1px solid var(--border)',
-              borderRadius: 4,
-              padding: '4px 10px',
-              color: 'var(--text2)',
-              fontSize: 12,
-              cursor: 'pointer',
-            }}
-          >
-            Cancel
-          </button>
-        </div>
-      )}
-
       {/* Inline editor panel */}
       {showInlineEditor && (
         <div
@@ -366,7 +193,7 @@ export function NewCard({ item, onAction }: NewCardProps) {
             For condition logic, use the full entry editor.
           </div>
           <div style={{ fontSize: 12, color: 'var(--text3)' }}>
-            Name: {item.suggested_name} · Rate: {formatRate(item.suggested_rate_per_day)}
+            Name: {item.suggested_name} · Rate: {formatRate(item.suggested_rate_per_day ?? 0)}
           </div>
         </div>
       )}

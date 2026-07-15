@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useJobs } from '../contexts/JobsContext'
 import type { SseJobEvent } from '../contexts/JobsContext'
+import { getToken } from '../auth/tokens'
 
 const BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api'
 const MAX_BACKOFF_MS = 30_000
@@ -16,7 +17,7 @@ export function useJobStream() {
 
     function connect() {
       if (cancelled) return
-      const token = localStorage.getItem('token')
+      const token = getToken()
       if (!token) return
 
       const url = `${BASE}/jobs/stream?token=${encodeURIComponent(token)}`

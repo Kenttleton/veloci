@@ -1,92 +1,25 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { NewCard } from '../components/review/NewCard'
 import { DriftCard } from '../components/review/DriftCard'
 import { EndedCard } from '../components/review/EndedCard'
-// TODO(task-6-11): getReview will be replaced with generated hook
-
-// Interim local type until review components are rebuilt in tasks 6-11
-interface ReviewItem {
-  id: string
-  entry_id: string
-  suggested_name: string
-  alert_type: 'new' | 'drift' | 'ended'
-  status: 'pending' | 'approved' | 'rejected'
-  confidence: number | null
-  merchant_confidence: number | null
-  timing_confidence: number | null
-  amount_confidence: number | null
-  suggested_entry_type: string | null
-  suggested_rate_per_day: number | null
-  recurrence_anchor: string | null
-  sample_merchants: Array<{ date: string; payee: string; amount_cents: number }>
-  transaction_count: number
-  old_rate_per_day?: number
-  new_rate_per_day?: number
-  old_timing?: string
-  new_timing?: string
-  transaction_evidence?: Array<{ date: string; payee: string; amount_cents: number }>
-  has_manual_projection?: boolean
-  manual_projection_per_day?: number
-  last_seen_date?: string
-  next_due_date?: string
-  days_overdue?: number
-  current_rate_per_day?: number
-  created_at: string
-}
-
-async function getReview(params: { after?: string; limit?: number }): Promise<{ data: ReviewItem[]; meta: { next_cursor?: string; has_more?: boolean } }> {
-  const token = localStorage.getItem('token')
-  const base = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api'
-  const p: Record<string, string> = {}
-  if (params.after) p.after = params.after
-  if (params.limit) p.limit = String(params.limit)
-  const qs = Object.keys(p).length ? '?' + new URLSearchParams(p).toString() : ''
-  const res = await fetch(`${base}/review${qs}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  })
-  return res.json() as Promise<{ data: ReviewItem[]; meta: { next_cursor?: string; has_more?: boolean } }>
-}
+import { useListReviewInfinite } from '../api/cursorQuery'
+import type { ReviewView } from '../api/generated/velociAPI.schemas'
 
 type AlertType = 'new' | 'drift' | 'ended'
 
 export function ReviewPage() {
-  const [items, setItems] = useState<ReviewItem[]>([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
+  const { data, fetchNextPage, hasNextPage, isFetching } = useListReviewInfinite({ limit: 50 })
+  const items: ReviewView[] = data?.pages.flatMap((p) => p.data.data ?? []) ?? []
+  const loading = !data && isFetching
+
   const [activeFilters, setActiveFilters] = useState<Set<AlertType>>(
     new Set(['new', 'drift', 'ended']),
   )
-  const [cursor, setCursor] = useState<string | undefined>(undefined)
-  const [hasMore, setHasMore] = useState(false)
-  const [loadingMore, setLoadingMore] = useState(false)
-
-  const loadItems = useCallback(async (after?: string, reset = false) => {
-    if (reset) setLoading(true)
-    else setLoadingMore(true)
-    try {
-      const result = await getReview({ after, limit: 50 })
-      const incoming = result.data
-      if (reset) {
-        setItems(incoming)
-      } else {
-        setItems((prev) => [...prev, ...incoming])
-      }
-      setCursor(result.meta.next_cursor)
-      setHasMore(result.meta.has_more ?? false)
-    } catch {
-      //
-    } finally {
-      setLoading(false)
-      setLoadingMore(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    void loadItems(undefined, true)
-  }, [loadItems])
 
   function handleAction() {
-    // Reload after any card action
-    void loadItems(undefined, true)
+    void queryClient.invalidateQueries({ queryKey: ['infinite', '/review'] })
   }
 
   function toggleFilter(type: AlertType) {
@@ -100,14 +33,16 @@ export function ReviewPage() {
 
   // Sort: new → drift → ended, within each group by confidence desc
   const sortedItems = [...items].sort((a, b) => {
-    const order: Record<AlertType, number> = { new: 0, drift: 1, ended: 2 }
-    const aOrder = order[a.alert_type]
-    const bOrder = order[b.alert_type]
+    const order: Record<string, number> = { new: 0, drift: 1, ended: 2 }
+    const aOrder = order[a.alert_type] ?? 99
+    const bOrder = order[b.alert_type] ?? 99
     if (aOrder !== bOrder) return aOrder - bOrder
-    return b.confidence - a.confidence
+    return (b.confidence ?? 0) - (a.confidence ?? 0)
   })
 
-  const filteredItems = sortedItems.filter((i) => activeFilters.has(i.alert_type))
+  const filteredItems = sortedItems.filter((i) =>
+    activeFilters.has(i.alert_type as AlertType),
+  )
 
   const counts = {
     new: items.filter((i) => i.alert_type === 'new').length,
@@ -224,23 +159,23 @@ export function ReviewPage() {
               return <EndedCard key={item.id} item={item} onAction={handleAction} />
             })}
 
-            {hasMore && (
+            {hasNextPage && (
               <div style={{ textAlign: 'center', padding: 16 }}>
                 <button
-                  onClick={() => void loadItems(cursor)}
-                  disabled={loadingMore}
+                  onClick={() => void fetchNextPage()}
+                  disabled={isFetching}
                   style={{
                     background: 'none',
                     border: '1px solid var(--border)',
                     borderRadius: 4,
                     padding: '6px 16px',
-                    cursor: loadingMore ? 'default' : 'pointer',
+                    cursor: isFetching ? 'default' : 'pointer',
                     color: 'var(--text2)',
                     fontSize: 13,
-                    opacity: loadingMore ? 0.5 : 1,
+                    opacity: isFetching ? 0.5 : 1,
                   }}
                 >
-                  {loadingMore ? 'Loading...' : 'Load more'}
+                  {isFetching ? 'Loading...' : 'Load older'}
                 </button>
               </div>
             )}

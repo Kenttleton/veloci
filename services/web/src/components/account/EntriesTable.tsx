@@ -13,8 +13,8 @@ import {
 } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { ChevronDown, ChevronRight } from 'lucide-react'
-import { useListEntriesInfinite, useListTransactionsInfinite } from '../../api/cursorQuery'
-import type { EntryView, TransactionView } from '../../api/generated/velociAPI.schemas'
+import { useListEntriesInfinite } from '../../api/cursorQuery'
+import type { EntryView } from '../../api/generated/velociAPI.schemas'
 import { LabelPill } from '../shared/LabelPill'
 
 const columnHelper = createColumnHelper<EntryView>()
@@ -94,125 +94,18 @@ const columns = [
 ]
 
 function TransactionSubTable({ entryId: _entryId }: { entryId: string }) {
-  // entryId param kept for when the API supports filtering by entry_id
-  const { data, fetchNextPage, hasNextPage, isFetching } = useListTransactionsInfinite({
-    limit: 25,
-  })
-
-  const txRows = data?.pages.flatMap((p) => p.data.data ?? []) ?? []
-
-  if (!data && isFetching) {
-    return (
-      <div style={{ padding: '8px 28px', color: 'var(--text3)', fontSize: 12 }}>
-        Loading transactions...
-      </div>
-    )
-  }
-
-  if (txRows.length === 0 && !isFetching) {
-    return (
-      <div style={{ padding: '8px 28px', color: 'var(--text3)', fontSize: 12 }}>
-        No matched transactions.
-      </div>
-    )
-  }
-
+  // TODO: replace with filtered query when API supports entry_id param
   return (
     <div
       style={{
+        padding: '12px 28px',
+        color: 'var(--text3)',
+        fontSize: 12,
         background: 'var(--bg)',
         borderTop: '1px solid var(--border)',
-        borderBottom: '1px solid var(--border)',
-        maxHeight: 122,
-        overflowY: 'auto',
       }}
     >
-      {/* Sub-table header */}
-      <div
-        style={{
-          display: 'flex',
-          gap: 8,
-          padding: '4px 28px',
-          borderBottom: '1px solid var(--border)',
-        }}
-      >
-        {(['Date', 'Merchant', 'Amount'] as const).map((h) => (
-          <div
-            key={h}
-            style={{
-              flex: h === 'Amount' ? '0 0 90px' : h === 'Date' ? '0 0 80px' : 1,
-              fontSize: 10,
-              color: 'var(--text3)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.04em',
-            }}
-          >
-            {h}
-          </div>
-        ))}
-      </div>
-
-      {txRows.map((tx: TransactionView) => (
-        <div
-          key={tx.id}
-          style={{
-            display: 'flex',
-            gap: 8,
-            padding: '5px 28px',
-            borderBottom: '1px solid var(--border)',
-            alignItems: 'center',
-          }}
-        >
-          <div style={{ flex: '0 0 80px', fontSize: 12, color: 'var(--text2)' }}>
-            {new Date(tx.date).toLocaleDateString('en-US', {
-              month: 'short',
-              day: 'numeric',
-            })}
-          </div>
-          <div
-            style={{
-              flex: 1,
-              fontSize: 12,
-              color: 'var(--text)',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {tx.merchant_normalized}
-          </div>
-          <div
-            style={{
-              flex: '0 0 90px',
-              fontSize: 12,
-              color: 'var(--text)',
-              textAlign: 'right',
-            }}
-          >
-            {(Math.abs(tx.amount_cents) / 100).toLocaleString('en-US', {
-              style: 'currency',
-              currency: 'USD',
-            })}
-          </div>
-        </div>
-      ))}
-
-      {hasNextPage && (
-        <button
-          onClick={() => void fetchNextPage()}
-          disabled={isFetching}
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            padding: '6px 28px',
-            color: 'var(--accent)',
-            fontSize: 12,
-          }}
-        >
-          {isFetching ? 'Loading...' : 'Load more'}
-        </button>
-      )}
+      Transaction drill-down coming soon (API filter not yet available).
     </div>
   )
 }

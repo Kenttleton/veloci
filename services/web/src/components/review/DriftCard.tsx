@@ -1,25 +1,17 @@
 import { useState } from 'react'
 import { ConfidenceComponent } from './ConfidenceComponent'
 import { useRateFormat } from '../../contexts/RateFormatContext'
-// TODO(task-6-11): approveReview/rejectReview/updateReview will be replaced with generated mutation hooks
+import { useApproveReview, useRejectReview, useUpdateReview } from '../../api/generated/velociAPI'
+import type { ReviewView } from '../../api/generated/velociAPI.schemas'
 
-// Interim local type until review components are rebuilt in tasks 6-11
-interface ReviewItem {
-  id: string
-  entry_id: string
-  suggested_name: string
-  alert_type: 'new' | 'drift' | 'ended'
-  status: 'pending' | 'approved' | 'rejected'
-  confidence: number | null
-  merchant_confidence: number | null
-  timing_confidence: number | null
-  amount_confidence: number | null
-  suggested_entry_type: string | null
-  suggested_rate_per_day: number | null
-  recurrence_anchor: string | null
-  sample_merchants: Array<{ date: string; payee: string; amount_cents: number }>
-  transaction_count: number
-  // drift-specific
+interface DriftCardProps {
+  item: ReviewView
+  onAction: () => void
+}
+
+type DriftChoice = 'correction' | 'version'
+
+interface DriftConditions {
   old_rate_per_day?: number
   new_rate_per_day?: number
   old_timing?: string
@@ -27,45 +19,7 @@ interface ReviewItem {
   transaction_evidence?: Array<{ date: string; payee: string; amount_cents: number }>
   has_manual_projection?: boolean
   manual_projection_per_day?: number
-  // ended-specific
-  last_seen_date?: string
-  next_due_date?: string
-  days_overdue?: number
-  current_rate_per_day?: number
-  created_at: string
 }
-
-async function _reviewAction(url: string, method = 'POST', data?: unknown): Promise<void> {
-  const token = localStorage.getItem('token')
-  const base = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api'
-  await fetch(`${base}${url}`, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: data ? JSON.stringify(data) : undefined,
-  })
-}
-
-async function approveReview(id: string, payload?: Record<string, unknown>): Promise<void> {
-  await _reviewAction(`/review/${id}/approve`, 'POST', payload ?? {})
-}
-
-async function rejectReview(id: string): Promise<void> {
-  await _reviewAction(`/review/${id}/reject`, 'POST')
-}
-
-async function updateReview(id: string, payload: Record<string, unknown>): Promise<void> {
-  await _reviewAction(`/review/${id}`, 'PUT', payload)
-}
-
-interface DriftCardProps {
-  item: ReviewItem
-  onAction: () => void
-}
-
-type DriftChoice = 'correction' | 'version'
 
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr)
@@ -79,39 +33,40 @@ function formatAmount(cents: number): string {
 export function DriftCard({ item, onAction }: DriftCardProps) {
   const { formatRate } = useRateFormat()
   const [choice, setChoice] = useState<DriftChoice | null>(null)
-  const [submitting, setSubmitting] = useState(false)
 
-  const oldRate = item.old_rate_per_day ?? 0
-  const newRate = item.new_rate_per_day ?? 0
+  const approveMutation = useApproveReview()
+  const rejectMutation = useRejectReview()
+  const updateMutation = useUpdateReview()
+
+  const submitting = approveMutation.isPending || rejectMutation.isPending || updateMutation.isPending
+
+  const conditions = (item.suggested_conditions ?? {}) as DriftConditions
+  const oldRate = conditions.old_rate_per_day ?? 0
+  const newRate = conditions.new_rate_per_day ?? 0
   const delta = newRate - oldRate
   const deltaSign = delta >= 0 ? '+' : '−'
   const deltaColor = delta >= 0 ? 'var(--commit)' : 'var(--income)'
 
   async function handleAccept() {
     if (!choice) return
-    setSubmitting(true)
     try {
-      await updateReview(item.id, {
-        correction: choice === 'correction',
-        version: choice === 'version',
+      await updateMutation.mutateAsync({
+        id: item.id,
+        data: { status: choice === 'correction' ? 'correction' : 'version' },
       })
-      await approveReview(item.id, {
-        correction: choice === 'correction',
-        version: choice === 'version',
-      })
+      await approveMutation.mutateAsync({ id: item.id })
       onAction()
     } catch {
-      setSubmitting(false)
+      //
     }
   }
 
   async function handleDismiss() {
-    setSubmitting(true)
     try {
-      await rejectReview(item.id)
+      await rejectMutation.mutateAsync({ id: item.id })
       onAction()
     } catch {
-      setSubmitting(false)
+      //
     }
   }
 
@@ -167,7 +122,7 @@ export function DriftCard({ item, onAction }: DriftCardProps) {
             {formatRate(oldRate)}
           </div>
           <div style={{ fontSize: 12, color: 'var(--text2)' }}>
-            {item.old_timing ?? '—'}
+            {conditions.old_timing ?? '—'}
           </div>
         </div>
         <div>
@@ -176,8 +131,8 @@ export function DriftCard({ item, onAction }: DriftCardProps) {
             {formatRate(newRate)}
           </div>
           <div style={{ fontSize: 12, color: 'var(--text2)' }}>
-            {item.new_timing ?? '—'}
-            {item.old_timing === item.new_timing && (
+            {conditions.new_timing ?? '—'}
+            {conditions.old_timing === conditions.new_timing && (
               <span style={{ color: 'var(--text3)', marginLeft: 6 }}>(timing unchanged)</span>
             )}
           </div>
@@ -190,12 +145,12 @@ export function DriftCard({ item, onAction }: DriftCardProps) {
       </div>
 
       {/* Evidence transactions */}
-      {item.transaction_evidence && item.transaction_evidence.length > 0 && (
+      {conditions.transaction_evidence && conditions.transaction_evidence.length > 0 && (
         <div style={{ marginBottom: 12 }}>
           <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 6 }}>
-            Based on {item.transaction_evidence.length} new transactions
+            Based on {conditions.transaction_evidence.length} new transactions
           </div>
-          {item.transaction_evidence.map((tx, i) => (
+          {conditions.transaction_evidence.map((tx, i) => (
             <div key={i} style={{ display: 'flex', gap: 8, padding: '2px 0', fontSize: 12 }}>
               <span style={{ width: 56, color: 'var(--text2)', flexShrink: 0 }}>{formatDate(tx.date)}</span>
               <span style={{ flex: 1, color: 'var(--text2)' }}>{tx.payee}</span>
@@ -215,7 +170,7 @@ export function DriftCard({ item, onAction }: DriftCardProps) {
       />
 
       {/* Manual override warning */}
-      {item.has_manual_projection && item.manual_projection_per_day && (
+      {conditions.has_manual_projection && conditions.manual_projection_per_day && (
         <div
           style={{
             fontSize: 12,
@@ -227,7 +182,7 @@ export function DriftCard({ item, onAction }: DriftCardProps) {
             borderLeft: '2px solid var(--text3)',
           }}
         >
-          You previously set a custom projection of {formatRate(item.manual_projection_per_day)} — accepting this change will replace it.
+          You previously set a custom projection of {formatRate(conditions.manual_projection_per_day)} — accepting this change will replace it.
         </div>
       )}
 

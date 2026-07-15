@@ -1,20 +1,9 @@
 import { useState } from 'react'
-import { Check, X, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react'
-// TODO(task-6-11): retryJob will be replaced with generated mutation hook
-import type { Job } from '../../contexts/JobsContext'
-
-async function retryJob(jobId: string): Promise<void> {
-  // TODO(task-6-11): stub — will be replaced with useRetryJobMutation from generated API
-  const token = localStorage.getItem('token')
-  const base = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api'
-  await fetch(`${base}/jobs/${jobId}/retry`, {
-    method: 'POST',
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  })
-}
+import { Check, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react'
+import type { JobView } from '../../api/generated/velociAPI.schemas'
 
 interface JobCardProps {
-  job: Job
+  job: JobView
   forceExpanded?: boolean
 }
 
@@ -24,15 +13,11 @@ const JOB_TYPE_LABELS: Record<string, string> = {
   'account.analyze': 'Recalculate',
 }
 
-const STAGE_DISPLAY_NAMES: Record<number, string> = {
-  0: 'CSV import',
-  1: 'Entry matching',
-  2: 'Pattern detection',
-  3: 'Rate computation',
-  4: 'Label mapping',
-  5: 'Trend analysis',
-  6: 'Snapshot write',
-  7: 'Projection',
+type JobMetadata = {
+  transactions_imported?: number
+  transactions_skipped_duplicate?: number
+  entries_processed?: number
+  snapshots_written?: number
 }
 
 function formatTimestamp(dateStr: string): string {
@@ -48,7 +33,7 @@ function formatTimestamp(dateStr: string): string {
   return `${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
 }
 
-function StatusDot({ status }: { status: Job['status'] }) {
+function StatusDot({ status }: { status: string }) {
   if (status === 'complete') {
     return <Check size={14} style={{ color: 'var(--margin-pos)', flexShrink: 0 }} />
   }
@@ -69,38 +54,35 @@ function StatusDot({ status }: { status: Job['status'] }) {
   )
 }
 
-function summaryLine(job: Job): string {
+function summaryLine(job: JobView): string {
+  const meta = job.metadata as JobMetadata | null | undefined
+
   if (job.status === 'queued') return 'Waiting to start'
   if (job.status === 'processing') {
-    const stageName = job.current_stage != null ? STAGE_DISPLAY_NAMES[job.current_stage] : 'Processing'
-    const stageNum = job.current_stage != null ? `Stage ${job.current_stage} of ${job.total_stages ?? '?'}` : ''
-    return `${stageNum}${stageNum ? ' — ' : ''}${stageName}`
+    return 'Processing'
   }
   if (job.status === 'complete') {
-    const elapsed = job.completed_at && job.queued_at
-      ? ((new Date(job.completed_at).getTime() - new Date(job.queued_at).getTime()) / 1000).toFixed(1)
+    const start = job.started_at ?? job.queued_at
+    const elapsed = job.completed_at && start
+      ? ((new Date(job.completed_at).getTime() - new Date(start).getTime()) / 1000).toFixed(1)
       : null
     const parts: string[] = []
     if (elapsed) parts.push(`Completed in ${elapsed}s`)
-    if (job.job_type === 'import.process' && job.metadata.transactions_imported != null) {
-      parts.push(`${job.metadata.transactions_imported} transactions imported`)
-      if (job.metadata.transactions_skipped_duplicate) {
-        parts.push(`${job.metadata.transactions_skipped_duplicate} duplicates skipped`)
+    if (job.job_type === 'import.process' && meta?.transactions_imported != null) {
+      parts.push(`${meta.transactions_imported} transactions imported`)
+      if (meta.transactions_skipped_duplicate) {
+        parts.push(`${meta.transactions_skipped_duplicate} duplicates skipped`)
       }
     }
-    if (job.job_type === 'entries.reprocess' && job.metadata.entries_processed != null) {
-      parts.push(`${job.metadata.entries_processed} entries reprocessed`)
+    if (job.job_type === 'entries.reprocess' && meta?.entries_processed != null) {
+      parts.push(`${meta.entries_processed} entries reprocessed`)
     }
-    if (job.job_type === 'account.analyze' && job.metadata.snapshots_written != null) {
-      parts.push(`${job.metadata.snapshots_written} snapshots written`)
+    if (job.job_type === 'account.analyze' && meta?.snapshots_written != null) {
+      parts.push(`${meta.snapshots_written} snapshots written`)
     }
     return parts.join(' · ')
   }
   if (job.status === 'failed') {
-    const failedStage = job.stages.find((s) => s.status === 'failed')
-    if (failedStage) {
-      return `Failed at Stage ${failedStage.stage_number} — ${STAGE_DISPLAY_NAMES[failedStage.stage_number] ?? failedStage.name}`
-    }
     return 'Failed'
   }
   return ''
@@ -108,24 +90,11 @@ function summaryLine(job: Job): string {
 
 export function JobCard({ job, forceExpanded = false }: JobCardProps) {
   const [expanded, setExpanded] = useState(forceExpanded || job.status === 'failed')
-  const [retrying, setRetrying] = useState(false)
 
   const jobTypeLabel = JOB_TYPE_LABELS[job.job_type] ?? job.job_type
-  const accountSuffix = job.account_name ? ` — ${job.account_name}` : ''
-  const title = `${jobTypeLabel}${accountSuffix}`
+  const title = jobTypeLabel
   const summary = summaryLine(job)
   const isFailed = job.status === 'failed'
-
-  async function handleRetry() {
-    setRetrying(true)
-    try {
-      await retryJob(job.id)
-    } catch {
-      //
-    } finally {
-      setRetrying(false)
-    }
-  }
 
   function copyError() {
     const text = `Job ID: ${job.id}\nError: ${job.error ?? 'Unknown'}`
@@ -183,8 +152,8 @@ export function JobCard({ job, forceExpanded = false }: JobCardProps) {
         )}
       </div>
 
-      {/* Expanded stage list */}
-      {expanded && job.stages.length > 0 && (
+      {/* Expanded detail — error info */}
+      {expanded && isFailed && (
         <div
           style={{
             borderTop: '1px solid var(--border)',
@@ -194,106 +163,37 @@ export function JobCard({ job, forceExpanded = false }: JobCardProps) {
             gap: 4,
           }}
         >
-          {job.stages.map((stage) => {
-            const isComplete = stage.status === 'complete'
-            const isRunning = stage.status === 'running'
-            const isStageFailed = stage.status === 'failed'
-            const isPending = stage.status === 'pending'
-
-            return (
-              <div key={stage.stage_number}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ width: 16, flexShrink: 0 }}>
-                    {isComplete && <Check size={12} style={{ color: 'var(--margin-pos)' }} />}
-                    {isRunning && (
-                      <span
-                        style={{
-                          width: 7,
-                          height: 7,
-                          borderRadius: '50%',
-                          background: 'var(--accent)',
-                          display: 'inline-block',
-                        }}
-                      />
-                    )}
-                    {isStageFailed && <X size={12} style={{ color: 'var(--commit)' }} />}
-                    {isPending && (
-                      <span style={{ fontSize: 12, color: 'var(--text3)' }}>—</span>
-                    )}
-                  </span>
-                  <span style={{ fontSize: 12, color: isPending ? 'var(--text3)' : 'var(--text2)' }}>
-                    Stage {stage.stage_number} — {STAGE_DISPLAY_NAMES[stage.stage_number] ?? stage.name}
-                  </span>
-                  <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text3)' }}>
-                    {isComplete && stage.elapsed_ms != null
-                      ? `${(stage.elapsed_ms / 1000).toFixed(1)}s`
-                      : isRunning
-                        ? 'running...'
-                        : isPending
-                          ? '—'
-                          : ''}
-                  </span>
-                </div>
-
-                {/* Error detail */}
-                {isStageFailed && stage.error && (
-                  <div
-                    style={{
-                      marginTop: 6,
-                      marginLeft: 24,
-                      padding: '8px 10px',
-                      background: 'var(--surface2)',
-                      borderRadius: 4,
-                      fontFamily: 'monospace',
-                      fontSize: 12,
-                      color: 'var(--text2)',
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    {stage.error}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-
-          {/* Failed actions */}
-          {isFailed && (
-            <div style={{ display: 'flex', gap: 8, marginTop: 8, marginLeft: 24 }}>
-              {job.retriable && (
-                <button
-                  onClick={() => void handleRetry()}
-                  disabled={retrying}
-                  style={{
-                    background: 'none',
-                    border: '1px solid var(--border)',
-                    borderRadius: 4,
-                    padding: '4px 10px',
-                    cursor: retrying ? 'default' : 'pointer',
-                    color: 'var(--text2)',
-                    fontSize: 12,
-                    opacity: retrying ? 0.5 : 1,
-                  }}
-                >
-                  {retrying ? 'Retrying...' : 'Retry'}
-                </button>
-              )}
-              <button
-                onClick={copyError}
-                style={{
-                  background: 'none',
-                  border: '1px solid var(--border)',
-                  borderRadius: 4,
-                  padding: '4px 10px',
-                  cursor: 'pointer',
-                  color: 'var(--text2)',
-                  fontSize: 12,
-                }}
-              >
-                Copy error
-              </button>
+          {job.error && (
+            <div
+              style={{
+                padding: '8px 10px',
+                background: 'var(--surface2)',
+                borderRadius: 4,
+                fontFamily: 'monospace',
+                fontSize: 12,
+                color: 'var(--text2)',
+                lineHeight: 1.5,
+              }}
+            >
+              {job.error}
             </div>
           )}
+          <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+            <button
+              onClick={copyError}
+              style={{
+                background: 'none',
+                border: '1px solid var(--border)',
+                borderRadius: 4,
+                padding: '4px 10px',
+                cursor: 'pointer',
+                color: 'var(--text2)',
+                fontSize: 12,
+              }}
+            >
+              Copy error
+            </button>
+          </div>
         </div>
       )}
     </div>

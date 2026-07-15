@@ -6,30 +6,22 @@ import { TermTooltip } from '../shared/TermTooltip'
 import { LabelPill } from '../shared/LabelPill'
 import { PendingDetailsLink } from '../shared/PendingBadge'
 import { RateValue } from '../shared/RateValue'
-// TODO(task-6-11): Entry will be replaced with EntryView from generated schemas
 import type { EntryView } from '../../api/generated/velociAPI.schemas'
-
-// EntryView from generated API has most fields but some differ; extend for compatibility
-interface Entry extends EntryView {
-  // These fields exist in EntryView: id, name, direction, entry_type, label_id, label_name,
-  // actual_rate, projected_rate, drift_rate, tag, period, status
-  // Interim alias for the fields used in StackPanel
-}
 
 interface LabelGroup {
   labelId: string | null
   labelName: string | null
-  entries: Entry[]
+  entries: EntryView[]
 }
 
 interface StackPanelProps {
-  entries: Entry[]
+  entries: EntryView[]
   loading: boolean
   pulsePeriod?: string
   isActual?: boolean
 }
 
-function groupByLabel(entries: Entry[]): LabelGroup[] {
+function groupByLabel(entries: EntryView[]): LabelGroup[] {
   const map = new Map<string, LabelGroup>()
   const nullKey = '__null__'
 
@@ -48,7 +40,7 @@ function groupByLabel(entries: Entry[]): LabelGroup[] {
   return Array.from(map.values())
 }
 
-function DriftBadge({ entry }: { entry: Entry }) {
+function DriftBadge({ entry }: { entry: EntryView }) {
   if (!entry.tag) return null
   const isHit = entry.tag === 'hit'
   return (

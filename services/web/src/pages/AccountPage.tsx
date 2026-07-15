@@ -5,11 +5,12 @@ import { ImportsTab } from '../components/account/ImportsTab'
 import { EntriesTable } from '../components/account/EntriesTable'
 // TODO(task-6-11): getAccount will be replaced with generated hook
 import type { AccountView } from '../api/generated/velociAPI.schemas'
+import { getToken } from '../auth/tokens'
 
 type Account = AccountView
 
 async function getAccount(id: string): Promise<Account> {
-  const token = localStorage.getItem('token')
+  const token = getToken()
   const base = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api'
   const res = await fetch(`${base}/accounts/${id}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},

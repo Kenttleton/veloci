@@ -1,68 +1,22 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useRateFormat } from '../contexts/RateFormatContext'
 import type { RateFormat } from '../contexts/RateFormatContext'
 import { SummaryStrip } from '../components/budget/SummaryStrip'
 import { HorizonGraph } from '../components/budget/HorizonGraph'
 import { StackPanel } from '../components/budget/StackPanel'
-// TODO(task-6-11): getSnapshotSummary/getEntries will be replaced with generated hooks
-import type { EntryView } from '../api/generated/velociAPI.schemas'
-
-// Extend EntryView with period/actual that SummaryStrip needs
-interface SnapshotSummary {
-  income_rate: number
-  commitments_rate: number
-  margin_rate: number
-  projection_rate: number
-  drift_rate: number
-  period: string
-  actual: boolean
-}
-
-type Entry = EntryView
-
-async function _apiFetch<T>(path: string): Promise<T> {
-  const token = localStorage.getItem('token')
-  const base = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api'
-  const res = await fetch(`${base}${path}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  })
-  return res.json() as Promise<T>
-}
-
-async function getSnapshotSummary(): Promise<SnapshotSummary> {
-  const result = await _apiFetch<{ data: SnapshotSummary }>('/snapshots/summary')
-  return result.data
-}
-
-async function getEntries(): Promise<Entry[]> {
-  const result = await _apiFetch<{ data: Entry[] }>('/entries')
-  return result.data ?? []
-}
+import { useListEntriesInfinite } from '../api/cursorQuery'
+import { useGetSnapshotSummary } from '../api/generated/velociAPI'
 
 export function BudgetPage() {
   const { format, setFormat } = useRateFormat()
-  const [summary, setSummary] = useState<SnapshotSummary | null>(null)
-  const [entries, setEntries] = useState<Entry[]>([])
-  const [summaryLoading, setSummaryLoading] = useState(true)
-  const [entriesLoading, setEntriesLoading] = useState(true)
   // Use a budget node id (entity-level snapshot) for the horizon
   const [horizonNodeId] = useState<string | null>(null)
 
-  useEffect(() => {
-    setSummaryLoading(true)
-    getSnapshotSummary()
-      .then(setSummary)
-      .catch(() => {})
-      .finally(() => setSummaryLoading(false))
-  }, [])
+  const { data: summaryData, isFetching: summaryLoading } = useGetSnapshotSummary()
+  const summary = summaryData?.data?.data ?? null
 
-  useEffect(() => {
-    setEntriesLoading(true)
-    getEntries()
-      .then(setEntries)
-      .catch(() => {})
-      .finally(() => setEntriesLoading(false))
-  }, [])
+  const { data: entriesData, isFetching: entriesLoading } = useListEntriesInfinite({ limit: 100 })
+  const entries = entriesData?.pages.flatMap((p) => p.data.data ?? []) ?? []
 
   const formatOptions: RateFormat[] = ['/day', '/mo', '/yr']
 
