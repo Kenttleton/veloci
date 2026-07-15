@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { JobCard } from '../components/activity/JobCard'
 import { useListJobsInfinite } from '../api/cursorQuery'

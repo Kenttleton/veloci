@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { useAuth } from './auth/useAuth'
+import { useAuth } from './auth/AuthProvider'
 import { LoginPage } from './auth/LoginPage'
 import { RateFormatProvider } from './contexts/RateFormatContext'
 import { JobsProvider } from './contexts/JobsContext'

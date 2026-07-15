@@ -130,11 +130,12 @@ export const useListLabelsInfinite = (
   >
 
 export const useListLabelEntriesInfinite = (
+  id: string,
   params?: ListLabelEntriesParams,
-  options?: Parameters<typeof _useListLabelEntriesInfinite>[1],
+  options?: Parameters<typeof _useListLabelEntriesInfinite>[2],
   queryClient?: QueryClient,
 ): ReturnType<typeof _useListLabelEntriesInfinite> =>
-  _useListLabelEntriesInfinite(params, withCursor(options), queryClient) as ReturnType<
+  _useListLabelEntriesInfinite(id, params, withCursor(options), queryClient) as ReturnType<
     typeof _useListLabelEntriesInfinite
   >
 

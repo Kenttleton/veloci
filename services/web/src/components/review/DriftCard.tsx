@@ -155,10 +155,10 @@ export function DriftCard({ item, onAction }: DriftCardProps) {
 
       {/* Confidence component — collapsed by default for drift */}
       <ConfidenceComponent
-        confidence={item.confidence}
-        merchantConfidence={item.merchant_confidence}
-        timingConfidence={item.timing_confidence}
-        amountConfidence={item.amount_confidence}
+        confidence={item.confidence ?? 0}
+        merchantConfidence={item.merchant_confidence ?? 0}
+        timingConfidence={item.timing_confidence ?? 0}
+        amountConfidence={item.amount_confidence ?? 0}
         defaultExpanded={false}
       />
 

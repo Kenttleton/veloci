@@ -441,10 +441,7 @@ export interface LoginOutputBody {
   token: string;
 }
 
-export interface LogoutInputBody {
-  /** Access token JTI to revoke */
-  jti: string;
-}
+export interface LogoutInputBody {}
 
 export interface Meta {
   has_more?: boolean;
@@ -759,6 +756,7 @@ limit?: number;
 
 export type GetSnapshotHistoryParams = {
 before?: string;
+cursor?: string;
 /**
  * @minimum 1
  * @maximum 180

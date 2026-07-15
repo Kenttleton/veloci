@@ -129,10 +129,10 @@ export function NewCard({ item, onAction }: NewCardProps) {
 
       {/* Confidence component */}
       <ConfidenceComponent
-        confidence={item.confidence}
-        merchantConfidence={item.merchant_confidence}
-        timingConfidence={item.timing_confidence}
-        amountConfidence={item.amount_confidence}
+        confidence={item.confidence ?? 0}
+        merchantConfidence={item.merchant_confidence ?? 0}
+        timingConfidence={item.timing_confidence ?? 0}
+        amountConfidence={item.amount_confidence ?? 0}
         defaultExpanded={true}
       />
 

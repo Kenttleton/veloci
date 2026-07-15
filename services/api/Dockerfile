@@ -3,8 +3,8 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN go build -o api .
+RUN go build -o veloci-api .
 
 FROM alpine:3.24
-COPY --from=build /app/api /api
-ENTRYPOINT ["/api", "serve"]
+COPY --from=build /app/veloci-api /veloci-api
+ENTRYPOINT ["/veloci-api", "serve"]
