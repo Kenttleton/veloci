@@ -32,6 +32,7 @@ function AuthenticatedApp() {
         <Routes>
           <Route path="/" element={<AppShell />}>
             <Route index element={<Navigate to="/budget" replace />} />
+            <Route path="login" element={<Navigate to="/" replace />} />
             <Route path="budget" element={<BudgetPage />} />
             <Route path="reports" element={<ReportsPage />} />
             <Route path="review" element={<ReviewPage />} />
