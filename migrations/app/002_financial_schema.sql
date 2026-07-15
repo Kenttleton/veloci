@@ -28,6 +28,7 @@ CREATE TABLE institution_mappings (
   debit_credit_col       TEXT,
   amount_sign_convention TEXT         NOT NULL
                          CHECK (amount_sign_convention IN ('positive_is_credit', 'positive_is_debit')),
+  created_at             TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   UNIQUE (entity_id, institution_name)
 );
 

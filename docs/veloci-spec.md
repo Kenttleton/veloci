@@ -469,6 +469,7 @@ CSV column configuration per bank. Drives Stage 0 normalization. Also stores the
 | amount_tolerance_pct | FLOAT8 | Fuzzy amount match tolerance. Default 0.005 (0.5%) |
 | date_col, amount_col, merchant_col | TEXT | CSV column mapping |
 | amount_sign_convention | TEXT | `positive_is_credit` · `positive_is_debit` |
+| created_at | TIMESTAMPTZ | |
 
 ### accounts
 
