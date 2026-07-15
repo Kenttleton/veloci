@@ -128,3 +128,31 @@ already-loaded list data is sufficient.
   second account sharing that institution, upload for it, choose "Edit mapping,"
   change the name — confirm a new institution is created and only the second
   account relinks to it (first account's institution/mapping untouched).
+
+## Out of scope: additional import formats
+
+This effort is CSV-only, matching what's currently spec'd and what the backend is
+built for. `papaparse` parses delimited text only — it cannot read `.xls` (binary
+OLE2) or `.xlsx` (zipped XML), and formats like QuickBooks' IIF or OFX/QFX aren't
+tabular at all. Notes for whoever picks up broader format support later:
+
+- **Excel (`.xls`/`.xlsx`)** — closest fit to the current design. Swap `papaparse`
+  for `xlsx` (SheetJS, handles `.xls`/`.xlsx`/`.ods`) to get the same header-row +
+  sample-rows shape client-side; `MappingFields`' `columnOptions` prop already
+  generalizes to any tabular source, so no UI changes needed there. Backend-wise,
+  either convert to CSV before storing in `pending_imports` (zero Stage 0 changes),
+  or teach Stage 0 to parse `.xlsx` directly (e.g. the `calamine` crate) — the
+  simpler path is conversion before storage. `institution_mappings.source_type`
+  would need a new value (or a general `file_type` field) alongside `csv`.
+- **OFX/QFX** — structurally different, not a column-mapping problem at all. OFX is
+  self-describing (date/amount/payee/type are already labeled fields in the format),
+  so there's no mapping UI to show — just a dedicated parser (e.g. `ofx-js`) feeding
+  directly into the internal transaction shape. This would bypass
+  `institution_mappings`' column config entirely for OFX-sourced imports and needs
+  its own Stage 0 ingestion path.
+- **QuickBooks** — IIF exports are a proprietary tab-delimited format with section
+  headers (`!TRNS`, `!SPL`, etc.), needing a dedicated parser rather than reuse of
+  the CSV column-mapping model. Alternatively, since QuickBooks has a live API, a
+  direct sync integration (bypassing file upload entirely) maps to the
+  `source_type = 'integration'` value already reserved in the schema but not yet
+  implemented — likely the better long-term path than IIF file parsing.
