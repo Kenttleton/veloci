@@ -1,4 +1,4 @@
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { useJobStream } from '../hooks/useJobStream'
 import { ErrorBoundary } from '../components/shared/ErrorBoundary'
@@ -6,6 +6,7 @@ import { ErrorBoundary } from '../components/shared/ErrorBoundary'
 export function AppShell() {
   // Establish SSE connection for the lifetime of the authenticated session
   useJobStream()
+  const location = useLocation()
 
   return (
     <div
@@ -26,7 +27,7 @@ export function AppShell() {
           minWidth: 0,
         }}
       >
-        <ErrorBoundary>
+        <ErrorBoundary resetKey={location.key}>
           <Outlet />
         </ErrorBoundary>
       </main>
