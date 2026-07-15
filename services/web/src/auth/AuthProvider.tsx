@@ -58,7 +58,7 @@ export function useAuth() {
   }
 
   function logout(): void {
-    logoutMutation.mutate({ data: {} })
+    logoutMutation.mutate()
     clearToken()
     setAuthenticated(false)
     navigate('/login')

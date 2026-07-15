@@ -2383,6 +2383,30 @@
         ]
       }
     },
+    "/auth/logout": {
+      "post": {
+        "operationId": "logout",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Revoke the caller's access token",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/classifications": {
       "get": {
         "operationId": "list-classifications",
@@ -4054,7 +4078,7 @@
           {
             "explode": false,
             "in": "query",
-            "name": "before",
+            "name": "cursor",
             "schema": {
               "type": "string"
             }

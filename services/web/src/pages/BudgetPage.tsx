@@ -94,8 +94,6 @@ export function BudgetPage() {
         <StackPanel
           entries={entries}
           loading={entriesLoading}
-          pulsePeriod={summary?.period}
-          isActual={summary?.actual}
         />
       </div>
     </div>

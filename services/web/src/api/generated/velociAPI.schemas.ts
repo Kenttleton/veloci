@@ -780,7 +780,7 @@ limit?: number;
 };
 
 export type GetSnapshotHistoryParams = {
-before?: string;
+cursor?: string;
 /**
  * @minimum 1
  * @maximum 180
