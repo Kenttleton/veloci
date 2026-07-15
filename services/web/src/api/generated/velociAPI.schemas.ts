@@ -526,10 +526,12 @@ export interface SnapshotHistoryView {
 }
 
 export interface SnapshotSummaryView {
+  actual?: boolean;
   commitments_rate: number;
   drift_rate: number;
   income_rate: number;
   margin_rate: number;
+  period?: string;
 }
 
 export type SnapshotViewBalanceCents = number | null;
