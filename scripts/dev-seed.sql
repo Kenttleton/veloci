@@ -4,14 +4,12 @@
 -- Run after: just migrate
 -- Idempotent: safe to re-run after volume wipes.
 --
--- DEPENDENCY: The app-side user record is created by the API on first login.
--- If starting from a clean volume, start veloci-auth and veloci-api, log in
--- once as admin@veloci.local, then run this seed. The entity and entity_users
--- rows below will be skipped (ON CONFLICT) if the API already created them.
+-- Usage (from a clean volume):
+--   just infra        → start postgres + rabbitmq, apply migrations
+--   just auth api     → veloci-auth seeds admin credential on startup
+--   just dev-seed     → this script; inserts entity, user, and entity_users
 --
--- Usage:
 --   psql -h localhost -U postgres -d veloci_app -f scripts/dev-seed.sql
---   or: just dev-seed
 
 BEGIN;
 
