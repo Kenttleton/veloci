@@ -16,6 +16,7 @@ const (
 	ctxEntityRole contextKey = "entity_role"
 	ctxSystemRole contextKey = "system_role"
 	ctxUserID     contextKey = "sub"
+	ctxJTI        contextKey = "jti"
 )
 
 // Authenticate validates the Bearer token via veloci-auth /tokens/validate.
@@ -42,6 +43,9 @@ func Authenticate(client *authclient.Client) func(http.Handler) http.Handler {
 			}
 
 			ctx := r.Context()
+			if jti, ok := result.GetJti().Get(); ok {
+				ctx = context.WithValue(ctx, ctxJTI, jti)
+			}
 			for k, raw := range result.Claims {
 				var s string
 				if json.Unmarshal(raw, &s) != nil {
@@ -84,5 +88,11 @@ func SystemRole(ctx context.Context) string {
 // UserID returns the sub (user ID) claim injected by Authenticate.
 func UserID(ctx context.Context) string {
 	v, _ := ctx.Value(ctxUserID).(string)
+	return v
+}
+
+// JTI returns the access token JTI injected by Authenticate.
+func JTI(ctx context.Context) string {
+	v, _ := ctx.Value(ctxJTI).(string)
 	return v
 }

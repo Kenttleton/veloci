@@ -8,6 +8,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/veloci/api/authclient"
+	"github.com/veloci/api/middleware"
 )
 
 // UserEntity holds the resolved entity context for a user looked up in veloci_app.
@@ -44,12 +45,6 @@ type loginOutput struct {
 	Body struct {
 		Token     string `json:"token"      doc:"Short-lived access token"`
 		ExpiresAt string `json:"expires_at" doc:"Token expiry as RFC 3339 timestamp"`
-	}
-}
-
-type logoutInput struct {
-	Body struct {
-		JTI string `json:"jti" required:"true" doc:"Access token JTI to revoke"`
 	}
 }
 
@@ -96,13 +91,15 @@ func (h *AuthHandler) Login(ctx context.Context, input *loginInput) (*loginOutpu
 	return out, nil
 }
 
-// Logout revokes the token identified by the jti field in the request body.
-func (h *AuthHandler) Logout(ctx context.Context, input *logoutInput) (*struct{}, error) {
-	h.auth.RevokeToken(ctx, authclient.RevokeTokenParams{Jti: input.Body.JTI}) //nolint:errcheck
+// Logout revokes the caller's access token using the JTI injected by Authenticate middleware.
+func (h *AuthHandler) Logout(ctx context.Context, input *struct{}) (*struct{}, error) {
+	if jti := middleware.JTI(ctx); jti != "" {
+		h.auth.RevokeToken(ctx, authclient.RevokeTokenParams{Jti: jti}) //nolint:errcheck
+	}
 	return nil, nil
 }
 
-// RegisterAuthRoutes registers auth endpoints on the given Huma API.
+// RegisterAuthRoutes registers public auth endpoints (no token required).
 func RegisterAuthRoutes(api huma.API, h *AuthHandler) {
 	huma.Register(api, huma.Operation{
 		OperationID: "login",
@@ -111,12 +108,15 @@ func RegisterAuthRoutes(api huma.API, h *AuthHandler) {
 		Summary:     "Login with email and password",
 		Tags:        []string{"auth"},
 	}, h.Login)
+}
 
+// RegisterLogoutRoute registers the logout endpoint on an authenticated API.
+func RegisterLogoutRoute(api huma.API, h *AuthHandler) {
 	huma.Register(api, huma.Operation{
 		OperationID:   "logout",
 		Method:        http.MethodPost,
 		Path:          "/auth/logout",
-		Summary:       "Revoke an access token",
+		Summary:       "Revoke the caller's access token",
 		Tags:          []string{"auth"},
 		DefaultStatus: http.StatusNoContent,
 	}, h.Logout)

@@ -137,6 +137,7 @@ func runServe(_ *cobra.Command, _ []string) error {
 		// Mount Huma-registered routes inside the authenticated group via a sub-router.
 		subAPI := humachi.New(r, huma.DefaultConfig("Veloci API", "1.0.0"))
 
+		handler.RegisterLogoutRoute(subAPI, authHandler)
 		handler.RegisterUsersRoutes(subAPI, s, authClient, pub, perms)
 		handler.RegisterInstitutionsRoutes(subAPI, s, pub, perms)
 		handler.RegisterAccountsRoutes(subAPI, s, pub, perms)

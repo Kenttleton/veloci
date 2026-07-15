@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useLogin as useLoginMutation, useLogout as useLogoutMutation } from '../api/generated/velociAPI'
-import { setToken, clearToken, getToken } from './tokens'
+import { setToken, clearToken } from './tokens'
 import { useAuthContext } from './AuthProvider'
 
 export function useAuth() {
@@ -17,10 +17,7 @@ export function useAuth() {
   }
 
   function logout(): void {
-    const token = getToken()
-    if (token) {
-      logoutMutation.mutate({ data: { jti: token } })
-    }
+    logoutMutation.mutate({})
     clearToken()
     setAuthenticated(false)
     navigate('/login')
