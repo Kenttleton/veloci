@@ -51,6 +51,24 @@ export interface ClassificationView {
   status: string;
 }
 
+export type CreateAccountInputBodyBalanceCents = number | null;
+
+export type CreateAccountInputBodyCreditLimitCents = number | null;
+
+export type CreateAccountInputBodyInstitutionId = string | null;
+
+export type CreateAccountInputBodyInterestRate = number | null;
+
+export interface CreateAccountInputBody {
+  account_type: string;
+  balance_cents: CreateAccountInputBodyBalanceCents;
+  credit_limit_cents: CreateAccountInputBodyCreditLimitCents;
+  institution_id: CreateAccountInputBodyInstitutionId;
+  interest_rate: CreateAccountInputBodyInterestRate;
+  name: string;
+  status: string;
+}
+
 export interface CreateClassificationInputBody {
   conditions: unknown;
   label_id: string;
@@ -441,8 +459,6 @@ export interface LoginOutputBody {
   token: string;
 }
 
-export interface LogoutInputBody {}
-
 export interface Meta {
   has_more?: boolean;
   limit?: number;
@@ -526,12 +542,10 @@ export interface SnapshotHistoryView {
 }
 
 export interface SnapshotSummaryView {
-  actual?: boolean;
   commitments_rate: number;
   drift_rate: number;
   income_rate: number;
   margin_rate: number;
-  period?: string;
 }
 
 export type SnapshotViewBalanceCents = number | null;
@@ -656,6 +670,15 @@ export interface UserView {
   id: string;
 }
 
+export type ListAccountsParams = {
+cursor?: string;
+/**
+ * @minimum 1
+ * @maximum 200
+ */
+limit?: number;
+};
+
 export type ListClassificationsParams = {
 cursor?: string;
 /**
@@ -758,7 +781,6 @@ limit?: number;
 
 export type GetSnapshotHistoryParams = {
 before?: string;
-cursor?: string;
 /**
  * @minimum 1
  * @maximum 180

@@ -37,6 +37,7 @@ import type {
 
 import type {
   ChangePasswordInputBody,
+  CreateAccountInputBody,
   CreateClassificationInputBody,
   CreateEntryInputBody,
   CreateInstitutionAccountInputBody,
@@ -73,6 +74,7 @@ import type {
   HealthOutputBody,
   InviteUserInputBody,
   InviteUserOutputBody,
+  ListAccountsParams,
   ListClassificationsParams,
   ListEntriesParams,
   ListImportsParams,
@@ -87,7 +89,6 @@ import type {
   ListTransactionsParams,
   LoginInputBody,
   LoginOutputBody,
-  LogoutInputBody,
   PreviewEntryInputBody,
   PreviewEntryOutputBody,
   UpdateAccountInputBody,
@@ -103,6 +104,234 @@ import type {
 
 
 
+/**
+ * @summary List accounts
+ */
+export const listAccounts = (
+    params?: ListAccountsParams, options?: AxiosRequestConfig
+ ): Promise<AxiosResponse<EnvelopeListAccountView>> => {
+    
+    
+    return axios.default.get(
+      `/accounts`,{
+    ...options,
+        params: {...params, ...options?.params},}
+    );
+  }
+
+
+
+
+export const getListAccountsInfiniteQueryKey = (params?: ListAccountsParams,) => {
+    return [
+    'infinite', `/accounts`, ...(params ? [params]: [])
+    ] as const;
+    }
+
+export const getListAccountsQueryKey = (params?: ListAccountsParams,) => {
+    return [
+    `/accounts`, ...(params ? [params]: [])
+    ] as const;
+    }
+
+    
+export const getListAccountsInfiniteQueryOptions = <TData = InfiniteData<Awaited<ReturnType<typeof listAccounts>>, ListAccountsParams['cursor']>, TError = AxiosError<ErrorModel>>(params?: ListAccountsParams, options?: { query?:Partial<UseInfiniteQueryOptions<Awaited<ReturnType<typeof listAccounts>>, TError, TData, QueryKey, ListAccountsParams['cursor']>>, axios?: AxiosRequestConfig}
+) => {
+
+const {query: queryOptions, axios: axiosOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAccountsInfiniteQueryKey(params);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAccounts>>, QueryKey, ListAccountsParams['cursor']> = ({ signal, pageParam }) => listAccounts({...params, 'cursor': pageParam || params?.['cursor']}, { signal, ...axiosOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof listAccounts>>, TError, TData, QueryKey, ListAccountsParams['cursor']> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListAccountsInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof listAccounts>>>
+export type ListAccountsInfiniteQueryError = AxiosError<ErrorModel>
+
+
+export function useListAccountsInfinite<TData = InfiniteData<Awaited<ReturnType<typeof listAccounts>>, ListAccountsParams['cursor']>, TError = AxiosError<ErrorModel>>(
+ params: undefined |  ListAccountsParams, options: { query:Partial<UseInfiniteQueryOptions<Awaited<ReturnType<typeof listAccounts>>, TError, TData, QueryKey, ListAccountsParams['cursor']>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAccounts>>,
+          TError,
+          Awaited<ReturnType<typeof listAccounts>>, QueryKey
+        > , 'initialData'
+      >, axios?: AxiosRequestConfig}
+ , queryClient?: QueryClient
+  ):  DefinedUseInfiniteQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListAccountsInfinite<TData = InfiniteData<Awaited<ReturnType<typeof listAccounts>>, ListAccountsParams['cursor']>, TError = AxiosError<ErrorModel>>(
+ params?: ListAccountsParams, options?: { query?:Partial<UseInfiniteQueryOptions<Awaited<ReturnType<typeof listAccounts>>, TError, TData, QueryKey, ListAccountsParams['cursor']>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAccounts>>,
+          TError,
+          Awaited<ReturnType<typeof listAccounts>>, QueryKey
+        > , 'initialData'
+      >, axios?: AxiosRequestConfig}
+ , queryClient?: QueryClient
+  ):  UseInfiniteQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListAccountsInfinite<TData = InfiniteData<Awaited<ReturnType<typeof listAccounts>>, ListAccountsParams['cursor']>, TError = AxiosError<ErrorModel>>(
+ params?: ListAccountsParams, options?: { query?:Partial<UseInfiniteQueryOptions<Awaited<ReturnType<typeof listAccounts>>, TError, TData, QueryKey, ListAccountsParams['cursor']>>, axios?: AxiosRequestConfig}
+ , queryClient?: QueryClient
+  ):  UseInfiniteQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List accounts
+ */
+
+export function useListAccountsInfinite<TData = InfiniteData<Awaited<ReturnType<typeof listAccounts>>, ListAccountsParams['cursor']>, TError = AxiosError<ErrorModel>>(
+ params?: ListAccountsParams, options?: { query?:Partial<UseInfiniteQueryOptions<Awaited<ReturnType<typeof listAccounts>>, TError, TData, QueryKey, ListAccountsParams['cursor']>>, axios?: AxiosRequestConfig}
+ , queryClient?: QueryClient 
+ ):  UseInfiniteQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListAccountsInfiniteQueryOptions(params,options)
+
+  const query = useInfiniteQuery(queryOptions, queryClient) as  UseInfiniteQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+
+export const getListAccountsQueryOptions = <TData = Awaited<ReturnType<typeof listAccounts>>, TError = AxiosError<ErrorModel>>(params?: ListAccountsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAccounts>>, TError, TData>>, axios?: AxiosRequestConfig}
+) => {
+
+const {query: queryOptions, axios: axiosOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAccountsQueryKey(params);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAccounts>>> = ({ signal }) => listAccounts(params, { signal, ...axiosOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAccounts>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListAccountsQueryResult = NonNullable<Awaited<ReturnType<typeof listAccounts>>>
+export type ListAccountsQueryError = AxiosError<ErrorModel>
+
+
+export function useListAccounts<TData = Awaited<ReturnType<typeof listAccounts>>, TError = AxiosError<ErrorModel>>(
+ params: undefined |  ListAccountsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAccounts>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAccounts>>,
+          TError,
+          Awaited<ReturnType<typeof listAccounts>>
+        > , 'initialData'
+      >, axios?: AxiosRequestConfig}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListAccounts<TData = Awaited<ReturnType<typeof listAccounts>>, TError = AxiosError<ErrorModel>>(
+ params?: ListAccountsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAccounts>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAccounts>>,
+          TError,
+          Awaited<ReturnType<typeof listAccounts>>
+        > , 'initialData'
+      >, axios?: AxiosRequestConfig}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListAccounts<TData = Awaited<ReturnType<typeof listAccounts>>, TError = AxiosError<ErrorModel>>(
+ params?: ListAccountsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAccounts>>, TError, TData>>, axios?: AxiosRequestConfig}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List accounts
+ */
+
+export function useListAccounts<TData = Awaited<ReturnType<typeof listAccounts>>, TError = AxiosError<ErrorModel>>(
+ params?: ListAccountsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAccounts>>, TError, TData>>, axios?: AxiosRequestConfig}
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListAccountsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+
+
+/**
+ * @summary Create an account
+ */
+export const createAccount = (
+    createAccountInputBody: CreateAccountInputBody, options?: AxiosRequestConfig
+ ): Promise<AxiosResponse<EnvelopeAccountView>> => {
+    
+    
+    return axios.default.post(
+      `/accounts`,
+      createAccountInputBody,options
+    );
+  }
+
+
+
+export const getCreateAccountMutationOptions = <TError = AxiosError<ErrorModel>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAccount>>, TError,{data: CreateAccountInputBody}, TContext>, axios?: AxiosRequestConfig}
+): UseMutationOptions<Awaited<ReturnType<typeof createAccount>>, TError,{data: CreateAccountInputBody}, TContext> => {
+
+const mutationKey = ['createAccount'];
+const {mutation: mutationOptions, axios: axiosOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, axios: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createAccount>>, {data: CreateAccountInputBody}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createAccount(data,axiosOptions)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateAccountMutationResult = NonNullable<Awaited<ReturnType<typeof createAccount>>>
+    export type CreateAccountMutationBody = CreateAccountInputBody
+    export type CreateAccountMutationError = AxiosError<ErrorModel>
+
+    /**
+ * @summary Create an account
+ */
+export const useCreateAccount = <TError = AxiosError<ErrorModel>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAccount>>, TError,{data: CreateAccountInputBody}, TContext>, axios?: AxiosRequestConfig}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createAccount>>,
+        TError,
+        {data: CreateAccountInputBody},
+        TContext
+      > => {
+
+      const mutationOptions = getCreateAccountMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    
 /**
  * @summary Delete an account
  */
@@ -777,68 +1006,6 @@ export const useLogin = <TError = AxiosError<ErrorModel>,
       > => {
 
       const mutationOptions = getLoginMutationOptions(options);
-
-      return useMutation(mutationOptions, queryClient);
-    }
-    
-/**
- * @summary Revoke an access token
- */
-export const logout = (
-    logoutInputBody: LogoutInputBody, options?: AxiosRequestConfig
- ): Promise<AxiosResponse<void>> => {
-    
-    
-    return axios.default.post(
-      `/auth/logout`,
-      logoutInputBody,options
-    );
-  }
-
-
-
-export const getLogoutMutationOptions = <TError = AxiosError<ErrorModel>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof logout>>, TError,{data: LogoutInputBody}, TContext>, axios?: AxiosRequestConfig}
-): UseMutationOptions<Awaited<ReturnType<typeof logout>>, TError,{data: LogoutInputBody}, TContext> => {
-
-const mutationKey = ['logout'];
-const {mutation: mutationOptions, axios: axiosOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, axios: undefined};
-
-      
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof logout>>, {data: LogoutInputBody}> = (props) => {
-          const {data} = props ?? {};
-
-          return  logout(data,axiosOptions)
-        }
-
-        
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type LogoutMutationResult = NonNullable<Awaited<ReturnType<typeof logout>>>
-    export type LogoutMutationBody = LogoutInputBody
-    export type LogoutMutationError = AxiosError<ErrorModel>
-
-    /**
- * @summary Revoke an access token
- */
-export const useLogout = <TError = AxiosError<ErrorModel>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof logout>>, TError,{data: LogoutInputBody}, TContext>, axios?: AxiosRequestConfig}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof logout>>,
-        TError,
-        {data: LogoutInputBody},
-        TContext
-      > => {
-
-      const mutationOptions = getLogoutMutationOptions(options);
 
       return useMutation(mutationOptions, queryClient);
     }
