@@ -51,7 +51,7 @@ func main() {
 	handler.RegisterSnapshotsRoutes(api, nil, nil, perms)
 	handler.RegisterProjectionsRoutes(api, nil, nil, perms)
 	handler.RegisterAdminRoutes(api, nil, nil, perms)
-	handler.RegisterJobsRoutes(api, nil, nil, nil, perms)
+	handler.RegisterJobsRoutes(api, handler.NewJobsHandler(nil, nil, nil), perms)
 
 	spec := api.OpenAPI()
 	b, err := json.MarshalIndent(spec, "", "  ")

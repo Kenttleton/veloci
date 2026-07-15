@@ -59,6 +59,22 @@ type listAccountsOutput struct {
 	Body response.Envelope[[]accountView]
 }
 
+type createAccountInput struct {
+	Body struct {
+		Name             string   `json:"name"          required:"true"`
+		AccountType      string   `json:"account_type"  required:"true"`
+		Status           string   `json:"status"        required:"true"`
+		InstitutionID    *string  `json:"institution_id"`
+		InterestRate     *float64 `json:"interest_rate"`
+		BalanceCents     *int64   `json:"balance_cents"`
+		CreditLimitCents *int64   `json:"credit_limit_cents"`
+	}
+}
+
+type createAccountOutput struct {
+	Body response.Envelope[accountView]
+}
+
 type getAccountInput struct {
 	PathID string `path:"id"`
 }
@@ -117,6 +133,26 @@ func (h *AccountsHandler) ListAccounts(ctx context.Context, input *listAccountsI
 
 	out := &listAccountsOutput{}
 	out.Body = response.Page(views, nextCursor, limit, hasMore)
+	return out, nil
+}
+
+func (h *AccountsHandler) CreateAccount(ctx context.Context, input *createAccountInput) (*createAccountOutput, error) {
+	entityID := middleware.EntityID(ctx)
+
+	item, err := h.s.CreateAccount(ctx, entityID, store.Account{
+		InstitutionID:    input.Body.InstitutionID,
+		Name:             input.Body.Name,
+		AccountType:      input.Body.AccountType,
+		Status:           input.Body.Status,
+		InterestRate:     input.Body.InterestRate,
+		BalanceCents:     input.Body.BalanceCents,
+		CreditLimitCents: input.Body.CreditLimitCents,
+	})
+	if err != nil {
+		return nil, huma.Error500InternalServerError("internal error")
+	}
+	out := &createAccountOutput{}
+	out.Body = response.Single(toAccountView(item))
 	return out, nil
 }
 
@@ -182,6 +218,15 @@ func RegisterAccountsRoutes(api huma.API, s *store.Store, _ *queue.Publisher, pe
 		Tags:        []string{"accounts"},
 		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "accounts:read")},
 	}, h.ListAccounts)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "create-account",
+		Method:      http.MethodPost,
+		Path:        "/accounts",
+		Summary:     "Create an account",
+		Tags:        []string{"accounts"},
+		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "accounts:write")},
+	}, h.CreateAccount)
 
 	huma.Register(api, huma.Operation{
 		OperationID: "get-account",

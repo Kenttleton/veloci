@@ -147,6 +147,57 @@
         ],
         "type": "object"
       },
+      "CreateAccountInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_type": {
+            "type": "string"
+          },
+          "balance_cents": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "credit_limit_cents": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "institution_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "interest_rate": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "account_type",
+          "status",
+          "institution_id",
+          "interest_rate",
+          "balance_cents",
+          "credit_limit_cents"
+        ],
+        "type": "object"
+      },
       "CreateClassificationInputBody": {
         "additionalProperties": false,
         "properties": {
@@ -1331,19 +1382,6 @@
         ],
         "type": "object"
       },
-      "LogoutInputBody": {
-        "additionalProperties": false,
-        "properties": {
-          "jti": {
-            "description": "Access token JTI to revoke",
-            "type": "string"
-          }
-        },
-        "required": [
-          "jti"
-        ],
-        "type": "object"
-      },
       "Meta": {
         "additionalProperties": false,
         "properties": {
@@ -2028,6 +2066,98 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/accounts": {
+      "get": {
+        "operationId": "list-accounts",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 200,
+              "format": "int64",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvelopeListAccountView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List accounts",
+        "tags": [
+          "accounts"
+        ]
+      },
+      "post": {
+        "operationId": "create-account",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAccountInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvelopeAccountView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Create an account",
+        "tags": [
+          "accounts"
+        ]
+      }
+    },
     "/accounts/{id}": {
       "delete": {
         "operationId": "delete-account",
@@ -2248,40 +2378,6 @@
           }
         },
         "summary": "Login with email and password",
-        "tags": [
-          "auth"
-        ]
-      }
-    },
-    "/auth/logout": {
-      "post": {
-        "operationId": "logout",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/LogoutInputBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "No Content"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "summary": "Revoke an access token",
         "tags": [
           "auth"
         ]
