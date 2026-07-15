@@ -1,8 +1,10 @@
 import { useState, type FormEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from './AuthProvider'
 
 export function LoginPage() {
   const { login } = useAuth()
+  const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -14,6 +16,7 @@ export function LoginPage() {
     setLoading(true)
     try {
       await login(email, password)
+      navigate('/', { replace: true })
     } catch {
       setError('Invalid email or password')
     } finally {

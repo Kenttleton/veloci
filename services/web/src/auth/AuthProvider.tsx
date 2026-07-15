@@ -58,8 +58,12 @@ export function useAuth() {
   }
 
   function logout(): void {
-    logoutMutation.mutate()
-    clearToken()
+    const tokenAtLogout = getToken()
+    logoutMutation.mutate(undefined, {
+      onSettled: () => {
+        if (getToken() === tokenAtLogout) clearToken()
+      },
+    })
     setAuthenticated(false)
     navigate('/login')
   }
