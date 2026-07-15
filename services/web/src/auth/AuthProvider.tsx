@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react'
+import React, { createContext, useContext, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import axios from 'axios'
@@ -22,12 +22,11 @@ const queryClient = new QueryClient({
   },
 })
 
+// Must run before QueryClientProvider mounts so the first queries use the right baseURL.
+registerAuthInterceptors(axios)
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [authenticated, setAuthenticated] = useState(() => !!getToken())
-
-  useEffect(() => {
-    registerAuthInterceptors(axios)
-  }, [])
 
   return (
     <QueryClientProvider client={queryClient}>

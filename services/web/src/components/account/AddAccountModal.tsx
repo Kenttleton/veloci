@@ -172,8 +172,16 @@ export function AddAccountModal({ open, onClose, defaultStatus }: AddAccountModa
     try {
       let institutionId = existingInstitutionId
       if (institutionChoice !== 'existing') {
-        const result = await submitMapping(null, mappingValues)
-        institutionId = result.institutionId
+        // For 'skip', reuse an existing institution by name rather than creating a duplicate.
+        const nameMatch = institutions.find(
+          (inst) => inst.institution_name === mappingValues.institutionName.trim(),
+        )
+        if (nameMatch) {
+          institutionId = nameMatch.id
+        } else {
+          const result = await submitMapping(null, mappingValues)
+          institutionId = result.institutionId
+        }
       }
 
       await createInstitutionAccountMutation.mutateAsync({ id: institutionId, data: accountBody })

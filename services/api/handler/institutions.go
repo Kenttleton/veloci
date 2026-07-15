@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/veloci/api/middleware"
 	"github.com/veloci/api/queue"
@@ -199,6 +200,10 @@ func (h *InstitutionsHandler) CreateInstitution(ctx context.Context, input *crea
 		AmountSignConvention: input.Body.AmountSignConvention,
 	})
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return nil, huma.Error409Conflict("an institution with this name already exists")
+		}
 		return nil, huma.Error500InternalServerError("internal error")
 	}
 	out := &createInstitutionOutput{}
