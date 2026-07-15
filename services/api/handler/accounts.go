@@ -50,6 +50,15 @@ func toAccountView(a store.Account) accountView {
 	}
 }
 
+type listAccountsInput struct {
+	Cursor string `query:"cursor"`
+	Limit  int    `query:"limit" default:"200" minimum:"1" maximum:"200"`
+}
+
+type listAccountsOutput struct {
+	Body response.Envelope[[]accountView]
+}
+
 type getAccountInput struct {
 	PathID string `path:"id"`
 }
@@ -76,6 +85,39 @@ type updateAccountOutput struct {
 
 type deleteAccountInput struct {
 	PathID string `path:"id"`
+}
+
+func (h *AccountsHandler) ListAccounts(ctx context.Context, input *listAccountsInput) (*listAccountsOutput, error) {
+	entityID := middleware.EntityID(ctx)
+	limit := input.Limit
+	if limit == 0 {
+		limit = 200
+	}
+
+	items, err := h.s.ListAccounts(ctx, entityID, limit+1, input.Cursor)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("internal error")
+	}
+
+	hasMore := len(items) > limit
+	if hasMore {
+		items = items[:limit]
+	}
+	var nextCursor *string
+	if hasMore && len(items) > 0 {
+		last := items[len(items)-1]
+		c := store.EncodeCursor(last.ID, last.CreatedAt)
+		nextCursor = &c
+	}
+
+	views := make([]accountView, len(items))
+	for i, item := range items {
+		views[i] = toAccountView(item)
+	}
+
+	out := &listAccountsOutput{}
+	out.Body = response.Page(views, nextCursor, limit, hasMore)
+	return out, nil
 }
 
 func (h *AccountsHandler) GetAccount(ctx context.Context, input *getAccountInput) (*getAccountOutput, error) {
@@ -131,6 +173,15 @@ func (h *AccountsHandler) DeleteAccount(ctx context.Context, input *deleteAccoun
 // RegisterAccountsRoutes registers account endpoints on the given Huma API.
 func RegisterAccountsRoutes(api huma.API, s *store.Store, _ *queue.Publisher, perms middleware.PermissionCache) {
 	h := NewAccountsHandler(s)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "list-accounts",
+		Method:      http.MethodGet,
+		Path:        "/accounts",
+		Summary:     "List accounts",
+		Tags:        []string{"accounts"},
+		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "accounts:read")},
+	}, h.ListAccounts)
 
 	huma.Register(api, huma.Operation{
 		OperationID: "get-account",

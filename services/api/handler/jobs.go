@@ -262,9 +262,7 @@ func pgxQuoteIdentifier(name string) string {
 }
 
 // RegisterJobsRoutes registers job endpoints on the given Huma API.
-func RegisterJobsRoutes(api huma.API, s *store.Store, pub *queue.Publisher, pool *pgxpool.Pool, perms middleware.PermissionCache) *JobsHandler {
-	h := NewJobsHandler(s, pub, pool)
-
+func RegisterJobsRoutes(api huma.API, h *JobsHandler, perms middleware.PermissionCache) {
 	huma.Register(api, huma.Operation{
 		OperationID: "list-jobs",
 		Method:      http.MethodGet,
@@ -301,5 +299,4 @@ func RegisterJobsRoutes(api huma.API, s *store.Store, pub *queue.Publisher, pool
 		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "reports:read")},
 	}, h.TriggerProject)
 
-	return h
 }

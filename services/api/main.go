@@ -131,6 +131,8 @@ func runServe(_ *cobra.Command, _ []string) error {
 	handler.RegisterHealthRoutes(api)
 	handler.RegisterAuthRoutes(api, authHandler)
 
+	jobsHandler := handler.NewJobsHandler(s, pub, pool)
+
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Authenticate(authClient))
 
@@ -150,12 +152,15 @@ func runServe(_ *cobra.Command, _ []string) error {
 		handler.RegisterSnapshotsRoutes(subAPI, s, pub, perms)
 		handler.RegisterProjectionsRoutes(subAPI, s, pub, perms)
 		handler.RegisterAdminRoutes(subAPI, s, pub, perms)
-		jobsHandler := handler.RegisterJobsRoutes(subAPI, s, pub, pool, perms)
+		handler.RegisterJobsRoutes(subAPI, jobsHandler, perms)
 
-		// Raw chi handlers that cannot use Huma (SSE, multipart upload).
+		// Raw chi handler that cannot use Huma (multipart upload).
 		r.Post("/imports", handler.NewImportsHandler(s, pub).UploadImport)
-		r.Get("/jobs/stream", jobsHandler.StreamJobs)
 	})
+
+	// SSE endpoint: browsers cannot send Authorization headers, so the token is
+	// passed as ?token= and validated by AuthenticateSSE rather than Authenticate.
+	r.With(middleware.AuthenticateSSE(authClient)).Get("/jobs/stream", jobsHandler.StreamJobs)
 
 	r.Get("/openapi.json", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -251,8 +256,8 @@ func runSeed(_ *cobra.Command, _ []string) error {
 	authPort := viper.GetInt("api.auth.port")
 	authURL := fmt.Sprintf("http://%s:%d", authHost, authPort)
 
-	email := viper.GetString("admin.email")
-	password := viper.GetString("admin.password")
+	email := viper.GetString("auth.admin.email")
+	password := viper.GetString("auth.admin.password")
 	if email == "" || password == "" {
 		return fmt.Errorf("admin.email and admin.password must be set in config")
 	}

@@ -40,6 +40,38 @@ func (s *Store) GetAccount(ctx context.Context, entityID, id string) (Account, e
 	return pgx.CollectOneRow(rows, pgx.RowToStructByName[Account])
 }
 
+// ListAccounts returns paginated accounts for an entity across all institutions.
+func (s *Store) ListAccounts(ctx context.Context, entityID string, limit int, cursor string) ([]Account, error) {
+	if cursor == "" {
+		rows, err := s.pool.Query(ctx, fmt.Sprintf(`
+			SELECT %s FROM accounts
+			WHERE entity_id = $1
+			ORDER BY created_at DESC, id DESC
+			LIMIT $2
+		`, accountCols), entityID, limit)
+		if err != nil {
+			return nil, err
+		}
+		return pgx.CollectRows(rows, pgx.RowToStructByName[Account])
+	}
+
+	cursorID, cursorTS, err := decodeCursor(cursor)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
+		SELECT %s FROM accounts
+		WHERE entity_id = $1
+		  AND (created_at, id::text) < ($2::timestamptz, $3)
+		ORDER BY created_at DESC, id DESC
+		LIMIT $4
+	`, accountCols), entityID, cursorTS, cursorID, limit)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowToStructByName[Account])
+}
+
 // ListAccountsByInstitution returns paginated accounts for an institution within an entity.
 func (s *Store) ListAccountsByInstitution(ctx context.Context, entityID, institutionID string, limit int, cursor string) ([]Account, error) {
 	if cursor == "" {
