@@ -25,20 +25,20 @@ func NewInstitutionsHandler(s *store.Store) *InstitutionsHandler {
 
 // institutionView is the API representation of an institution mapping.
 type institutionView struct {
-	ID                   string   `json:"id"`
-	InstitutionName      string   `json:"institution_name"`
-	SourceType           string   `json:"source_type"`
-	SettlementWindowDays int      `json:"settlement_window_days"`
-	DedupWindowDays      int      `json:"dedup_window_days"`
-	AmountTolerancePct   float64  `json:"amount_tolerance_pct"`
-	DateCol              string   `json:"date_col"`
-	AmountCol            string   `json:"amount_col"`
-	MerchantCol          string   `json:"merchant_col"`
-	ImportedIDCol        *string  `json:"imported_id_col"`
-	BalanceCol           *string  `json:"balance_col"`
-	DebitCreditCol       *string  `json:"debit_credit_col"`
-	AmountSignConvention string   `json:"amount_sign_convention"`
-	CreatedAt            string   `json:"created_at"`
+	ID                   string  `json:"id"`
+	InstitutionName      string  `json:"institution_name"`
+	SourceType           string  `json:"source_type"`
+	SettlementWindowDays int     `json:"settlement_window_days"`
+	DedupWindowDays      int     `json:"dedup_window_days"`
+	AmountTolerancePct   float64 `json:"amount_tolerance_pct"`
+	DateCol              string  `json:"date_col"`
+	AmountCol            string  `json:"amount_col"`
+	MerchantCol          string  `json:"merchant_col"`
+	ImportedIDCol        *string `json:"imported_id_col"`
+	BalanceCol           *string `json:"balance_col"`
+	DebitCreditCol       *string `json:"debit_credit_col"`
+	AmountSignConvention string  `json:"amount_sign_convention"`
+	CreatedAt            string  `json:"created_at"`
 }
 
 func toInstitutionView(i store.Institution) institutionView {
@@ -60,10 +60,9 @@ func toInstitutionView(i store.Institution) institutionView {
 	}
 }
 
-type listInstitutionsInput struct {
-	Cursor string `query:"cursor"`
-	Limit  int    `query:"limit" default:"50" minimum:"1" maximum:"200"`
-}
+// listInstitutionsInput has no params — institutions are never paginated
+// (realistic cardinality is a handful, at most a few dozen).
+type listInstitutionsInput struct{}
 
 type listInstitutionsOutput struct {
 	Body response.Envelope[[]institutionView]
@@ -150,27 +149,12 @@ type createInstitutionAccountOutput struct {
 	Body response.Envelope[accountView]
 }
 
-func (h *InstitutionsHandler) ListInstitutions(ctx context.Context, input *listInstitutionsInput) (*listInstitutionsOutput, error) {
+func (h *InstitutionsHandler) ListInstitutions(ctx context.Context, _ *listInstitutionsInput) (*listInstitutionsOutput, error) {
 	entityID := middleware.EntityID(ctx)
-	limit := input.Limit
-	if limit == 0 {
-		limit = 50
-	}
 
-	items, err := h.s.ListInstitutions(ctx, entityID, limit+1, input.Cursor)
+	items, err := h.s.ListInstitutions(ctx, entityID)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("internal error")
-	}
-
-	hasMore := len(items) > limit
-	if hasMore {
-		items = items[:limit]
-	}
-	var nextCursor *string
-	if hasMore && len(items) > 0 {
-		last := items[len(items)-1]
-		c := store.EncodeCursor(last.ID, last.CreatedAt)
-		nextCursor = &c
 	}
 
 	views := make([]institutionView, len(items))
@@ -178,7 +162,7 @@ func (h *InstitutionsHandler) ListInstitutions(ctx context.Context, input *listI
 		views[i] = toInstitutionView(item)
 	}
 	out := &listInstitutionsOutput{}
-	out.Body = response.Page(views, nextCursor, limit, hasMore)
+	out.Body = response.Single(views)
 	return out, nil
 }
 

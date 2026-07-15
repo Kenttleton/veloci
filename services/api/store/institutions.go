@@ -11,21 +11,21 @@ import (
 
 // Institution represents a row from the institution_mappings table.
 type Institution struct {
-	ID                    string   `db:"id"`
-	EntityID              string   `db:"entity_id"`
-	InstitutionName       string   `db:"institution_name"`
-	SourceType            string   `db:"source_type"`
-	SettlementWindowDays  int      `db:"settlement_window_days"`
-	DedupWindowDays       int      `db:"dedup_window_days"`
-	AmountTolerancePct    float64  `db:"amount_tolerance_pct"`
-	DateCol               string   `db:"date_col"`
-	AmountCol             string   `db:"amount_col"`
-	MerchantCol           string   `db:"merchant_col"`
-	ImportedIDCol         *string  `db:"imported_id_col"`
-	BalanceCol            *string  `db:"balance_col"`
-	DebitCreditCol        *string  `db:"debit_credit_col"`
-	AmountSignConvention  string   `db:"amount_sign_convention"`
-	CreatedAt             time.Time `db:"created_at"`
+	ID                   string    `db:"id"`
+	EntityID             string    `db:"entity_id"`
+	InstitutionName      string    `db:"institution_name"`
+	SourceType           string    `db:"source_type"`
+	SettlementWindowDays int       `db:"settlement_window_days"`
+	DedupWindowDays      int       `db:"dedup_window_days"`
+	AmountTolerancePct   float64   `db:"amount_tolerance_pct"`
+	DateCol              string    `db:"date_col"`
+	AmountCol            string    `db:"amount_col"`
+	MerchantCol          string    `db:"merchant_col"`
+	ImportedIDCol        *string   `db:"imported_id_col"`
+	BalanceCol           *string   `db:"balance_col"`
+	DebitCreditCol       *string   `db:"debit_credit_col"`
+	AmountSignConvention string    `db:"amount_sign_convention"`
+	CreatedAt            time.Time `db:"created_at"`
 }
 
 const institutionCols = `
@@ -47,31 +47,14 @@ func (s *Store) GetInstitution(ctx context.Context, entityID, id string) (Instit
 	return pgx.CollectOneRow(rows, pgx.RowToStructByName[Institution])
 }
 
-// ListInstitutions returns a paginated list of institutions for an entity.
-func (s *Store) ListInstitutions(ctx context.Context, entityID string, limit int, cursor string) ([]Institution, error) {
-	if cursor == "" {
-		rows, err := s.pool.Query(ctx, fmt.Sprintf(`
-			SELECT %s FROM institution_mappings
-			WHERE entity_id = $1
-			ORDER BY created_at DESC, id DESC
-			LIMIT $2
-		`, institutionCols), entityID, limit)
-		if err != nil {
-			return nil, err
-		}
-		return pgx.CollectRows(rows, pgx.RowToStructByName[Institution])
-	}
-
-	cursorID, cursorTS, err := decodeCursor(cursor)
-	if err != nil {
-		return nil, err
-	}
+// ListInstitutions returns every institution for an entity, unpaginated.
+// Realistic cardinality is a handful, at most a few dozen — not worth pagination.
+func (s *Store) ListInstitutions(ctx context.Context, entityID string) ([]Institution, error) {
 	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
 		SELECT %s FROM institution_mappings
-		WHERE entity_id = $1 AND (created_at, id::text) < ($2::timestamptz, $3)
-		ORDER BY created_at DESC, id DESC
-		LIMIT $4
-	`, institutionCols), entityID, cursorTS, cursorID, limit)
+		WHERE entity_id = $1
+		ORDER BY institution_name
+	`, institutionCols), entityID)
 	if err != nil {
 		return nil, err
 	}
