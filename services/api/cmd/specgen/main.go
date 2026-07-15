@@ -37,8 +37,11 @@ func main() {
 	// All routes registered on the same API — middleware is irrelevant for spec generation.
 	perms := middleware.PermissionCache{}
 
+	authHandler := handler.NewAuthHandler(nil, nil)
+
 	handler.RegisterHealthRoutes(api)
-	handler.RegisterAuthRoutes(api, handler.NewAuthHandler(nil, nil))
+	handler.RegisterAuthRoutes(api, authHandler)
+	handler.RegisterLogoutRoute(api, authHandler)
 	handler.RegisterUsersRoutes(api, nil, nil, nil, perms)
 	handler.RegisterInstitutionsRoutes(api, nil, nil, perms)
 	handler.RegisterAccountsRoutes(api, nil, nil, perms)

@@ -94,7 +94,7 @@ type getSnapshotSummaryOutput struct {
 
 type getSnapshotHistoryInput struct {
 	NodeID      string `path:"node_id"`
-	Before      string `query:"before"`
+	Cursor      string `query:"cursor"`
 	Limit       int    `query:"limit" default:"60" minimum:"1" maximum:"180"`
 	Granularity string `query:"granularity" default:"day"`
 }
@@ -161,10 +161,10 @@ func (h *SnapshotsHandler) GetSnapshotHistory(ctx context.Context, input *getSna
 	}
 
 	before := time.Now()
-	if input.Before != "" {
-		t, err := time.Parse("2006-01-02", input.Before)
+	if input.Cursor != "" {
+		t, err := time.Parse("2006-01-02", input.Cursor)
 		if err != nil {
-			return nil, huma.Error422UnprocessableEntity("invalid before date")
+			return nil, huma.Error422UnprocessableEntity("invalid cursor date")
 		}
 		before = t
 	}
