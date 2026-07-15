@@ -72,11 +72,11 @@ func (s *Store) DeleteUser(ctx context.Context, entityID, userID string) error {
 	return err
 }
 
-// GetUserCredentialID returns the credential_id for a user by user_id.
+// GetUserCredentialID returns the auth_credential_id for a user by user_id.
 func (s *Store) GetUserCredentialID(ctx context.Context, userID string) (string, error) {
 	var credentialID string
 	err := s.pool.QueryRow(ctx, `
-		SELECT credential_id::text FROM users WHERE id = $1
+		SELECT auth_credential_id::text FROM users WHERE id = $1
 	`, userID).Scan(&credentialID)
 	if err != nil {
 		return "", err
@@ -85,13 +85,14 @@ func (s *Store) GetUserCredentialID(ctx context.Context, userID string) (string,
 }
 
 // EnsureUser inserts a user row if it does not already exist, returning the user id.
-func (s *Store) EnsureUser(ctx context.Context, email, credentialID string) (string, error) {
+// On email conflict it updates the auth_credential_id so a credential reset is reflected.
+func (s *Store) EnsureUser(ctx context.Context, email, name, credentialID string) (string, error) {
 	var id string
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO users (id, email, credential_id, created_at)
-		VALUES (gen_random_uuid(), $1, $2::uuid, NOW())
-		ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
+		INSERT INTO users (id, email, name, auth_credential_id, created_at)
+		VALUES (gen_random_uuid(), $1, $2, $3::uuid, NOW())
+		ON CONFLICT (email) DO UPDATE SET auth_credential_id = EXCLUDED.auth_credential_id
 		RETURNING id::text
-	`, email, credentialID).Scan(&id)
+	`, email, name, credentialID).Scan(&id)
 	return id, err
 }

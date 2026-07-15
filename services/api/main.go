@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
@@ -115,6 +116,14 @@ func runServe(_ *cobra.Command, _ []string) error {
 	}
 
 	s := store.New(pool)
+
+	adminEmail := viper.GetString("auth.admin.email")
+	adminPass := viper.GetString("auth.admin.password")
+	if adminEmail != "" && adminPass != "" {
+		if err := syncAdminUser(context.Background(), authClient, s, adminEmail, adminPass); err != nil {
+			log.Printf("warn: admin user sync failed: %v", err)
+		}
+	}
 
 	perms, err := s.LoadPermissions(context.Background())
 	if err != nil {
@@ -249,6 +258,47 @@ func runMigrate(_ *cobra.Command, _ []string) error {
 	return nil
 }
 
+// syncAdminUser ensures the admin user exists in veloci_app and belongs to at least
+// one entity. It retries the auth credential lookup for up to 30 seconds to tolerate
+// concurrent startup ordering between veloci-auth and veloci-api.
+func syncAdminUser(ctx context.Context, authClient *authclient.Client, s *store.Store, email, password string) error {
+	var credentialID string
+	for i := range 30 {
+		cred, err := authClient.ValidateCredential(ctx, &authclient.ValidateCredentialInputBody{
+			Email:    email,
+			Password: password,
+		})
+		if err == nil {
+			credentialID = cred.CredentialID
+			break
+		}
+		if i < 29 {
+			log.Printf("admin sync: auth not ready (attempt %d/30): %v", i+1, err)
+			time.Sleep(time.Second)
+		}
+	}
+	if credentialID == "" {
+		return fmt.Errorf("could not validate admin credential after 30 attempts")
+	}
+
+	userID, err := s.EnsureUser(ctx, email, "Server Admin", credentialID)
+	if err != nil {
+		return fmt.Errorf("ensure user: %w", err)
+	}
+
+	entityID, err := s.EnsureAdminEntity(ctx, "Home")
+	if err != nil {
+		return fmt.Errorf("ensure entity: %w", err)
+	}
+
+	if err := s.EnsureEntityUser(ctx, userID, entityID, "entity_admin"); err != nil {
+		return fmt.Errorf("ensure entity membership: %w", err)
+	}
+
+	log.Printf("sync: admin user ready (id=%s, entity_id=%s)", userID, entityID)
+	return nil
+}
+
 func runSeed(_ *cobra.Command, _ []string) error {
 	loadConfig()
 
@@ -267,40 +317,15 @@ func runSeed(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("authclient: %w", err)
 	}
 
-	ctx := context.Background()
-
-	var credentialID string
-	created, err := authClient.CreateCredential(ctx, &authclient.CreateCredentialInputBody{
-		Email:    email,
-		Password: password,
-	})
-	if err != nil {
-		// Credential likely already exists; validate to retrieve the credential ID.
-		existing, verifyErr := authClient.ValidateCredential(ctx, &authclient.ValidateCredentialInputBody{
-			Email:    email,
-			Password: password,
-		})
-		if verifyErr != nil {
-			return fmt.Errorf("create credential: %w; validate: %w", err, verifyErr)
-		}
-		credentialID = existing.CredentialID
-		log.Printf("seed: credential already exists (id=%s)", credentialID)
-	} else {
-		credentialID = created.CredentialID
-	}
-
-	pool, err := pgxpool.New(ctx, buildDBDSN())
+	pool, err := pgxpool.New(context.Background(), buildDBDSN())
 	if err != nil {
 		return fmt.Errorf("database: %w", err)
 	}
 	defer pool.Close()
 
 	s := store.New(pool)
-	userID, err := s.EnsureUser(ctx, email, credentialID)
-	if err != nil {
-		return fmt.Errorf("ensure user: %w", err)
+	if err := syncAdminUser(context.Background(), authClient, s, email, password); err != nil {
+		return fmt.Errorf("seed: %w", err)
 	}
-
-	log.Printf("seed: admin user ready (id=%s, credential_id=%s)", userID, credentialID)
 	return nil
 }
