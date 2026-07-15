@@ -79,7 +79,6 @@ import type {
   ListEntriesParams,
   ListImportsParams,
   ListInstitutionAccountsParams,
-  ListInstitutionsParams,
   ListJobsParams,
   ListLabelEntriesParams,
   ListLabelsParams,
@@ -2663,89 +2662,87 @@ export function useGetImport<TData = Awaited<ReturnType<typeof getImport>>, TErr
  * @summary List institution mappings
  */
 export const listInstitutions = (
-    params?: ListInstitutionsParams, options?: AxiosRequestConfig
+     options?: AxiosRequestConfig
  ): Promise<AxiosResponse<EnvelopeListInstitutionView>> => {
     
     
     return axios.default.get(
-      `/institutions`,{
-    ...options,
-        params: {...params, ...options?.params},}
+      `/institutions`,options
     );
   }
 
 
 
 
-export const getListInstitutionsInfiniteQueryKey = (params?: ListInstitutionsParams,) => {
+export const getListInstitutionsInfiniteQueryKey = () => {
     return [
-    'infinite', `/institutions`, ...(params ? [params]: [])
+    'infinite', `/institutions`
     ] as const;
     }
 
-export const getListInstitutionsQueryKey = (params?: ListInstitutionsParams,) => {
+export const getListInstitutionsQueryKey = () => {
     return [
-    `/institutions`, ...(params ? [params]: [])
+    `/institutions`
     ] as const;
     }
 
     
-export const getListInstitutionsInfiniteQueryOptions = <TData = InfiniteData<Awaited<ReturnType<typeof listInstitutions>>, ListInstitutionsParams['cursor']>, TError = AxiosError<ErrorModel>>(params?: ListInstitutionsParams, options?: { query?:Partial<UseInfiniteQueryOptions<Awaited<ReturnType<typeof listInstitutions>>, TError, TData, QueryKey, ListInstitutionsParams['cursor']>>, axios?: AxiosRequestConfig}
+export const getListInstitutionsInfiniteQueryOptions = <TData = InfiniteData<Awaited<ReturnType<typeof listInstitutions>>>, TError = AxiosError<ErrorModel>>( options?: { query?:Partial<UseInfiniteQueryOptions<Awaited<ReturnType<typeof listInstitutions>>, TError, TData>>, axios?: AxiosRequestConfig}
 ) => {
 
 const {query: queryOptions, axios: axiosOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getListInstitutionsInfiniteQueryKey(params);
+  const queryKey =  queryOptions?.queryKey ?? getListInstitutionsInfiniteQueryKey();
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listInstitutions>>, QueryKey, ListInstitutionsParams['cursor']> = ({ signal, pageParam }) => listInstitutions({...params, 'cursor': pageParam || params?.['cursor']}, { signal, ...axiosOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listInstitutions>>> = ({ signal }) => listInstitutions({ signal, ...axiosOptions });
 
       
 
       
 
-   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof listInstitutions>>, TError, TData, QueryKey, ListInstitutionsParams['cursor']> & { queryKey: DataTag<QueryKey, TData, TError> }
+   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof listInstitutions>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
 
 export type ListInstitutionsInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof listInstitutions>>>
 export type ListInstitutionsInfiniteQueryError = AxiosError<ErrorModel>
 
 
-export function useListInstitutionsInfinite<TData = InfiniteData<Awaited<ReturnType<typeof listInstitutions>>, ListInstitutionsParams['cursor']>, TError = AxiosError<ErrorModel>>(
- params: undefined |  ListInstitutionsParams, options: { query:Partial<UseInfiniteQueryOptions<Awaited<ReturnType<typeof listInstitutions>>, TError, TData, QueryKey, ListInstitutionsParams['cursor']>> & Pick<
+export function useListInstitutionsInfinite<TData = InfiniteData<Awaited<ReturnType<typeof listInstitutions>>>, TError = AxiosError<ErrorModel>>(
+  options: { query:Partial<UseInfiniteQueryOptions<Awaited<ReturnType<typeof listInstitutions>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof listInstitutions>>,
           TError,
-          Awaited<ReturnType<typeof listInstitutions>>, QueryKey
+          Awaited<ReturnType<typeof listInstitutions>>
         > , 'initialData'
       >, axios?: AxiosRequestConfig}
  , queryClient?: QueryClient
   ):  DefinedUseInfiniteQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListInstitutionsInfinite<TData = InfiniteData<Awaited<ReturnType<typeof listInstitutions>>, ListInstitutionsParams['cursor']>, TError = AxiosError<ErrorModel>>(
- params?: ListInstitutionsParams, options?: { query?:Partial<UseInfiniteQueryOptions<Awaited<ReturnType<typeof listInstitutions>>, TError, TData, QueryKey, ListInstitutionsParams['cursor']>> & Pick<
+export function useListInstitutionsInfinite<TData = InfiniteData<Awaited<ReturnType<typeof listInstitutions>>>, TError = AxiosError<ErrorModel>>(
+  options?: { query?:Partial<UseInfiniteQueryOptions<Awaited<ReturnType<typeof listInstitutions>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof listInstitutions>>,
           TError,
-          Awaited<ReturnType<typeof listInstitutions>>, QueryKey
+          Awaited<ReturnType<typeof listInstitutions>>
         > , 'initialData'
       >, axios?: AxiosRequestConfig}
  , queryClient?: QueryClient
   ):  UseInfiniteQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListInstitutionsInfinite<TData = InfiniteData<Awaited<ReturnType<typeof listInstitutions>>, ListInstitutionsParams['cursor']>, TError = AxiosError<ErrorModel>>(
- params?: ListInstitutionsParams, options?: { query?:Partial<UseInfiniteQueryOptions<Awaited<ReturnType<typeof listInstitutions>>, TError, TData, QueryKey, ListInstitutionsParams['cursor']>>, axios?: AxiosRequestConfig}
+export function useListInstitutionsInfinite<TData = InfiniteData<Awaited<ReturnType<typeof listInstitutions>>>, TError = AxiosError<ErrorModel>>(
+  options?: { query?:Partial<UseInfiniteQueryOptions<Awaited<ReturnType<typeof listInstitutions>>, TError, TData>>, axios?: AxiosRequestConfig}
  , queryClient?: QueryClient
   ):  UseInfiniteQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
  * @summary List institution mappings
  */
 
-export function useListInstitutionsInfinite<TData = InfiniteData<Awaited<ReturnType<typeof listInstitutions>>, ListInstitutionsParams['cursor']>, TError = AxiosError<ErrorModel>>(
- params?: ListInstitutionsParams, options?: { query?:Partial<UseInfiniteQueryOptions<Awaited<ReturnType<typeof listInstitutions>>, TError, TData, QueryKey, ListInstitutionsParams['cursor']>>, axios?: AxiosRequestConfig}
+export function useListInstitutionsInfinite<TData = InfiniteData<Awaited<ReturnType<typeof listInstitutions>>>, TError = AxiosError<ErrorModel>>(
+  options?: { query?:Partial<UseInfiniteQueryOptions<Awaited<ReturnType<typeof listInstitutions>>, TError, TData>>, axios?: AxiosRequestConfig}
  , queryClient?: QueryClient 
  ):  UseInfiniteQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
-  const queryOptions = getListInstitutionsInfiniteQueryOptions(params,options)
+  const queryOptions = getListInstitutionsInfiniteQueryOptions(options)
 
   const query = useInfiniteQuery(queryOptions, queryClient) as  UseInfiniteQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
@@ -2757,16 +2754,16 @@ export function useListInstitutionsInfinite<TData = InfiniteData<Awaited<ReturnT
 
 
 
-export const getListInstitutionsQueryOptions = <TData = Awaited<ReturnType<typeof listInstitutions>>, TError = AxiosError<ErrorModel>>(params?: ListInstitutionsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listInstitutions>>, TError, TData>>, axios?: AxiosRequestConfig}
+export const getListInstitutionsQueryOptions = <TData = Awaited<ReturnType<typeof listInstitutions>>, TError = AxiosError<ErrorModel>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listInstitutions>>, TError, TData>>, axios?: AxiosRequestConfig}
 ) => {
 
 const {query: queryOptions, axios: axiosOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getListInstitutionsQueryKey(params);
+  const queryKey =  queryOptions?.queryKey ?? getListInstitutionsQueryKey();
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listInstitutions>>> = ({ signal }) => listInstitutions(params, { signal, ...axiosOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listInstitutions>>> = ({ signal }) => listInstitutions({ signal, ...axiosOptions });
 
       
 
@@ -2780,7 +2777,7 @@ export type ListInstitutionsQueryError = AxiosError<ErrorModel>
 
 
 export function useListInstitutions<TData = Awaited<ReturnType<typeof listInstitutions>>, TError = AxiosError<ErrorModel>>(
- params: undefined |  ListInstitutionsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listInstitutions>>, TError, TData>> & Pick<
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listInstitutions>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof listInstitutions>>,
           TError,
@@ -2790,7 +2787,7 @@ export function useListInstitutions<TData = Awaited<ReturnType<typeof listInstit
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useListInstitutions<TData = Awaited<ReturnType<typeof listInstitutions>>, TError = AxiosError<ErrorModel>>(
- params?: ListInstitutionsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listInstitutions>>, TError, TData>> & Pick<
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listInstitutions>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof listInstitutions>>,
           TError,
@@ -2800,7 +2797,7 @@ export function useListInstitutions<TData = Awaited<ReturnType<typeof listInstit
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useListInstitutions<TData = Awaited<ReturnType<typeof listInstitutions>>, TError = AxiosError<ErrorModel>>(
- params?: ListInstitutionsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listInstitutions>>, TError, TData>>, axios?: AxiosRequestConfig}
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listInstitutions>>, TError, TData>>, axios?: AxiosRequestConfig}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
@@ -2808,11 +2805,11 @@ export function useListInstitutions<TData = Awaited<ReturnType<typeof listInstit
  */
 
 export function useListInstitutions<TData = Awaited<ReturnType<typeof listInstitutions>>, TError = AxiosError<ErrorModel>>(
- params?: ListInstitutionsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listInstitutions>>, TError, TData>>, axios?: AxiosRequestConfig}
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listInstitutions>>, TError, TData>>, axios?: AxiosRequestConfig}
  , queryClient?: QueryClient 
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
-  const queryOptions = getListInstitutionsQueryOptions(params,options)
+  const queryOptions = getListInstitutionsQueryOptions(options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

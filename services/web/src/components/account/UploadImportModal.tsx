@@ -53,7 +53,7 @@ export function UploadImportModal({ accountId, open, onClose }: UploadImportModa
 
   const queryClient = useQueryClient()
   const accountQuery = useGetAccount(accountId, { query: { enabled: open } })
-  const institutionsQuery = useListInstitutions(undefined, { query: { enabled: open } })
+  const institutionsQuery = useListInstitutions({ query: { enabled: open } })
   const accountsQuery = useListAccounts(undefined, { query: { enabled: open } })
   const updateAccountMutation = useUpdateAccount()
   const { submitMapping, pending: mappingPending } = useSubmitMapping()

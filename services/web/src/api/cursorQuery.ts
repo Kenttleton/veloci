@@ -22,7 +22,6 @@ import type {
   ListEntriesParams,
   ListImportsParams,
   ListInstitutionAccountsParams,
-  ListInstitutionsParams,
   ListJobsParams,
   ListLabelEntriesParams,
   ListLabelsParams,
@@ -37,7 +36,6 @@ import {
   useListEntriesInfinite as _useListEntriesInfinite,
   useListImportsInfinite as _useListImportsInfinite,
   useListInstitutionAccountsInfinite as _useListInstitutionAccountsInfinite,
-  useListInstitutionsInfinite as _useListInstitutionsInfinite,
   useListJobsInfinite as _useListJobsInfinite,
   useListLabelEntriesInfinite as _useListLabelEntriesInfinite,
   useListLabelsInfinite as _useListLabelsInfinite,
@@ -94,12 +92,6 @@ export const useListImportsInfinite = (
   options?: QueryOptions,
   queryClient?: QueryClient,
 ) => _useListImportsInfinite(params, withCursor(options) as any, queryClient)
-
-export const useListInstitutionsInfinite = (
-  params?: ListInstitutionsParams,
-  options?: QueryOptions,
-  queryClient?: QueryClient,
-) => _useListInstitutionsInfinite(params, withCursor(options) as any, queryClient)
 
 export const useListJobsInfinite = (
   params?: ListJobsParams,

@@ -711,15 +711,6 @@ cursor?: string;
 limit?: number;
 };
 
-export type ListInstitutionsParams = {
-cursor?: string;
-/**
- * @minimum 1
- * @maximum 200
- */
-limit?: number;
-};
-
 export type ListInstitutionAccountsParams = {
 cursor?: string;
 /**

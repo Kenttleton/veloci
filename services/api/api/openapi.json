@@ -3027,28 +3027,6 @@
     "/institutions": {
       "get": {
         "operationId": "list-institutions",
-        "parameters": [
-          {
-            "explode": false,
-            "in": "query",
-            "name": "cursor",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "explode": false,
-            "in": "query",
-            "name": "limit",
-            "schema": {
-              "default": 50,
-              "format": "int64",
-              "maximum": 200,
-              "minimum": 1,
-              "type": "integer"
-            }
-          }
-        ],
         "responses": {
           "200": {
             "content": {
