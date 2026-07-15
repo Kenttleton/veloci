@@ -75,126 +75,91 @@ function withCursor<T extends QueryOptions | undefined>(options: T): T {
 // Hooks with signature: (params?, options?, queryClient?)
 // ---------------------------------------------------------------------------
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 export const useListTransactionsInfinite = (
   params?: ListTransactionsParams,
-  options?: Parameters<typeof _useListTransactionsInfinite>[1],
+  options?: QueryOptions,
   queryClient?: QueryClient,
-): ReturnType<typeof _useListTransactionsInfinite> =>
-  _useListTransactionsInfinite(params, withCursor(options), queryClient) as ReturnType<
-    typeof _useListTransactionsInfinite
-  >
+) => _useListTransactionsInfinite(params, withCursor(options) as any, queryClient)
 
 export const useListEntriesInfinite = (
   params?: ListEntriesParams,
-  options?: Parameters<typeof _useListEntriesInfinite>[1],
+  options?: QueryOptions,
   queryClient?: QueryClient,
-): ReturnType<typeof _useListEntriesInfinite> =>
-  _useListEntriesInfinite(params, withCursor(options), queryClient) as ReturnType<
-    typeof _useListEntriesInfinite
-  >
+) => _useListEntriesInfinite(params, withCursor(options) as any, queryClient)
 
 export const useListImportsInfinite = (
   params?: ListImportsParams,
-  options?: Parameters<typeof _useListImportsInfinite>[1],
+  options?: QueryOptions,
   queryClient?: QueryClient,
-): ReturnType<typeof _useListImportsInfinite> =>
-  _useListImportsInfinite(params, withCursor(options), queryClient) as ReturnType<
-    typeof _useListImportsInfinite
-  >
+) => _useListImportsInfinite(params, withCursor(options) as any, queryClient)
 
 export const useListInstitutionsInfinite = (
   params?: ListInstitutionsParams,
-  options?: Parameters<typeof _useListInstitutionsInfinite>[1],
+  options?: QueryOptions,
   queryClient?: QueryClient,
-): ReturnType<typeof _useListInstitutionsInfinite> =>
-  _useListInstitutionsInfinite(params, withCursor(options), queryClient) as ReturnType<
-    typeof _useListInstitutionsInfinite
-  >
+) => _useListInstitutionsInfinite(params, withCursor(options) as any, queryClient)
 
 export const useListJobsInfinite = (
   params?: ListJobsParams,
-  options?: Parameters<typeof _useListJobsInfinite>[1],
+  options?: QueryOptions,
   queryClient?: QueryClient,
-): ReturnType<typeof _useListJobsInfinite> =>
-  _useListJobsInfinite(params, withCursor(options), queryClient) as ReturnType<
-    typeof _useListJobsInfinite
-  >
+) => _useListJobsInfinite(params, withCursor(options) as any, queryClient)
 
 export const useListLabelsInfinite = (
   params?: ListLabelsParams,
-  options?: Parameters<typeof _useListLabelsInfinite>[1],
+  options?: QueryOptions,
   queryClient?: QueryClient,
-): ReturnType<typeof _useListLabelsInfinite> =>
-  _useListLabelsInfinite(params, withCursor(options), queryClient) as ReturnType<
-    typeof _useListLabelsInfinite
-  >
-
-export const useListLabelEntriesInfinite = (
-  id: string,
-  params?: ListLabelEntriesParams,
-  options?: Parameters<typeof _useListLabelEntriesInfinite>[2],
-  queryClient?: QueryClient,
-): ReturnType<typeof _useListLabelEntriesInfinite> =>
-  _useListLabelEntriesInfinite(id, params, withCursor(options), queryClient) as ReturnType<
-    typeof _useListLabelEntriesInfinite
-  >
+) => _useListLabelsInfinite(params, withCursor(options) as any, queryClient)
 
 export const useListProjectionsInfinite = (
   params?: ListProjectionsParams,
-  options?: Parameters<typeof _useListProjectionsInfinite>[1],
+  options?: QueryOptions,
   queryClient?: QueryClient,
-): ReturnType<typeof _useListProjectionsInfinite> =>
-  _useListProjectionsInfinite(params, withCursor(options), queryClient) as ReturnType<
-    typeof _useListProjectionsInfinite
-  >
+) => _useListProjectionsInfinite(params, withCursor(options) as any, queryClient)
 
 export const useListReviewInfinite = (
   params?: ListReviewParams,
-  options?: Parameters<typeof _useListReviewInfinite>[1],
+  options?: QueryOptions,
   queryClient?: QueryClient,
-): ReturnType<typeof _useListReviewInfinite> =>
-  _useListReviewInfinite(params, withCursor(options), queryClient) as ReturnType<
-    typeof _useListReviewInfinite
-  >
+) => _useListReviewInfinite(params, withCursor(options) as any, queryClient)
 
 export const useListSnapshotsInfinite = (
   params?: ListSnapshotsParams,
-  options?: Parameters<typeof _useListSnapshotsInfinite>[1],
+  options?: QueryOptions,
   queryClient?: QueryClient,
-): ReturnType<typeof _useListSnapshotsInfinite> =>
-  _useListSnapshotsInfinite(params, withCursor(options), queryClient) as ReturnType<
-    typeof _useListSnapshotsInfinite
-  >
+) => _useListSnapshotsInfinite(params, withCursor(options) as any, queryClient)
 
 export const useListClassificationsInfinite = (
   params?: ListClassificationsParams,
-  options?: Parameters<typeof _useListClassificationsInfinite>[1],
+  options?: QueryOptions,
   queryClient?: QueryClient,
-): ReturnType<typeof _useListClassificationsInfinite> =>
-  _useListClassificationsInfinite(params, withCursor(options), queryClient) as ReturnType<
-    typeof _useListClassificationsInfinite
-  >
+) => _useListClassificationsInfinite(params, withCursor(options) as any, queryClient)
 
 // ---------------------------------------------------------------------------
 // Hooks with signature: (id, params?, options?, queryClient?)
 // ---------------------------------------------------------------------------
 
+export const useListLabelEntriesInfinite = (
+  id: string,
+  params?: ListLabelEntriesParams,
+  options?: QueryOptions,
+  queryClient?: QueryClient,
+) => _useListLabelEntriesInfinite(id, params, withCursor(options) as any, queryClient)
+
 export const useListInstitutionAccountsInfinite = (
   id: string,
   params?: ListInstitutionAccountsParams,
-  options?: Parameters<typeof _useListInstitutionAccountsInfinite>[2],
+  options?: QueryOptions,
   queryClient?: QueryClient,
-): ReturnType<typeof _useListInstitutionAccountsInfinite> =>
-  _useListInstitutionAccountsInfinite(id, params, withCursor(options), queryClient) as ReturnType<
-    typeof _useListInstitutionAccountsInfinite
-  >
+) => _useListInstitutionAccountsInfinite(id, params, withCursor(options) as any, queryClient)
 
 export const useGetSnapshotHistoryInfinite = (
   nodeId: string,
   params?: GetSnapshotHistoryParams,
-  options?: Parameters<typeof _useGetSnapshotHistoryInfinite>[2],
+  options?: QueryOptions,
   queryClient?: QueryClient,
-): ReturnType<typeof _useGetSnapshotHistoryInfinite> =>
-  _useGetSnapshotHistoryInfinite(nodeId, params, withCursor(options), queryClient) as ReturnType<
-    typeof _useGetSnapshotHistoryInfinite
-  >
+) => _useGetSnapshotHistoryInfinite(nodeId, params, withCursor(options) as any, queryClient)
+
+/* eslint-enable @typescript-eslint/no-explicit-any */
