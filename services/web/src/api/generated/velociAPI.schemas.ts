@@ -589,12 +589,15 @@ export type UpdateAccountInputBodyBalanceCents = number | null;
 
 export type UpdateAccountInputBodyCreditLimitCents = number | null;
 
+export type UpdateAccountInputBodyInstitutionId = string | null;
+
 export type UpdateAccountInputBodyInterestRate = number | null;
 
 export interface UpdateAccountInputBody {
   account_type: string;
   balance_cents: UpdateAccountInputBodyBalanceCents;
   credit_limit_cents: UpdateAccountInputBodyCreditLimitCents;
+  institution_id: UpdateAccountInputBodyInstitutionId;
   interest_rate: UpdateAccountInputBodyInterestRate;
   name: string;
   status: string;
@@ -699,6 +702,7 @@ limit?: number;
 };
 
 export type ListImportsParams = {
+account_id?: string;
 cursor?: string;
 /**
  * @minimum 1

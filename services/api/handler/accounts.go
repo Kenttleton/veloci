@@ -89,6 +89,7 @@ type updateAccountInput struct {
 		Name             string   `json:"name"          required:"true"`
 		AccountType      string   `json:"account_type"  required:"true"`
 		Status           string   `json:"status"        required:"true"`
+		InstitutionID    *string  `json:"institution_id"`
 		InterestRate     *float64 `json:"interest_rate"`
 		BalanceCents     *int64   `json:"balance_cents"`
 		CreditLimitCents *int64   `json:"credit_limit_cents"`
@@ -178,6 +179,7 @@ func (h *AccountsHandler) UpdateAccount(ctx context.Context, input *updateAccoun
 		Name:             input.Body.Name,
 		AccountType:      input.Body.AccountType,
 		Status:           input.Body.Status,
+		InstitutionID:    input.Body.InstitutionID,
 		InterestRate:     input.Body.InterestRate,
 		BalanceCents:     input.Body.BalanceCents,
 		CreditLimitCents: input.Body.CreditLimitCents,

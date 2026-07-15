@@ -42,15 +42,17 @@ func (s *Store) GetPendingImport(ctx context.Context, entityID, id string) (Pend
 	return pgx.CollectOneRow(rows, pgx.RowToStructByName[PendingImport])
 }
 
-// ListPendingImports returns a paginated list of imports for an entity.
-func (s *Store) ListPendingImports(ctx context.Context, entityID string, limit int, cursor string) ([]PendingImport, error) {
+// ListPendingImports returns a paginated list of imports for an entity, optionally
+// filtered to a single account (empty accountID means no filter).
+func (s *Store) ListPendingImports(ctx context.Context, entityID, accountID string, limit int, cursor string) ([]PendingImport, error) {
 	if cursor == "" {
 		rows, err := s.pool.Query(ctx, fmt.Sprintf(`
 			SELECT %s FROM pending_imports
 			WHERE entity_id = $1
+			  AND ($3 = '' OR account_id = $3::uuid)
 			ORDER BY uploaded_at DESC, id DESC
 			LIMIT $2
-		`, pendingImportCols), entityID, limit)
+		`, pendingImportCols), entityID, limit, accountID)
 		if err != nil {
 			return nil, err
 		}
@@ -65,9 +67,10 @@ func (s *Store) ListPendingImports(ctx context.Context, entityID string, limit i
 		SELECT %s FROM pending_imports
 		WHERE entity_id = $1
 		  AND (uploaded_at, id::text) < ($2::timestamptz, $3)
+		  AND ($5 = '' OR account_id = $5::uuid)
 		ORDER BY uploaded_at DESC, id DESC
 		LIMIT $4
-	`, pendingImportCols), entityID, cursorTS, cursorID, limit)
+	`, pendingImportCols), entityID, cursorTS, cursorID, limit, accountID)
 	if err != nil {
 		return nil, err
 	}

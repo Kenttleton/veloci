@@ -1,20 +1,17 @@
 import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import * as Collapsible from '@radix-ui/react-collapsible'
-import { ChevronRight } from 'lucide-react'
 import { Modal } from '../shared/Modal'
+import { MappingFields } from '../institution/MappingFields'
+import { MappingPreview } from '../institution/MappingPreview'
+import { useSubmitMapping } from '../institution/useSubmitMapping'
+import { DEFAULT_MAPPING_VALUES, type MappingFormValues } from '../institution/mappingForm'
+import { inputStyle, errorInputStyle, labelStyle, fieldWrapStyle } from '../shared/formStyles'
 import {
   useListInstitutions,
-  useCreateInstitution,
   useCreateInstitutionAccount,
-  useCreateAccount,
   getListAccountsQueryKey,
 } from '../../api/generated/velociAPI'
-import type {
-  CreateInstitutionInputBody,
-  CreateInstitutionAccountInputBody,
-  CreateAccountInputBody,
-} from '../../api/generated/velociAPI.schemas'
+import type { CreateInstitutionAccountInputBody } from '../../api/generated/velociAPI.schemas'
 
 interface AddAccountModalProps {
   open: boolean
@@ -33,34 +30,7 @@ const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
   investment: 'Investment',
 }
 
-type InstitutionChoice = 'existing' | 'new' | 'none'
-
-const inputStyle: React.CSSProperties = {
-  background: 'var(--surface2)',
-  border: '1px solid var(--border)',
-  borderRadius: 4,
-  padding: '6px 8px',
-  color: 'var(--text)',
-  fontSize: 13,
-  outline: 'none',
-  width: '100%',
-}
-
-const errorInputStyle: React.CSSProperties = {
-  ...inputStyle,
-  border: '1px solid var(--commit)',
-}
-
-const labelStyle: React.CSSProperties = {
-  display: 'block',
-  fontSize: 12,
-  color: 'var(--text3)',
-  marginBottom: 4,
-  textTransform: 'uppercase',
-  letterSpacing: '0.04em',
-}
-
-const fieldWrapStyle: React.CSSProperties = { marginBottom: 14 }
+type InstitutionChoice = 'existing' | 'new' | 'skip'
 
 /** Renders a dollar-amount text input; parent stores the raw string and converts on submit. */
 function DollarInput({
@@ -118,19 +88,9 @@ export function AddAccountModal({ open, onClose, defaultStatus }: AddAccountModa
   const [creditLimit, setCreditLimit] = useState('')
 
   // --- Institution section ---
-  const [institutionChoice, setInstitutionChoice] = useState<InstitutionChoice>('none')
+  const [institutionChoice, setInstitutionChoice] = useState<InstitutionChoice>('skip')
   const [existingInstitutionId, setExistingInstitutionId] = useState('')
-  const [newInstitutionName, setNewInstitutionName] = useState('')
-  const [advancedOpen, setAdvancedOpen] = useState(false)
-
-  // Advanced institution settings (only relevant when institutionChoice === 'new')
-  const [amountSignConvention, setAmountSignConvention] = useState('positive_is_credit')
-  const [dedupWindowDays, setDedupWindowDays] = useState('3')
-  const [settlementWindowDays, setSettlementWindowDays] = useState('14')
-  const [amountTolerancePct, setAmountTolerancePct] = useState('0.5')
-  const [dateCol, setDateCol] = useState('date')
-  const [amountCol, setAmountCol] = useState('amount')
-  const [merchantCol, setMerchantCol] = useState('description')
+  const [mappingValues, setMappingValues] = useState<MappingFormValues>(DEFAULT_MAPPING_VALUES)
 
   const [error, setError] = useState('')
   const [pending, setPending] = useState(false)
@@ -139,13 +99,29 @@ export function AddAccountModal({ open, onClose, defaultStatus }: AddAccountModa
 
   const institutionsQuery = useListInstitutions()
   const institutions = institutionsQuery.data?.data.data ?? []
+  const selectedExistingInstitution = institutions.find((inst) => inst.id === existingInstitutionId)
 
-  const createInstitutionMutation = useCreateInstitution()
   const createInstitutionAccountMutation = useCreateInstitutionAccount()
-  const createAccountMutation = useCreateAccount()
+  const { submitMapping, pending: mappingPending } = useSubmitMapping()
 
   const showInterestRate = accountType === 'credit' || accountType === 'loan' || accountType === 'mortgage'
   const showCreditLimit = accountType === 'credit'
+
+  function selectInstitutionChoice(choice: InstitutionChoice) {
+    setInstitutionChoice(choice)
+    if (choice === 'new') {
+      setMappingValues(DEFAULT_MAPPING_VALUES)
+    } else if (choice === 'skip') {
+      setMappingValues((prev) => ({ ...DEFAULT_MAPPING_VALUES, institutionName: name.trim() || prev.institutionName }))
+    }
+  }
+
+  function handleNameChange(value: string) {
+    setName(value)
+    if (institutionChoice === 'skip') {
+      setMappingValues((prev) => ({ ...prev, institutionName: value.trim() }))
+    }
+  }
 
   function resetForm() {
     setName('')
@@ -154,17 +130,9 @@ export function AddAccountModal({ open, onClose, defaultStatus }: AddAccountModa
     setBalance('')
     setInterestRate('')
     setCreditLimit('')
-    setInstitutionChoice('none')
+    setInstitutionChoice('skip')
     setExistingInstitutionId('')
-    setNewInstitutionName('')
-    setAdvancedOpen(false)
-    setAmountSignConvention('positive_is_credit')
-    setDedupWindowDays('3')
-    setSettlementWindowDays('14')
-    setAmountTolerancePct('0.5')
-    setDateCol('date')
-    setAmountCol('amount')
-    setMerchantCol('description')
+    setMappingValues(DEFAULT_MAPPING_VALUES)
     setError('')
   }
 
@@ -186,7 +154,7 @@ export function AddAccountModal({ open, onClose, defaultStatus }: AddAccountModa
       setError('Select an institution, or choose a different institution option.')
       return
     }
-    if (institutionChoice === 'new' && !newInstitutionName.trim()) {
+    if (institutionChoice !== 'existing' && !mappingValues.institutionName.trim()) {
       setError('Institution name is required.')
       return
     }
@@ -202,44 +170,13 @@ export function AddAccountModal({ open, onClose, defaultStatus }: AddAccountModa
 
     setPending(true)
     try {
-      if (institutionChoice === 'existing') {
-        await createInstitutionAccountMutation.mutateAsync({
-          id: existingInstitutionId,
-          data: accountBody,
-        })
-      } else if (institutionChoice === 'new') {
-        // Create the institution first, using defaults for the CSV-mapping fields
-        // (the user can refine these during their first CSV import), then create
-        // the account under the newly created institution.
-        const newInstitutionBody: CreateInstitutionInputBody = {
-          institution_name: newInstitutionName.trim(),
-          source_type: 'csv',
-          amount_col: amountCol.trim() || 'amount',
-          date_col: dateCol.trim() || 'date',
-          merchant_col: merchantCol.trim() || 'description',
-          balance_col: null,
-          debit_credit_col: null,
-          imported_id_col: null,
-          amount_sign_convention: amountSignConvention,
-          dedup_window_days: Number(dedupWindowDays) || 3,
-          settlement_window_days: Number(settlementWindowDays) || 14,
-          amount_tolerance_pct: Number(amountTolerancePct) || 0.5,
-        }
-        const createdInstitution = await createInstitutionMutation.mutateAsync({ data: newInstitutionBody })
-        const institutionId = createdInstitution.data.data.id
-        await createInstitutionAccountMutation.mutateAsync({
-          id: institutionId,
-          data: accountBody,
-        })
-      } else {
-        // institutionChoice === 'none' — standalone cash/manual account with no institution.
-        const noInstitutionBody: CreateAccountInputBody = {
-          ...accountBody,
-          institution_id: null,
-        }
-        await createAccountMutation.mutateAsync({ data: noInstitutionBody })
+      let institutionId = existingInstitutionId
+      if (institutionChoice !== 'existing') {
+        const result = await submitMapping(null, mappingValues)
+        institutionId = result.institutionId
       }
 
+      await createInstitutionAccountMutation.mutateAsync({ id: institutionId, data: accountBody })
       await queryClient.invalidateQueries({ queryKey: getListAccountsQueryKey() })
 
       resetForm()
@@ -261,7 +198,7 @@ export function AddAccountModal({ open, onClose, defaultStatus }: AddAccountModa
             id="account-name"
             type="text"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => handleNameChange(e.target.value)}
             placeholder="e.g. Chase Checking"
             style={!name.trim() && error ? errorInputStyle : inputStyle}
           />
@@ -337,7 +274,7 @@ export function AddAccountModal({ open, onClose, defaultStatus }: AddAccountModa
                 name="institution-choice"
                 value="existing"
                 checked={institutionChoice === 'existing'}
-                onChange={() => setInstitutionChoice('existing')}
+                onChange={() => selectInstitutionChoice('existing')}
               />
               Link to existing institution
             </label>
@@ -347,7 +284,7 @@ export function AddAccountModal({ open, onClose, defaultStatus }: AddAccountModa
                 name="institution-choice"
                 value="new"
                 checked={institutionChoice === 'new'}
-                onChange={() => setInstitutionChoice('new')}
+                onChange={() => selectInstitutionChoice('new')}
               />
               Create new institution
             </label>
@@ -355,15 +292,15 @@ export function AddAccountModal({ open, onClose, defaultStatus }: AddAccountModa
               <input
                 type="radio"
                 name="institution-choice"
-                value="none"
-                checked={institutionChoice === 'none'}
-                onChange={() => setInstitutionChoice('none')}
+                value="skip"
+                checked={institutionChoice === 'skip'}
+                onChange={() => selectInstitutionChoice('skip')}
               />
-              No institution (cash / manual account)
+              Skip for now
             </label>
           </div>
 
-          {/* Existing institution select */}
+          {/* Existing institution select + read-only mapping preview */}
           {institutionChoice === 'existing' && (
             <div style={fieldWrapStyle}>
               <label style={labelStyle} htmlFor="existing-institution">Institution</label>
@@ -371,7 +308,7 @@ export function AddAccountModal({ open, onClose, defaultStatus }: AddAccountModa
                 id="existing-institution"
                 value={existingInstitutionId}
                 onChange={(e) => setExistingInstitutionId(e.target.value)}
-                style={{ ...inputStyle, cursor: 'pointer' }}
+                style={{ ...inputStyle, cursor: 'pointer', marginBottom: 8 }}
                 disabled={institutionsQuery.isLoading}
               >
                 <option value="">
@@ -386,164 +323,17 @@ export function AddAccountModal({ open, onClose, defaultStatus }: AddAccountModa
                   No institutions yet — choose "Create new institution" instead.
                 </div>
               )}
+              {selectedExistingInstitution && <MappingPreview institution={selectedExistingInstitution} />}
             </div>
           )}
 
-          {/* New institution fields */}
-          {institutionChoice === 'new' && (
-            <div>
-              <div style={fieldWrapStyle}>
-                <label style={labelStyle} htmlFor="new-institution-name">Institution name</label>
-                <input
-                  id="new-institution-name"
-                  type="text"
-                  value={newInstitutionName}
-                  onChange={(e) => setNewInstitutionName(e.target.value)}
-                  placeholder="e.g. Chase"
-                  style={inputStyle}
-                />
-              </div>
-
-              <Collapsible.Root open={advancedOpen} onOpenChange={setAdvancedOpen}>
-                <Collapsible.Trigger asChild>
-                  <button
-                    type="button"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 4,
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      color: 'var(--text2)',
-                      fontSize: 12,
-                      padding: '4px 0',
-                      marginBottom: 8,
-                    }}
-                  >
-                    <ChevronRight
-                      size={12}
-                      style={{
-                        transform: advancedOpen ? 'rotate(90deg)' : 'none',
-                        transition: 'transform 0.1s',
-                      }}
-                    />
-                    Advanced settings (optional)
-                  </button>
-                </Collapsible.Trigger>
-                <Collapsible.Content>
-                  <div
-                    style={{
-                      padding: 12,
-                      background: 'var(--surface2)',
-                      borderRadius: 4,
-                      border: '1px solid var(--border)',
-                      marginBottom: 8,
-                    }}
-                  >
-                    <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 12 }}>
-                      You can refine these when you upload your first CSV.
-                    </div>
-
-                    <div style={fieldWrapStyle}>
-                      <label style={labelStyle} htmlFor="source-type">Source type</label>
-                      <input
-                        id="source-type"
-                        type="text"
-                        value="csv"
-                        disabled
-                        style={{ ...inputStyle, opacity: 0.6, cursor: 'not-allowed' }}
-                      />
-                    </div>
-
-                    <div style={fieldWrapStyle}>
-                      <label style={labelStyle} htmlFor="amount-sign-convention">Amount sign convention</label>
-                      <select
-                        id="amount-sign-convention"
-                        value={amountSignConvention}
-                        onChange={(e) => setAmountSignConvention(e.target.value)}
-                        style={{ ...inputStyle, cursor: 'pointer' }}
-                      >
-                        <option value="positive_is_credit">Positive is credit</option>
-                        <option value="positive_is_debit">Positive is debit</option>
-                      </select>
-                    </div>
-
-                    <div style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
-                      <div style={{ flex: 1 }}>
-                        <label style={labelStyle} htmlFor="dedup-window-days">Dedup window (days)</label>
-                        <input
-                          id="dedup-window-days"
-                          type="number"
-                          value={dedupWindowDays}
-                          onChange={(e) => setDedupWindowDays(e.target.value)}
-                          style={inputStyle}
-                        />
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <label style={labelStyle} htmlFor="settlement-window-days">Settlement window (days)</label>
-                        <input
-                          id="settlement-window-days"
-                          type="number"
-                          value={settlementWindowDays}
-                          onChange={(e) => setSettlementWindowDays(e.target.value)}
-                          style={inputStyle}
-                        />
-                      </div>
-                    </div>
-
-                    <div style={fieldWrapStyle}>
-                      <label style={labelStyle} htmlFor="amount-tolerance-pct">Amount tolerance (%)</label>
-                      <input
-                        id="amount-tolerance-pct"
-                        type="number"
-                        step="0.1"
-                        value={amountTolerancePct}
-                        onChange={(e) => setAmountTolerancePct(e.target.value)}
-                        style={inputStyle}
-                      />
-                    </div>
-
-                    <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 8 }}>
-                      Column mapping — finalized during first CSV import
-                    </div>
-
-                    <div style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
-                      <div style={{ flex: 1 }}>
-                        <label style={labelStyle} htmlFor="date-col">Date column</label>
-                        <input
-                          id="date-col"
-                          type="text"
-                          value={dateCol}
-                          onChange={(e) => setDateCol(e.target.value)}
-                          style={inputStyle}
-                        />
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <label style={labelStyle} htmlFor="amount-col">Amount column</label>
-                        <input
-                          id="amount-col"
-                          type="text"
-                          value={amountCol}
-                          onChange={(e) => setAmountCol(e.target.value)}
-                          style={inputStyle}
-                        />
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <label style={labelStyle} htmlFor="merchant-col">Merchant column</label>
-                        <input
-                          id="merchant-col"
-                          type="text"
-                          value={merchantCol}
-                          onChange={(e) => setMerchantCol(e.target.value)}
-                          style={inputStyle}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </Collapsible.Content>
-              </Collapsible.Root>
-            </div>
+          {/* New / skip institution mapping editor */}
+          {institutionChoice !== 'existing' && (
+            <MappingFields
+              values={mappingValues}
+              onChange={setMappingValues}
+              nameEditable={institutionChoice === 'new'}
+            />
           )}
         </div>
 
@@ -574,7 +364,7 @@ export function AddAccountModal({ open, onClose, defaultStatus }: AddAccountModa
           </button>
           <button
             type="submit"
-            disabled={pending}
+            disabled={pending || mappingPending}
             style={{
               background: 'var(--accent)',
               border: 'none',

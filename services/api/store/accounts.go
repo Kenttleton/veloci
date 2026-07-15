@@ -125,7 +125,8 @@ func (s *Store) CreateAccount(ctx context.Context, entityID string, in Account) 
 	return pgx.CollectOneRow(rows, pgx.RowToStructByName[Account])
 }
 
-// UpdateAccount updates mutable fields on an account row.
+// UpdateAccount updates mutable fields on an account row. A nil InstitutionID
+// leaves the existing institution_id untouched — pass a non-nil value to relink.
 func (s *Store) UpdateAccount(ctx context.Context, entityID, id string, in Account) (Account, error) {
 	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
 		UPDATE accounts SET
@@ -134,13 +135,15 @@ func (s *Store) UpdateAccount(ctx context.Context, entityID, id string, in Accou
 			status = $5,
 			interest_rate = $6,
 			balance_cents = $7,
-			credit_limit_cents = $8
+			credit_limit_cents = $8,
+			institution_id = COALESCE($9::uuid, institution_id)
 		WHERE entity_id = $1 AND id = $2
 		RETURNING %s
 	`, accountCols),
 		entityID, id,
 		in.Name, in.AccountType, in.Status,
 		in.InterestRate, in.BalanceCents, in.CreditLimitCents,
+		in.InstitutionID,
 	)
 	if err != nil {
 		return Account{}, err

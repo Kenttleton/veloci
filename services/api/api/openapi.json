@@ -1814,6 +1814,12 @@
               "null"
             ]
           },
+          "institution_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "interest_rate": {
             "format": "double",
             "type": [
@@ -1832,6 +1838,7 @@
           "name",
           "account_type",
           "status",
+          "institution_id",
           "interest_rate",
           "balance_cents",
           "credit_limit_cents"
@@ -2919,6 +2926,14 @@
       "get": {
         "operationId": "list-imports",
         "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "account_id",
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "explode": false,
             "in": "query",

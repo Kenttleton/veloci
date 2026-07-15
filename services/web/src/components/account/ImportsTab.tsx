@@ -1,6 +1,8 @@
+import { useState } from 'react'
 import { format, parseISO } from 'date-fns'
 import { useListImportsInfinite } from '../../api/cursorQuery'
 import type { ImportView } from '../../api/generated/velociAPI.schemas'
+import { UploadImportModal } from './UploadImportModal'
 
 interface ImportsTabProps {
   accountId: string
@@ -33,9 +35,28 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
-export function ImportsTab({ accountId: _accountId }: ImportsTabProps) {
-  const { data, fetchNextPage, hasNextPage, isFetching } = useListImportsInfinite({ limit: 50 })
+export function ImportsTab({ accountId }: ImportsTabProps) {
+  const [uploadOpen, setUploadOpen] = useState(false)
+  const { data, fetchNextPage, hasNextPage, isFetching } = useListImportsInfinite({ account_id: accountId, limit: 50 })
   const rows: ImportView[] = data?.pages.flatMap((p) => p.data.data ?? []) ?? []
+
+  const uploadButton = (
+    <button
+      onClick={() => setUploadOpen(true)}
+      style={{
+        background: 'var(--accent)',
+        border: 'none',
+        borderRadius: 4,
+        cursor: 'pointer',
+        color: '#fff',
+        fontSize: 12,
+        fontWeight: 600,
+        padding: '6px 12px',
+      }}
+    >
+      Upload CSV
+    </button>
+  )
 
   if (!data && isFetching) {
     return (
@@ -47,15 +68,20 @@ export function ImportsTab({ accountId: _accountId }: ImportsTabProps) {
     return (
       <div style={{ padding: 32, textAlign: 'center' }}>
         <p style={{ color: 'var(--text2)', marginBottom: 8 }}>No imports for this account.</p>
-        <p style={{ color: 'var(--text3)', fontSize: 13 }}>
-          Use the import button in the sidebar to upload a CSV.
-        </p>
+        <div style={{ marginTop: 8 }}>{uploadButton}</div>
+        <UploadImportModal accountId={accountId} open={uploadOpen} onClose={() => setUploadOpen(false)} />
       </div>
     )
   }
 
   return (
     <div>
+      {/* Toolbar */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '10px 16px', borderBottom: '1px solid var(--border)' }}>
+        {uploadButton}
+      </div>
+      <UploadImportModal accountId={accountId} open={uploadOpen} onClose={() => setUploadOpen(false)} />
+
       {/* Column headers */}
       <div
         style={{

@@ -66,8 +66,9 @@ func toImportView(i store.PendingImport) importView {
 }
 
 type listImportsInput struct {
-	Cursor string `query:"cursor"`
-	Limit  int    `query:"limit" default:"50" minimum:"1" maximum:"200"`
+	AccountID string `query:"account_id"`
+	Cursor    string `query:"cursor"`
+	Limit     int    `query:"limit" default:"50" minimum:"1" maximum:"200"`
 }
 
 type listImportsOutput struct {
@@ -89,7 +90,7 @@ func (h *ImportsHandler) ListImports(ctx context.Context, input *listImportsInpu
 		limit = 50
 	}
 
-	items, err := h.s.ListPendingImports(ctx, entityID, limit+1, input.Cursor)
+	items, err := h.s.ListPendingImports(ctx, entityID, input.AccountID, limit+1, input.Cursor)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("internal error")
 	}
