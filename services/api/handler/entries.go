@@ -47,6 +47,14 @@ type entryView struct {
 	StartDate    string          `json:"start_date"`
 	EndDate      *string         `json:"end_date"`
 	CreatedAt    string          `json:"created_at"`
+	// Engine review metadata (null for user-created entries)
+	AlertType                *string  `json:"alert_type"`
+	Confidence               *float64 `json:"confidence"`
+	MerchantConfidence       *float64 `json:"merchant_confidence"`
+	TimingConfidence         *float64 `json:"timing_confidence"`
+	AmountConfidence         *float64 `json:"amount_confidence"`
+	SampleMerchants          []string `json:"sample_merchants"`
+	MatchedTransactionCount  *int     `json:"matched_transaction_count"`
 }
 
 func toEntryView(e store.EntryRow) entryView {
@@ -80,6 +88,11 @@ func toEntryView(e store.EntryRow) entryView {
 		endDate = &s
 	}
 
+	sampleMerchants := e.SampleMerchants
+	if sampleMerchants == nil {
+		sampleMerchants = []string{}
+	}
+
 	return entryView{
 		ID:           e.ID,
 		LabelID:      e.LabelID,
@@ -99,6 +112,13 @@ func toEntryView(e store.EntryRow) entryView {
 		StartDate:    e.StartDate.Format("2006-01-02"),
 		EndDate:      endDate,
 		CreatedAt:    e.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		AlertType:               e.AlertType,
+		Confidence:              e.Confidence,
+		MerchantConfidence:      e.MerchantConfidence,
+		TimingConfidence:        e.TimingConfidence,
+		AmountConfidence:        e.AmountConfidence,
+		SampleMerchants:         sampleMerchants,
+		MatchedTransactionCount: e.MatchedTransactionCount,
 	}
 }
 

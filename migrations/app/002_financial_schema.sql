@@ -222,7 +222,18 @@ CREATE TABLE entries (
   -- Signal lifecycle (absorbed from rule_epochs).
   start_date             DATE          NOT NULL,
   end_date               DATE,
-  created_at             TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+  created_at             TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+  -- Engine review metadata (populated by Stage 2; NULL on user-created entries).
+  -- alert_type: 'new' = first detection, 'drift' = rate changed, 'ended' = signal gone.
+  alert_type                TEXT          CHECK (alert_type IN ('new', 'drift', 'ended')),
+  confidence                NUMERIC(4,3),
+  merchant_confidence       NUMERIC(4,3),
+  timing_confidence         NUMERIC(4,3),
+  amount_confidence         NUMERIC(4,3),
+  sample_merchants          TEXT[],
+  matched_transaction_count INTEGER,
+  reviewed_by               UUID          REFERENCES users(id),
+  reviewed_at               TIMESTAMPTZ
 );
 
 CREATE INDEX ON entries (entity_id, status);
@@ -267,37 +278,6 @@ CREATE TABLE transaction_entry_assignments (
 
 CREATE INDEX ON transaction_entry_assignments (entry_id);
 
--- ── REVIEW QUEUE ─────────────────────────────────────────────────────────────
--- Engine-detected candidate entries awaiting user approval.
--- suggested_conditions is transparent and editable before the user approves.
--- alert_type: 'new' = first detection, 'drift' = rate changed significantly,
---             'ended' = signal no longer seen in recent transactions.
--- *_confidence: per-component breakdown from Stage 2 scoring (NULL on older jobs).
-
-CREATE TABLE review_queue (
-  id                        UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
-  entity_id                 UUID          NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-  entry_id                  UUID          NOT NULL REFERENCES entries(id) ON DELETE CASCADE,
-  job_id                    UUID          NOT NULL REFERENCES processing_jobs(id),
-  suggested_name            TEXT          NOT NULL,
-  suggested_entry_type      TEXT          NOT NULL,
-  suggested_conditions      JSONB         NOT NULL,
-  suggested_rate_per_day    NUMERIC(12,4) NOT NULL,
-  matched_transaction_count INTEGER       NOT NULL,
-  alert_type                TEXT          NOT NULL DEFAULT 'new'
-                            CHECK (alert_type IN ('new', 'drift', 'ended')),
-  confidence                NUMERIC(4,3)  NOT NULL,
-  merchant_confidence       NUMERIC(4,3),
-  timing_confidence         NUMERIC(4,3),
-  amount_confidence         NUMERIC(4,3),
-  sample_merchants          TEXT[]        NOT NULL,
-  status                    TEXT          NOT NULL DEFAULT 'pending'
-                            CHECK (status IN ('pending', 'approved', 'rejected', 'modified')),
-  reviewed_by               UUID          REFERENCES users(id),
-  reviewed_at               TIMESTAMPTZ
-);
-
-CREATE INDEX ON review_queue (entity_id, status);
 
 -- ── SNAPSHOTS ────────────────────────────────────────────────────────────────
 -- Rebuildable engine output. Safe to truncate and recompute at any time.

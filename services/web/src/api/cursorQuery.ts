@@ -26,7 +26,6 @@ import type {
   ListLabelEntriesParams,
   ListLabelsParams,
   ListProjectionsParams,
-  ListReviewParams,
   ListSnapshotsParams,
   ListTransactionsParams,
 } from './generated/velociAPI.schemas'
@@ -40,7 +39,6 @@ import {
   useListLabelEntriesInfinite as _useListLabelEntriesInfinite,
   useListLabelsInfinite as _useListLabelsInfinite,
   useListProjectionsInfinite as _useListProjectionsInfinite,
-  useListReviewInfinite as _useListReviewInfinite,
   useListSnapshotsInfinite as _useListSnapshotsInfinite,
   useListTransactionsInfinite as _useListTransactionsInfinite,
 } from './generated/velociAPI'
@@ -110,12 +108,6 @@ export const useListProjectionsInfinite = (
   options?: QueryOptions,
   queryClient?: QueryClient,
 ) => _useListProjectionsInfinite(params, withCursor(options) as any, queryClient)
-
-export const useListReviewInfinite = (
-  params?: ListReviewParams,
-  options?: QueryOptions,
-  queryClient?: QueryClient,
-) => _useListReviewInfinite(params, withCursor(options) as any, queryClient)
 
 export const useListSnapshotsInfinite = (
   params?: ListSnapshotsParams,

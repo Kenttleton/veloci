@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
-import { useApproveEntry, useRejectEntry, useListTransactions, useListLabels, useUpdateEntry, useListAccounts } from '../api/generated/velociAPI'
+import { useApproveEntry, useRejectEntry, useListTransactions, useListLabels, useUpdateEntry, useListAccounts, useCreateLabel } from '../api/generated/velociAPI'
 import type { EntryView } from '../api/generated/velociAPI.schemas'
 import { useLedgerStore } from '../store/ledgerStore'
 import type { StatusFilter } from '../store/ledgerStore'
@@ -111,48 +111,92 @@ function EntryReviewPanel({ entry, onDone }: { entry: EntryView; onDone: () => v
   const { data: labelsData } = useListLabels({})
   const labels = labelsData?.data?.data ?? []
 
-  const [labelId, setLabelId] = useState<string>(entry.label_id ?? '')
+  const [labelName, setLabelName] = useState(entry.label_name ?? '')
+  const [resolvedLabelId, setResolvedLabelId] = useState<string | null>(entry.label_id ?? null)
   const [direction, setDirection] = useState(entry.direction)
   const [entryType, setEntryType] = useState(entry.entry_type)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   const approve = useApproveEntry()
   const reject = useRejectEntry()
   const update = useUpdateEntry()
+  const createLabel = useCreateLabel()
 
-  const isDirty = labelId !== (entry.label_id ?? '') || direction !== entry.direction || entryType !== entry.entry_type
+  function save(overrides: { labelId?: string | null; direction?: string; entryType?: string } = {}) {
+    setSaveError(null)
+    update.mutate({
+      id: entry.id,
+      data: {
+        label_id: 'labelId' in overrides ? (overrides.labelId ?? null) : resolvedLabelId,
+        direction: overrides.direction ?? direction,
+        entry_type: overrides.entryType ?? entryType,
+        period_days: parseInt(entry.period ?? '30', 10) || 30,
+        status: 'pending_review',
+        start_date: entry.start_date,
+        end_date: entry.end_date ?? null,
+        conditions: entry.conditions ?? null,
+        priority: entry.priority ?? 0,
+        project_tentatively: false,
+        projected_rate_per_day: entry.projected_rate ?? null,
+        variable_method: null,
+      },
+    }, {
+      onError: (err: unknown) => {
+        const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+        setSaveError(detail ?? 'Failed to save — please try again')
+      },
+    })
+  }
 
-  function handleApprove(e: React.MouseEvent) {
-    e.stopPropagation()
-    const doApprove = () => approve.mutate({ id: entry.id }, { onSuccess: onDone })
-    if (isDirty) {
-      update.mutate({
-        id: entry.id,
-        data: {
-          label_id: labelId || null,
-          direction,
-          entry_type: entryType,
-          period_days: parseInt(entry.period ?? '30', 10) || 30,
-          status: 'pending_review',
-          start_date: entry.start_date,
-          end_date: entry.end_date ?? null,
-        },
-      }, { onSuccess: doApprove })
+  function handleLabelBlur() {
+    const trimmed = labelName.trim()
+    if (!trimmed) {
+      setResolvedLabelId(null)
+      save({ labelId: null })
+      return
+    }
+    const existing = labels.find((l) => l.name.toLowerCase() === trimmed.toLowerCase())
+    if (existing) {
+      setResolvedLabelId(existing.id)
+      save({ labelId: existing.id })
     } else {
-      doApprove()
+      setSaveError(null)
+      createLabel.mutate({ data: { name: trimmed } }, {
+        onSuccess: (res) => {
+          const id = res.data.data?.id ?? null
+          setResolvedLabelId(id)
+          save({ labelId: id })
+        },
+        onError: (err: unknown) => {
+          const status = (err as { response?: { status?: number } })?.response?.status
+          const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+          setSaveError(
+            status === 409
+              ? `Label "${trimmed}" already exists — try a different name`
+              : (detail ?? 'Could not create label')
+          )
+        },
+      })
     }
   }
 
-  function handleReject(e: React.MouseEvent) {
-    e.stopPropagation()
-    reject.mutate({ id: entry.id }, { onSuccess: onDone })
+  function handleDirectionChange(val: string) {
+    setSaveError(null)
+    setDirection(val)
+    save({ direction: val })
   }
 
-  const isBusy = approve.isPending || reject.isPending || update.isPending
+  function handleEntryTypeChange(val: string) {
+    setSaveError(null)
+    setEntryType(val)
+    save({ entryType: val })
+  }
+
+  const isBusy = approve.isPending || reject.isPending || update.isPending || createLabel.isPending
 
   const fieldStyle: React.CSSProperties = {
     fontSize: 12, padding: '3px 6px', borderRadius: 4,
     border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)',
-    cursor: 'pointer',
   }
 
   return (
@@ -160,21 +204,29 @@ function EntryReviewPanel({ entry, onDone }: { entry: EntryView; onDone: () => v
       borderTop: '1px solid var(--border)', background: 'var(--surface2)',
       padding: '10px 20px', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap',
     }}>
-      {/* Label picker */}
+      {/* Label */}
       <label style={{ fontSize: 11, color: 'var(--text3)', display: 'flex', flexDirection: 'column', gap: 3 }}>
         Label
-        <select value={labelId} onChange={(e) => setLabelId(e.target.value)} style={fieldStyle} onClick={(e) => e.stopPropagation()}>
-          <option value="">— none —</option>
-          {labels.map((l) => (
-            <option key={l.id} value={l.id}>{l.name}</option>
-          ))}
-        </select>
+        <input
+          type="text"
+          value={labelName}
+          onChange={(e) => setLabelName(e.target.value)}
+          onBlur={handleLabelBlur}
+          onClick={(e) => e.stopPropagation()}
+          placeholder="e.g. Groceries"
+          style={{ ...fieldStyle, width: 160 }}
+        />
       </label>
 
       {/* Direction */}
       <label style={{ fontSize: 11, color: 'var(--text3)', display: 'flex', flexDirection: 'column', gap: 3 }}>
         Direction
-        <select value={direction} onChange={(e) => setDirection(e.target.value)} style={fieldStyle} onClick={(e) => e.stopPropagation()}>
+        <select
+          value={direction}
+          onChange={(e) => handleDirectionChange(e.target.value)}
+          style={fieldStyle}
+          onClick={(e) => e.stopPropagation()}
+        >
           <option value="expense">Expense</option>
           <option value="income">Income</option>
         </select>
@@ -183,19 +235,38 @@ function EntryReviewPanel({ entry, onDone }: { entry: EntryView; onDone: () => v
       {/* Entry type */}
       <label style={{ fontSize: 11, color: 'var(--text3)', display: 'flex', flexDirection: 'column', gap: 3 }}>
         Type
-        <select value={entryType} onChange={(e) => setEntryType(e.target.value)} style={fieldStyle} onClick={(e) => e.stopPropagation()}>
+        <select
+          value={entryType}
+          onChange={(e) => handleEntryTypeChange(e.target.value)}
+          style={fieldStyle}
+          onClick={(e) => e.stopPropagation()}
+        >
           <option value="standing">Standing</option>
           <option value="variable">Variable</option>
           <option value="irregular">Irregular</option>
         </select>
       </label>
 
-      <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-        <button onClick={handleReject} disabled={isBusy} style={actionBtn('var(--commit)')}>
+      <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+        {saveError && (
+          <span style={{ fontSize: 11, color: 'var(--commit)', maxWidth: 220 }}>{saveError}</span>
+        )}
+        {!saveError && (update.isPending || createLabel.isPending) && (
+          <span style={{ fontSize: 11, color: 'var(--text3)' }}>Saving…</span>
+        )}
+        <button
+          onClick={(e) => { e.stopPropagation(); reject.mutate({ id: entry.id }, { onSuccess: onDone }) }}
+          disabled={isBusy}
+          style={actionBtn('var(--commit)')}
+        >
           {reject.isPending ? '…' : 'Reject'}
         </button>
-        <button onClick={handleApprove} disabled={isBusy} style={actionBtn('var(--income)')}>
-          {approve.isPending || update.isPending ? '…' : 'Approve'}
+        <button
+          onClick={(e) => { e.stopPropagation(); approve.mutate({ id: entry.id }, { onSuccess: onDone }) }}
+          disabled={isBusy}
+          style={actionBtn('var(--income)')}
+        >
+          {approve.isPending ? '…' : 'Approve'}
         </button>
       </div>
     </div>
@@ -249,9 +320,10 @@ export function LedgerPage() {
   const virtualizer = useVirtualizer({
     count: filtered.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: (i) => (expanded.has(filtered[i]?.id ?? '') ? 220 : 44),
+    estimateSize: () => 44,
     overscan: 8,
     initialOffset: scrollOffset,
+    measureElement: (el) => el.getBoundingClientRect().height,
   })
 
   function toggleExpand(id: string) {
@@ -349,6 +421,8 @@ export function LedgerPage() {
               return (
                 <div
                   key={entry.id}
+                  data-index={vRow.index}
+                  ref={virtualizer.measureElement}
                   style={{ position: 'absolute', top: vRow.start, left: 0, right: 0 }}
                 >
                   {/* Entry row */}

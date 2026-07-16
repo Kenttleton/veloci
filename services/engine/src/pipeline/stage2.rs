@@ -2,17 +2,18 @@
 //!
 //! **Input:** UUIDs of transactions that produced no Stage 1 assignments.
 //!
-//! **Output:** Candidate `entries` with `status = 'pending_review'` and linked
-//! `review_queue` records.
+//! **Output:** Candidate `entries` with `status = 'pending_review'` and review
+//! metadata (alert_type, confidence, sample_merchants, etc.) written directly
+//! to the entries row.
 //!
 //! ## Algorithm
 //!
 //! 1. Load the full unmatched transaction rows.
 //! 2. Sequential global clustering pass using LCS similarity (≥ 0.70 ratio).
 //! 3. `rayon::par_iter` over clusters for confidence scoring.
-//! 4. Clusters above 0.3 confidence produce one `entries` row + one
-//!    `review_queue` row, and `transaction_entry_assignments` rows with the
-//!    cluster confidence score.
+//! 4. Clusters above 0.3 confidence produce one `entries` row (with review
+//!    metadata) and `transaction_entry_assignments` rows with the cluster
+//!    confidence score.
 
 use anyhow::{Context, Result};
 use chrono::NaiveDate;
@@ -114,7 +115,6 @@ pub struct ClusterScore {
 /// Run Stage 2 for the given unmatched transaction IDs.
 pub async fn run(
     entity_id: Uuid,
-    job_id: Uuid,
     unmatched_tx_ids: &[Uuid],
     pool: &PgPool,
 ) -> Result<Stage2Output> {
@@ -143,7 +143,7 @@ pub async fn run(
         if score.confidence < MIN_CONFIDENCE {
             continue;
         }
-        persist_cluster(entity_id, job_id, &cluster, &score, pool).await?;
+        persist_cluster(entity_id, &cluster, &score, pool).await?;
         clusters_created += 1;
     }
 
@@ -375,12 +375,11 @@ async fn load_unmatched(
 
 async fn persist_cluster(
     entity_id: Uuid,
-    job_id: Uuid,
     cluster: &Cluster,
     score: &ClusterScore,
     pool: &PgPool,
 ) -> Result<()> {
-    let suggested_conditions = serde_json::json!({
+    let conditions = serde_json::json!({
         "op": "AND",
         "children": [{
             "type": "imported_payee_contains",
@@ -420,10 +419,17 @@ async fn persist_cluster(
 
     let entry_id: (Uuid,) = sqlx::query_as(
         r#"
-        INSERT INTO entries
-          (entity_id, label_id, direction, entry_type, period_days, next_due_date,
-           conditions, status, source, project_tentatively, start_date)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending_review', 'engine', false, $8)
+        INSERT INTO entries (
+          entity_id, label_id, direction, entry_type, period_days, next_due_date,
+          conditions, projected_rate_per_day, status, source, project_tentatively, start_date,
+          alert_type, confidence, merchant_confidence, timing_confidence, amount_confidence,
+          sample_merchants, matched_transaction_count
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6,
+          $7, $8, 'pending_review', 'engine', false, $9,
+          'new', $10, $11, $12, $13,
+          $14, $15
+        )
         RETURNING id
         "#,
     )
@@ -433,39 +439,19 @@ async fn persist_cluster(
     .bind(score.entry_type)
     .bind(period_days)
     .bind(next_due_date)
-    .bind(&suggested_conditions)
+    .bind(&conditions)
+    .bind(rate_per_day)
     .bind(start_date)
+    .bind(score.confidence)
+    .bind(score.merchant_confidence)
+    .bind(score.timing_confidence)
+    .bind(score.amount_confidence)
+    .bind(&score.sample_merchants)
+    .bind(cluster.transactions.len() as i32)
     .fetch_one(pool)
     .await
     .context("failed to insert pending_review entry")?;
     let entry_id = entry_id.0;
-
-    sqlx::query(
-        r#"
-        INSERT INTO review_queue
-          (entity_id, entry_id, job_id, suggested_name, suggested_entry_type,
-           suggested_conditions, suggested_rate_per_day, matched_transaction_count,
-           confidence, sample_merchants,
-           alert_type, merchant_confidence, timing_confidence, amount_confidence)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'new', $11, $12, $13)
-        "#,
-    )
-    .bind(entity_id)
-    .bind(entry_id)
-    .bind(job_id)
-    .bind(&score.suggested_name)
-    .bind(score.entry_type)
-    .bind(&suggested_conditions)
-    .bind(rate_per_day)
-    .bind(cluster.transactions.len() as i32)
-    .bind(score.confidence)
-    .bind(&score.sample_merchants)
-    .bind(score.merchant_confidence)
-    .bind(score.timing_confidence)
-    .bind(score.amount_confidence)
-    .execute(pool)
-    .await
-    .context("failed to insert review_queue record")?;
 
     let tx_ids: Vec<Uuid> = cluster.transactions.iter().map(|t| t.id).collect();
     let entry_ids: Vec<Uuid> = vec![entry_id; tx_ids.len()];

@@ -50,7 +50,6 @@ func main() {
 	handler.RegisterClassificationsRoutes(api, nil, nil, perms)
 	handler.RegisterTransactionsRoutes(api, nil, nil, perms)
 	handler.RegisterImportsRoutes(api, nil, nil, perms)
-	handler.RegisterReviewRoutes(api, nil, nil, perms)
 	handler.RegisterSnapshotsRoutes(api, nil, nil, perms)
 	handler.RegisterProjectionsRoutes(api, nil, nil, perms)
 	handler.RegisterAdminRoutes(api, nil, nil, perms)

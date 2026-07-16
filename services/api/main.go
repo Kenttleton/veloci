@@ -157,7 +157,6 @@ func runServe(_ *cobra.Command, _ []string) error {
 		handler.RegisterClassificationsRoutes(subAPI, s, pub, perms)
 		handler.RegisterTransactionsRoutes(subAPI, s, pub, perms)
 		handler.RegisterImportsRoutes(subAPI, s, pub, perms)
-		handler.RegisterReviewRoutes(subAPI, s, pub, perms)
 		handler.RegisterSnapshotsRoutes(subAPI, s, pub, perms)
 		handler.RegisterProjectionsRoutes(subAPI, s, pub, perms)
 		handler.RegisterAdminRoutes(subAPI, s, pub, perms)
@@ -211,7 +210,6 @@ func runMigrate(_ *cobra.Command, _ []string) error {
 		"entries:write",
 		"classifications:write",
 		"labels:write",
-		"review:write",
 		"reports:read",
 		"users:manage",
 		"entity:configure",

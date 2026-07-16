@@ -20,10 +20,13 @@ function formatAmount(cents: number): string {
   return (Math.abs(cents) / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
 }
 
+// grid: date | merchant(2x) | raw payee(1x) | amount | status
+// minmax(0,Xfr) lets the columns shrink below their content before horizontal scroll kicks in
+const COL_GRID = '90px minmax(0, 2fr) minmax(0, 1fr) 100px 80px'
+
 const columns = [
   columnHelper.accessor('date', {
     header: 'Date',
-    size: 90,
     cell: (info) => format(parseISO(info.getValue()), 'MMM d'),
   }),
   columnHelper.accessor('merchant_normalized', {
@@ -36,12 +39,10 @@ const columns = [
   }),
   columnHelper.accessor('amount_cents', {
     header: 'Amount',
-    size: 100,
     cell: (info) => formatAmount(info.getValue()),
   }),
   columnHelper.accessor('settlement_status', {
     header: 'Status',
-    size: 80,
     cell: (info) => info.getValue(),
   }),
 ]
@@ -146,20 +147,22 @@ export function Transactions({ accountId }: TransactionsProps) {
       </div>
 
       {/* Column headers */}
-      <div style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg)' }}>
+      <div style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg)', minWidth: 480 }}>
         {table.getHeaderGroups().map((headerGroup) => (
-          <div key={headerGroup.id} style={{ display: 'flex', padding: '5px 16px', gap: 8 }}>
+          <div key={headerGroup.id} style={{ display: 'grid', gridTemplateColumns: COL_GRID, padding: '5px 16px', gap: 8 }}>
             {headerGroup.headers.map((header) => (
               <div
                 key={header.id}
                 style={{
-                  flex: header.column.getSize() ? `0 0 ${header.column.getSize()}px` : 1,
                   fontSize: 11,
                   color: 'var(--text3)',
                   textTransform: 'uppercase',
                   letterSpacing: '0.04em',
                   cursor: header.column.getCanSort() ? 'pointer' : 'default',
                   userSelect: 'none',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
                 }}
                 onClick={header.column.getToggleSortingHandler()}
               >
@@ -185,7 +188,9 @@ export function Transactions({ accountId }: TransactionsProps) {
                   left: 0,
                   right: 0,
                   height: virtualRow.size,
-                  display: 'flex',
+                  minWidth: 480,
+                  display: 'grid',
+                  gridTemplateColumns: COL_GRID,
                   alignItems: 'center',
                   padding: '0 16px',
                   gap: 8,
@@ -197,7 +202,6 @@ export function Transactions({ accountId }: TransactionsProps) {
                   <div
                     key={cell.id}
                     style={{
-                      flex: cell.column.getSize() ? `0 0 ${cell.column.getSize()}px` : 1,
                       fontSize: 13,
                       color: 'var(--text)',
                       overflow: 'hidden',

@@ -33,6 +33,16 @@ type EntryRow struct {
 	StartDate           time.Time       `db:"start_date"`
 	EndDate             *time.Time      `db:"end_date"`
 	CreatedAt           time.Time       `db:"created_at"`
+	// Engine review metadata (NULL for user-created entries)
+	AlertType                *string    `db:"alert_type"`
+	Confidence               *float64   `db:"confidence"`
+	MerchantConfidence       *float64   `db:"merchant_confidence"`
+	TimingConfidence         *float64   `db:"timing_confidence"`
+	AmountConfidence         *float64   `db:"amount_confidence"`
+	SampleMerchants          []string   `db:"sample_merchants"`
+	MatchedTransactionCount  *int       `db:"matched_transaction_count"`
+	ReviewedBy               *string    `db:"reviewed_by"`
+	ReviewedAt               *time.Time `db:"reviewed_at"`
 	// From latest snapshot join (nullable when no snapshot exists yet)
 	ActualRatePerDay    *float64 `db:"actual_rate_per_day"`
 	SnapshotDriftPerDay *float64 `db:"drift_per_day"`
@@ -45,6 +55,9 @@ const entryCols = `
 	e.recurrence_anchor, e.next_due_date, e.project_tentatively,
 	e.pending_amount_cents, e.pending_effective_date,
 	e.start_date, e.end_date, e.created_at,
+	e.alert_type, e.confidence, e.merchant_confidence, e.timing_confidence,
+	e.amount_confidence, e.sample_merchants, e.matched_transaction_count,
+	e.reviewed_by::text, e.reviewed_at,
 	s.actual_rate_per_day, s.drift_per_day
 `
 
@@ -182,7 +195,12 @@ func (s *Store) CreateEntry(ctx context.Context, entityID string, in CreateEntry
 			$6, $7, $8, $9,
 			'pending_review', $10, $11, $12, $13, NOW()
 		)
-		RETURNING %s, NULL::float8 AS actual_rate_per_day, NULL::float8 AS drift_per_day
+		RETURNING %s,
+		NULL::text AS alert_type, NULL::numeric AS confidence,
+		NULL::numeric AS merchant_confidence, NULL::numeric AS timing_confidence,
+		NULL::numeric AS amount_confidence, NULL::text[] AS sample_merchants,
+		NULL::int AS matched_transaction_count, NULL::text AS reviewed_by, NULL::timestamptz AS reviewed_at,
+		NULL::float8 AS actual_rate_per_day, NULL::float8 AS drift_per_day
 	`, `
 		id::text, entity_id::text, label_id::text,
 		NULL AS label_name, direction, entry_type, period_days,
@@ -234,7 +252,12 @@ func (s *Store) UpdateEntry(ctx context.Context, entityID, id string, in UpdateE
 			start_date = $13,
 			end_date = $14
 		WHERE entity_id = $1 AND id = $2
-		RETURNING %s, NULL::float8 AS actual_rate_per_day, NULL::float8 AS drift_per_day
+		RETURNING %s,
+		NULL::text AS alert_type, NULL::numeric AS confidence,
+		NULL::numeric AS merchant_confidence, NULL::numeric AS timing_confidence,
+		NULL::numeric AS amount_confidence, NULL::text[] AS sample_merchants,
+		NULL::int AS matched_transaction_count, NULL::text AS reviewed_by, NULL::timestamptz AS reviewed_at,
+		NULL::float8 AS actual_rate_per_day, NULL::float8 AS drift_per_day
 	`, `
 		id::text, entity_id::text, label_id::text,
 		NULL AS label_name, direction, entry_type, period_days,
@@ -340,67 +363,42 @@ func (s *Store) EndEntry(ctx context.Context, entityID, entryID string, endDate 
 	return err
 }
 
-// ApproveEntryReview activates or ends the entry based on its pending review alert_type,
-// marks the review_queue item approved, and returns the alert_type for job-trigger decisions.
+// ApproveEntryReview activates or ends the entry based on its alert_type,
+// records the reviewer, and returns the alert_type for job-trigger decisions.
 func (s *Store) ApproveEntryReview(ctx context.Context, entityID, entryID, userID string) (string, error) {
-	var reviewID, alertType string
+	var alertType string
 	err := s.pool.QueryRow(ctx, `
-		SELECT id::text, alert_type FROM review_queue
-		WHERE entry_id = $1::uuid AND entity_id = $2 AND status = 'pending'
-		ORDER BY created_at DESC LIMIT 1
-	`, entryID, entityID).Scan(&reviewID, &alertType)
+		SELECT COALESCE(alert_type, '') FROM entries
+		WHERE entity_id = $1 AND id = $2::uuid AND status = 'pending_review'
+	`, entityID, entryID).Scan(&alertType)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return "", err
 	}
 
 	switch alertType {
-	case "new", "":
-		if err := s.ActivateEntry(ctx, entityID, entryID); err != nil {
-			return alertType, err
-		}
 	case "ended":
-		if err := s.EndEntry(ctx, entityID, entryID, time.Now()); err != nil {
+		if _, err := s.pool.Exec(ctx, `
+			UPDATE entries SET end_date = NOW()::date, reviewed_by = $3::uuid, reviewed_at = NOW()
+			WHERE entity_id = $1 AND id = $2::uuid
+		`, entityID, entryID, userID); err != nil {
 			return alertType, err
 		}
-	// "drift": no entry state change, just acknowledge
-	}
-
-	if reviewID != "" {
+	default: // "new", "" — activate
 		if _, err := s.pool.Exec(ctx, `
-			UPDATE review_queue SET status = 'approved', reviewed_by = $3::uuid, reviewed_at = NOW()
-			WHERE id = $1::uuid AND entity_id = $2
-		`, reviewID, entityID, userID); err != nil {
+			UPDATE entries SET status = 'active', reviewed_by = $3::uuid, reviewed_at = NOW()
+			WHERE entity_id = $1 AND id = $2::uuid
+		`, entityID, entryID, userID); err != nil {
 			return alertType, err
 		}
 	}
 	return alertType, nil
 }
 
-// RejectEntryReview dismisses the pending review item and deactivates new entries.
+// RejectEntryReview deactivates the entry and records the reviewer.
 func (s *Store) RejectEntryReview(ctx context.Context, entityID, entryID, userID string) error {
-	var reviewID, alertType string
-	err := s.pool.QueryRow(ctx, `
-		SELECT id::text, alert_type FROM review_queue
-		WHERE entry_id = $1::uuid AND entity_id = $2 AND status = 'pending'
-		ORDER BY created_at DESC LIMIT 1
-	`, entryID, entityID).Scan(&reviewID, &alertType)
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return err
-	}
-
-	if alertType == "new" {
-		if err := s.DeactivateEntry(ctx, entityID, entryID); err != nil {
-			return err
-		}
-	}
-
-	if reviewID != "" {
-		if _, err := s.pool.Exec(ctx, `
-			UPDATE review_queue SET status = 'rejected', reviewed_by = $3::uuid, reviewed_at = NOW()
-			WHERE id = $1::uuid AND entity_id = $2
-		`, reviewID, entityID, userID); err != nil {
-			return err
-		}
-	}
-	return nil
+	_, err := s.pool.Exec(ctx, `
+		UPDATE entries SET status = 'inactive', reviewed_by = $3::uuid, reviewed_at = NOW()
+		WHERE entity_id = $1 AND id = $2::uuid AND status = 'pending_review'
+	`, entityID, entryID, userID)
+	return err
 }

@@ -139,19 +139,36 @@ export interface CreateLabelInputBody {
   name: string;
 }
 
+export type EntryViewAlertType = string | null;
+
+export type EntryViewAmountConfidence = number | null;
+
+export type EntryViewConfidence = number | null;
+
 export type EntryViewEndDate = string | null;
 
 export type EntryViewLabelId = string | null;
 
 export type EntryViewLabelName = string | null;
 
+export type EntryViewMatchedTransactionCount = number | null;
+
+export type EntryViewMerchantConfidence = number | null;
+
 export type EntryViewProjectedRate = number | null;
+
+export type EntryViewSampleMerchants = string[] | null;
 
 export type EntryViewTag = string | null;
 
+export type EntryViewTimingConfidence = number | null;
+
 export interface EntryView {
   actual_rate: number;
+  alert_type: EntryViewAlertType;
+  amount_confidence: EntryViewAmountConfidence;
   conditions: unknown;
+  confidence: EntryViewConfidence;
   created_at: string;
   direction: string;
   drift_rate: number;
@@ -160,14 +177,18 @@ export interface EntryView {
   id: string;
   label_id: EntryViewLabelId;
   label_name: EntryViewLabelName;
+  matched_transaction_count: EntryViewMatchedTransactionCount;
+  merchant_confidence: EntryViewMerchantConfidence;
   name: string;
   period: string;
   priority: number;
   projected_rate: EntryViewProjectedRate;
+  sample_merchants: EntryViewSampleMerchants;
   source: string;
   start_date: string;
   status: string;
   tag: EntryViewTag;
+  timing_confidence: EntryViewTimingConfidence;
 }
 
 export interface EnvelopeAccountView {
@@ -273,13 +294,6 @@ export interface EnvelopeListProjectionView {
   meta: Meta;
 }
 
-export type EnvelopeListReviewViewData = ReviewView[] | null;
-
-export interface EnvelopeListReviewView {
-  data: EnvelopeListReviewViewData;
-  meta: Meta;
-}
-
 export type EnvelopeListSnapshotHistoryViewData = SnapshotHistoryView[] | null;
 
 export interface EnvelopeListSnapshotHistoryView {
@@ -305,11 +319,6 @@ export type EnvelopeListUserViewData = UserView[] | null;
 
 export interface EnvelopeListUserView {
   data: EnvelopeListUserViewData;
-  meta: Meta;
-}
-
-export interface EnvelopeReviewView {
-  data: ReviewView;
   meta: Meta;
 }
 
@@ -492,46 +501,6 @@ export interface ProjectionView {
   projected_date: string;
 }
 
-export type ReviewViewAmountConfidence = number | null;
-
-export type ReviewViewConfidence = number | null;
-
-export type ReviewViewMerchantConfidence = number | null;
-
-export type ReviewViewReviewedAt = string | null;
-
-export type ReviewViewReviewedBy = string | null;
-
-export type ReviewViewSampleMerchants = string[] | null;
-
-export type ReviewViewSuggestedEntryType = string | null;
-
-export type ReviewViewSuggestedName = string | null;
-
-export type ReviewViewSuggestedRatePerDay = number | null;
-
-export type ReviewViewTimingConfidence = number | null;
-
-export interface ReviewView {
-  alert_type: string;
-  amount_confidence: ReviewViewAmountConfidence;
-  confidence: ReviewViewConfidence;
-  entry_id: string;
-  id: string;
-  job_id: string;
-  matched_transaction_count: number;
-  merchant_confidence: ReviewViewMerchantConfidence;
-  reviewed_at: ReviewViewReviewedAt;
-  reviewed_by: ReviewViewReviewedBy;
-  sample_merchants: ReviewViewSampleMerchants;
-  status: string;
-  suggested_conditions: unknown;
-  suggested_entry_type: ReviewViewSuggestedEntryType;
-  suggested_name: ReviewViewSuggestedName;
-  suggested_rate_per_day: ReviewViewSuggestedRatePerDay;
-  timing_confidence: ReviewViewTimingConfidence;
-}
-
 export interface SnapshotHistoryView {
   actual_rate_per_day: number;
   close_rate?: number;
@@ -665,10 +634,6 @@ export interface UpdateMeInputBody {
   name: string;
 }
 
-export interface UpdateReviewInputBody {
-  status: string;
-}
-
 export interface UserView {
   created_at: string;
   email: string;
@@ -767,15 +732,6 @@ limit?: number;
 };
 
 export type ListProjectionsParams = {
-cursor?: string;
-/**
- * @minimum 1
- * @maximum 200
- */
-limit?: number;
-};
-
-export type ListReviewParams = {
 cursor?: string;
 /**
  * @minimum 1

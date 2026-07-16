@@ -421,7 +421,27 @@
             "format": "double",
             "type": "number"
           },
+          "alert_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "amount_confidence": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
           "conditions": {},
+          "confidence": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
           "created_at": {
             "type": "string"
           },
@@ -456,6 +476,20 @@
               "null"
             ]
           },
+          "matched_transaction_count": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "merchant_confidence": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
           "name": {
             "type": "string"
           },
@@ -473,6 +507,15 @@
               "null"
             ]
           },
+          "sample_merchants": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
           "source": {
             "type": "string"
           },
@@ -485,6 +528,13 @@
           "tag": {
             "type": [
               "string",
+              "null"
+            ]
+          },
+          "timing_confidence": {
+            "format": "double",
+            "type": [
+              "number",
               "null"
             ]
           }
@@ -507,7 +557,14 @@
           "conditions",
           "start_date",
           "end_date",
-          "created_at"
+          "created_at",
+          "alert_type",
+          "confidence",
+          "merchant_confidence",
+          "timing_confidence",
+          "amount_confidence",
+          "sample_merchants",
+          "matched_transaction_count"
         ],
         "type": "object"
       },
@@ -837,28 +894,6 @@
         ],
         "type": "object"
       },
-      "EnvelopeListReviewView": {
-        "additionalProperties": false,
-        "properties": {
-          "data": {
-            "items": {
-              "$ref": "#/components/schemas/ReviewView"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "meta": {
-            "$ref": "#/components/schemas/Meta"
-          }
-        },
-        "required": [
-          "data",
-          "meta"
-        ],
-        "type": "object"
-      },
       "EnvelopeListSnapshotHistoryView": {
         "additionalProperties": false,
         "properties": {
@@ -936,22 +971,6 @@
               "array",
               "null"
             ]
-          },
-          "meta": {
-            "$ref": "#/components/schemas/Meta"
-          }
-        },
-        "required": [
-          "data",
-          "meta"
-        ],
-        "type": "object"
-      },
-      "EnvelopeReviewView": {
-        "additionalProperties": false,
-        "properties": {
-          "data": {
-            "$ref": "#/components/schemas/ReviewView"
           },
           "meta": {
             "$ref": "#/components/schemas/Meta"
@@ -1485,119 +1504,6 @@
         ],
         "type": "object"
       },
-      "ReviewView": {
-        "additionalProperties": false,
-        "properties": {
-          "alert_type": {
-            "type": "string"
-          },
-          "amount_confidence": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "confidence": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "entry_id": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "job_id": {
-            "type": "string"
-          },
-          "matched_transaction_count": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "merchant_confidence": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "reviewed_at": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "reviewed_by": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "sample_merchants": {
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "status": {
-            "type": "string"
-          },
-          "suggested_conditions": {},
-          "suggested_entry_type": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "suggested_name": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "suggested_rate_per_day": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "timing_confidence": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "id",
-          "entry_id",
-          "job_id",
-          "suggested_name",
-          "suggested_entry_type",
-          "suggested_conditions",
-          "suggested_rate_per_day",
-          "matched_transaction_count",
-          "alert_type",
-          "confidence",
-          "merchant_confidence",
-          "timing_confidence",
-          "amount_confidence",
-          "sample_merchants",
-          "status",
-          "reviewed_by",
-          "reviewed_at"
-        ],
-        "type": "object"
-      },
       "SnapshotHistoryView": {
         "additionalProperties": false,
         "properties": {
@@ -2036,18 +1942,6 @@
         },
         "required": [
           "name"
-        ],
-        "type": "object"
-      },
-      "UpdateReviewInputBody": {
-        "additionalProperties": false,
-        "properties": {
-          "status": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "status"
         ],
         "type": "object"
       },
@@ -3933,178 +3827,6 @@
         "summary": "List balance projections",
         "tags": [
           "projections"
-        ]
-      }
-    },
-    "/review": {
-      "get": {
-        "operationId": "list-review",
-        "parameters": [
-          {
-            "explode": false,
-            "in": "query",
-            "name": "cursor",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "explode": false,
-            "in": "query",
-            "name": "limit",
-            "schema": {
-              "default": 50,
-              "format": "int64",
-              "maximum": 200,
-              "minimum": 1,
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EnvelopeListReviewView"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "summary": "List review queue items",
-        "tags": [
-          "review"
-        ]
-      }
-    },
-    "/review/{id}": {
-      "put": {
-        "operationId": "update-review",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateReviewInputBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EnvelopeReviewView"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "summary": "Update a review queue item status",
-        "tags": [
-          "review"
-        ]
-      }
-    },
-    "/review/{id}/approve": {
-      "post": {
-        "operationId": "approve-review",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "No Content"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "summary": "Approve a review queue item",
-        "tags": [
-          "review"
-        ]
-      }
-    },
-    "/review/{id}/reject": {
-      "post": {
-        "operationId": "reject-review",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "No Content"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "summary": "Reject a review queue item",
-        "tags": [
-          "review"
         ]
       }
     },

@@ -15,12 +15,12 @@
 //! Stage responsibilities:
 //!   0 — CSV dedup + normalization → transactions
 //!   1 — Active entry matching → transaction_entry_assignments; updates next_due_date
-//!   2 — Pattern detection on unmatched txns → pending_review entries + review_queue; sets next_due_date
+//!   2 — Pattern detection on unmatched txns → pending_review entries (with review metadata); sets next_due_date
 //!   3 — Per-entry rate computation (day-crawl) — pure calculation, no entry metadata writes
 //!   4 — Label rate aggregation from entry rates
 //!   5 — Slope + drift regression over snapshot history
 //!   6 — Snapshot UPSERT into `snapshots`
-//!   7 — Cash flow projection into `projections`; raises review_queue alerts for missed expected transactions
+//!   7 — Cash flow projection into `projections`; raises drift/ended alerts on entries for missed expectations
 
 pub mod stage0;
 pub mod stage1;
@@ -124,7 +124,7 @@ async fn run_from_stage1(
     tracing::info!(%entity_id, assignments = stage1_out.total_assignments, unmatched = stage1_out.unmatched_tx_ids.len(), "stage 1 complete");
 
     // Stage 2: Pattern detection on unmatched transactions → pending_review entries
-    let stage2_out = stage2::run(entity_id, job_id, &stage1_out.unmatched_tx_ids, &pools.read).await?;
+    let stage2_out = stage2::run(entity_id, &stage1_out.unmatched_tx_ids, &pools.read).await?;
     tracing::info!(%entity_id, clusters = stage2_out.clusters_created, "stage 2 complete");
 
     run_from_stage3(entity_id, job_id, computed_as_of, pools).await
