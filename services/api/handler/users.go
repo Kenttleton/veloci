@@ -31,6 +31,7 @@ func NewUsersHandler(s *store.Store, auth *authclient.Client) *UsersHandler {
 type userView struct {
 	ID         string `json:"id"`
 	Email      string `json:"email"`
+	Name       string `json:"name"`
 	EntityRole string `json:"entity_role"`
 	CreatedAt  string `json:"created_at"`
 }
@@ -39,6 +40,7 @@ func toUserView(u store.User) userView {
 	return userView{
 		ID:         u.ID,
 		Email:      u.Email,
+		Name:       u.Name,
 		EntityRole: u.EntityRole,
 		CreatedAt:  u.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
@@ -50,7 +52,7 @@ type getMeOutput struct {
 
 type updateMeInput struct {
 	Body struct {
-		Email string `json:"email" required:"true"`
+		Name string `json:"name" required:"true"`
 	}
 }
 
@@ -103,11 +105,11 @@ func (h *UsersHandler) GetMe(ctx context.Context, _ *struct{}) (*getMeOutput, er
 	return out, nil
 }
 
-func (h *UsersHandler) UpdateMe(ctx context.Context, _ *updateMeInput) (*updateMeOutput, error) {
+func (h *UsersHandler) UpdateMe(ctx context.Context, input *updateMeInput) (*updateMeOutput, error) {
 	entityID := middleware.EntityID(ctx)
 	userID := middleware.UserID(ctx)
 
-	if err := h.s.UpdateUserProfile(ctx, userID); err != nil {
+	if err := h.s.UpdateUserProfile(ctx, userID, input.Body.Name); err != nil {
 		return nil, huma.Error500InternalServerError("internal error")
 	}
 	u, err := h.s.GetUserByID(ctx, entityID, userID)

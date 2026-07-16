@@ -2030,12 +2030,12 @@
       "UpdateMeInputBody": {
         "additionalProperties": false,
         "properties": {
-          "email": {
+          "name": {
             "type": "string"
           }
         },
         "required": [
-          "email"
+          "name"
         ],
         "type": "object"
       },
@@ -2065,11 +2065,15 @@
           },
           "id": {
             "type": "string"
+          },
+          "name": {
+            "type": "string"
           }
         },
         "required": [
           "id",
           "email",
+          "name",
           "entity_role",
           "created_at"
         ],

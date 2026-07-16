@@ -11,6 +11,7 @@ import (
 type User struct {
 	ID         string    `db:"id"`
 	Email      string    `db:"email"`
+	Name       string    `db:"name"`
 	EntityRole string    `db:"entity_role"`
 	CreatedAt  time.Time `db:"created_at"`
 }
@@ -18,7 +19,7 @@ type User struct {
 // GetUserByID fetches a single user by user id within an entity.
 func (s *Store) GetUserByID(ctx context.Context, entityID, userID string) (User, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT u.id::text, u.email, eu.entity_role, u.created_at
+		SELECT u.id::text, u.email, u.name, eu.entity_role, u.created_at
 		FROM users u
 		JOIN entity_users eu ON eu.user_id = u.id
 		WHERE eu.entity_id = $1 AND u.id = $2
@@ -32,7 +33,7 @@ func (s *Store) GetUserByID(ctx context.Context, entityID, userID string) (User,
 // GetUserByEmail fetches a user by email within an entity.
 func (s *Store) GetUserByEmail(ctx context.Context, entityID, email string) (User, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT u.id::text, u.email, eu.entity_role, u.created_at
+		SELECT u.id::text, u.email, u.name, eu.entity_role, u.created_at
 		FROM users u
 		JOIN entity_users eu ON eu.user_id = u.id
 		WHERE eu.entity_id = $1 AND u.email = $2
@@ -46,7 +47,7 @@ func (s *Store) GetUserByEmail(ctx context.Context, entityID, email string) (Use
 // ListUsers returns all users belonging to an entity.
 func (s *Store) ListUsers(ctx context.Context, entityID string) ([]User, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT u.id::text, u.email, eu.entity_role, u.created_at
+		SELECT u.id::text, u.email, u.name, eu.entity_role, u.created_at
 		FROM users u
 		JOIN entity_users eu ON eu.user_id = u.id
 		WHERE eu.entity_id = $1
@@ -58,9 +59,9 @@ func (s *Store) ListUsers(ctx context.Context, entityID string) ([]User, error) 
 	return pgx.CollectRows(rows, pgx.RowToStructByName[User])
 }
 
-// UpdateUserProfile updates display fields on the current user (noop stub; schema extension point).
-func (s *Store) UpdateUserProfile(ctx context.Context, userID string) error {
-	_, err := s.pool.Exec(ctx, `UPDATE users SET id = id WHERE id = $1`, userID)
+// UpdateUserProfile updates the display name for the current user.
+func (s *Store) UpdateUserProfile(ctx context.Context, userID, name string) error {
+	_, err := s.pool.Exec(ctx, `UPDATE users SET name = $2 WHERE id = $1`, userID, name)
 	return err
 }
 

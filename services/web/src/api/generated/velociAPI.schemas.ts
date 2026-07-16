@@ -662,7 +662,7 @@ export interface UpdateLabelInputBody {
 }
 
 export interface UpdateMeInputBody {
-  email: string;
+  name: string;
 }
 
 export interface UpdateReviewInputBody {
@@ -674,6 +674,7 @@ export interface UserView {
   email: string;
   entity_role: string;
   id: string;
+  name: string;
 }
 
 export type ListAccountsParams = {
