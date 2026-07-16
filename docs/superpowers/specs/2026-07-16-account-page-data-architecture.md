@@ -162,7 +162,82 @@ A type-to-confirm modal:
 
 ---
 
-## 7. Auth Data Clearing
+## 7. Logging
+
+This spec introduces `pino` as the frontend logging library. Only the Zustand store registry and account page data functions are covered here. Converting existing `console.*` calls elsewhere in the app is a follow-up task.
+
+### Library
+
+`pino` with `pino/browser`. Structured JSON output, log levels, and a `transmit.send` hook that is the single extension point for routing logs to an aggregator (Datadog, Axiom, Better Stack, etc.) when the time comes. No other code changes when the transport is configured.
+
+### Logger Utility
+
+`src/lib/logger.ts` creates the root pino instance:
+
+```ts
+import pino from 'pino'
+
+const logger = pino({
+  level: import.meta.env.DEV ? 'debug' : 'info',
+  browser: {
+    asObject: true,
+    transmit: {
+      level: 'warn',
+      send: (_level, _logEvent) => {
+        // configure aggregator transport here when ready
+      },
+    },
+  },
+})
+
+export default logger
+```
+
+Domain-scoped child loggers are created at the module level in each file that needs them:
+
+```ts
+const log = logger.child({ domain: 'store:accounts' })
+log.error({ err }, 'fetch failed')
+```
+
+Child loggers inherit level and transport from the root and automatically include the `domain` field in every entry.
+
+### Logging Scope for This Spec
+
+**`src/store/registry.ts`** — store teardown failures:
+
+```ts
+const log = logger.child({ domain: 'store:registry' })
+
+// in clearAllStores(), replace console.error:
+log.error({ err: result.reason, store: registry[i].domain }, 'store clear failed')
+```
+
+**`src/store/accountStore.ts`** — fetch status transitions written to store:
+
+```ts
+const log = logger.child({ domain: 'store:accounts' })
+
+// on TanStack error callback writing to store:
+log.warn({ accountId, err }, 'transaction fetch failed')
+log.warn({ accountId, err }, 'entries fetch failed')
+```
+
+**`src/pages/AccountPage.tsx`** — tab navigation and data coordination:
+
+```ts
+const log = logger.child({ domain: 'account-page' })
+
+// on tab change:
+log.debug({ accountId, tab }, 'tab changed')
+
+// on clearAppData triggering store clear from this context:
+log.info({ accountId }, 'account data cleared on session end')
+```
+
+---
+
+## 8. Auth Data Clearing
 
 ### Store Registry
 
@@ -181,18 +256,19 @@ export function registerStore(domain: string, clear: () => void | Promise<void>)
 }
 
 export async function clearAllStores(): Promise<void> {
+  const log = logger.child({ domain: 'store:registry' })
   const results = await Promise.allSettled(
     registry.map(({ clear }) => Promise.resolve(clear()))
   )
   results.forEach((result, i) => {
     if (result.status === 'rejected') {
-      console.error(`[store:${registry[i].domain}] clear failed`, result.reason)
+      log.error({ err: result.reason, store: registry[i].domain }, 'store clear failed')
     }
   })
 }
 ```
 
-`Promise.allSettled()` ensures every store is cleared regardless of individual failures. Domain-tagged errors make it clear which store was the source. Future stores just call `registerStore()` — cleanup and error reporting come for free.
+`Promise.allSettled()` ensures every store is cleared regardless of individual failures. Future stores just call `registerStore()` — cleanup and error reporting come for free.
 
 Each store self-registers:
 
@@ -227,6 +303,7 @@ Called from:
 
 ### New
 
+- `src/lib/logger.ts` — pino root instance, domain child logger pattern, aggregator transmit hook
 - `src/store/registry.ts` — store registry, `registerStore()`, `clearAllStores()`
 - `src/store/accountStore.ts` — Zustand store definition, self-registers on import
 
