@@ -1752,6 +1752,15 @@
           "date": {
             "type": "string"
           },
+          "entry_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
           "id": {
             "type": "string"
           },
@@ -1790,7 +1799,8 @@
           "merchant_normalized",
           "imported_id",
           "settlement_status",
-          "imported_at"
+          "imported_at",
+          "entry_ids"
         ],
         "type": "object"
       },
@@ -2635,6 +2645,52 @@
           {
             "explode": false,
             "in": "query",
+            "name": "date_from",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "date_to",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "span_days",
+            "schema": {
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "span_months",
+            "schema": {
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "span_years",
+            "schema": {
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
             "name": "account_id",
             "schema": {
               "type": "string"
@@ -2661,9 +2717,9 @@
             "in": "query",
             "name": "limit",
             "schema": {
-              "default": 50,
+              "default": 200,
               "format": "int64",
-              "maximum": 200,
+              "maximum": 500,
               "minimum": 1,
               "type": "integer"
             }
@@ -4209,6 +4265,52 @@
           {
             "explode": false,
             "in": "query",
+            "name": "date_from",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "date_to",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "span_days",
+            "schema": {
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "span_months",
+            "schema": {
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "span_years",
+            "schema": {
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
             "name": "account_id",
             "schema": {
               "type": "string"
@@ -4235,9 +4337,9 @@
             "in": "query",
             "name": "limit",
             "schema": {
-              "default": 50,
+              "default": 200,
               "format": "int64",
-              "maximum": 200,
+              "maximum": 500,
               "minimum": 1,
               "type": "integer"
             }

@@ -49,9 +49,10 @@ const entryCols = `
 `
 
 // ListEntries returns a paginated list of entries ordered by start_date DESC.
-// dateFrom/dateTo filter on start_date. accountID limits to entries with transactions
-// in that account. statusFilter defaults to active-only; pass "all" for every status.
-func (s *Store) ListEntries(ctx context.Context, entityID, dateFrom, dateTo, accountID, statusFilter string, limit int, cursor string) ([]EntryRow, error) {
+// dr filters on start_date; see DateRange / ResolveRange for resolution rules.
+// accountID limits to entries with transactions in that account.
+// statusFilter defaults to active-only; pass "all" for every status.
+func (s *Store) ListEntries(ctx context.Context, entityID string, dr DateRange, accountID, statusFilter string, limit int, cursor string) ([]EntryRow, error) {
 	statusCond := `e.status = 'active'`
 	if statusFilter == "all" {
 		statusCond = `1=1`
@@ -60,13 +61,21 @@ func (s *Store) ListEntries(ctx context.Context, entityID, dateFrom, dateTo, acc
 	args := []any{entityID}
 	extraFilters := ""
 
-	if dateFrom != "" {
-		args = append(args, dateFrom)
+	if dr.From != "" {
+		args = append(args, dr.From)
 		extraFilters += fmt.Sprintf(" AND e.start_date >= $%d::date", len(args))
 	}
-	if dateTo != "" {
-		args = append(args, dateTo)
+	if dr.To != "" {
+		args = append(args, dr.To)
 		extraFilters += fmt.Sprintf(" AND e.start_date <= $%d::date", len(args))
+	}
+	if dr.SpanInterval != "" {
+		args = append(args, dr.SpanInterval)
+		extraFilters += fmt.Sprintf(`
+			AND e.start_date >= (
+				SELECT COALESCE(MAX(e2.start_date), CURRENT_DATE) - $%d::interval
+				FROM entries e2 WHERE e2.entity_id = $1
+			)`, len(args))
 	}
 	if accountID != "" {
 		args = append(args, accountID)

@@ -113,12 +113,15 @@ func entryName(e store.EntryRow) string {
 }
 
 type listEntriesInput struct {
-	DateFrom  string `query:"date_from"`
-	DateTo    string `query:"date_to"`
-	AccountID string `query:"account_id"`
-	Status    string `query:"status"`
-	Cursor    string `query:"cursor"`
-	Limit     int    `query:"limit" default:"200" minimum:"1" maximum:"500"`
+	DateFrom   string `query:"date_from"`
+	DateTo     string `query:"date_to"`
+	SpanDays   int    `query:"span_days"   minimum:"0"`
+	SpanMonths int    `query:"span_months" minimum:"0"`
+	SpanYears  int    `query:"span_years"  minimum:"0"`
+	AccountID  string `query:"account_id"`
+	Status     string `query:"status"`
+	Cursor     string `query:"cursor"`
+	Limit      int    `query:"limit" default:"200" minimum:"1" maximum:"500"`
 }
 
 type listEntriesOutput struct {
@@ -200,7 +203,8 @@ func (h *EntriesHandler) ListEntries(ctx context.Context, input *listEntriesInpu
 		limit = 50
 	}
 
-	items, err := h.s.ListEntries(ctx, entityID, input.DateFrom, input.DateTo, input.AccountID, input.Status, limit+1, input.Cursor)
+	dr := store.ResolveRange(input.DateFrom, input.DateTo, input.SpanDays, input.SpanMonths, input.SpanYears)
+	items, err := h.s.ListEntries(ctx, entityID, dr, input.AccountID, input.Status, limit+1, input.Cursor)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("internal error")
 	}

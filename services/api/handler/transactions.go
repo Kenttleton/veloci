@@ -59,11 +59,15 @@ func toTransactionView(t store.Transaction) transactionView {
 }
 
 type listTransactionsInput struct {
-	SpanDays  int    `query:"span_days" minimum:"1" maximum:"3650"`
-	AccountID string `query:"account_id"`
-	EntryID   string `query:"entry_id"`
-	Cursor    string `query:"cursor"`
-	Limit     int    `query:"limit" default:"200" minimum:"1" maximum:"500"`
+	DateFrom   string `query:"date_from"`
+	DateTo     string `query:"date_to"`
+	SpanDays   int    `query:"span_days"   minimum:"0"`
+	SpanMonths int    `query:"span_months" minimum:"0"`
+	SpanYears  int    `query:"span_years"  minimum:"0"`
+	AccountID  string `query:"account_id"`
+	EntryID    string `query:"entry_id"`
+	Cursor     string `query:"cursor"`
+	Limit      int    `query:"limit" default:"200" minimum:"1" maximum:"500"`
 }
 
 type listTransactionsOutput struct {
@@ -85,7 +89,8 @@ func (h *TransactionsHandler) ListTransactions(ctx context.Context, input *listT
 		limit = 50
 	}
 
-	items, err := h.s.ListTransactions(ctx, entityID, input.DateFrom, input.DateTo, input.AccountID, input.EntryID, limit+1, input.Cursor)
+	dr := store.ResolveRange(input.DateFrom, input.DateTo, input.SpanDays, input.SpanMonths, input.SpanYears)
+	items, err := h.s.ListTransactions(ctx, entityID, dr, input.AccountID, input.EntryID, limit+1, input.Cursor)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("internal error")
 	}

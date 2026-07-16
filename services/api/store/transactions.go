@@ -48,17 +48,25 @@ func (s *Store) GetTransaction(ctx context.Context, entityID, id string) (Transa
 }
 
 // ListTransactions returns a paginated list of transactions for an entity ordered by date DESC.
-// spanDays > 0 limits results to the last N days relative to the entity's latest transaction date.
+// dr is an optional date filter; see DateRange / ResolveRange for resolution rules.
 // accountID and entryID are optional filters; entryID joins through transaction_entry_assignments.
-func (s *Store) ListTransactions(ctx context.Context, entityID string, spanDays int, accountID, entryID string, limit int, cursor string) ([]Transaction, error) {
+func (s *Store) ListTransactions(ctx context.Context, entityID string, dr DateRange, accountID, entryID string, limit int, cursor string) ([]Transaction, error) {
 	args := []any{entityID}
 	extraFilters := ""
 
-	if spanDays > 0 {
-		args = append(args, spanDays)
+	if dr.From != "" {
+		args = append(args, dr.From)
+		extraFilters += fmt.Sprintf(" AND t.date >= $%d::date", len(args))
+	}
+	if dr.To != "" {
+		args = append(args, dr.To)
+		extraFilters += fmt.Sprintf(" AND t.date <= $%d::date", len(args))
+	}
+	if dr.SpanInterval != "" {
+		args = append(args, dr.SpanInterval)
 		extraFilters += fmt.Sprintf(`
 			AND t.date >= (
-				SELECT COALESCE(MAX(t2.date), CURRENT_DATE) - ($%d || ' days')::interval
+				SELECT COALESCE(MAX(t2.date), CURRENT_DATE) - $%d::interval
 				FROM transactions t2 WHERE t2.entity_id = $1
 			)`, len(args))
 	}
