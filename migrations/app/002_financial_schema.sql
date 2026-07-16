@@ -76,6 +76,29 @@ CREATE UNIQUE INDEX processing_jobs_one_active
   ON processing_jobs (entity_id, job_type)
   WHERE status IN ('queued', 'processing');
 
+CREATE OR REPLACE FUNCTION notify_job_status_change() RETURNS trigger AS $$
+BEGIN
+    PERFORM pg_notify(
+        'job:' || NEW.entity_id::text,
+        json_build_object(
+            'job_id',       NEW.id::text,
+            'job_type',     NEW.job_type,
+            'status',       NEW.status,
+            'error',        NEW.error,
+            'queued_at',    to_char(NEW.queued_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+            'completed_at', CASE WHEN NEW.completed_at IS NULL THEN NULL
+                                 ELSE to_char(NEW.completed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+                            END
+        )::text
+    );
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER processing_jobs_notify
+AFTER UPDATE ON processing_jobs
+FOR EACH ROW EXECUTE FUNCTION notify_job_status_change();
+
 -- ── PENDING IMPORTS ─────────────────────────────────────────────────────────
 -- Staging area for uploaded CSVs. Retained after processing for audit.
 

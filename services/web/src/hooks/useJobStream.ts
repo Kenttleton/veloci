@@ -6,9 +6,9 @@ import { useTransactionStore } from '../store/transactionStore'
 import { useEntryStore } from '../store/entryStore'
 
 const TRANSACTION_JOB_TYPES = new Set([
-  'transactions.import',
+  'import.process',
   'account.analyze',
-  'entries.reprocess',
+  'rules.reprocess',
 ])
 
 const BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api'
@@ -39,7 +39,7 @@ export function useJobStream() {
           const event = JSON.parse(e.data) as SseJobEvent
           upsertJobFromEvent(event)
           backoffRef.current = 1000
-          if (event.status === 'completed' && TRANSACTION_JOB_TYPES.has(event.job_type)) {
+          if (event.status === 'complete' && TRANSACTION_JOB_TYPES.has(event.job_type)) {
             void refreshTransactions()
             void refreshEntries()
           }

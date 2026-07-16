@@ -184,9 +184,10 @@ func (h *JobsHandler) TriggerProject(ctx context.Context, _ *struct{}) (*trigger
 
 // sseJobEvent is the payload sent over the SSE channel.
 type sseJobEvent struct {
-	JobID  string `json:"job_id"`
-	Type   string `json:"type"`
-	Status string `json:"status"`
+	JobID    string  `json:"job_id"`
+	JobType  string  `json:"job_type"`
+	Status   string  `json:"status"`
+	Error    *string `json:"error"`
 }
 
 // StreamJobs streams job state changes as Server-Sent Events.
@@ -223,7 +224,7 @@ func (h *JobsHandler) StreamJobs(w http.ResponseWriter, r *http.Request) {
 	activeJobs, err := h.s.ListActiveJobs(ctx, entityID)
 	if err == nil {
 		for _, j := range activeJobs {
-			event := sseJobEvent{JobID: j.ID, Type: j.JobType, Status: j.Status}
+			event := sseJobEvent{JobID: j.ID, JobType: j.JobType, Status: j.Status, Error: j.Error}
 			b, _ := json.Marshal(event)
 			fmt.Fprintf(w, "data: %s\n\n", b)
 		}

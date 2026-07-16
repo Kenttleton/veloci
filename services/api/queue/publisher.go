@@ -14,7 +14,7 @@ const QueueName = "veloci.jobs"
 // Job represents a unit of work published to the queue.
 type Job struct {
 	JobID    string          `json:"job_id"`
-	Type     string          `json:"type"`
+	Type     string          `json:"job_type"`
 	EntityID string          `json:"entity_id"`
 	Metadata json.RawMessage `json:"metadata"`
 }

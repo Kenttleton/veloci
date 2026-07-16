@@ -67,7 +67,21 @@ pub async fn run(cfg: &AppConfig, pools: Pools) -> Result<()> {
     tracing::info!("consuming from {QUEUE} (prefetch=1)");
     while let Some(delivery) = consumer.next().await {
         let d = delivery?;
-        match serde_json::from_slice::<jobs::JobMessage>(&d.data) {
+
+        // Two-phase parse: extract job_id first so we can mark failed even on
+        // a malformed payload, then attempt the full deserialization.
+        let raw: serde_json::Value = match serde_json::from_slice(&d.data) {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::error!("unparseable job payload (not valid JSON): {:?}", e);
+                d.ack(BasicAckOptions::default()).await?;
+                continue;
+            }
+        };
+        let job_id_str = raw.get("job_id").and_then(|v| v.as_str()).unwrap_or("");
+        let fallback_jid: Option<Uuid> = job_id_str.parse().ok();
+
+        match serde_json::from_value::<jobs::JobMessage>(raw) {
             Ok(msg) => {
                 let (eid, jt, jid) = (msg.entity_id, msg.job_type.clone(), msg.job_id);
                 tracing::info!(entity_id = %eid, job_type = %jt, job_id = %jid, "job received");
@@ -84,7 +98,13 @@ pub async fn run(cfg: &AppConfig, pools: Pools) -> Result<()> {
                     }
                 }
             }
-            Err(e) => tracing::error!("malformed job payload: {:?}", e),
+            Err(e) => {
+                let detail = format!("malformed job payload: {e:?}");
+                tracing::error!("{}", detail);
+                if let Some(jid) = fallback_jid {
+                    set_job_status(jid, "failed", Some(&detail), &pools).await;
+                }
+            }
         }
         d.ack(BasicAckOptions::default()).await?;
     }
