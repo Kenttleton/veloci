@@ -219,17 +219,17 @@ Unmatched transactions are clustered by normalized merchant name and scored acro
 - **Timing** — how regular the intervals between occurrences are
 - **Amount** — how consistent the transaction amounts are
 
-The scores determine entry type: clusters with tight timing and tight amounts are classified as Standing; tight timing with variable amounts as Variable; everything else as Irregular. Each cluster that clears a minimum confidence threshold produces a candidate entry in the review queue.
+The scores determine entry type: clusters with tight timing and tight amounts are classified as Standing; tight timing with variable amounts as Variable; everything else as Irregular. Each cluster that clears a minimum confidence threshold produces a `pending_review` entry in the `entries` table.
 
 ## 4.5 User Review
 
-After processing, users see a review queue of candidate entries. Each candidate shows the detected pattern, entry type, calculated /day rate, confidence breakdown, and the matched transactions. Users can approve as-is, edit the name or entry type, or dismiss.
+After processing, users see pending entries in the Ledger. Each pending entry shows the detected pattern, entry type, calculated /day rate, confidence breakdown, and the matched transactions. Users can approve as-is, edit the name or entry type, or reject.
 
-Once approved, the entry joins the model and future matching against it is automatic. Review burden decreases over time — most people have fewer than 50 true recurring items, and after two or three import cycles the queue shrinks to only genuinely new activity.
+Once approved, the entry joins the model and future matching against it is automatic. Review burden decreases over time — most people have fewer than 50 true recurring items, and after two or three import cycles the number of pending entries shrinks to only genuinely new activity.
 
 ## 4.6 The Healing Property
 
-The import cycle is self-correcting. Entries that end — a subscription cancelled, a loan paid off — naturally disappear from the Actual lane as transactions stop arriving. The engine detects a missed expected transaction and surfaces it in the review queue as an `ended` alert. The user confirms the change; the Projection lane entry is then closed. No manual cleanup is required.
+The import cycle is self-correcting. Entries that end — a subscription cancelled, a loan paid off — naturally disappear from the Actual lane as transactions stop arriving. The engine detects a missed expected transaction and sets `alert_type = 'ended'` on the entry, surfacing it in the Ledger for user review. The user confirms the change; the Projection lane entry is then closed. No manual cleanup is required.
 
 # 5. Budget Views
 
@@ -339,7 +339,7 @@ Every financial figure in Veloci leads with the /day rate. Monthly, quarterly, a
 
 ## 7.2 Show Impact at the Moment of Approval
 
-When a user approves a new Entry from the review queue, that is the highest-value insight moment in the product. The Margin change should be shown immediately and in context — not as a notification, but as a live update to the Pulse view. The user should feel the app respond to their confirmation with genuine, personalized insight.
+When a user approves a new `pending_review` entry from the Ledger, that is the highest-value insight moment in the product. The Margin change should be shown immediately and in context — not as a notification, but as a live update to the Pulse view. The user should feel the app respond to their confirmation with genuine, personalized insight.
 
 ## 7.3 Never Editorialize
 
@@ -570,12 +570,6 @@ User-defined post-stage rules that apply labels to groups of entries. Do not aff
 
 Many-to-many join between transactions and entries. A transaction may match multiple entries. `confidence` is 1.0 for user-created entries and 0.0–1.0 for engine-generated matches.
 
-### review_queue
-
-Engine-detected candidate entries awaiting user approval. Each row carries a full suggestion — name, entry_type, conditions, rate, matched transaction count, and three-component confidence breakdown (merchant / timing / amount).
-
-`alert_type`: `new` = first detection, `drift` = rate changed significantly, `ended` = signal no longer seen.
-
 ## 9.7 Engine Output
 
 ### snapshots
@@ -629,7 +623,7 @@ The processing engine is a Rust service (`services/engine`) using `sqlx` for asy
 | **Job type** | **Stages** | **Trigger** |
 | --- | --- | --- |
 | `import.process` | 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 | CSV upload |
-| `entries.reprocess` | 1 → 2 → 3 → 4 → 5 → 6 → 7 | Entry edited or approved from review queue |
+| `entries.reprocess` | 1 → 2 → 3 → 4 → 5 → 6 → 7 | Entry edited or approved (from `pending_review` status) |
 | `account.analyze` | 3 → 4 → 5 → 6 → 7 | Account balance updated |
 | `balance.project` | 7 | Balance-only refresh |
 
@@ -671,11 +665,11 @@ Loads all active entries (`status = 'active'` AND `end_date IS NULL`) that have 
 ### Stage 2 — Pattern Detection
 
 **Input:** Unmatched transaction IDs from Stage 1
-**Output:** New rows in `entries` (status `pending_review`) and `review_queue`
+**Output:** New rows in `entries` (status `pending_review`) with review metadata
 
 Clusters unmatched transactions by merchant name similarity, amount consistency, and timing regularity. Scores each cluster across three components: merchant confidence (brand extraction and normalization quality), timing confidence (regularity of intervals), and amount confidence (variance in transaction amounts). The composite confidence score determines whether a cluster is surfaced as `new` or silently discarded below a threshold.
 
-For each accepted cluster: upserts a label (by name, global UNIQUE), creates an entry with `source = 'engine'` and `start_date` set to the earliest transaction in the cluster, and enqueues a `review_queue` row with the full suggestion and confidence breakdown. Sets `next_due_date` and `project_tentatively = TRUE` when the recurrence pattern is clear enough to project before user approval.
+For each accepted cluster: upserts a label (by name, global UNIQUE), creates an entry with `source = 'engine'`, `alert_type = 'new'`, and `start_date` set to the earliest transaction in the cluster. Review metadata (confidence scores, sample merchants, matched transaction count) is written directly to the `entries` row — there is no separate review table. Sets `next_due_date` and `project_tentatively = TRUE` when the recurrence pattern is clear enough to project before user approval.
 
 Entry type assignment: `standing` for clusters with regular timing and consistent amounts (≥3 observations); `variable` for clusters with regular timing and variable amounts; `irregular` as the fallthrough when timing confidence is below the gates. For irregular clusters, `period_days` is set to the mean observed interval when 2+ transactions are present, or 30 for a single-transaction cluster.
 
@@ -739,13 +733,13 @@ Produces two snapshot types per day:
 ### Stage 7 — Cash Flow Projection
 
 **Input:** Entity ID, `computed_as_of`, active entries + their recurrence schedules, latest snapshots
-**Output:** Rows in `projections`; new `review_queue` alert rows for missed expected transactions
+**Output:** Rows in `projections`; `alert_type = 'ended'` written to `entries` for missed expected transactions
 
 Runs once after the day-crawl completes. Loads eligible entries: `status = 'active'` entries and `status = 'pending_review'` entries where `project_tentatively = TRUE`. Loads the latest snapshot rate for each eligible entry to use as the projected rate. Deletes all existing projections for this entity/job and rebuilds them for 90 days forward.
 
 For each projected day, superposes all eligible entry rates using their `recurrence_anchor` and `next_due_date` to phase each signal correctly across the timeline. Produces one row per `(entity_id, account_id, projected_date)` containing income rate, commitment rate, margin rate, running projected balance, and whether the day is a pinch point (margin < 0).
 
-Also raises `alert_type = 'ended'` review queue entries for active entries whose `next_due_date` has passed without a matching transaction — signaling that a known recurring commitment may have ended.
+Also sets `alert_type = 'ended'` and `status = 'pending_review'` on active entries whose `next_due_date` has passed without a matching transaction — surfacing them in the Ledger for user review.
 
 ## 10.4 Pipeline Invariants
 
