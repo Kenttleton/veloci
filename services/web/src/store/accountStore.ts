@@ -11,8 +11,6 @@ interface AccountUIStore {
   clear: () => void
 }
 
-const DEFAULT_STATE: AccountUIState = { scrollTransactions: 0 }
-
 export const useAccountStore = create<AccountUIStore>((set) => ({
   accounts: {},
   setScroll: (id, offset) =>

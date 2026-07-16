@@ -568,6 +568,8 @@ export interface SnapshotView {
   window_days_used: number;
 }
 
+export type TransactionViewEntryIds = string[] | null;
+
 export type TransactionViewImportBatchId = string | null;
 
 export type TransactionViewImportedId = string | null;
@@ -576,6 +578,7 @@ export interface TransactionView {
   account_id: string;
   amount_cents: number;
   date: string;
+  entry_ids: TransactionViewEntryIds;
   id: string;
   import_batch_id: TransactionViewImportBatchId;
   imported_at: string;
@@ -692,12 +695,26 @@ limit?: number;
 };
 
 export type ListEntriesParams = {
+date_from?: string;
+date_to?: string;
+/**
+ * @minimum 0
+ */
+span_days?: number;
+/**
+ * @minimum 0
+ */
+span_months?: number;
+/**
+ * @minimum 0
+ */
+span_years?: number;
 account_id?: string;
 status?: string;
 cursor?: string;
 /**
  * @minimum 1
- * @maximum 200
+ * @maximum 500
  */
 limit?: number;
 };
@@ -786,12 +803,26 @@ granularity?: string;
 };
 
 export type ListTransactionsParams = {
+date_from?: string;
+date_to?: string;
+/**
+ * @minimum 0
+ */
+span_days?: number;
+/**
+ * @minimum 0
+ */
+span_months?: number;
+/**
+ * @minimum 0
+ */
+span_years?: number;
 account_id?: string;
 entry_id?: string;
 cursor?: string;
 /**
  * @minimum 1
- * @maximum 200
+ * @maximum 500
  */
 limit?: number;
 };

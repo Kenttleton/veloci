@@ -1,11 +1,12 @@
 import { Outlet, useLocation } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { useJobStream } from '../hooks/useJobStream'
+import { useDataLoader } from '../hooks/useDataLoader'
 import { ErrorBoundary } from '../components/shared/ErrorBoundary'
 
 export function AppShell() {
-  // Establish SSE connection for the lifetime of the authenticated session
   useJobStream()
+  useDataLoader()
   const location = useLocation()
 
   return (

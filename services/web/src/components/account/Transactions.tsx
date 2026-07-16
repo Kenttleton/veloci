@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react'
+import { useRef, useState, useEffect, useMemo } from 'react'
 import { format, parseISO } from 'date-fns'
 import {
   useReactTable,
@@ -10,16 +10,15 @@ import {
 } from '@tanstack/react-table'
 import type { SortingState, ColumnFiltersState } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { useListTransactionsInfinite } from '../../api/cursorQuery'
 import type { TransactionView } from '../../api/generated/velociAPI.schemas'
 import { useAccountStore } from '../../store/accountStore'
+import { useTransactionStore } from '../../store/transactionStore'
 
 const columnHelper = createColumnHelper<TransactionView>()
 
 function formatAmount(cents: number): string {
   return (Math.abs(cents) / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
 }
-
 
 const columns = [
   columnHelper.accessor('date', {
@@ -47,24 +46,29 @@ const columns = [
   }),
 ]
 
-interface TransactionsTabProps {
+interface TransactionsProps {
   accountId: string
 }
 
-export function Transactions({ accountId }: TransactionsTabProps) {
+export function Transactions({ accountId }: TransactionsProps) {
   const parentRef = useRef<HTMLDivElement>(null)
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const initialScrollOffset = useAccountStore((s) => s.accounts[accountId]?.scrollTransactions ?? 0)
   const setScroll = useAccountStore((s) => s.setScroll)
 
-  const { data, fetchNextPage, hasNextPage, isFetching } = useListTransactionsInfinite({
-    account_id: accountId,
-    limit: 50,
-  })
+  const allTransactions = useTransactionStore((s) => s.transactions)
+  const txStatus = useTransactionStore((s) => s.status)
+  const nextCursor = useTransactionStore((s) => s.nextCursor)
+  const loadMore = useTransactionStore((s) => s.loadMore)
 
-  // Pages are AxiosResponse<EnvelopeListTransactionView>
-  const rows = data?.pages.flatMap((p) => p.data.data ?? []) ?? []
+  const rows = useMemo(
+    () =>
+      Object.values(allTransactions)
+        .filter((tx) => tx.account_id === accountId)
+        .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)),
+    [allTransactions, accountId],
+  )
 
   const table = useReactTable({
     data: rows,
@@ -95,18 +99,24 @@ export function Transactions({ accountId }: TransactionsTabProps) {
     return () => el.removeEventListener('scroll', save)
   }, [accountId, setScroll])
 
+  // Trigger lazy load when approaching the end of known data
   const lastVirtualIndex = virtualizer.getVirtualItems().at(-1)?.index
   useEffect(() => {
-    if (lastVirtualIndex !== undefined && lastVirtualIndex >= tableRows.length - 20 && hasNextPage && !isFetching) {
-      void fetchNextPage()
+    if (
+      lastVirtualIndex !== undefined &&
+      lastVirtualIndex >= tableRows.length - 20 &&
+      nextCursor &&
+      txStatus !== 'loading'
+    ) {
+      void loadMore()
     }
-  }, [lastVirtualIndex, tableRows.length, hasNextPage, isFetching, fetchNextPage])
+  }, [lastVirtualIndex, tableRows.length, nextCursor, txStatus, loadMore])
 
-  if (!data && isFetching) {
+  if (txStatus === 'loading' && rows.length === 0) {
     return <div style={{ padding: 20, color: 'var(--text3)' }}>Loading...</div>
   }
 
-  if (rows.length === 0 && !isFetching) {
+  if (rows.length === 0) {
     return (
       <div style={{ padding: 32, textAlign: 'center', color: 'var(--text3)' }}>
         No transactions for this account.
@@ -117,14 +127,7 @@ export function Transactions({ accountId }: TransactionsTabProps) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Filter bar */}
-      <div
-        style={{
-          display: 'flex',
-          gap: 8,
-          padding: '8px 16px',
-          borderBottom: '1px solid var(--border)',
-        }}
-      >
+      <div style={{ display: 'flex', gap: 8, padding: '8px 16px', borderBottom: '1px solid var(--border)' }}>
         <input
           type="text"
           placeholder="Filter merchant..."
@@ -145,10 +148,7 @@ export function Transactions({ accountId }: TransactionsTabProps) {
       {/* Column headers */}
       <div style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg)' }}>
         {table.getHeaderGroups().map((headerGroup) => (
-          <div
-            key={headerGroup.id}
-            style={{ display: 'flex', padding: '5px 16px', gap: 8 }}
-          >
+          <div key={headerGroup.id} style={{ display: 'flex', padding: '5px 16px', gap: 8 }}>
             {headerGroup.headers.map((header) => (
               <div
                 key={header.id}
@@ -164,11 +164,7 @@ export function Transactions({ accountId }: TransactionsTabProps) {
                 onClick={header.column.getToggleSortingHandler()}
               >
                 {flexRender(header.column.columnDef.header, header.getContext())}
-                {header.column.getIsSorted() === 'asc'
-                  ? ' ↑'
-                  : header.column.getIsSorted() === 'desc'
-                    ? ' ↓'
-                    : ''}
+                {header.column.getIsSorted() === 'asc' ? ' ↑' : header.column.getIsSorted() === 'desc' ? ' ↓' : ''}
               </div>
             ))}
           </div>
@@ -218,10 +214,8 @@ export function Transactions({ accountId }: TransactionsTabProps) {
         </div>
       </div>
 
-      {isFetching && (
-        <div style={{ padding: '8px 16px', color: 'var(--text3)', fontSize: 12 }}>
-          Loading more...
-        </div>
+      {txStatus === 'loading' && (
+        <div style={{ padding: '8px 16px', color: 'var(--text3)', fontSize: 12 }}>Loading more...</div>
       )}
     </div>
   )

@@ -1,12 +1,13 @@
-import { useState, useRef, useEffect } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
-import { useListEntriesInfinite, useListTransactionsInfinite } from '../api/cursorQuery'
 import { useApproveEntry, useRejectEntry } from '../api/generated/velociAPI'
 import type { EntryView } from '../api/generated/velociAPI.schemas'
 import { useLedgerStore } from '../store/ledgerStore'
+import type { StatusFilter } from '../store/ledgerStore'
+import { useEntryStore } from '../store/entryStore'
+import { useTransactionStore } from '../store/transactionStore'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -37,12 +38,15 @@ function rateLabel(ratePerDay: number | null): string {
 // ── Entry transaction drill-down ──────────────────────────────────────────────
 
 function EntryTransactions({ entryId }: { entryId: string }) {
-  const { data, isFetching } = useListTransactionsInfinite({ entry_id: entryId, limit: 50 })
-  const rows = data?.pages.flatMap((p) => p.data.data ?? []) ?? []
+  const allTransactions = useTransactionStore((s) => s.transactions)
+  const rows = useMemo(
+    () =>
+      Object.values(allTransactions)
+        .filter((tx) => tx.entry_ids?.includes(entryId))
+        .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)),
+    [allTransactions, entryId],
+  )
 
-  if (isFetching && !data) {
-    return <div style={{ padding: '12px 20px', color: 'var(--text3)', fontSize: 12 }}>Loading…</div>
-  }
   if (rows.length === 0) {
     return (
       <div style={{ padding: '12px 20px', color: 'var(--text3)', fontSize: 12 }}>
@@ -145,7 +149,6 @@ function actionBtn(color: string): React.CSSProperties {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function LedgerPage() {
-  const queryClient = useQueryClient()
   const parentRef = useRef<HTMLDivElement>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
@@ -154,9 +157,12 @@ export function LedgerPage() {
   const setStatusFilter = useLedgerStore((s) => s.setStatusFilter)
   const setScrollOffset = useLedgerStore((s) => s.setScrollOffset)
 
-  const { data, fetchNextPage, hasNextPage, isFetching } = useListEntriesInfinite({ status: 'all', limit: 100 })
+  const entryMap = useEntryStore((s) => s.entries)
+  const entryStatus = useEntryStore((s) => s.status)
+  const entryNextCursor = useEntryStore((s) => s.nextCursor)
+  const loadMoreEntries = useEntryStore((s) => s.loadMore)
 
-  const allEntries: EntryView[] = data?.pages.flatMap((p) => p.data.data ?? []) ?? []
+  const allEntries: EntryView[] = useMemo(() => Object.values(entryMap), [entryMap])
 
   const filtered = allEntries
     .filter((e) => statusFilter === 'all' || e.status === statusFilter)
@@ -186,7 +192,7 @@ export function LedgerPage() {
   }
 
   function invalidate() {
-    void queryClient.invalidateQueries({ queryKey: ['infinite', '/entries'] })
+    void useEntryStore.getState().refresh()
   }
 
   useEffect(() => {
@@ -199,10 +205,10 @@ export function LedgerPage() {
 
   const lastIdx = virtualizer.getVirtualItems().at(-1)?.index
   useEffect(() => {
-    if (lastIdx !== undefined && lastIdx >= filtered.length - 20 && hasNextPage && !isFetching) {
-      void fetchNextPage()
+    if (lastIdx !== undefined && lastIdx >= filtered.length - 20 && entryNextCursor && entryStatus !== 'loading') {
+      void loadMoreEntries()
     }
-  }, [lastIdx, filtered.length, hasNextPage, isFetching, fetchNextPage])
+  }, [lastIdx, filtered.length, entryNextCursor, entryStatus, loadMoreEntries])
 
   const filterPills: Array<{ key: StatusFilter; label: string; color: string }> = [
     { key: 'all',           label: `All ${allEntries.length}`,                   color: 'var(--text2)' },
@@ -253,7 +259,7 @@ export function LedgerPage() {
       </div>
 
       {/* Virtual rows */}
-      {!data && isFetching ? (
+      {entryStatus === 'loading' && allEntries.length === 0 ? (
         <div style={{ padding: 32, color: 'var(--text3)', textAlign: 'center' }}>Loading…</div>
       ) : filtered.length === 0 ? (
         <div style={{ padding: 32, color: 'var(--text3)', textAlign: 'center' }}>
@@ -321,7 +327,7 @@ export function LedgerPage() {
         </div>
       )}
 
-      {isFetching && data && (
+      {entryStatus === 'loading' && allEntries.length > 0 && (
         <div style={{ padding: '8px 20px', color: 'var(--text3)', fontSize: 12, flexShrink: 0 }}>
           Loading more…
         </div>

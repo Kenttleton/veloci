@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { registerStore } from './registry'
 
-type StatusFilter = 'all' | 'pending_review' | 'active' | 'inactive'
+export type StatusFilter = 'all' | 'pending_review' | 'active' | 'inactive'
 
 interface LedgerStore {
   statusFilter: StatusFilter
