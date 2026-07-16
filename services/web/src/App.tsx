@@ -10,6 +10,7 @@ import { LedgerPage } from './pages/LedgerPage'
 import { ActivityPage } from './pages/ActivityPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { GlossaryPage } from './pages/GlossaryPage'
+import { ConfigurationPage } from './pages/ConfigurationPage'
 
 function ReportsPage() {
   return <div style={{ padding: 32, color: 'var(--text2)' }}>Reports — coming soon</div>
@@ -45,6 +46,7 @@ export default function App() {
                       <Route path="accounts/:id" element={<AccountPage />} />
                       <Route path="settings" element={<SettingsPage />} />
                       <Route path="glossary" element={<GlossaryPage />} />
+                      <Route path="configuration" element={<ConfigurationPage />} />
                     </Route>
                   </Routes>
                 </JobsProvider>

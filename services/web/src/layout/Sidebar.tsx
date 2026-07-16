@@ -7,9 +7,9 @@ import {
   Activity,
   Settings,
   BookOpen,
+  SlidersHorizontal,
   Plus,
 } from 'lucide-react'
-import { useAuth } from '../auth/AuthProvider'
 import { useJobs } from '../contexts/JobsContext'
 import { useListAccounts } from '../api/generated/velociAPI'
 import type { AccountView } from '../api/generated/velociAPI.schemas'
@@ -19,8 +19,7 @@ type Account = AccountView
 
 function formatBalance(cents: number | null): string {
   if (cents === null) return '—'
-  const dollars = cents / 100
-  return dollars.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+  return (cents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
 }
 
 function isNegativeBalance(account: Account): boolean {
@@ -34,7 +33,6 @@ function isNegativeBalance(account: Account): boolean {
 }
 
 export function Sidebar() {
-  const { logout } = useAuth()
   const { hasRunningJobs } = useJobs()
   const [reviewCount] = useState(0)
   const [addAccountStatus, setAddAccountStatus] = useState<'active' | 'passive' | null>(null)
@@ -42,11 +40,10 @@ export function Sidebar() {
   const accountsQuery = useListAccounts()
   const accounts: Account[] = accountsQuery.data?.data.data ?? []
   const accountsLoading = accountsQuery.isLoading
-
   const activeAccounts = accounts.filter((a) => a.status === 'active')
   const passiveAccounts = accounts.filter((a) => a.status === 'passive')
 
-  const navItemStyle = (isActive: boolean): React.CSSProperties => ({
+  const navItem = (isActive: boolean): React.CSSProperties => ({
     display: 'flex',
     alignItems: 'center',
     gap: 8,
@@ -74,42 +71,28 @@ export function Sidebar() {
         overflow: 'hidden',
       }}
     >
-      {/* Logo / entity */}
-      <div
-        style={{
-          padding: '16px 16px 12px',
-          borderBottom: '1px solid var(--border)',
-        }}
-      >
+      {/* Logo */}
+      <div style={{ padding: '16px 16px 12px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
         <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--text)', letterSpacing: '-0.02em' }}>
           Veloci
         </span>
       </div>
 
-      {/* Nav */}
-      <nav style={{ padding: '8px 8px 0' }}>
-        <NavLink
-          to="/budget"
-          style={({ isActive }) => navItemStyle(isActive)}
-        >
+      {/* Primary nav */}
+      <nav style={{ padding: '8px 8px 0', flexShrink: 0 }}>
+        <NavLink to="/budget" style={({ isActive }) => navItem(isActive)}>
           <BarChart2 size={15} />
           Budget
         </NavLink>
 
-        <NavLink
-          to="/reports"
-          style={({ isActive }) => navItemStyle(isActive)}
-        >
+        <NavLink to="/reports" style={({ isActive }) => navItem(isActive)}>
           <FileText size={15} />
           Reports
         </NavLink>
 
         <NavLink
           to="/ledger"
-          style={({ isActive }) => ({
-            ...navItemStyle(isActive),
-            position: 'relative',
-          })}
+          style={({ isActive }) => ({ ...navItem(isActive), position: 'relative' })}
         >
           <CheckSquare
             size={15}
@@ -131,37 +114,19 @@ export function Sidebar() {
                 fontWeight: 700,
                 padding: '0 6px',
                 lineHeight: '16px',
-                opacity: hasRunningJobs ? 0.55 : 1,
-                outline: hasRunningJobs ? '1px solid var(--accent)' : undefined,
               }}
             >
               {reviewCount}
             </span>
           )}
         </NavLink>
-
-        <NavLink
-          to="/activity"
-          style={({ isActive }) => navItemStyle(isActive)}
-        >
-          <Activity size={15} />
-          Activity
-        </NavLink>
       </nav>
 
-      {/* Accounts section */}
+      {/* Accounts — scrollable */}
       <div style={{ flex: 1, overflow: 'auto', padding: '12px 8px 0' }}>
-        {/* Active accounts */}
+        {/* Active */}
         <div style={{ marginBottom: 8 }}>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '4px 8px',
-              marginBottom: 2,
-            }}
-          >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', marginBottom: 2 }}>
             <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               Active
             </span>
@@ -175,11 +140,9 @@ export function Sidebar() {
           </div>
 
           {accountsLoading ? (
-            <>
-              {[80, 110, 95].map((w) => (
-                <div key={w} style={{ height: 28, margin: '2px 8px', borderRadius: 4, background: 'var(--surface2)', width: w, opacity: 0.5 }} />
-              ))}
-            </>
+            [80, 110, 95].map((w) => (
+              <div key={w} style={{ height: 28, margin: '2px 8px', borderRadius: 4, background: 'var(--surface2)', width: w, opacity: 0.5 }} />
+            ))
           ) : (
             <>
               {activeAccounts.map((account) => (
@@ -200,40 +163,22 @@ export function Sidebar() {
                   <span style={{ fontSize: 13, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {account.name}
                   </span>
-                  <span
-                    style={{
-                      fontSize: 12,
-                      color: isNegativeBalance(account) ? 'var(--commit)' : 'var(--text2)',
-                      flexShrink: 0,
-                      marginLeft: 4,
-                    }}
-                  >
+                  <span style={{ fontSize: 12, color: isNegativeBalance(account) ? 'var(--commit)' : 'var(--text2)', flexShrink: 0, marginLeft: 4 }}>
                     {formatBalance(account.balance_cents)}
                   </span>
                 </NavLink>
               ))}
-
               {activeAccounts.length === 0 && (
-                <p style={{ fontSize: 12, color: 'var(--text3)', padding: '4px 8px', margin: 0 }}>
-                  No active accounts
-                </p>
+                <p style={{ fontSize: 12, color: 'var(--text3)', padding: '4px 8px', margin: 0 }}>No active accounts</p>
               )}
             </>
           )}
         </div>
 
-        {/* Passive accounts */}
+        {/* Passive */}
         {!accountsLoading && passiveAccounts.length > 0 && (
           <div style={{ marginBottom: 8 }}>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '4px 8px',
-                marginBottom: 2,
-              }}
-            >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', marginBottom: 2 }}>
               <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                 Passive
               </span>
@@ -264,14 +209,7 @@ export function Sidebar() {
                 <span style={{ fontSize: 13, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {account.name}
                 </span>
-                <span
-                  style={{
-                    fontSize: 12,
-                    color: isNegativeBalance(account) ? 'var(--commit)' : 'var(--text2)',
-                    flexShrink: 0,
-                    marginLeft: 4,
-                  }}
-                >
+                <span style={{ fontSize: 12, color: isNegativeBalance(account) ? 'var(--commit)' : 'var(--text2)', flexShrink: 0, marginLeft: 4 }}>
                   {formatBalance(account.balance_cents)}
                 </span>
               </NavLink>
@@ -280,48 +218,39 @@ export function Sidebar() {
         )}
       </div>
 
-      {/* Footer */}
-      <div
-        style={{
-          borderTop: '1px solid var(--border)',
-          padding: '8px',
-        }}
-      >
-        <NavLink
-          to="/settings"
-          style={({ isActive }) => navItemStyle(isActive)}
-        >
+      {/* Footer nav */}
+      <div style={{ borderTop: '1px solid var(--border)', padding: '8px', flexShrink: 0 }}>
+        <NavLink to="/activity" style={({ isActive }) => ({ ...navItem(isActive), position: 'relative' })}>
+          <Activity size={15} />
+          Activity
+          {hasRunningJobs && (
+            <span
+              style={{
+                marginLeft: 'auto',
+                width: 7,
+                height: 7,
+                borderRadius: '50%',
+                background: 'var(--accent)',
+                flexShrink: 0,
+              }}
+            />
+          )}
+        </NavLink>
+
+        <NavLink to="/settings" style={({ isActive }) => navItem(isActive)}>
           <Settings size={15} />
           Settings
         </NavLink>
 
-        <NavLink
-          to="/glossary"
-          style={({ isActive }) => navItemStyle(isActive)}
-        >
+        <NavLink to="/glossary" style={({ isActive }) => navItem(isActive)}>
           <BookOpen size={15} />
           Glossary
         </NavLink>
 
-        <button
-          onClick={logout}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '7px 12px',
-            borderRadius: 6,
-            cursor: 'pointer',
-            color: 'var(--text3)',
-            background: 'transparent',
-            border: 'none',
-            fontSize: '13.5px',
-            width: '100%',
-            marginTop: 2,
-          }}
-        >
-          Sign out
-        </button>
+        <NavLink to="/configuration" style={({ isActive }) => navItem(isActive)}>
+          <SlidersHorizontal size={15} />
+          Configuration
+        </NavLink>
       </div>
 
       {addAccountStatus && (

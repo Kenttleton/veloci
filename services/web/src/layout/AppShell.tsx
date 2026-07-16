@@ -1,5 +1,6 @@
 import { Outlet, useLocation } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
+import { UserMenu } from './UserMenu'
 import { useJobStream } from '../hooks/useJobStream'
 import { useDataLoader } from '../hooks/useDataLoader'
 import { ErrorBoundary } from '../components/shared/ErrorBoundary'
@@ -32,6 +33,7 @@ export function AppShell() {
           <Outlet />
         </ErrorBoundary>
       </main>
+      <UserMenu />
     </div>
   )
 }
