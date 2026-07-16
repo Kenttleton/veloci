@@ -1,12 +1,15 @@
 package handler
 
 import (
+	"bytes"
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/jackc/pgx/v5"
@@ -15,6 +18,84 @@ import (
 	"github.com/veloci/api/response"
 	"github.com/veloci/api/store"
 )
+
+var csvDateFormats = []string{
+	"2006-01-02",
+	"01/02/2006",
+	"1/2/2006",
+	"01/02/06",
+	"1/2/06",
+	"2006/01/02",
+	"Jan 2, 2006",
+	"January 2, 2006",
+	"02-Jan-2006",
+	"2-Jan-2006",
+}
+
+func parseCSVDate(s string) (time.Time, bool) {
+	s = strings.TrimSpace(s)
+	for _, f := range csvDateFormats {
+		if t, err := time.Parse(f, s); err == nil {
+			return t, true
+		}
+	}
+	return time.Time{}, false
+}
+
+// extractDateRange parses csvBytes and returns min date, max date, row count
+// using dateCol as the column name. Returns an error if no parseable dates found.
+func extractDateRange(csvBytes []byte, dateCol string) (minDate, maxDate time.Time, rowCount int, err error) {
+	r := csv.NewReader(bytes.NewReader(csvBytes))
+	headers, err := r.Read()
+	if err != nil {
+		return time.Time{}, time.Time{}, 0, err
+	}
+	colIdx := -1
+	for i, h := range headers {
+		if strings.EqualFold(strings.TrimSpace(h), strings.TrimSpace(dateCol)) {
+			colIdx = i
+			break
+		}
+	}
+	if colIdx < 0 {
+		return time.Time{}, time.Time{}, 0, errors.New("date column not found in CSV")
+	}
+
+	initialized := false
+	for {
+		row, readErr := r.Read()
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil {
+			continue
+		}
+		if colIdx >= len(row) {
+			continue
+		}
+		t, ok := parseCSVDate(row[colIdx])
+		if !ok {
+			continue
+		}
+		rowCount++
+		if !initialized {
+			minDate = t
+			maxDate = t
+			initialized = true
+			continue
+		}
+		if t.Before(minDate) {
+			minDate = t
+		}
+		if t.After(maxDate) {
+			maxDate = t
+		}
+	}
+	if !initialized {
+		return time.Time{}, time.Time{}, 0, errors.New("no parseable dates found in CSV")
+	}
+	return minDate, maxDate, rowCount, nil
+}
 
 // ImportsHandler handles CSV import endpoints.
 type ImportsHandler struct {
@@ -160,7 +241,34 @@ func (h *ImportsHandler) UploadImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	importID, err := h.s.CreatePendingImport(ctx, entityID, accountID, userID, csvBytes)
+	// Resolve the institution mapping linked to this account so we can parse dates.
+	account, err := h.s.GetAccount(ctx, entityID, accountID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		http.Error(w, `{"title":"Not Found","status":404,"detail":"account not found"}`, http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, `{"title":"Internal Server Error","status":500,"detail":"internal error"}`, http.StatusInternalServerError)
+		return
+	}
+	if account.InstitutionID == nil {
+		http.Error(w, `{"title":"Bad Request","status":400,"detail":"account has no institution mapping; set one before uploading"}`, http.StatusBadRequest)
+		return
+	}
+
+	institution, err := h.s.GetInstitution(ctx, entityID, *account.InstitutionID)
+	if err != nil {
+		http.Error(w, `{"title":"Internal Server Error","status":500,"detail":"internal error"}`, http.StatusInternalServerError)
+		return
+	}
+
+	minDate, maxDate, rowCount, err := extractDateRange(csvBytes, institution.DateCol)
+	if err != nil {
+		http.Error(w, `{"title":"Bad Request","status":400,"detail":"could not parse dates from CSV using the current mapping"}`, http.StatusBadRequest)
+		return
+	}
+
+	importID, err := h.s.CreatePendingImport(ctx, entityID, accountID, userID, account.InstitutionID, minDate, maxDate, rowCount, csvBytes)
 	if err != nil {
 		http.Error(w, `{"title":"Internal Server Error","status":500,"detail":"internal error"}`, http.StatusInternalServerError)
 		return

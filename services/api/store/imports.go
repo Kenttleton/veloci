@@ -78,16 +78,29 @@ func (s *Store) ListPendingImports(ctx context.Context, entityID, accountID stri
 }
 
 // CreatePendingImport inserts a new pending_imports row and returns its id.
-func (s *Store) CreatePendingImport(ctx context.Context, entityID, accountID, uploadedBy string, csvBytes []byte) (string, error) {
+func (s *Store) CreatePendingImport(
+	ctx context.Context,
+	entityID, accountID, uploadedBy string,
+	institutionID *string,
+	dateRangeStart, dateRangeEnd time.Time,
+	rowCount int,
+	csvBytes []byte,
+) (string, error) {
 	var id string
 	err := s.pool.QueryRow(ctx, `
 		INSERT INTO pending_imports (
-			id, entity_id, account_id, uploaded_by, uploaded_at, csv_bytes, status
+			id, entity_id, account_id, institution_id, uploaded_by,
+			uploaded_at, date_range_start, date_range_end, row_count,
+			csv_bytes, status
 		) VALUES (
-			gen_random_uuid(), $1, $2::uuid, $3::uuid, NOW(), $4, 'pending'
+			gen_random_uuid(), $1, $2::uuid, $3::uuid, $4::uuid,
+			NOW(), $5::date, $6::date, $7,
+			$8, 'pending'
 		)
 		RETURNING id::text
-	`, entityID, accountID, uploadedBy, csvBytes).Scan(&id)
+	`, entityID, accountID, institutionID, uploadedBy,
+		dateRangeStart.Format("2006-01-02"), dateRangeEnd.Format("2006-01-02"), rowCount,
+		csvBytes).Scan(&id)
 	return id, err
 }
 
