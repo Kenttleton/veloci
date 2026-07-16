@@ -2635,6 +2635,14 @@
           {
             "explode": false,
             "in": "query",
+            "name": "account_id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
             "name": "status",
             "schema": {
               "type": "string"
@@ -2886,6 +2894,74 @@
           }
         },
         "summary": "Update a budget entry",
+        "tags": [
+          "entries"
+        ]
+      }
+    },
+    "/entries/{id}/approve": {
+      "post": {
+        "operationId": "approve-entry",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Approve a pending entry",
+        "tags": [
+          "entries"
+        ]
+      }
+    },
+    "/entries/{id}/reject": {
+      "post": {
+        "operationId": "reject-entry",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Reject a pending entry",
         "tags": [
           "entries"
         ]
@@ -4130,6 +4206,22 @@
       "get": {
         "operationId": "list-transactions",
         "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "account_id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "entry_id",
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "explode": false,
             "in": "query",

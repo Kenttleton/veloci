@@ -25,19 +25,24 @@ func NewTransactionsHandler(s *store.Store) *TransactionsHandler {
 
 // transactionView is the API representation of a transaction.
 type transactionView struct {
-	ID                 string  `json:"id"`
-	AccountID          string  `json:"account_id"`
-	ImportBatchID      *string `json:"import_batch_id"`
-	Date               string  `json:"date"`
-	AmountCents        int64   `json:"amount_cents"`
-	ImportedPayee      string  `json:"imported_payee"`
-	MerchantNormalized string  `json:"merchant_normalized"`
-	ImportedID         *string `json:"imported_id"`
-	SettlementStatus   string  `json:"settlement_status"`
-	ImportedAt         string  `json:"imported_at"`
+	ID                 string   `json:"id"`
+	AccountID          string   `json:"account_id"`
+	ImportBatchID      *string  `json:"import_batch_id"`
+	Date               string   `json:"date"`
+	AmountCents        int64    `json:"amount_cents"`
+	ImportedPayee      string   `json:"imported_payee"`
+	MerchantNormalized string   `json:"merchant_normalized"`
+	ImportedID         *string  `json:"imported_id"`
+	SettlementStatus   string   `json:"settlement_status"`
+	ImportedAt         string   `json:"imported_at"`
+	EntryIDs           []string `json:"entry_ids"`
 }
 
 func toTransactionView(t store.Transaction) transactionView {
+	entryIDs := t.EntryIDs
+	if entryIDs == nil {
+		entryIDs = []string{}
+	}
 	return transactionView{
 		ID:                 t.ID,
 		AccountID:          t.AccountID,
@@ -49,12 +54,16 @@ func toTransactionView(t store.Transaction) transactionView {
 		ImportedID:         t.ImportedID,
 		SettlementStatus:   t.SettlementStatus,
 		ImportedAt:         t.ImportedAt.Format("2006-01-02T15:04:05Z07:00"),
+		EntryIDs:           entryIDs,
 	}
 }
 
 type listTransactionsInput struct {
-	Cursor string `query:"cursor"`
-	Limit  int    `query:"limit" default:"50" minimum:"1" maximum:"200"`
+	SpanDays  int    `query:"span_days" minimum:"1" maximum:"3650"`
+	AccountID string `query:"account_id"`
+	EntryID   string `query:"entry_id"`
+	Cursor    string `query:"cursor"`
+	Limit     int    `query:"limit" default:"200" minimum:"1" maximum:"500"`
 }
 
 type listTransactionsOutput struct {
@@ -76,7 +85,7 @@ func (h *TransactionsHandler) ListTransactions(ctx context.Context, input *listT
 		limit = 50
 	}
 
-	items, err := h.s.ListTransactions(ctx, entityID, limit+1, input.Cursor)
+	items, err := h.s.ListTransactions(ctx, entityID, input.DateFrom, input.DateTo, input.AccountID, input.EntryID, limit+1, input.Cursor)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("internal error")
 	}
@@ -88,7 +97,7 @@ func (h *TransactionsHandler) ListTransactions(ctx context.Context, input *listT
 	var nextCursor *string
 	if hasMore && len(items) > 0 {
 		last := items[len(items)-1]
-		c := store.EncodeCursor(last.ID, last.ImportedAt)
+		c := store.EncodeDateCursor(last.ID, last.Date)
 		nextCursor = &c
 	}
 

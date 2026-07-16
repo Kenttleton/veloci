@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -47,40 +48,37 @@ const entryCols = `
 	s.actual_rate_per_day, s.drift_per_day
 `
 
-// ListEntries returns a paginated list of entries with budget-view fields.
-func (s *Store) ListEntries(ctx context.Context, entityID string, statusFilter string, limit int, cursor string) ([]EntryRow, error) {
+// ListEntries returns a paginated list of entries ordered by start_date DESC.
+// dateFrom/dateTo filter on start_date. accountID limits to entries with transactions
+// in that account. statusFilter defaults to active-only; pass "all" for every status.
+func (s *Store) ListEntries(ctx context.Context, entityID, dateFrom, dateTo, accountID, statusFilter string, limit int, cursor string) ([]EntryRow, error) {
 	statusCond := `e.status = 'active'`
 	if statusFilter == "all" {
 		statusCond = `1=1`
 	}
 
-	if cursor == "" {
-		rows, err := s.pool.Query(ctx, fmt.Sprintf(`
-			SELECT %s
-			FROM entries e
-			LEFT JOIN labels l ON l.id = e.label_id
-			LEFT JOIN LATERAL (
-				SELECT actual_rate_per_day, drift_per_day
-				FROM snapshots
-				WHERE entity_id = e.entity_id AND node_id = e.id AND node_type = 'entry'
-				ORDER BY snapshot_date DESC LIMIT 1
-			) s ON true
-			WHERE e.entity_id = $1 AND %s
-			ORDER BY e.created_at DESC, e.id DESC
-			LIMIT $2
-		`, entryCols, statusCond), entityID, limit)
-		if err != nil {
-			return nil, err
-		}
-		return pgx.CollectRows(rows, pgx.RowToStructByName[EntryRow])
+	args := []any{entityID}
+	extraFilters := ""
+
+	if dateFrom != "" {
+		args = append(args, dateFrom)
+		extraFilters += fmt.Sprintf(" AND e.start_date >= $%d::date", len(args))
+	}
+	if dateTo != "" {
+		args = append(args, dateTo)
+		extraFilters += fmt.Sprintf(" AND e.start_date <= $%d::date", len(args))
+	}
+	if accountID != "" {
+		args = append(args, accountID)
+		extraFilters += fmt.Sprintf(`
+			AND EXISTS (
+				SELECT 1 FROM transaction_entry_assignments tea
+				JOIN transactions t ON t.id = tea.transaction_id
+				WHERE tea.entry_id = e.id AND t.account_id = $%d
+			)`, len(args))
 	}
 
-	cursorID, cursorTS, err := decodeCursor(cursor)
-	if err != nil {
-		return nil, err
-	}
-	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
-		SELECT %s
+	const entryFrom = `
 		FROM entries e
 		LEFT JOIN labels l ON l.id = e.label_id
 		LEFT JOIN LATERAL (
@@ -89,11 +87,38 @@ func (s *Store) ListEntries(ctx context.Context, entityID string, statusFilter s
 			WHERE entity_id = e.entity_id AND node_id = e.id AND node_type = 'entry'
 			ORDER BY snapshot_date DESC LIMIT 1
 		) s ON true
-		WHERE e.entity_id = $1 AND %s
-		  AND (e.created_at, e.id::text) < ($2::timestamptz, $3)
-		ORDER BY e.created_at DESC, e.id DESC
-		LIMIT $4
-	`, entryCols, statusCond), entityID, cursorTS, cursorID, limit)
+	`
+
+	if cursor == "" {
+		args = append(args, limit)
+		rows, err := s.pool.Query(ctx, fmt.Sprintf(`
+			SELECT %s %s
+			WHERE e.entity_id = $1 AND %s%s
+			ORDER BY e.start_date DESC, e.id DESC
+			LIMIT $%d
+		`, entryCols, entryFrom, statusCond, extraFilters, len(args)), args...)
+		if err != nil {
+			return nil, err
+		}
+		return pgx.CollectRows(rows, pgx.RowToStructByName[EntryRow])
+	}
+
+	cursorID, cursorDate, err := decodeCursor(cursor)
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, cursorDate)
+	datePos := len(args)
+	args = append(args, cursorID)
+	idPos := len(args)
+	args = append(args, limit)
+	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
+		SELECT %s %s
+		WHERE e.entity_id = $1 AND %s%s
+		  AND (e.start_date, e.id::text) < ($%d::date, $%d)
+		ORDER BY e.start_date DESC, e.id DESC
+		LIMIT $%d
+	`, entryCols, entryFrom, statusCond, extraFilters, datePos, idPos, len(args)), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -304,4 +329,69 @@ func (s *Store) EndEntry(ctx context.Context, entityID, entryID string, endDate 
 		UPDATE entries SET end_date = $3 WHERE entity_id = $1 AND id = $2
 	`, entityID, entryID, endDate)
 	return err
+}
+
+// ApproveEntryReview activates or ends the entry based on its pending review alert_type,
+// marks the review_queue item approved, and returns the alert_type for job-trigger decisions.
+func (s *Store) ApproveEntryReview(ctx context.Context, entityID, entryID, userID string) (string, error) {
+	var reviewID, alertType string
+	err := s.pool.QueryRow(ctx, `
+		SELECT id::text, alert_type FROM review_queue
+		WHERE entry_id = $1::uuid AND entity_id = $2 AND status = 'pending'
+		ORDER BY created_at DESC LIMIT 1
+	`, entryID, entityID).Scan(&reviewID, &alertType)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return "", err
+	}
+
+	switch alertType {
+	case "new", "":
+		if err := s.ActivateEntry(ctx, entityID, entryID); err != nil {
+			return alertType, err
+		}
+	case "ended":
+		if err := s.EndEntry(ctx, entityID, entryID, time.Now()); err != nil {
+			return alertType, err
+		}
+	// "drift": no entry state change, just acknowledge
+	}
+
+	if reviewID != "" {
+		if _, err := s.pool.Exec(ctx, `
+			UPDATE review_queue SET status = 'approved', reviewed_by = $3::uuid, reviewed_at = NOW()
+			WHERE id = $1::uuid AND entity_id = $2
+		`, reviewID, entityID, userID); err != nil {
+			return alertType, err
+		}
+	}
+	return alertType, nil
+}
+
+// RejectEntryReview dismisses the pending review item and deactivates new entries.
+func (s *Store) RejectEntryReview(ctx context.Context, entityID, entryID, userID string) error {
+	var reviewID, alertType string
+	err := s.pool.QueryRow(ctx, `
+		SELECT id::text, alert_type FROM review_queue
+		WHERE entry_id = $1::uuid AND entity_id = $2 AND status = 'pending'
+		ORDER BY created_at DESC LIMIT 1
+	`, entryID, entityID).Scan(&reviewID, &alertType)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+
+	if alertType == "new" {
+		if err := s.DeactivateEntry(ctx, entityID, entryID); err != nil {
+			return err
+		}
+	}
+
+	if reviewID != "" {
+		if _, err := s.pool.Exec(ctx, `
+			UPDATE review_queue SET status = 'rejected', reviewed_by = $3::uuid, reviewed_at = NOW()
+			WHERE id = $1::uuid AND entity_id = $2
+		`, reviewID, entityID, userID); err != nil {
+			return err
+		}
+	}
+	return nil
 }

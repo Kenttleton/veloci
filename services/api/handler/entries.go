@@ -18,12 +18,13 @@ import (
 
 // EntriesHandler handles entry (budget line) endpoints.
 type EntriesHandler struct {
-	s *store.Store
+	s   *store.Store
+	pub *queue.Publisher
 }
 
 // NewEntriesHandler creates an EntriesHandler.
-func NewEntriesHandler(s *store.Store) *EntriesHandler {
-	return &EntriesHandler{s: s}
+func NewEntriesHandler(s *store.Store, pub *queue.Publisher) *EntriesHandler {
+	return &EntriesHandler{s: s, pub: pub}
 }
 
 // entryView is the API representation of an entry with computed budget fields.
@@ -112,9 +113,12 @@ func entryName(e store.EntryRow) string {
 }
 
 type listEntriesInput struct {
-	Status string `query:"status"`
-	Cursor string `query:"cursor"`
-	Limit  int    `query:"limit" default:"50" minimum:"1" maximum:"200"`
+	DateFrom  string `query:"date_from"`
+	DateTo    string `query:"date_to"`
+	AccountID string `query:"account_id"`
+	Status    string `query:"status"`
+	Cursor    string `query:"cursor"`
+	Limit     int    `query:"limit" default:"200" minimum:"1" maximum:"500"`
 }
 
 type listEntriesOutput struct {
@@ -196,7 +200,7 @@ func (h *EntriesHandler) ListEntries(ctx context.Context, input *listEntriesInpu
 		limit = 50
 	}
 
-	items, err := h.s.ListEntries(ctx, entityID, input.Status, limit+1, input.Cursor)
+	items, err := h.s.ListEntries(ctx, entityID, input.DateFrom, input.DateTo, input.AccountID, input.Status, limit+1, input.Cursor)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("internal error")
 	}
@@ -208,7 +212,7 @@ func (h *EntriesHandler) ListEntries(ctx context.Context, input *listEntriesInpu
 	var nextCursor *string
 	if hasMore && len(items) > 0 {
 		last := items[len(items)-1]
-		c := store.EncodeCursor(last.ID, last.CreatedAt)
+		c := store.EncodeDateCursor(last.ID, last.StartDate)
 		nextCursor = &c
 	}
 
@@ -333,6 +337,47 @@ func (h *EntriesHandler) DeleteEntry(ctx context.Context, input *deleteEntryInpu
 	return nil, nil
 }
 
+type approveEntryInput struct {
+	PathID string `path:"id"`
+}
+
+type rejectEntryInput struct {
+	PathID string `path:"id"`
+}
+
+func (h *EntriesHandler) ApproveEntry(ctx context.Context, input *approveEntryInput) (*struct{}, error) {
+	entityID := middleware.EntityID(ctx)
+	userID := middleware.UserID(ctx)
+
+	alertType, err := h.s.ApproveEntryReview(ctx, entityID, input.PathID, userID)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("internal error")
+	}
+
+	if alertType != "drift" {
+		meta, _ := json.Marshal(map[string]string{})
+		if job, err := h.s.CreateJob(ctx, entityID, "account.analyze", userID, meta); err == nil {
+			h.pub.Publish(ctx, queue.Job{ //nolint:errcheck
+				JobID:    job.ID,
+				Type:     "account.analyze",
+				EntityID: entityID,
+				Metadata: meta,
+			})
+		}
+	}
+	return nil, nil
+}
+
+func (h *EntriesHandler) RejectEntry(ctx context.Context, input *rejectEntryInput) (*struct{}, error) {
+	entityID := middleware.EntityID(ctx)
+	userID := middleware.UserID(ctx)
+
+	if err := h.s.RejectEntryReview(ctx, entityID, input.PathID, userID); err != nil {
+		return nil, huma.Error500InternalServerError("internal error")
+	}
+	return nil, nil
+}
+
 func (h *EntriesHandler) PreviewEntry(ctx context.Context, input *previewEntryInput) (*previewEntryOutput, error) {
 	entityID := middleware.EntityID(ctx)
 
@@ -351,8 +396,8 @@ func (h *EntriesHandler) PreviewEntry(ctx context.Context, input *previewEntryIn
 }
 
 // RegisterEntriesRoutes registers entry endpoints on the given Huma API.
-func RegisterEntriesRoutes(api huma.API, s *store.Store, _ *queue.Publisher, perms middleware.PermissionCache) {
-	h := NewEntriesHandler(s)
+func RegisterEntriesRoutes(api huma.API, s *store.Store, pub *queue.Publisher, perms middleware.PermissionCache) {
+	h := NewEntriesHandler(s, pub)
 
 	huma.Register(api, huma.Operation{
 		OperationID: "list-entries",
@@ -399,6 +444,26 @@ func RegisterEntriesRoutes(api huma.API, s *store.Store, _ *queue.Publisher, per
 		DefaultStatus: http.StatusNoContent,
 		Middlewares:   huma.Middlewares{middleware.RequirePermission(perms, "entries:write")},
 	}, h.DeleteEntry)
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "approve-entry",
+		Method:        http.MethodPost,
+		Path:          "/entries/{id}/approve",
+		Summary:       "Approve a pending entry",
+		Tags:          []string{"entries"},
+		DefaultStatus: http.StatusNoContent,
+		Middlewares:   huma.Middlewares{middleware.RequirePermission(perms, "entries:write")},
+	}, h.ApproveEntry)
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "reject-entry",
+		Method:        http.MethodPost,
+		Path:          "/entries/{id}/reject",
+		Summary:       "Reject a pending entry",
+		Tags:          []string{"entries"},
+		DefaultStatus: http.StatusNoContent,
+		Middlewares:   huma.Middlewares{middleware.RequirePermission(perms, "entries:write")},
+	}, h.RejectEntry)
 
 	huma.Register(api, huma.Operation{
 		OperationID: "preview-entry",

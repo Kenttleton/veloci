@@ -133,9 +133,15 @@ func (s *Store) DeleteInstitution(ctx context.Context, entityID, id string) erro
 	return nil
 }
 
-// EncodeCursor base64-encodes "id,createdAt" for opaque cursor pagination.
+// EncodeCursor base64-encodes "id,timestamp" for timestamp-based keyset pagination.
 func EncodeCursor(id string, createdAt time.Time) string {
 	raw := id + "," + createdAt.UTC().Format(time.RFC3339Nano)
+	return base64.StdEncoding.EncodeToString([]byte(raw))
+}
+
+// EncodeDateCursor base64-encodes "id,date" for date-based keyset pagination (transactions, entries).
+func EncodeDateCursor(id string, date time.Time) string {
+	raw := id + "," + date.Format("2006-01-02")
 	return base64.StdEncoding.EncodeToString([]byte(raw))
 }
 
