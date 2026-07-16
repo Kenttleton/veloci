@@ -2,12 +2,11 @@ import { useState, useRef, useEffect, useMemo } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
-import { useApproveEntry, useRejectEntry } from '../api/generated/velociAPI'
+import { useApproveEntry, useRejectEntry, useListTransactions, useListLabels, useUpdateEntry, useListAccounts } from '../api/generated/velociAPI'
 import type { EntryView } from '../api/generated/velociAPI.schemas'
 import { useLedgerStore } from '../store/ledgerStore'
 import type { StatusFilter } from '../store/ledgerStore'
 import { useEntryStore } from '../store/entryStore'
-import { useTransactionStore } from '../store/transactionStore'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -38,14 +37,25 @@ function rateLabel(ratePerDay: number | null): string {
 // ── Entry transaction drill-down ──────────────────────────────────────────────
 
 function EntryTransactions({ entryId }: { entryId: string }) {
-  const allTransactions = useTransactionStore((s) => s.transactions)
+  const { data, isLoading } = useListTransactions({ entry_id: entryId, limit: 200 })
+  const { data: accountsData } = useListAccounts(undefined)
+  const accountNames = useMemo(() => {
+    const m: Record<string, string> = {}
+    for (const a of accountsData?.data?.data ?? []) m[a.id] = a.name
+    return m
+  }, [accountsData])
   const rows = useMemo(
-    () =>
-      Object.values(allTransactions)
-        .filter((tx) => tx.entry_ids?.includes(entryId))
-        .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)),
-    [allTransactions, entryId],
+    () => [...(data?.data?.data ?? [])].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)),
+    [data],
   )
+
+  if (isLoading) {
+    return (
+      <div style={{ padding: '12px 20px', color: 'var(--text3)', fontSize: 12 }}>
+        Loading…
+      </div>
+    )
+  }
 
   if (rows.length === 0) {
     return (
@@ -83,7 +93,7 @@ function EntryTransactions({ entryId }: { entryId: string }) {
             {tx.merchant_normalized || tx.imported_payee}
           </span>
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text3)' }}>
-            {tx.account_id}
+            {accountNames[tx.account_id] ?? tx.account_id}
           </span>
           <span style={{ color: tx.amount_cents < 0 ? 'var(--commit)' : 'var(--income)' }}>
             {(Math.abs(tx.amount_cents) / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
@@ -95,47 +105,109 @@ function EntryTransactions({ entryId }: { entryId: string }) {
   )
 }
 
-// ── Row actions ───────────────────────────────────────────────────────────────
+// ── Review edit panel ─────────────────────────────────────────────────────────
 
-function EntryActions({ entry, onDone }: { entry: EntryView; onDone: () => void }) {
+function EntryReviewPanel({ entry, onDone }: { entry: EntryView; onDone: () => void }) {
+  const { data: labelsData } = useListLabels({})
+  const labels = labelsData?.data?.data ?? []
+
+  const [labelId, setLabelId] = useState<string>(entry.label_id ?? '')
+  const [direction, setDirection] = useState(entry.direction)
+  const [entryType, setEntryType] = useState(entry.entry_type)
+
   const approve = useApproveEntry()
   const reject = useRejectEntry()
+  const update = useUpdateEntry()
 
-  if (entry.status === 'pending_review') {
-    return (
-      <div style={{ display: 'flex', gap: 6 }}>
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            approve.mutate({ id: entry.id }, { onSuccess: onDone })
-          }}
-          disabled={approve.isPending}
-          style={actionBtn('var(--income)')}
-        >
-          {approve.isPending ? '…' : 'Approve'}
-        </button>
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            reject.mutate({ id: entry.id }, { onSuccess: onDone })
-          }}
-          disabled={reject.isPending}
-          style={actionBtn('var(--commit)')}
-        >
+  const isDirty = labelId !== (entry.label_id ?? '') || direction !== entry.direction || entryType !== entry.entry_type
+
+  function handleApprove(e: React.MouseEvent) {
+    e.stopPropagation()
+    const doApprove = () => approve.mutate({ id: entry.id }, { onSuccess: onDone })
+    if (isDirty) {
+      update.mutate({
+        id: entry.id,
+        data: {
+          label_id: labelId || null,
+          direction,
+          entry_type: entryType,
+          period_days: parseInt(entry.period ?? '30', 10) || 30,
+          status: 'pending_review',
+          start_date: entry.start_date,
+          end_date: entry.end_date ?? null,
+        },
+      }, { onSuccess: doApprove })
+    } else {
+      doApprove()
+    }
+  }
+
+  function handleReject(e: React.MouseEvent) {
+    e.stopPropagation()
+    reject.mutate({ id: entry.id }, { onSuccess: onDone })
+  }
+
+  const isBusy = approve.isPending || reject.isPending || update.isPending
+
+  const fieldStyle: React.CSSProperties = {
+    fontSize: 12, padding: '3px 6px', borderRadius: 4,
+    border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)',
+    cursor: 'pointer',
+  }
+
+  return (
+    <div style={{
+      borderTop: '1px solid var(--border)', background: 'var(--surface2)',
+      padding: '10px 20px', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap',
+    }}>
+      {/* Label picker */}
+      <label style={{ fontSize: 11, color: 'var(--text3)', display: 'flex', flexDirection: 'column', gap: 3 }}>
+        Label
+        <select value={labelId} onChange={(e) => setLabelId(e.target.value)} style={fieldStyle} onClick={(e) => e.stopPropagation()}>
+          <option value="">— none —</option>
+          {labels.map((l) => (
+            <option key={l.id} value={l.id}>{l.name}</option>
+          ))}
+        </select>
+      </label>
+
+      {/* Direction */}
+      <label style={{ fontSize: 11, color: 'var(--text3)', display: 'flex', flexDirection: 'column', gap: 3 }}>
+        Direction
+        <select value={direction} onChange={(e) => setDirection(e.target.value)} style={fieldStyle} onClick={(e) => e.stopPropagation()}>
+          <option value="expense">Expense</option>
+          <option value="income">Income</option>
+        </select>
+      </label>
+
+      {/* Entry type */}
+      <label style={{ fontSize: 11, color: 'var(--text3)', display: 'flex', flexDirection: 'column', gap: 3 }}>
+        Type
+        <select value={entryType} onChange={(e) => setEntryType(e.target.value)} style={fieldStyle} onClick={(e) => e.stopPropagation()}>
+          <option value="standing">Standing</option>
+          <option value="variable">Variable</option>
+          <option value="irregular">Irregular</option>
+        </select>
+      </label>
+
+      <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+        <button onClick={handleReject} disabled={isBusy} style={actionBtn('var(--commit)')}>
           {reject.isPending ? '…' : 'Reject'}
         </button>
+        <button onClick={handleApprove} disabled={isBusy} style={actionBtn('var(--income)')}>
+          {approve.isPending || update.isPending ? '…' : 'Approve'}
+        </button>
       </div>
-    )
-  }
+    </div>
+  )
+}
 
+// ── Row actions (header-level, non-review) ────────────────────────────────────
+
+function EntryActions({ entry }: { entry: EntryView }) {
   if (entry.status === 'active') {
-    return (
-      <div style={{ display: 'flex', gap: 6 }}>
-        <span style={{ fontSize: 11, color: 'var(--text3)', padding: '3px 0' }}>Edit · End</span>
-      </div>
-    )
+    return <span style={{ fontSize: 11, color: 'var(--text3)' }}>Edit · End</span>
   }
-
   return null
 }
 
@@ -314,12 +386,19 @@ export function LedgerPage() {
                     </span>
                     <span>{statusBadge(entry.status)}</span>
                     <span onClick={(e) => e.stopPropagation()}>
-                      <EntryActions entry={entry} onDone={invalidate} />
+                      <EntryActions entry={entry} />
                     </span>
                   </div>
 
                   {/* Expanded drill-down */}
-                  {isExpanded && <EntryTransactions entryId={entry.id} />}
+                  {isExpanded && (
+                    <>
+                      {entry.status === 'pending_review' && (
+                        <EntryReviewPanel entry={entry} onDone={invalidate} />
+                      )}
+                      <EntryTransactions entryId={entry.id} />
+                    </>
+                  )}
                 </div>
               )
             })}
