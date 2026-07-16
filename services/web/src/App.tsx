@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom'
 import { useAuth } from './auth/AuthProvider'
 import { LoginPage } from './auth/LoginPage'
 import { RateFormatProvider } from './contexts/RateFormatContext'
@@ -10,6 +10,11 @@ import { ReviewPage } from './pages/ReviewPage'
 import { ActivityPage } from './pages/ActivityPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { GlossaryPage } from './pages/GlossaryPage'
+
+function AccountPageWrapper() {
+  const { id } = useParams<{ id: string }>()
+  return <AccountPage key={id} />
+}
 
 function ReportsPage() {
   return (
@@ -36,7 +41,7 @@ function AuthenticatedApp() {
             <Route path="reports" element={<ReportsPage />} />
             <Route path="review" element={<ReviewPage />} />
             <Route path="activity" element={<ActivityPage />} />
-            <Route path="accounts/:id" element={<AccountPage />} />
+            <Route path="accounts/:id" element={<AccountPageWrapper />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="glossary" element={<GlossaryPage />} />
           </Route>
@@ -48,7 +53,7 @@ function AuthenticatedApp() {
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter useTransitions={false}>
       <AuthenticatedApp />
     </BrowserRouter>
   )

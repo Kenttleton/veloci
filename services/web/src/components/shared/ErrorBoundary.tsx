@@ -16,6 +16,10 @@ export class ErrorBoundary extends React.Component<Props, State> {
     return { error }
   }
 
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error('[ErrorBoundary] caught render error:', error, info.componentStack)
+  }
+
   componentDidUpdate(prevProps: Props) {
     if (this.state.error && prevProps.resetKey !== this.props.resetKey) {
       this.setState({ error: null })
@@ -35,8 +39,11 @@ export class ErrorBoundary extends React.Component<Props, State> {
           }}
         >
           <p style={{ margin: 0, color: 'var(--text2)', fontSize: 14 }}>
-            Something went wrong on this page.
+            Render error: {this.state.error.message}
           </p>
+          <pre style={{ margin: 0, color: 'var(--text3)', fontSize: 11, whiteSpace: 'pre-wrap', maxWidth: 600 }}>
+            {this.state.error.stack}
+          </pre>
           <button
             onClick={() => this.setState({ error: null })}
             style={{

@@ -1,23 +1,12 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { TransactionsTab } from '../components/account/TransactionsTab'
 import { ImportsTab } from '../components/account/ImportsTab'
 import { EntriesTable } from '../components/account/EntriesTable'
-// TODO(task-6-11): getAccount will be replaced with generated hook
+import { useGetAccount } from '../api/generated/velociAPI'
 import type { AccountView } from '../api/generated/velociAPI.schemas'
-import { getToken } from '../auth/tokens'
 
 type Account = AccountView
-
-async function getAccount(id: string): Promise<Account> {
-  const token = getToken()
-  const base = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api'
-  const res = await fetch(`${base}/accounts/${id}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  })
-  const json = (await res.json()) as { data: Account }
-  return json.data
-}
 
 const ACCOUNT_TYPE_LABELS: Record<string, string> = {
   checking: 'Checking',
@@ -47,20 +36,12 @@ type TabId = 'transactions' | 'imports' | 'entries'
 
 export function AccountPage() {
   const { id } = useParams<{ id: string }>()
-  const [account, setAccount] = useState<Account | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [fetchError, setFetchError] = useState(false)
   const [activeTab, setActiveTab] = useState<TabId>('transactions')
 
-  useEffect(() => {
-    if (!id) return
-    setLoading(true)
-    setFetchError(false)
-    getAccount(id)
-      .then(setAccount)
-      .catch(() => setFetchError(true))
-      .finally(() => setLoading(false))
-  }, [id])
+  const accountQuery = useGetAccount(id ?? '', { query: { enabled: !!id } })
+  const account: Account | null = accountQuery.data?.data.data ?? null
+  const loading = accountQuery.isLoading
+  const fetchError = accountQuery.isError
 
   if (!id) return null
 

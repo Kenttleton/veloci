@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import {
   useReactTable,
   getCoreRowModel,
@@ -146,18 +146,14 @@ export function EntriesTable({ accountId: _accountId }: EntriesTableProps) {
     getScrollElement: () => parentRef.current,
     estimateSize: (i) => (tableRows[i]?.getIsExpanded() ? 160 : 38),
     overscan: 5,
-    onChange: (instance) => {
-      const lastItem = instance.getVirtualItems().at(-1)
-      if (
-        lastItem &&
-        lastItem.index >= tableRows.length - 10 &&
-        hasNextPage &&
-        !isFetching
-      ) {
-        void fetchNextPage()
-      }
-    },
   })
+
+  const lastVirtualIndex = virtualizer.getVirtualItems().at(-1)?.index
+  useEffect(() => {
+    if (lastVirtualIndex !== undefined && lastVirtualIndex >= tableRows.length - 10 && hasNextPage && !isFetching) {
+      void fetchNextPage()
+    }
+  }, [lastVirtualIndex, tableRows.length, hasNextPage, isFetching, fetchNextPage])
 
   if (!data && isFetching) {
     return <div style={{ padding: 20, color: 'var(--text3)' }}>Loading...</div>

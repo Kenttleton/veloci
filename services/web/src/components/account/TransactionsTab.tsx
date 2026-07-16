@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { format, parseISO } from 'date-fns'
 import {
   useReactTable,
@@ -80,13 +80,14 @@ export function TransactionsTab({ accountId: _accountId }: TransactionsTabProps)
     getScrollElement: () => parentRef.current,
     estimateSize: () => 36,
     overscan: 10,
-    onChange: (instance) => {
-      const lastItem = instance.getVirtualItems().at(-1)
-      if (lastItem && lastItem.index >= tableRows.length - 20 && hasNextPage && !isFetching) {
-        void fetchNextPage()
-      }
-    },
   })
+
+  const lastVirtualIndex = virtualizer.getVirtualItems().at(-1)?.index
+  useEffect(() => {
+    if (lastVirtualIndex !== undefined && lastVirtualIndex >= tableRows.length - 20 && hasNextPage && !isFetching) {
+      void fetchNextPage()
+    }
+  }, [lastVirtualIndex, tableRows.length, hasNextPage, isFetching, fetchNextPage])
 
   if (!data && isFetching) {
     return <div style={{ padding: 20, color: 'var(--text3)' }}>Loading...</div>
