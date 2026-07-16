@@ -164,12 +164,51 @@ A type-to-confirm modal:
 
 ## 7. Auth Data Clearing
 
-`clearAppData()` is added to `tokens.ts` and is the single call site for session teardown:
+### Store Registry
+
+A central registry in `src/store/registry.ts` manages all Zustand stores. Each store self-registers at module load time — no manual wiring in `clearAppData()` as new stores are added.
 
 ```ts
-export const clearAppData = (): void => {
+interface StoreRegistration {
+  domain: string
+  clear: () => void | Promise<void>
+}
+
+const registry: StoreRegistration[] = []
+
+export function registerStore(domain: string, clear: () => void | Promise<void>): void {
+  registry.push({ domain, clear })
+}
+
+export async function clearAllStores(): Promise<void> {
+  const results = await Promise.allSettled(
+    registry.map(({ clear }) => Promise.resolve(clear()))
+  )
+  results.forEach((result, i) => {
+    if (result.status === 'rejected') {
+      console.error(`[store:${registry[i].domain}] clear failed`, result.reason)
+    }
+  })
+}
+```
+
+`Promise.allSettled()` ensures every store is cleared regardless of individual failures. Domain-tagged errors make it clear which store was the source. Future stores just call `registerStore()` — cleanup and error reporting come for free.
+
+Each store self-registers:
+
+```ts
+// store/accountStore.ts
+registerStore('accounts', () => useAccountStore.getState().clear())
+```
+
+### clearAppData
+
+`clearAppData()` in `tokens.ts` is the single call site for session teardown:
+
+```ts
+export const clearAppData = async (): Promise<void> => {
   clearToken()
-  accountStore.getState().clear()
+  await clearAllStores()
   Object.keys(localStorage)
     .filter(k => k.startsWith('veloci_'))
     .forEach(k => localStorage.removeItem(k))
@@ -188,7 +227,8 @@ Called from:
 
 ### New
 
-- `src/store/accountStore.ts` — Zustand store definition and actions
+- `src/store/registry.ts` — store registry, `registerStore()`, `clearAllStores()`
+- `src/store/accountStore.ts` — Zustand store definition, self-registers on import
 
 ### Modified
 
