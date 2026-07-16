@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from './auth/AuthProvider'
 import { LoginPage } from './auth/LoginPage'
 import { RateFormatProvider } from './contexts/RateFormatContext'
@@ -12,44 +12,47 @@ import { SettingsPage } from './pages/SettingsPage'
 import { GlossaryPage } from './pages/GlossaryPage'
 
 function ReportsPage() {
-  return (
-    <div style={{ padding: 32, color: 'var(--text2)' }}>
-      Reports — coming soon
-    </div>
-  )
+  return <div style={{ padding: 32, color: 'var(--text2)' }}>Reports — coming soon</div>
 }
 
-function AuthenticatedApp() {
+function RequireAuth({ children }: { children: React.ReactNode }) {
   const { authenticated } = useAuth()
-
+  const location = useLocation()
   if (!authenticated) {
-    return <LoginPage />
+    return <Navigate to="/login" state={{ from: location }} replace />
   }
-
-  return (
-    <RateFormatProvider>
-      <JobsProvider>
-        <Routes>
-          <Route path="/" element={<AppShell />}>
-            <Route index element={<Navigate to="/budget" replace />} />
-<Route path="budget" element={<BudgetPage />} />
-            <Route path="reports" element={<ReportsPage />} />
-            <Route path="ledger" element={<LedgerPage />} />
-            <Route path="activity" element={<ActivityPage />} />
-            <Route path="accounts/:id" element={<AccountPage />} />
-            <Route path="settings" element={<SettingsPage />} />
-            <Route path="glossary" element={<GlossaryPage />} />
-          </Route>
-        </Routes>
-      </JobsProvider>
-    </RateFormatProvider>
-  )
+  return <>{children}</>
 }
 
 export default function App() {
   return (
     <BrowserRouter useTransitions={false}>
-      <AuthenticatedApp />
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route
+          path="/*"
+          element={
+            <RequireAuth>
+              <RateFormatProvider>
+                <JobsProvider>
+                  <Routes>
+                    <Route path="/" element={<AppShell />}>
+                      <Route index element={<Navigate to="/budget" replace />} />
+                      <Route path="budget" element={<BudgetPage />} />
+                      <Route path="reports" element={<ReportsPage />} />
+                      <Route path="ledger" element={<LedgerPage />} />
+                      <Route path="activity" element={<ActivityPage />} />
+                      <Route path="accounts/:id" element={<AccountPage />} />
+                      <Route path="settings" element={<SettingsPage />} />
+                      <Route path="glossary" element={<GlossaryPage />} />
+                    </Route>
+                  </Routes>
+                </JobsProvider>
+              </RateFormatProvider>
+            </RequireAuth>
+          }
+        />
+      </Routes>
     </BrowserRouter>
   )
 }

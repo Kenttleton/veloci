@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { Modal } from '../shared/Modal'
 import { inputStyle, labelStyle, fieldWrapStyle } from '../shared/formStyles'
-import { useDeleteAccount } from '../../api/generated/velociAPI'
+import { useDeleteAccount, getListAccountsQueryKey } from '../../api/generated/velociAPI'
 import type { AccountView } from '../../api/generated/velociAPI.schemas'
 
 interface DeleteAccountModalProps {
@@ -15,6 +16,7 @@ export function DeleteAccountModal({ account, open, onClose }: DeleteAccountModa
   const [confirmValue, setConfirmValue] = useState('')
   const [error, setError] = useState('')
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { mutateAsync, isPending } = useDeleteAccount()
 
   useEffect(() => {
@@ -31,6 +33,7 @@ export function DeleteAccountModal({ account, open, onClose }: DeleteAccountModa
     setError('')
     try {
       await mutateAsync({ id: account.id })
+      await queryClient.invalidateQueries({ queryKey: getListAccountsQueryKey() })
       void navigate('/budget')
     } catch {
       setError('Failed to delete account. Please try again.')
