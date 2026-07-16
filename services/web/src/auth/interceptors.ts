@@ -19,6 +19,7 @@ export function registerAuthInterceptors(instance: AxiosStatic): void {
         (err as { response?: { status?: number } }).response?.status === 401
       ) {
         clearToken()
+        window.dispatchEvent(new Event('auth:expired'))
       }
       return Promise.reject(err)
     },

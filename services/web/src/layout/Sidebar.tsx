@@ -105,7 +105,7 @@ export function Sidebar() {
         </NavLink>
 
         <NavLink
-          to="/review"
+          to="/ledger"
           style={({ isActive }) => ({
             ...navItemStyle(isActive),
             position: 'relative',
@@ -119,7 +119,7 @@ export function Sidebar() {
               borderRadius: 2,
             }}
           />
-          Review
+          Ledger
           {reviewCount > 0 && (
             <span
               style={{

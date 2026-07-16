@@ -2165,6 +2165,128 @@ export const useUpdateEntry = <TError = AxiosError<ErrorModel>,
     }
     
 /**
+ * @summary Approve a pending entry
+ */
+export const approveEntry = (
+    id: string, options?: AxiosRequestConfig
+ ): Promise<AxiosResponse<void>> => {
+    
+    
+    return axios.default.post(
+      `/entries/${id}/approve`,undefined,options
+    );
+  }
+
+
+
+export const getApproveEntryMutationOptions = <TError = AxiosError<ErrorModel>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof approveEntry>>, TError,{id: string}, TContext>, axios?: AxiosRequestConfig}
+): UseMutationOptions<Awaited<ReturnType<typeof approveEntry>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['approveEntry'];
+const {mutation: mutationOptions, axios: axiosOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, axios: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof approveEntry>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  approveEntry(id,axiosOptions)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ApproveEntryMutationResult = NonNullable<Awaited<ReturnType<typeof approveEntry>>>
+    
+    export type ApproveEntryMutationError = AxiosError<ErrorModel>
+
+    /**
+ * @summary Approve a pending entry
+ */
+export const useApproveEntry = <TError = AxiosError<ErrorModel>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof approveEntry>>, TError,{id: string}, TContext>, axios?: AxiosRequestConfig}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof approveEntry>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+
+      const mutationOptions = getApproveEntryMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    
+/**
+ * @summary Reject a pending entry
+ */
+export const rejectEntry = (
+    id: string, options?: AxiosRequestConfig
+ ): Promise<AxiosResponse<void>> => {
+    
+    
+    return axios.default.post(
+      `/entries/${id}/reject`,undefined,options
+    );
+  }
+
+
+
+export const getRejectEntryMutationOptions = <TError = AxiosError<ErrorModel>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rejectEntry>>, TError,{id: string}, TContext>, axios?: AxiosRequestConfig}
+): UseMutationOptions<Awaited<ReturnType<typeof rejectEntry>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['rejectEntry'];
+const {mutation: mutationOptions, axios: axiosOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, axios: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof rejectEntry>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  rejectEntry(id,axiosOptions)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RejectEntryMutationResult = NonNullable<Awaited<ReturnType<typeof rejectEntry>>>
+    
+    export type RejectEntryMutationError = AxiosError<ErrorModel>
+
+    /**
+ * @summary Reject a pending entry
+ */
+export const useRejectEntry = <TError = AxiosError<ErrorModel>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rejectEntry>>, TError,{id: string}, TContext>, axios?: AxiosRequestConfig}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof rejectEntry>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+
+      const mutationOptions = getRejectEntryMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    
+/**
  * @summary Service health check
  */
 export const health = (

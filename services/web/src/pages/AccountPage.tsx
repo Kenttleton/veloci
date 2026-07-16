@@ -1,8 +1,8 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { TransactionsTab } from '../components/account/TransactionsTab'
-import { ImportsTab } from '../components/account/ImportsTab'
-import { EntriesTable } from '../components/account/EntriesTable'
+import { Transactions } from '../components/account/Transactions'
+import { UploadImportModal } from '../components/account/UploadImportModal'
+import { DeleteAccountModal } from '../components/account/DeleteAccountModal'
 import { useGetAccount } from '../api/generated/velociAPI'
 import type { AccountView } from '../api/generated/velociAPI.schemas'
 
@@ -32,11 +32,10 @@ function isNegativeLiability(account: Account): boolean {
   )
 }
 
-type TabId = 'transactions' | 'imports' | 'entries'
-
 export function AccountPage() {
   const { id } = useParams<{ id: string }>()
-  const [activeTab, setActiveTab] = useState<TabId>('transactions')
+  const [uploadOpen, setUploadOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
 
   const accountQuery = useGetAccount(id ?? '', { query: { enabled: !!id } })
   const account: Account | null = accountQuery.data?.data.data ?? null
@@ -52,18 +51,6 @@ export function AccountPage() {
       </div>
     )
   }
-
-  const tabStyle = (isActive: boolean): React.CSSProperties => ({
-    padding: '10px 16px',
-    cursor: 'pointer',
-    fontSize: 13,
-    fontWeight: isActive ? 600 : 400,
-    color: isActive ? 'var(--text)' : 'var(--text2)',
-    background: 'none',
-    border: 'none',
-    borderBottom: isActive ? '2px solid var(--accent)' : '2px solid transparent',
-    transition: 'all 0.1s',
-  })
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -124,42 +111,65 @@ export function AccountPage() {
         )}
       </div>
 
-      {/* Tab strip */}
+      {/* Actions bar */}
       <div
         style={{
           display: 'flex',
-          gap: 0,
-          padding: '0 4px',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 20px',
+          height: 36,
           borderBottom: '1px solid var(--border)',
           flexShrink: 0,
         }}
       >
         <button
-          style={tabStyle(activeTab === 'transactions')}
-          onClick={() => setActiveTab('transactions')}
+          type="button"
+          onClick={() => setUploadOpen(true)}
+          style={{
+            background: 'none',
+            border: '1px solid var(--border)',
+            borderRadius: 4,
+            cursor: 'pointer',
+            color: 'var(--text2)',
+            fontSize: 12,
+            padding: '3px 10px',
+          }}
         >
-          Transactions
+          Upload CSV
         </button>
         <button
-          style={tabStyle(activeTab === 'imports')}
-          onClick={() => setActiveTab('imports')}
+          type="button"
+          onClick={() => setDeleteOpen(true)}
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: 'var(--text3)',
+            fontSize: 12,
+            padding: '3px 10px',
+            borderRadius: 4,
+            transition: 'color 0.1s',
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--commit)' }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--text3)' }}
         >
-          Imports
-        </button>
-        <button
-          style={tabStyle(activeTab === 'entries')}
-          onClick={() => setActiveTab('entries')}
-        >
-          Entries
+          Delete Account
         </button>
       </div>
 
-      {/* Tab content */}
-      <div style={{ flex: 1, overflow: 'auto' }}>
-        {activeTab === 'transactions' && <TransactionsTab accountId={id} />}
-        {activeTab === 'imports' && <ImportsTab accountId={id} />}
-        {activeTab === 'entries' && <EntriesTable accountId={id} />}
-      </div>
+      <Transactions accountId={id} />
+
+      <UploadImportModal
+        accountId={id}
+        open={uploadOpen}
+        onClose={() => setUploadOpen(false)}
+      />
+      <DeleteAccountModal
+        account={account}
+        open={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+      />
     </div>
   )
 }

@@ -692,6 +692,7 @@ limit?: number;
 };
 
 export type ListEntriesParams = {
+account_id?: string;
 status?: string;
 cursor?: string;
 /**
@@ -785,6 +786,8 @@ granularity?: string;
 };
 
 export type ListTransactionsParams = {
+account_id?: string;
+entry_id?: string;
 cursor?: string;
 /**
  * @minimum 1

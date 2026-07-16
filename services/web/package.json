@@ -28,10 +28,12 @@
     "lightweight-charts": "^5.2.0",
     "lucide-react": "^1.24.0",
     "papaparse": "^5.5.4",
+    "pino": "^10.3.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.18.1",
-    "tailwind-merge": "^3.6.0"
+    "tailwind-merge": "^3.6.0",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

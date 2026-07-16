@@ -12,6 +12,7 @@ import type { SortingState, ColumnFiltersState } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useListTransactionsInfinite } from '../../api/cursorQuery'
 import type { TransactionView } from '../../api/generated/velociAPI.schemas'
+import { useAccountStore } from '../../store/accountStore'
 
 const columnHelper = createColumnHelper<TransactionView>()
 
@@ -50,12 +51,15 @@ interface TransactionsTabProps {
   accountId: string
 }
 
-export function TransactionsTab({ accountId: _accountId }: TransactionsTabProps) {
+export function Transactions({ accountId }: TransactionsTabProps) {
   const parentRef = useRef<HTMLDivElement>(null)
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+  const initialScrollOffset = useAccountStore((s) => s.accounts[accountId]?.scrollTransactions ?? 0)
+  const setScroll = useAccountStore((s) => s.setScroll)
 
   const { data, fetchNextPage, hasNextPage, isFetching } = useListTransactionsInfinite({
+    account_id: accountId,
     limit: 50,
   })
 
@@ -80,7 +84,16 @@ export function TransactionsTab({ accountId: _accountId }: TransactionsTabProps)
     getScrollElement: () => parentRef.current,
     estimateSize: () => 36,
     overscan: 10,
+    initialOffset: initialScrollOffset,
   })
+
+  useEffect(() => {
+    const el = parentRef.current
+    if (!el) return
+    const save = () => setScroll(accountId, el.scrollTop)
+    el.addEventListener('scroll', save, { passive: true })
+    return () => el.removeEventListener('scroll', save)
+  }, [accountId, setScroll])
 
   const lastVirtualIndex = virtualizer.getVirtualItems().at(-1)?.index
   useEffect(() => {
@@ -102,7 +115,7 @@ export function TransactionsTab({ accountId: _accountId }: TransactionsTabProps)
   }
 
   return (
-    <div>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Filter bar */}
       <div
         style={{
@@ -163,7 +176,7 @@ export function TransactionsTab({ accountId: _accountId }: TransactionsTabProps)
       </div>
 
       {/* Virtual rows */}
-      <div ref={parentRef} style={{ height: 480, overflowY: 'auto' }}>
+      <div ref={parentRef} style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
         <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
           {virtualizer.getVirtualItems().map((virtualRow) => {
             const row = tableRows[virtualRow.index]
