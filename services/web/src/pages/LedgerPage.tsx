@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
-import { useApproveEntry, useRejectEntry, useListTransactions, useListLabels, useUpdateEntry, useListAccounts, useCreateLabel } from '../api/generated/velociAPI'
+import { useApproveEntry, useRejectEntry, useListTransactions, useListLabels, useUpdateEntry, useListAccounts, useCreateLabel, useUpdateEntryConditions, useTriggerReprocess } from '../api/generated/velociAPI'
 import type { EntryView } from '../api/generated/velociAPI.schemas'
 import { useLedgerStore } from '../store/ledgerStore'
 import type { StatusFilter } from '../store/ledgerStore'
@@ -273,6 +273,66 @@ function EntryReviewPanel({ entry, onDone }: { entry: EntryView; onDone: () => v
   )
 }
 
+// ── Conditions JSON editor ────────────────────────────────────────────────────
+
+function EntryConditionsSection({ entry }: { entry: EntryView }) {
+  const [text, setText] = useState(() => {
+    try { return JSON.stringify(entry.conditions, null, 2) } catch { return '' }
+  })
+  const [jsonError, setJsonError] = useState<string | null>(null)
+  const updateConditions = useUpdateEntryConditions()
+  const upsert = useEntryStore((s) => s.upsert)
+
+  function handleBlur() {
+    try {
+      JSON.parse(text)
+    } catch {
+      setJsonError('Invalid JSON — fix before saving')
+      return
+    }
+    setJsonError(null)
+    updateConditions.mutate(
+      { id: entry.id, data: { conditions: JSON.parse(text) } },
+      {
+        onSuccess: (res) => {
+          const updated = res.data.data
+          if (updated) upsert(updated)
+        },
+        onError: () => setJsonError('Failed to save'),
+      },
+    )
+  }
+
+  return (
+    <div style={{ borderTop: '1px solid var(--border)', padding: '10px 20px', background: 'var(--bg)' }}>
+      <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+        Matching Rule
+      </div>
+      <textarea
+        value={text}
+        onChange={(e) => { setText(e.target.value); setJsonError(null) }}
+        onBlur={handleBlur}
+        onClick={(e) => e.stopPropagation()}
+        rows={5}
+        spellCheck={false}
+        style={{
+          width: '100%', fontFamily: 'monospace', fontSize: 11,
+          background: 'var(--surface)', color: 'var(--text)',
+          border: `1px solid ${jsonError ? 'var(--commit)' : 'var(--border)'}`,
+          borderRadius: 4, padding: '6px 8px', resize: 'vertical', boxSizing: 'border-box',
+        }}
+      />
+      {jsonError && <span style={{ fontSize: 11, color: 'var(--commit)' }}>{jsonError}</span>}
+      {!jsonError && updateConditions.isPending && (
+        <span style={{ fontSize: 11, color: 'var(--text3)' }}>Saving…</span>
+      )}
+      {!jsonError && updateConditions.isSuccess && !updateConditions.isPending && (
+        <span style={{ fontSize: 11, color: 'var(--income)' }}>Saved — status reset to pending review</span>
+      )}
+    </div>
+  )
+}
+
 // ── Row actions (header-level, non-review) ────────────────────────────────────
 
 function EntryActions({ entry }: { entry: EntryView }) {
@@ -294,6 +354,7 @@ function actionBtn(color: string): React.CSSProperties {
 export function LedgerPage() {
   const parentRef = useRef<HTMLDivElement>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const reprocess = useTriggerReprocess()
 
   const statusFilter = useLedgerStore((s) => s.statusFilter)
   const scrollOffset = useLedgerStore((s) => s.scrollOffset)
@@ -386,6 +447,17 @@ export function LedgerPage() {
             {label}
           </button>
         ))}
+        <button
+          onClick={() => reprocess.mutate({})}
+          disabled={reprocess.isPending}
+          style={{
+            marginLeft: 'auto', padding: '4px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+            border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text2)',
+            cursor: reprocess.isPending ? 'default' : 'pointer', opacity: reprocess.isPending ? 0.6 : 1,
+          }}
+        >
+          {reprocess.isPending ? 'Queued…' : 'Run Engine'}
+        </button>
       </div>
 
       {/* Column headers */}
@@ -470,6 +542,7 @@ export function LedgerPage() {
                       {entry.status === 'pending_review' && (
                         <EntryReviewPanel entry={entry} onDone={invalidate} />
                       )}
+                      <EntryConditionsSection entry={entry} />
                       <EntryTransactions entryId={entry.id} />
                     </>
                   )}

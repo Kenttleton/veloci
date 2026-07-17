@@ -16,6 +16,8 @@ interface EntryStore {
   refresh: () => Promise<void>
   // Fetch the next cursor page.
   loadMore: () => Promise<void>
+  // Merge a single updated entry into the store without a full re-fetch.
+  upsert: (entry: EntryView) => void
   clear: () => void
 }
 
@@ -77,6 +79,10 @@ export const useEntryStore = create<EntryStore>((set, get) => ({
     } catch {
       // leave existing data intact on refresh failure
     }
+  },
+
+  upsert(entry: EntryView) {
+    set((s) => ({ entries: { ...s.entries, [entry.id]: entry } }))
   },
 
   async loadMore() {

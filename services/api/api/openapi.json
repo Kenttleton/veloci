@@ -1784,6 +1784,16 @@
         ],
         "type": "object"
       },
+      "UpdateEntryConditionsInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "conditions": {}
+        },
+        "required": [
+          "conditions"
+        ],
+        "type": "object"
+      },
       "UpdateEntryInputBody": {
         "additionalProperties": false,
         "properties": {
@@ -2882,6 +2892,57 @@
           }
         },
         "summary": "Approve a pending entry",
+        "tags": [
+          "entries"
+        ]
+      }
+    },
+    "/entries/{id}/conditions": {
+      "patch": {
+        "operationId": "update-entry-conditions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateEntryConditionsInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvelopeEntryView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Update entry matching conditions and release transaction assignments",
         "tags": [
           "entries"
         ]

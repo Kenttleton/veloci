@@ -89,6 +89,7 @@ import type {
   PreviewEntryOutputBody,
   UpdateAccountInputBody,
   UpdateClassificationInputBody,
+  UpdateEntryConditionsInputBody,
   UpdateEntryInputBody,
   UpdateInstitutionInputBody,
   UpdateLabelInputBody,
@@ -2217,6 +2218,69 @@ export const useApproveEntry = <TError = AxiosError<ErrorModel>,
       > => {
 
       const mutationOptions = getApproveEntryMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    
+/**
+ * @summary Update entry matching conditions and release transaction assignments
+ */
+export const updateEntryConditions = (
+    id: string,
+    updateEntryConditionsInputBody: UpdateEntryConditionsInputBody, options?: AxiosRequestConfig
+ ): Promise<AxiosResponse<EnvelopeEntryView>> => {
+    
+    
+    return axios.default.patch(
+      `/entries/${id}/conditions`,
+      updateEntryConditionsInputBody,options
+    );
+  }
+
+
+
+export const getUpdateEntryConditionsMutationOptions = <TError = AxiosError<ErrorModel>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateEntryConditions>>, TError,{id: string;data: UpdateEntryConditionsInputBody}, TContext>, axios?: AxiosRequestConfig}
+): UseMutationOptions<Awaited<ReturnType<typeof updateEntryConditions>>, TError,{id: string;data: UpdateEntryConditionsInputBody}, TContext> => {
+
+const mutationKey = ['updateEntryConditions'];
+const {mutation: mutationOptions, axios: axiosOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, axios: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateEntryConditions>>, {id: string;data: UpdateEntryConditionsInputBody}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateEntryConditions(id,data,axiosOptions)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateEntryConditionsMutationResult = NonNullable<Awaited<ReturnType<typeof updateEntryConditions>>>
+    export type UpdateEntryConditionsMutationBody = UpdateEntryConditionsInputBody
+    export type UpdateEntryConditionsMutationError = AxiosError<ErrorModel>
+
+    /**
+ * @summary Update entry matching conditions and release transaction assignments
+ */
+export const useUpdateEntryConditions = <TError = AxiosError<ErrorModel>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateEntryConditions>>, TError,{id: string;data: UpdateEntryConditionsInputBody}, TContext>, axios?: AxiosRequestConfig}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateEntryConditions>>,
+        TError,
+        {id: string;data: UpdateEntryConditionsInputBody},
+        TContext
+      > => {
+
+      const mutationOptions = getUpdateEntryConditionsMutationOptions(options);
 
       return useMutation(mutationOptions, queryClient);
     }

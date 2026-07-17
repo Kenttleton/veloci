@@ -582,6 +582,10 @@ export interface UpdateClassificationInputBody {
   status: string;
 }
 
+export interface UpdateEntryConditionsInputBody {
+  conditions: unknown;
+}
+
 export type UpdateEntryInputBodyEndDate = string | null;
 
 export type UpdateEntryInputBodyLabelId = string | null;

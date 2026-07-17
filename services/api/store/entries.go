@@ -339,6 +339,41 @@ func (s *Store) PreviewConditions(ctx context.Context, entityID string, conditio
 	return len(ids), ids, rows.Err()
 }
 
+// UpdateEntryConditions updates the conditions JSON on an entry, releases all
+// transaction_entry_assignments for it, and resets its status to pending_review.
+// Both writes happen in a single transaction so they are atomic.
+func (s *Store) UpdateEntryConditions(ctx context.Context, entityID, id string, conditions json.RawMessage) (EntryRow, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return EntryRow{}, err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	tag, err := tx.Exec(ctx, `
+		UPDATE entries
+		SET conditions = $3, status = 'pending_review'
+		WHERE entity_id = $1 AND id = $2::uuid
+	`, entityID, id, conditions)
+	if err != nil {
+		return EntryRow{}, err
+	}
+	if tag.RowsAffected() == 0 {
+		return EntryRow{}, pgx.ErrNoRows
+	}
+
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM transaction_entry_assignments WHERE entry_id = $1::uuid
+	`, id); err != nil {
+		return EntryRow{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return EntryRow{}, err
+	}
+
+	return s.GetEntry(ctx, entityID, id)
+}
+
 // ActivateEntry sets an entry's status to active.
 func (s *Store) ActivateEntry(ctx context.Context, entityID, entryID string) error {
 	_, err := s.pool.Exec(ctx, `

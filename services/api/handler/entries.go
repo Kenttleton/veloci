@@ -402,6 +402,36 @@ func (h *EntriesHandler) RejectEntry(ctx context.Context, input *rejectEntryInpu
 	return nil, nil
 }
 
+type updateEntryConditionsInput struct {
+	PathID string `path:"id"`
+	Body   struct {
+		Conditions json.RawMessage `json:"conditions" required:"true"`
+	}
+}
+
+type updateEntryConditionsOutput struct {
+	Body response.Envelope[entryView]
+}
+
+func (h *EntriesHandler) UpdateEntryConditions(ctx context.Context, input *updateEntryConditionsInput) (*updateEntryConditionsOutput, error) {
+	entityID := middleware.EntityID(ctx)
+
+	if !json.Valid(input.Body.Conditions) {
+		return nil, huma.Error422UnprocessableEntity("conditions must be valid JSON")
+	}
+
+	item, err := h.s.UpdateEntryConditions(ctx, entityID, input.PathID, input.Body.Conditions)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, huma.Error404NotFound("not found")
+	}
+	if err != nil {
+		return nil, huma.Error500InternalServerError("internal error")
+	}
+	out := &updateEntryConditionsOutput{}
+	out.Body = response.Single(toEntryView(item))
+	return out, nil
+}
+
 func (h *EntriesHandler) PreviewEntry(ctx context.Context, input *previewEntryInput) (*previewEntryOutput, error) {
 	entityID := middleware.EntityID(ctx)
 
@@ -488,6 +518,15 @@ func RegisterEntriesRoutes(api huma.API, s *store.Store, pub *queue.Publisher, p
 		DefaultStatus: http.StatusNoContent,
 		Middlewares:   huma.Middlewares{middleware.RequirePermission(perms, "entries:write")},
 	}, h.RejectEntry)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "update-entry-conditions",
+		Method:      http.MethodPatch,
+		Path:        "/entries/{id}/conditions",
+		Summary:     "Update entry matching conditions and release transaction assignments",
+		Tags:        []string{"entries"},
+		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "entries:write")},
+	}, h.UpdateEntryConditions)
 
 	huma.Register(api, huma.Operation{
 		OperationID: "preview-entry",
