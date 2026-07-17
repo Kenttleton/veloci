@@ -34,6 +34,138 @@ function rateLabel(ratePerDay: number | null): string {
   return '$' + (Math.abs(ratePerDay) * 30 / 100).toFixed(0) + '/mo'
 }
 
+function alertBadge(alertType: string | null) {
+  if (!alertType) return null
+  const styles: Record<string, React.CSSProperties> = {
+    new:   { background: 'color-mix(in srgb, var(--accent) 18%, transparent)', color: 'var(--accent)' },
+    drift: { background: 'color-mix(in srgb, #f59e0b 18%, transparent)',       color: '#f59e0b' },
+    ended: { background: 'color-mix(in srgb, var(--commit) 18%, transparent)', color: 'var(--commit)' },
+  }
+  return (
+    <span style={{
+      fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 8, whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: '0.04em',
+      ...styles[alertType] ?? {},
+    }}>
+      {alertType}
+    </span>
+  )
+}
+
+function confidencePct(v: number | null) {
+  if (v === null || v === undefined) return null
+  return Math.round(v * 100)
+}
+
+// ── Entry details panel (conditions JSON + confidence side-by-side) ───────────
+
+function confColor(v: number | null) {
+  const pct = confidencePct(v) ?? 0
+  return pct >= 80 ? 'var(--income)' : pct >= 55 ? '#f59e0b' : 'var(--commit)'
+}
+
+function ConfidenceBar({ label, value }: { label: string; value: number | null }) {
+  const pct = confidencePct(value)
+  if (pct === null) return null
+  const color = confColor(value)
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span style={{ fontSize: 11, color: 'var(--text3)', width: 60, flexShrink: 0 }}>{label}</span>
+      <div style={{ flex: 1, height: 4, borderRadius: 2, background: 'var(--border)' }}>
+        <div style={{ width: `${pct}%`, height: '100%', borderRadius: 2, background: color }} />
+      </div>
+      <span style={{ fontSize: 11, color, width: 30, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{pct}%</span>
+    </div>
+  )
+}
+
+function EntryDetailsPanel({ entry }: { entry: EntryView }) {
+  const [text, setText] = useState(() => {
+    try { return JSON.stringify(entry.conditions, null, 2) } catch { return '' }
+  })
+  const [jsonError, setJsonError] = useState<string | null>(null)
+  const [confExpanded, setConfExpanded] = useState(true)
+  const updateConditions = useUpdateEntryConditions()
+  const upsert = useEntryStore((s) => s.upsert)
+
+  function handleBlur() {
+    try { JSON.parse(text) } catch {
+      setJsonError('Invalid JSON — fix before saving')
+      return
+    }
+    setJsonError(null)
+    updateConditions.mutate(
+      { id: entry.id, data: { conditions: JSON.parse(text) } },
+      {
+        onSuccess: (res) => { const u = res.data.data; if (u) upsert(u) },
+        onError: () => setJsonError('Failed to save'),
+      },
+    )
+  }
+
+  const hasConf = entry.confidence !== null
+
+  return (
+    <div style={{ borderTop: '1px solid var(--border)', display: 'flex', background: 'var(--bg)', minHeight: 0 }}>
+      {/* JSON editor — left, takes remaining space */}
+      <div style={{ flex: 1, padding: '10px 20px', minWidth: 0 }}>
+        <div style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>
+          Matching Rule
+        </div>
+        <textarea
+          value={text}
+          onChange={(e) => { setText(e.target.value); setJsonError(null) }}
+          onBlur={handleBlur}
+          onClick={(e) => e.stopPropagation()}
+          rows={5}
+          spellCheck={false}
+          style={{
+            width: '100%', fontFamily: 'monospace', fontSize: 11,
+            background: 'var(--surface)', color: 'var(--text)',
+            border: `1px solid ${jsonError ? 'var(--commit)' : 'var(--border)'}`,
+            borderRadius: 4, padding: '6px 8px', resize: 'vertical', boxSizing: 'border-box',
+          }}
+        />
+        {jsonError && <span style={{ fontSize: 11, color: 'var(--commit)' }}>{jsonError}</span>}
+        {!jsonError && updateConditions.isPending && <span style={{ fontSize: 11, color: 'var(--text3)' }}>Saving…</span>}
+        {!jsonError && updateConditions.isSuccess && !updateConditions.isPending && (
+          <span style={{ fontSize: 11, color: 'var(--income)' }}>Saved — status reset to pending review</span>
+        )}
+      </div>
+
+      {/* Confidence — right, collapsible */}
+      {hasConf && (
+        <div style={{
+          borderLeft: '1px solid var(--border)', padding: '10px 14px', flexShrink: 0,
+          width: confExpanded ? 220 : 'auto', transition: 'width 0.15s',
+        }}>
+          {/* Header row: label + overall pct + toggle */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: confExpanded ? 8 : 0 }}>
+            <span style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>
+              Confidence
+            </span>
+            <span style={{ fontSize: 11, fontWeight: 600, color: confColor(entry.confidence), fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+              {confidencePct(entry.confidence)}%
+            </span>
+            <button
+              onClick={(e) => { e.stopPropagation(); setConfExpanded(v => !v) }}
+              style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', padding: 0, display: 'flex', alignItems: 'center' }}
+            >
+              {confExpanded ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+            </button>
+          </div>
+          {confExpanded && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              <ConfidenceBar label="Merchant" value={entry.merchant_confidence} />
+              <ConfidenceBar label="Timing"   value={entry.timing_confidence} />
+              <ConfidenceBar label="Amount"   value={entry.amount_confidence} />
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Entry transaction drill-down ──────────────────────────────────────────────
 
 function EntryTransactions({ entryId }: { entryId: string }) {
@@ -273,65 +405,6 @@ function EntryReviewPanel({ entry, onDone }: { entry: EntryView; onDone: () => v
   )
 }
 
-// ── Conditions JSON editor ────────────────────────────────────────────────────
-
-function EntryConditionsSection({ entry }: { entry: EntryView }) {
-  const [text, setText] = useState(() => {
-    try { return JSON.stringify(entry.conditions, null, 2) } catch { return '' }
-  })
-  const [jsonError, setJsonError] = useState<string | null>(null)
-  const updateConditions = useUpdateEntryConditions()
-  const upsert = useEntryStore((s) => s.upsert)
-
-  function handleBlur() {
-    try {
-      JSON.parse(text)
-    } catch {
-      setJsonError('Invalid JSON — fix before saving')
-      return
-    }
-    setJsonError(null)
-    updateConditions.mutate(
-      { id: entry.id, data: { conditions: JSON.parse(text) } },
-      {
-        onSuccess: (res) => {
-          const updated = res.data.data
-          if (updated) upsert(updated)
-        },
-        onError: () => setJsonError('Failed to save'),
-      },
-    )
-  }
-
-  return (
-    <div style={{ borderTop: '1px solid var(--border)', padding: '10px 20px', background: 'var(--bg)' }}>
-      <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-        Matching Rule
-      </div>
-      <textarea
-        value={text}
-        onChange={(e) => { setText(e.target.value); setJsonError(null) }}
-        onBlur={handleBlur}
-        onClick={(e) => e.stopPropagation()}
-        rows={5}
-        spellCheck={false}
-        style={{
-          width: '100%', fontFamily: 'monospace', fontSize: 11,
-          background: 'var(--surface)', color: 'var(--text)',
-          border: `1px solid ${jsonError ? 'var(--commit)' : 'var(--border)'}`,
-          borderRadius: 4, padding: '6px 8px', resize: 'vertical', boxSizing: 'border-box',
-        }}
-      />
-      {jsonError && <span style={{ fontSize: 11, color: 'var(--commit)' }}>{jsonError}</span>}
-      {!jsonError && updateConditions.isPending && (
-        <span style={{ fontSize: 11, color: 'var(--text3)' }}>Saving…</span>
-      )}
-      {!jsonError && updateConditions.isSuccess && !updateConditions.isPending && (
-        <span style={{ fontSize: 11, color: 'var(--income)' }}>Saved — status reset to pending review</span>
-      )}
-    </div>
-  )
-}
 
 // ── Row actions (header-level, non-review) ────────────────────────────────────
 
@@ -467,7 +540,7 @@ export function LedgerPage() {
         padding: '5px 20px', gap: 8,
         borderBottom: '1px solid var(--border)', background: 'var(--bg)', flexShrink: 0,
       }}>
-        {['', 'Entry', 'Type', 'Dir', 'Rate/mo', 'Status', ''].map((h, i) => (
+        {['', 'Entry', 'Type', 'Dir', 'Rate/mo', 'Status', 'Conf'].map((h, i) => (
           <span key={i} style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             {h}
           </span>
@@ -530,8 +603,19 @@ export function LedgerPage() {
                     <span style={{ fontSize: 12, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
                       {rateLabel(entry.actual_rate)}
                     </span>
-                    <span>{statusBadge(entry.status)}</span>
-                    <span onClick={(e) => e.stopPropagation()}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                      {statusBadge(entry.status)}
+                      {alertBadge(entry.alert_type)}
+                    </span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={(e) => e.stopPropagation()}>
+                      {entry.confidence !== null && (
+                        <span style={{
+                          fontSize: 11, fontVariantNumeric: 'tabular-nums',
+                          color: (confidencePct(entry.confidence) ?? 0) >= 80 ? 'var(--income)' : (confidencePct(entry.confidence) ?? 0) >= 55 ? '#f59e0b' : 'var(--commit)',
+                        }}>
+                          {confidencePct(entry.confidence)}%
+                        </span>
+                      )}
                       <EntryActions entry={entry} />
                     </span>
                   </div>
@@ -542,7 +626,7 @@ export function LedgerPage() {
                       {entry.status === 'pending_review' && (
                         <EntryReviewPanel entry={entry} onDone={invalidate} />
                       )}
-                      <EntryConditionsSection entry={entry} />
+                      <EntryDetailsPanel entry={entry} />
                       <EntryTransactions entryId={entry.id} />
                     </>
                   )}

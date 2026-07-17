@@ -244,35 +244,47 @@ export function UploadImportModal({ accountId, open, onClose }: UploadImportModa
 
           <MappingFields values={mappingValues} onChange={setMappingValues} columnOptions={parsed.headers} defaultAdvancedOpen />
 
-          {parsed.sampleRows.length > 0 && (
-            <div style={{ marginTop: 8 }}>
-              <div style={labelStyle}>Preview</div>
-              <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 4 }}>
-                <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12 }}>
-                  <thead>
-                    <tr>
-                      {parsed.headers.map((h) => (
-                        <th key={h} style={{ textAlign: 'left', padding: '4px 8px', color: 'var(--text3)', borderBottom: '1px solid var(--border)' }}>
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {parsed.sampleRows.map((row, i) => (
-                      <tr key={i}>
-                        {parsed.headers.map((h) => (
-                          <td key={h} style={{ padding: '4px 8px', color: 'var(--text2)', borderBottom: '1px solid var(--border)' }}>
-                            {row[h]}
-                          </td>
+          {parsed.sampleRows.length > 0 && (() => {
+            const mappedCols = [
+              { label: 'Date',         col: mappingValues.dateCol },
+              { label: 'Amount',       col: mappingValues.amountCol },
+              { label: 'Merchant',     col: mappingValues.merchantCol },
+              ...(mappingValues.balanceCol.trim()     ? [{ label: 'Balance',      col: mappingValues.balanceCol }]     : []),
+              ...(mappingValues.debitCreditCol.trim() ? [{ label: 'Debit/Credit', col: mappingValues.debitCreditCol }] : []),
+              ...(mappingValues.importedIdCol.trim()  ? [{ label: 'ID',           col: mappingValues.importedIdCol }]  : []),
+            ].filter(({ col }) => col.trim() !== '')
+
+            return (
+              <div style={{ marginTop: 8 }}>
+                <div style={labelStyle}>Preview</div>
+                <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 4 }}>
+                  <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12 }}>
+                    <thead>
+                      <tr>
+                        {mappedCols.map(({ label, col }) => (
+                          <th key={label} style={{ textAlign: 'left', padding: '4px 8px', borderBottom: '1px solid var(--border)' }}>
+                            <div style={{ color: 'var(--text)', fontWeight: 600 }}>{label}</div>
+                            <div style={{ color: 'var(--text3)', fontWeight: 400, fontSize: 10 }}>{col}</div>
+                          </th>
                         ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {parsed.sampleRows.map((row, i) => (
+                        <tr key={i}>
+                          {mappedCols.map(({ label, col }) => (
+                            <td key={label} style={{ padding: '4px 8px', color: 'var(--text2)', borderBottom: '1px solid var(--border)' }}>
+                              {row[col] ?? <span style={{ color: 'var(--text3)', fontStyle: 'italic' }}>—</span>}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
-          )}
+            )
+          })()}
 
           {error && <div style={{ fontSize: 12, color: 'var(--commit)', marginTop: 12 }}>{error}</div>}
 
