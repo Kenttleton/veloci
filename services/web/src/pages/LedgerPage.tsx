@@ -63,17 +63,19 @@ function confColor(v: number | null) {
   return pct >= 80 ? 'var(--income)' : pct >= 55 ? '#f59e0b' : 'var(--commit)'
 }
 
-function ConfidenceBar({ label, value }: { label: string; value: number | null }) {
+function ConfidenceRow({ label, value, showBar }: { label: string; value: number | null; showBar: boolean }) {
   const pct = confidencePct(value)
   if (pct === null) return null
   const color = confColor(value)
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
       <span style={{ fontSize: 11, color: 'var(--text3)', width: 60, flexShrink: 0 }}>{label}</span>
-      <div style={{ flex: 1, height: 4, borderRadius: 2, background: 'var(--border)' }}>
-        <div style={{ width: `${pct}%`, height: '100%', borderRadius: 2, background: color }} />
-      </div>
-      <span style={{ fontSize: 11, color, width: 30, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{pct}%</span>
+      {showBar && (
+        <div style={{ flex: 1, height: 4, borderRadius: 2, background: 'var(--border)', minWidth: 40 }}>
+          <div style={{ width: `${pct}%`, height: '100%', borderRadius: 2, background: color }} />
+        </div>
+      )}
+      <span style={{ fontSize: 11, color, width: 30, textAlign: 'right', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{pct}%</span>
     </div>
   )
 }
@@ -132,34 +134,31 @@ function EntryDetailsPanel({ entry }: { entry: EntryView }) {
         )}
       </div>
 
-      {/* Confidence — right, collapsible */}
+      {/* Confidence — right, horizontally collapsible (bars hide, numbers stay) */}
       {hasConf && (
         <div style={{
           borderLeft: '1px solid var(--border)', padding: '10px 14px', flexShrink: 0,
-          width: confExpanded ? 220 : 'auto', transition: 'width 0.15s',
+          width: confExpanded ? 230 : 120,
+          overflow: 'hidden', transition: 'width 0.15s ease',
         }}>
-          {/* Header row: label + overall pct + toggle */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: confExpanded ? 8 : 0 }}>
+          {/* Header: label + toggle */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
             <span style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>
               Confidence
             </span>
-            <span style={{ fontSize: 11, fontWeight: 600, color: confColor(entry.confidence), fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-              {confidencePct(entry.confidence)}%
-            </span>
             <button
               onClick={(e) => { e.stopPropagation(); setConfExpanded(v => !v) }}
-              style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', padding: 0, display: 'flex', alignItems: 'center' }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', padding: 0, display: 'flex', alignItems: 'center' }}
             >
-              {confExpanded ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+              {confExpanded ? <ChevronRight size={11} /> : <ChevronDown size={11} />}
             </button>
           </div>
-          {confExpanded && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-              <ConfidenceBar label="Merchant" value={entry.merchant_confidence} />
-              <ConfidenceBar label="Timing"   value={entry.timing_confidence} />
-              <ConfidenceBar label="Amount"   value={entry.amount_confidence} />
-            </div>
-          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <ConfidenceRow label="Overall"  value={entry.confidence}          showBar={confExpanded} />
+            <ConfidenceRow label="Merchant" value={entry.merchant_confidence} showBar={confExpanded} />
+            <ConfidenceRow label="Timing"   value={entry.timing_confidence}   showBar={confExpanded} />
+            <ConfidenceRow label="Amount"   value={entry.amount_confidence}   showBar={confExpanded} />
+          </div>
         </div>
       )}
     </div>
