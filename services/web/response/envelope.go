@@ -1,4 +1,4 @@
-// Package response provides the standard envelope used by all veloci-api endpoints.
+// Package response provides the standard envelope used by all veloci-web endpoints.
 //
 // Every non-empty response body is wrapped as:
 //

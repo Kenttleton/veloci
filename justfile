@@ -31,8 +31,8 @@ rabbitmq:
 auth:
     docker compose up -d auth
 
-# Start veloci (BFF — API + web)
-veloci:
+# Start web (BFF — API + web)
+web:
     docker compose up -d web
 
 # Start veloci-engine (Rust queue consumer)

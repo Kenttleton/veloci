@@ -2,4 +2,3 @@ tmp/*
 .*/
 
 .env
-veloci-auth.yaml

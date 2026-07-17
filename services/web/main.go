@@ -25,14 +25,13 @@ import (
 	"github.com/veloci/veloci/store"
 )
 
-
 func main() {
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal(err)
 	}
 }
 
-var rootCmd = &cobra.Command{Use: "veloci-api", Short: "Veloci API service"}
+var rootCmd = &cobra.Command{Use: "veloci-web", Short: "Veloci API service"}
 
 var serveCmd = &cobra.Command{Use: "serve", Short: "Start the HTTP server", RunE: runServe}
 var migrateCmd = &cobra.Command{Use: "migrate", Short: "Seed RBAC roles and permissions", RunE: runMigrate}
@@ -264,7 +263,7 @@ func runMigrate(_ *cobra.Command, _ []string) error {
 
 // syncAdminUser ensures the admin user exists in veloci_app and belongs to at least
 // one entity. It retries the auth credential lookup for up to 30 seconds to tolerate
-// concurrent startup ordering between veloci-auth and veloci-api.
+// concurrent startup ordering between veloci-auth and veloci-web.
 func syncAdminUser(ctx context.Context, authClient *authclient.Client, s *store.Store, email, password string) error {
 	var credentialID string
 	for i := range 30 {
@@ -302,7 +301,6 @@ func syncAdminUser(ctx context.Context, authClient *authclient.Client, s *store.
 	log.Printf("sync: admin user ready (id=%s, entity_id=%s)", userID, entityID)
 	return nil
 }
-
 
 func runSeed(_ *cobra.Command, _ []string) error {
 	loadConfig()

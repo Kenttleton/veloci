@@ -1,4 +1,4 @@
-// Package queue provides RabbitMQ publishing for the veloci-api service.
+// Package queue provides RabbitMQ publishing for the veloci-web service.
 package queue
 
 import (
