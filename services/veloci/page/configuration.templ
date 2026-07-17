@@ -1,0 +1,627 @@
+package page
+
+import (
+	"encoding/json"
+	"fmt"
+
+	"github.com/veloci/veloci/store"
+)
+
+templ ConfigurationPage(shell ShellData, data ConfigurationData) {
+	@Shell(shell) {
+		<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
+			<div style="padding:14px 20px 0;border-bottom:1px solid var(--border);flex-shrink:0">
+				<h1 style="margin:0 0 12px;font-size:18px;font-weight:700;color:var(--text);letter-spacing:-0.02em">Configuration</h1>
+				<div style="display:flex;gap:2px">
+					<a
+						href="?tab=labels"
+						style={ cfgTabStyle(data.Tab == "labels") }
+					>Labels</a>
+					<a
+						href="?tab=institutions"
+						style={ cfgTabStyle(data.Tab == "institutions") }
+					>Institution Mappings</a>
+				</div>
+			</div>
+			<div style="flex:1;overflow:auto;padding:24px 20px">
+				if data.Tab == "institutions" {
+					@cfgInstitutionsSection(data.Institutions)
+				} else {
+					@cfgLabelsSection(data.Labels)
+				}
+			</div>
+		</div>
+		@cfgInstDialog()
+		<script>
+			(function() {
+				// ── Labels ────────────────────────────────────────────────────────────────
+
+				var labelsBody = document.getElementById('labels-body');
+				var addLabelBtn = document.getElementById('add-label-btn');
+				var newLabelRow = document.getElementById('new-label-row');
+				var newLabelInput = document.getElementById('new-label-input');
+				var newLabelError = document.getElementById('new-label-error');
+				var newLabelSave = document.getElementById('new-label-save');
+				var newLabelCancel = document.getElementById('new-label-cancel');
+
+				function labelNames() {
+					var names = [];
+					(labelsBody ? labelsBody.querySelectorAll('[data-label-name]') : []).forEach(function(el) {
+						names.push(el.dataset.labelName.toLowerCase());
+					});
+					return names;
+				}
+
+				if (addLabelBtn && newLabelRow) {
+					addLabelBtn.addEventListener('click', function() {
+						newLabelRow.style.display = '';
+						newLabelInput.value = '';
+						newLabelError.textContent = '';
+						newLabelInput.focus();
+					});
+					newLabelCancel.addEventListener('click', function() {
+						newLabelRow.style.display = 'none';
+					});
+					newLabelInput.addEventListener('keydown', function(e) {
+						if (e.key === 'Enter') saveNewLabel();
+						if (e.key === 'Escape') { newLabelRow.style.display = 'none'; }
+					});
+					newLabelSave.addEventListener('click', saveNewLabel);
+				}
+
+				function saveNewLabel() {
+					var name = newLabelInput ? newLabelInput.value.trim() : '';
+					if (!name) { newLabelRow.style.display = 'none'; return; }
+					if (labelNames().includes(name.toLowerCase())) {
+						newLabelError.textContent = 'A label with this name already exists.';
+						return;
+					}
+					newLabelInput.disabled = true;
+					fetch('/labels', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})
+						.then(function(r){ return r.json(); })
+						.then(function(env) {
+							var label = env.data;
+							if (!label) throw new Error('no data');
+							newLabelRow.style.display = 'none';
+							newLabelInput.disabled = false;
+							// Prepend row to table
+							var row = buildLabelRow(label.id, label.name, 0);
+							if (labelsBody) {
+								var first = labelsBody.querySelector('tr');
+								if (first) labelsBody.insertBefore(row, first);
+								else labelsBody.appendChild(row);
+							}
+							var empty = document.getElementById('labels-empty');
+							if (empty) empty.style.display = 'none';
+						})
+						.catch(function() {
+							newLabelInput.disabled = false;
+							newLabelError.textContent = 'Failed to create label.';
+						});
+				}
+
+				function buildLabelRow(id, name, entryCount) {
+					var tr = document.createElement('tr');
+					tr.dataset.labelId = id;
+					tr.style.borderBottom = '1px solid var(--border)';
+					tr.innerHTML = labelRowHTML(id, name, entryCount, false);
+					return tr;
+				}
+
+				function labelRowHTML(id, name, entryCount, editing) {
+					var countStr = entryCount > 0 ? entryCount + ' entr' + (entryCount === 1 ? 'y' : 'ies') : '—';
+					if (editing) {
+						return '<td style="padding:8px 12px"><input class="label-edit-input" data-label-id="' + id + '" type="text" value="' + escHtml(name) + '" style="background:var(--surface2);border:1px solid var(--accent);border-radius:4px;padding:4px 8px;font-size:13px;color:var(--text);outline:none;width:100%"/><div class="label-edit-error" style="font-size:11px;color:var(--commit);margin-top:2px"></div></td>' +
+							'<td style="padding:8px 12px;font-size:12px;color:var(--text2)">' + countStr + '</td>' +
+							'<td style="padding:8px 12px"><div style="display:flex;gap:6px">' +
+							'<button class="js-label-save" data-label-id="' + id + '" style="background:none;border:none;cursor:pointer;color:var(--income);font-size:12px;font-family:inherit;padding:0">Save</button>' +
+							'<button class="js-label-cancel-edit" data-label-id="' + id + '" data-original-name="' + escHtml(name) + '" data-entry-count="' + entryCount + '" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit;padding:0">Cancel</button>' +
+							'</div></td>';
+					}
+					return '<td style="padding:8px 12px;font-size:13px;color:var(--text);cursor:pointer" class="js-label-name-cell" data-label-id="' + id + '" data-label-name="' + escHtml(name) + '" data-entry-count="' + entryCount + '">' + escHtml(name) + '</td>' +
+						'<td style="padding:8px 12px;font-size:12px;color:var(--text2)">' + countStr + '</td>' +
+						'<td style="padding:8px 12px"><button class="js-label-rename" data-label-id="' + id + '" data-label-name="' + escHtml(name) + '" data-entry-count="' + entryCount + '" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:0">Rename</button></td>';
+				}
+
+				function escHtml(s) {
+					return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+				}
+
+				function startEdit(id, name, entryCount) {
+					var tr = labelsBody ? labelsBody.querySelector('[data-label-id="' + id + '"]') : null;
+					if (!tr) return;
+					tr.innerHTML = labelRowHTML(id, name, entryCount, true);
+					var input = tr.querySelector('.label-edit-input');
+					if (input) { input.focus(); input.select(); }
+				}
+
+				function saveEdit(id) {
+					var tr = labelsBody ? labelsBody.querySelector('[data-label-id="' + id + '"]') : null;
+					if (!tr) return;
+					var input = tr.querySelector('.label-edit-input');
+					var errorEl = tr.querySelector('.label-edit-error');
+					var name = input ? input.value.trim() : '';
+					var originalName = tr.querySelector('[data-original-name]');
+					var origName = originalName ? originalName.dataset.originalName : '';
+					if (!name) { cancelEdit(id, origName, 0); return; }
+					// Check duplicate (exclude self)
+					var others = [];
+					(labelsBody ? labelsBody.querySelectorAll('[data-label-name]') : []).forEach(function(el) {
+						if (el.dataset.labelId !== id) others.push(el.dataset.labelName.toLowerCase());
+					});
+					if (others.includes(name.toLowerCase())) {
+						if (errorEl) errorEl.textContent = 'A label with this name already exists.';
+						return;
+					}
+					if (input) input.disabled = true;
+					fetch('/labels/' + id, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})
+						.then(function(r){ return r.json(); })
+						.then(function(env) {
+							var label = env.data;
+							var cnt = tr.querySelector('[data-entry-count]');
+							var count = cnt ? parseInt(cnt.dataset.entryCount||'0',10) : 0;
+							tr.innerHTML = labelRowHTML(label.id, label.name, count, false);
+						})
+						.catch(function() {
+							if (input) input.disabled = false;
+							if (errorEl) errorEl.textContent = 'Failed to save.';
+						});
+				}
+
+				function cancelEdit(id, name, entryCount) {
+					var tr = labelsBody ? labelsBody.querySelector('[data-label-id="' + id + '"]') : null;
+					if (!tr) return;
+					var btn = tr.querySelector('[data-original-name]');
+					var cnt = btn ? parseInt((btn.dataset.entryCount||'0'),10) : entryCount;
+					tr.innerHTML = labelRowHTML(id, name, cnt, false);
+				}
+
+				document.addEventListener('click', function(e) {
+					var rename = e.target.closest('.js-label-rename');
+					if (rename) { startEdit(rename.dataset.labelId, rename.dataset.labelName, parseInt(rename.dataset.entryCount||'0',10)); return; }
+					var nameCell = e.target.closest('.js-label-name-cell');
+					if (nameCell) { startEdit(nameCell.dataset.labelId, nameCell.dataset.labelName, parseInt(nameCell.dataset.entryCount||'0',10)); return; }
+					var save = e.target.closest('.js-label-save');
+					if (save) { saveEdit(save.dataset.labelId); return; }
+					var cancelEdit_ = e.target.closest('.js-label-cancel-edit');
+					if (cancelEdit_) { cancelEdit(cancelEdit_.dataset.labelId, cancelEdit_.dataset.originalName, parseInt(cancelEdit_.dataset.entryCount||'0',10)); return; }
+				});
+
+				document.addEventListener('keydown', function(e) {
+					if (!e.target.classList.contains('label-edit-input')) return;
+					var id = e.target.dataset.labelId;
+					if (e.key === 'Enter') saveEdit(id);
+					if (e.key === 'Escape') {
+						var btn = e.target.closest('tr') ? e.target.closest('tr').querySelector('[data-original-name]') : null;
+						var name = btn ? btn.dataset.originalName : '';
+						var cnt = btn ? parseInt(btn.dataset.entryCount||'0',10) : 0;
+						cancelEdit(id, name, cnt);
+					}
+				});
+
+				// ── Institutions ──────────────────────────────────────────────────────────
+
+				var instDialog = document.getElementById('inst-dialog');
+				var instDialogTitle = document.getElementById('inst-dialog-title');
+				var instDialogClose = document.getElementById('inst-dialog-close');
+				var instDialogCancel = document.getElementById('inst-dialog-cancel');
+				var instDialogSave = document.getElementById('inst-dialog-save');
+				var instDialogError = document.getElementById('inst-dialog-error');
+				var instEditId = null;
+
+				function openInstDialog(inst) {
+					instEditId = inst ? inst.id : null;
+					if (instDialogTitle) instDialogTitle.textContent = inst ? 'Edit: ' + inst.institution_name : 'New Institution Mapping';
+					setField('inst-name', inst ? inst.institution_name : '');
+					setField('inst-date-col', inst ? inst.date_col : 'date');
+					setField('inst-amount-col', inst ? inst.amount_col : 'amount');
+					setField('inst-merchant-col', inst ? inst.merchant_col : 'description');
+					setField('inst-balance-col', inst ? (inst.balance_col||'') : '');
+					setField('inst-dc-col', inst ? (inst.debit_credit_col||'') : '');
+					setField('inst-id-col', inst ? (inst.imported_id_col||'') : '');
+					setField('inst-sign', inst ? inst.amount_sign_convention : 'positive_is_credit');
+					setField('inst-settlement', inst ? inst.settlement_window_days : '14');
+					setField('inst-dedup', inst ? inst.dedup_window_days : '3');
+					setField('inst-tolerance', inst ? inst.amount_tolerance_pct : '0.5');
+					if (instDialogError) { instDialogError.textContent = ''; instDialogError.style.display = 'none'; }
+					if (instDialog) instDialog.showModal();
+				}
+
+				function setField(id, val) {
+					var el = document.getElementById(id);
+					if (el) el.value = String(val === null || val === undefined ? '' : val);
+				}
+
+				function getField(id) {
+					var el = document.getElementById(id);
+					return el ? el.value.trim() : '';
+				}
+
+				if (instDialogClose) instDialogClose.addEventListener('click', function(){ if(instDialog) instDialog.close(); });
+				if (instDialogCancel) instDialogCancel.addEventListener('click', function(){ if(instDialog) instDialog.close(); });
+				if (instDialog) instDialog.addEventListener('click', function(e){ if(e.target===instDialog) instDialog.close(); });
+
+				document.addEventListener('click', function(e) {
+					var newBtn = e.target.closest('#new-inst-btn');
+					if (newBtn) { openInstDialog(null); return; }
+					var editBtn = e.target.closest('.js-inst-edit');
+					if (editBtn) {
+						try { openInstDialog(JSON.parse(editBtn.dataset.institution)); } catch(ex){}
+						return;
+					}
+					var delBtn = e.target.closest('.js-inst-delete');
+					if (delBtn) {
+						var row = delBtn.closest('[data-inst-id]');
+						if (row) {
+							var confirm_ = row.querySelector('.js-inst-delete-confirm');
+							var normal = row.querySelector('.js-inst-actions-normal');
+							if (confirm_) confirm_.style.display = '';
+							if (normal) normal.style.display = 'none';
+						}
+						return;
+					}
+					var delNo = e.target.closest('.js-inst-delete-no');
+					if (delNo) {
+						var row = delNo.closest('[data-inst-id]');
+						if (row) {
+							var confirm_ = row.querySelector('.js-inst-delete-confirm');
+							var normal = row.querySelector('.js-inst-actions-normal');
+							if (confirm_) confirm_.style.display = 'none';
+							if (normal) normal.style.display = '';
+						}
+						return;
+					}
+					var delYes = e.target.closest('.js-inst-delete-yes');
+					if (delYes) {
+						var id = delYes.dataset.instId;
+						delYes.disabled = true;
+						fetch('/institutions/' + id, {method:'DELETE'})
+							.then(function(r) {
+								if (r.ok || r.status===404) {
+									var row = document.querySelector('[data-inst-id="' + id + '"]');
+									if (row) row.remove();
+									var list = document.getElementById('inst-list');
+									if (list && !list.querySelector('[data-inst-id]')) {
+										var empty = document.getElementById('inst-empty');
+										if (empty) empty.style.display = '';
+									}
+								}
+							})
+							.catch(function(){ delYes.disabled = false; });
+						return;
+					}
+				});
+
+				if (instDialogSave) instDialogSave.addEventListener('click', function() {
+					var name = getField('inst-name');
+					if (!name) {
+						if (instDialogError) { instDialogError.textContent = 'Institution name is required.'; instDialogError.style.display = ''; }
+						return;
+					}
+					var body = {
+						institution_name: name,
+						source_type: 'csv',
+						date_col: getField('inst-date-col') || 'date',
+						amount_col: getField('inst-amount-col') || 'amount',
+						merchant_col: getField('inst-merchant-col') || 'description',
+						balance_col: getField('inst-balance-col') || null,
+						debit_credit_col: getField('inst-dc-col') || null,
+						imported_id_col: getField('inst-id-col') || null,
+						amount_sign_convention: getField('inst-sign') || 'positive_is_credit',
+						settlement_window_days: parseInt(getField('inst-settlement')) || 14,
+						dedup_window_days: parseInt(getField('inst-dedup')) || 3,
+						amount_tolerance_pct: parseFloat(getField('inst-tolerance')) || 0.5
+					};
+					instDialogSave.disabled = true;
+					instDialogSave.textContent = 'Saving…';
+					var url = instEditId ? '/institutions/' + instEditId : '/institutions';
+					var method = instEditId ? 'PUT' : 'POST';
+					fetch(url, {method:method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+						.then(function(r) {
+							if (!r.ok) return r.json().then(function(e){ throw new Error(e.detail||'Save failed'); });
+							if (instDialog) instDialog.close();
+							location.reload();
+						})
+						.catch(function(err) {
+							instDialogSave.disabled = false;
+							instDialogSave.textContent = 'Save mapping';
+							if (instDialogError) { instDialogError.textContent = err.message||'Save failed.'; instDialogError.style.display = ''; }
+						});
+				});
+			})();
+		</script>
+	}
+}
+
+templ cfgLabelsSection(labels []store.LabelWithCount) {
+	<section style="max-width:560px">
+		<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+			<div>
+				<h2 style="margin:0;font-size:15px;font-weight:700;color:var(--text)">Labels</h2>
+				<p style="margin:4px 0 0;font-size:12px;color:var(--text3)">Used to tag and group budget entries</p>
+			</div>
+			<button
+				id="add-label-btn"
+				style="background:none;border:none;cursor:pointer;color:var(--accent);font-size:13px;font-family:inherit;padding:4px 0;display:flex;align-items:center;gap:4px"
+			>+ New label</button>
+		</div>
+		<div style="border:1px solid var(--border);border-radius:4px;overflow:hidden">
+			<table style="width:100%;border-collapse:collapse">
+				<thead>
+					<tr style="background:var(--surface);border-bottom:1px solid var(--border)">
+						<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em">Name</th>
+						<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;width:110px">Used by</th>
+						<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;width:80px">Actions</th>
+					</tr>
+				</thead>
+				<tbody id="labels-body">
+					<tr id="new-label-row" style="display:none;border-bottom:1px solid var(--border);background:var(--bg)">
+						<td style="padding:8px 12px">
+							<input
+								id="new-label-input"
+								type="text"
+								placeholder="Label name"
+								style="background:var(--surface2);border:1px solid var(--accent);border-radius:4px;padding:4px 8px;font-size:13px;color:var(--text);outline:none;width:100%"
+							/>
+							<div id="new-label-error" style="font-size:11px;color:var(--commit);margin-top:2px"></div>
+						</td>
+						<td style="padding:8px 12px;font-size:12px;color:var(--text3)">—</td>
+						<td style="padding:8px 12px">
+							<div style="display:flex;gap:6px">
+								<button id="new-label-save" style="background:none;border:none;cursor:pointer;color:var(--income);font-size:12px;font-family:inherit;padding:0">Save</button>
+								<button id="new-label-cancel" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit;padding:0">Cancel</button>
+							</div>
+						</td>
+					</tr>
+					if len(labels) == 0 {
+						<tr id="labels-empty">
+							<td colspan="3" style="padding:16px 12px;color:var(--text3);font-size:13px">No labels yet. Create one above.</td>
+						</tr>
+					} else {
+						for i, l := range labels {
+							<tr
+								data-label-id={ l.ID }
+								style={ func() string {
+									if i < len(labels)-1 {
+										return "border-bottom:1px solid var(--border)"
+									}
+									return ""
+								}() }
+							>
+								<td
+									class="js-label-name-cell"
+									data-label-id={ l.ID }
+									data-label-name={ l.Name }
+									data-entry-count={ fmt.Sprintf("%d", l.EntryCount) }
+									style="padding:8px 12px;font-size:13px;color:var(--text);cursor:pointer"
+								>{ l.Name }</td>
+								<td style="padding:8px 12px;font-size:12px;color:var(--text2)">
+									if l.EntryCount > 0 {
+										{ fmt.Sprintf("%d", l.EntryCount) }
+										if l.EntryCount == 1 {
+											{ " entry" }
+										} else {
+											{ " entries" }
+										}
+									} else {
+										<span style="color:var(--text3)">—</span>
+									}
+								</td>
+								<td style="padding:8px 12px">
+									<button
+										class="js-label-rename"
+										data-label-id={ l.ID }
+										data-label-name={ l.Name }
+										data-entry-count={ fmt.Sprintf("%d", l.EntryCount) }
+										style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:0"
+									>Rename</button>
+								</td>
+							</tr>
+						}
+					}
+				</tbody>
+			</table>
+		</div>
+	</section>
+}
+
+templ cfgInstitutionsSection(institutions []store.Institution) {
+	<section style="max-width:640px">
+		<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+			<div>
+				<h2 style="margin:0;font-size:15px;font-weight:700;color:var(--text)">Institution Mappings</h2>
+				<p style="margin:4px 0 0;font-size:12px;color:var(--text3)">CSV column mappings for each financial institution</p>
+			</div>
+			<button
+				id="new-inst-btn"
+				style="background:none;border:none;cursor:pointer;color:var(--accent);font-size:13px;font-family:inherit;padding:4px 0;display:flex;align-items:center;gap:4px"
+			>+ New mapping</button>
+		</div>
+		<div id="inst-list" style="border:1px solid var(--border);border-radius:4px;overflow:hidden">
+			if len(institutions) == 0 {
+				<div id="inst-empty" style="padding:24px;color:var(--text3);font-size:13px">
+					No institution mappings yet. Create one to enable CSV imports.
+				</div>
+			} else {
+				for i, inst := range institutions {
+					@cfgInstRow(inst, i == len(institutions)-1)
+				}
+			}
+		</div>
+	</section>
+}
+
+templ cfgInstRow(inst store.Institution, isLast bool) {
+	<details
+		data-inst-id={ inst.ID }
+		style={ func() string {
+			if isLast { return "background:var(--surface)" }
+			return "background:var(--surface);border-bottom:1px solid var(--border)"
+		}() }
+	>
+		<summary style="display:flex;align-items:center;gap:8px;padding:10px 12px;cursor:pointer;list-style:none;user-select:none">
+			<span style="color:var(--text3);font-size:10px;flex-shrink:0">▶</span>
+			<span style="flex:1;font-size:13px;font-weight:500;color:var(--text)">{ inst.InstitutionName }</span>
+			<span style="font-size:11px;color:var(--text3);background:var(--surface2);padding:2px 6px;border-radius:4px;flex-shrink:0">{ inst.SourceType }</span>
+			<div style="display:flex;gap:4px;flex-shrink:0" onclick="event.stopPropagation()">
+				<div class="js-inst-actions-normal" style="display:flex;gap:4px">
+					<button
+						class="js-inst-edit"
+						data-institution={ instJSON(inst) }
+						style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:2px 6px"
+					>Edit</button>
+					<button
+						class="js-inst-delete"
+						style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit;padding:2px 6px"
+					>Delete</button>
+				</div>
+				<div class="js-inst-delete-confirm" style="display:none;align-items:center;gap:4px">
+					<span style="font-size:11px;color:var(--commit)">Delete?</span>
+					<button
+						class="js-inst-delete-yes"
+						data-inst-id={ inst.ID }
+						style="background:none;border:none;cursor:pointer;color:var(--commit);font-size:11px;font-family:inherit;padding:2px 4px"
+					>Yes</button>
+					<button
+						class="js-inst-delete-no"
+						style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:11px;font-family:inherit;padding:2px 4px"
+					>No</button>
+				</div>
+			</div>
+		</summary>
+		<div style="border-top:1px solid var(--border);background:var(--bg);padding:12px 16px;display:grid;grid-template-columns:1fr 1fr;gap:8px 20px">
+			@cfgInstField("Date col", inst.DateCol)
+			@cfgInstField("Amount col", inst.AmountCol)
+			@cfgInstField("Merchant col", inst.MerchantCol)
+			@cfgInstOptField("Balance col", inst.BalanceCol)
+			@cfgInstOptField("Debit/Credit col", inst.DebitCreditCol)
+			@cfgInstOptField("Imported ID col", inst.ImportedIDCol)
+			@cfgInstField("Sign convention", inst.AmountSignConvention)
+			@cfgInstField("Settlement window", fmt.Sprintf("%d days", inst.SettlementWindowDays))
+			@cfgInstField("Dedup window", fmt.Sprintf("%d days", inst.DedupWindowDays))
+			@cfgInstField("Amount tolerance", fmt.Sprintf("%.1f%%", inst.AmountTolerancePct))
+		</div>
+	</details>
+}
+
+templ cfgInstField(label, value string) {
+	<div>
+		<div style="font-size:11px;color:var(--text3);margin-bottom:1px">{ label }</div>
+		<div style="font-size:13px;color:var(--text);font-family:monospace">{ value }</div>
+	</div>
+}
+
+templ cfgInstOptField(label string, value *string) {
+	if value != nil && *value != "" {
+		@cfgInstField(label, *value)
+	}
+}
+
+templ cfgInstDialog() {
+	<dialog
+		id="inst-dialog"
+		style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0;color:var(--text);width:520px;max-width:95vw;max-height:90vh;overflow:hidden;display:flex;flex-direction:column"
+	>
+		<div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+			<span id="inst-dialog-title" style="font-size:15px;font-weight:700">New Institution Mapping</span>
+			<button id="inst-dialog-close" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:18px;line-height:1;padding:0 4px">✕</button>
+		</div>
+		<div style="overflow:auto;flex:1;padding:20px;display:flex;flex-direction:column;gap:12px">
+			@cfgFormField("Institution name", "inst-name", "text", "Chase Checking", true)
+			<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+				@cfgFormField("Date column", "inst-date-col", "text", "date", false)
+				@cfgFormField("Amount column", "inst-amount-col", "text", "amount", false)
+			</div>
+			@cfgFormField("Merchant / description column", "inst-merchant-col", "text", "description", false)
+			<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+				@cfgFormField("Balance column (optional)", "inst-balance-col", "text", "", false)
+				@cfgFormField("Debit/Credit column (optional)", "inst-dc-col", "text", "", false)
+			</div>
+			@cfgFormField("Imported ID column (optional)", "inst-id-col", "text", "", false)
+			<div>
+				<label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px">Amount sign convention</label>
+				<select
+					id="inst-sign"
+					style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 28px 6px 8px;font-size:13px;color:var(--text);outline:none;width:100%"
+				>
+					<option value="positive_is_credit">Positive = credit (money in)</option>
+					<option value="positive_is_debit">Positive = debit (money out)</option>
+				</select>
+			</div>
+			<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+				@cfgFormField("Settlement window (days)", "inst-settlement", "number", "14", false)
+				@cfgFormField("Dedup window (days)", "inst-dedup", "number", "3", false)
+				@cfgFormField("Amount tolerance (%)", "inst-tolerance", "number", "0.5", false)
+			</div>
+			<div id="inst-dialog-error" style="color:var(--commit);font-size:12px;display:none"></div>
+		</div>
+		<div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0">
+			<button
+				id="inst-dialog-cancel"
+				style="background:transparent;border:1px solid var(--border);border-radius:6px;padding:6px 16px;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit"
+			>Cancel</button>
+			<button
+				id="inst-dialog-save"
+				style="background:var(--accent);border:none;border-radius:6px;padding:6px 16px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit"
+			>Save mapping</button>
+		</div>
+	</dialog>
+}
+
+templ cfgFormField(label, id, inputType, placeholder string, required bool) {
+	<div>
+		<label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px">
+			{ label }
+			if required {
+				<span style="color:var(--commit)"> *</span>
+			}
+		</label>
+		<input
+			id={ id }
+			type={ inputType }
+			placeholder={ placeholder }
+			style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;color:var(--text);outline:none;width:100%"
+		/>
+	</div>
+}
+
+func cfgTabStyle(active bool) string {
+	if active {
+		return "display:inline-block;padding:6px 14px;border-radius:6px 6px 0 0;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;background:var(--bg);color:var(--text);border:1px solid var(--border);border-bottom:1px solid var(--bg)"
+	}
+	return "display:inline-block;padding:6px 14px;border-radius:6px 6px 0 0;font-size:13px;font-weight:400;cursor:pointer;text-decoration:none;background:transparent;color:var(--text2)"
+}
+
+func instJSON(inst store.Institution) string {
+	type instOut struct {
+		ID                   string  `json:"id"`
+		InstitutionName      string  `json:"institution_name"`
+		SourceType           string  `json:"source_type"`
+		DateCol              string  `json:"date_col"`
+		AmountCol            string  `json:"amount_col"`
+		MerchantCol          string  `json:"merchant_col"`
+		BalanceCol           *string `json:"balance_col"`
+		DebitCreditCol       *string `json:"debit_credit_col"`
+		ImportedIDCol        *string `json:"imported_id_col"`
+		AmountSignConvention string  `json:"amount_sign_convention"`
+		SettlementWindowDays int     `json:"settlement_window_days"`
+		DedupWindowDays      int     `json:"dedup_window_days"`
+		AmountTolerancePct   float64 `json:"amount_tolerance_pct"`
+	}
+	b, _ := json.Marshal(instOut{
+		ID:                   inst.ID,
+		InstitutionName:      inst.InstitutionName,
+		SourceType:           inst.SourceType,
+		DateCol:              inst.DateCol,
+		AmountCol:            inst.AmountCol,
+		MerchantCol:          inst.MerchantCol,
+		BalanceCol:           inst.BalanceCol,
+		DebitCreditCol:       inst.DebitCreditCol,
+		ImportedIDCol:        inst.ImportedIDCol,
+		AmountSignConvention: inst.AmountSignConvention,
+		SettlementWindowDays: inst.SettlementWindowDays,
+		DedupWindowDays:      inst.DedupWindowDays,
+		AmountTolerancePct:   inst.AmountTolerancePct,
+	})
+	return string(b)
+}

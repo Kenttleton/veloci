@@ -566,8 +566,31 @@ func txnAmountStyle(cents int64) string {
 	return "color:var(--commit);font-variant-numeric:tabular-nums"
 }
 
+// ConfigurationData is passed to the Configuration page template.
+type ConfigurationData struct {
+	Tab          string
+	Labels       []store.LabelWithCount
+	Institutions []store.Institution
+}
+
 func (s *Server) Configuration(w http.ResponseWriter, r *http.Request) {
-	s.render(w, r, ConfigurationPage(s.buildShellData(r)))
+	ctx := r.Context()
+	entityID := middleware.EntityID(ctx)
+
+	tab := r.URL.Query().Get("tab")
+	if tab == "" {
+		tab = "labels"
+	}
+
+	labels, _ := s.store.ListLabelsWithEntryCount(ctx, entityID)
+	institutions, _ := s.store.ListInstitutions(ctx, entityID)
+
+	data := ConfigurationData{
+		Tab:          tab,
+		Labels:       labels,
+		Institutions: institutions,
+	}
+	s.render(w, r, ConfigurationPage(s.buildShellData(r), data))
 }
 
 func (s *Server) Settings(w http.ResponseWriter, r *http.Request) {

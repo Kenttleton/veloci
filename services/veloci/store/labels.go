@@ -95,6 +95,29 @@ func (s *Store) DeleteLabel(ctx context.Context, id string) error {
 	return nil
 }
 
+// LabelWithCount extends Label with the entry count for a specific entity.
+type LabelWithCount struct {
+	Label
+	EntryCount int `db:"entry_count"`
+}
+
+// ListLabelsWithEntryCount returns all labels ordered by creation date, with the
+// count of entries in this entity that reference each label.
+func (s *Store) ListLabelsWithEntryCount(ctx context.Context, entityID string) ([]LabelWithCount, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT l.id::text, l.name, l.created_at,
+		       COUNT(e.id)::int AS entry_count
+		FROM labels l
+		LEFT JOIN entries e ON e.label_id = l.id AND e.entity_id = $1
+		GROUP BY l.id, l.name, l.created_at
+		ORDER BY l.created_at DESC, l.id DESC
+	`, entityID)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowToStructByName[LabelWithCount])
+}
+
 // ListEntriesByLabel returns active entries associated with a label.
 func (s *Store) ListEntriesByLabel(ctx context.Context, entityID, labelID string, limit int, cursor string) ([]EntryRow, error) {
 	if cursor == "" {
