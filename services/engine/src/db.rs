@@ -12,8 +12,9 @@
 //! strings in environment variables.
 
 use anyhow::{Context, Result};
+use backon::{ExponentialBuilder, Retryable};
 use sqlx::{
-    postgres::{PgPoolOptions, PgConnectOptions},
+    postgres::{PgConnectOptions, PgPoolOptions},
     PgPool,
 };
 
@@ -37,17 +38,27 @@ pub async fn connect(cfg: &AppConfig) -> Result<Pools> {
         .parse()
         .context("failed to parse postgres DSN")?;
 
-    let read = PgPoolOptions::new()
-        .max_connections(cfg.engine.pool.read_max)
-        .connect_with(connect_opts.clone())
-        .await
-        .context("failed to connect read pool")?;
+    let backoff = ExponentialBuilder::default().with_max_times(10);
 
-    let write = PgPoolOptions::new()
-        .max_connections(cfg.engine.pool.write_max)
-        .connect_with(connect_opts)
-        .await
-        .context("failed to connect write pool")?;
+    let read = (|| async {
+        PgPoolOptions::new()
+            .max_connections(cfg.engine.pool.read_max)
+            .connect_with(connect_opts.clone())
+            .await
+    })
+    .retry(backoff.clone())
+    .await
+    .context("failed to connect read pool")?;
+
+    let write = (|| async {
+        PgPoolOptions::new()
+            .max_connections(cfg.engine.pool.write_max)
+            .connect_with(connect_opts.clone())
+            .await
+    })
+    .retry(backoff)
+    .await
+    .context("failed to connect write pool")?;
 
     Ok(Pools { read, write })
 }
