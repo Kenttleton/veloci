@@ -70,25 +70,9 @@ func runServe(_ *cobra.Command, _ []string) error {
 		viper.GetString("database.auth.name"),
 	)
 
-	database, err := store.New(ctx, dsn)
+	database, err := buildDB(ctx, dsn)
 	if err != nil {
-		return fmt.Errorf("db: %w", err)
-	}
-
-	bo := backoff.NewExponentialBackOff()
-	bo.InitialInterval = 500 * time.Millisecond
-	bo.MaxInterval = 30 * time.Second
-	bo.MaxElapsedTime = 2 * time.Minute
-
-	pingErr := backoff.RetryNotify(
-		func() error { return database.Ping(ctx) },
-		backoff.WithContext(bo, ctx),
-		func(err error, d time.Duration) {
-			log.Printf("db not ready (retrying in %s): %v", d.Round(time.Millisecond), err)
-		},
-	)
-	if pingErr != nil {
-		return fmt.Errorf("db unreachable after 2 minutes: %w", pingErr)
+		return err
 	}
 
 	adminEmail := viper.GetString("auth.admin.email")
@@ -166,6 +150,36 @@ func runServe(_ *cobra.Command, _ []string) error {
 		return err
 	}
 	return nil
+}
+
+func buildDB(ctx context.Context, dsn string) (*store.DB, error) {
+	b := backoff.NewExponentialBackOff()
+	b.InitialInterval = 500 * time.Millisecond
+	b.MaxInterval = 30 * time.Second
+	b.MaxElapsedTime = 2 * time.Minute
+
+	var db *store.DB
+	err := backoff.RetryNotify(
+		func() error {
+			d, err := store.New(ctx, dsn)
+			if err != nil {
+				return err
+			}
+			if err := d.Ping(ctx); err != nil {
+				return err
+			}
+			db = d
+			return nil
+		},
+		backoff.WithContext(b, ctx),
+		func(err error, d time.Duration) {
+			log.Printf("db not ready (retrying in %s): %v", d.Round(time.Millisecond), err)
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("db unreachable after 2 minutes: %w", err)
+	}
+	return db, nil
 }
 
 func warnWeakSecret(secret string) {

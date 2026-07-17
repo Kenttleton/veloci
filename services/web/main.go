@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
@@ -65,7 +66,30 @@ func buildPool(ctx context.Context) (*pgxpool.Pool, error) {
 	if max := viper.GetInt32("veloci.pool.max"); max > 0 {
 		cfg.MaxConns = max
 	}
-	return pgxpool.NewWithConfig(ctx, cfg)
+
+	var pool *pgxpool.Pool
+	b := backoff.NewExponentialBackOff()
+	b.MaxElapsedTime = 60 * time.Second
+	attempt := 0
+	err = backoff.Retry(func() error {
+		attempt++
+		p, dialErr := pgxpool.NewWithConfig(ctx, cfg)
+		if dialErr != nil {
+			log.Printf("database: connect attempt %d failed: %v", attempt, dialErr)
+			return dialErr
+		}
+		if pingErr := p.Ping(ctx); pingErr != nil {
+			p.Close()
+			log.Printf("database: ping attempt %d failed: %v", attempt, pingErr)
+			return pingErr
+		}
+		pool = p
+		return nil
+	}, backoff.WithContext(b, ctx))
+	if err != nil {
+		return nil, fmt.Errorf("database unavailable after 60s: %w", err)
+	}
+	return pool, nil
 }
 
 func loadConfig() {
@@ -266,22 +290,24 @@ func runMigrate(_ *cobra.Command, _ []string) error {
 // concurrent startup ordering between veloci-auth and veloci-web.
 func syncAdminUser(ctx context.Context, authClient *authclient.Client, s *store.Store, email, password string) error {
 	var credentialID string
-	for i := range 30 {
+	b := backoff.NewExponentialBackOff()
+	b.MaxElapsedTime = 60 * time.Second
+	attempt := 0
+	err := backoff.Retry(func() error {
+		attempt++
 		cred, err := authClient.ValidateCredential(ctx, &authclient.ValidateCredentialInputBody{
 			Email:    email,
 			Password: password,
 		})
-		if err == nil {
-			credentialID = cred.CredentialID
-			break
+		if err != nil {
+			log.Printf("admin sync: auth not ready (attempt %d): %v", attempt, err)
+			return err
 		}
-		if i < 29 {
-			log.Printf("admin sync: auth not ready (attempt %d/30): %v", i+1, err)
-			time.Sleep(time.Second)
-		}
-	}
-	if credentialID == "" {
-		return fmt.Errorf("could not validate admin credential after 30 attempts")
+		credentialID = cred.CredentialID
+		return nil
+	}, backoff.WithContext(b, ctx))
+	if err != nil {
+		return fmt.Errorf("could not validate admin credential after 60s: %w", err)
 	}
 
 	userID, err := s.EnsureUser(ctx, email, "Server Admin", credentialID)
