@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
@@ -28,13 +30,15 @@ type Publisher struct {
 	ch   *amqp.Channel
 }
 
-// NewPublisher returns a Publisher for the given AMQP URL. It attempts an
-// initial connection but does not fail if RabbitMQ is unavailable — the API
-// will start and reconnect automatically when a publish is attempted.
+// NewPublisher returns a Publisher for the given AMQP URL. It retries the
+// connection with exponential backoff for up to 30 seconds to tolerate slow
+// broker startup, then continues with lazy reconnect on each Publish call.
 func NewPublisher(url string) *Publisher {
 	p := &Publisher{url: url}
-	if err := p.connect(); err != nil {
-		log.Printf("queue: RabbitMQ not reachable at startup (%v) — will retry on publish", err)
+	b := backoff.NewExponentialBackOff()
+	b.MaxElapsedTime = 30 * time.Second
+	if err := backoff.Retry(p.connect, b); err != nil {
+		log.Printf("queue: RabbitMQ unavailable after 30s — will retry on each publish")
 	}
 	return p
 }

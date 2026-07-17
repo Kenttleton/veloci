@@ -4,7 +4,7 @@ go 1.26
 
 require (
 	github.com/danielgtaylor/huma/v2 v2.38.0
-	github.com/go-chi/chi/v5 v5.3.0
+	github.com/go-chi/chi/v5 v5.3.1
 	github.com/go-faster/errors v0.7.1
 	github.com/go-faster/jx v1.2.0
 	github.com/jackc/pgx/v5 v5.10.0
@@ -18,6 +18,7 @@ require (
 )
 
 require (
+	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/dlclark/regexp2 v1.12.0 // indirect
 	github.com/fatih/color v1.19.0 // indirect
