@@ -7,42 +7,39 @@ templ PlaceholderPage(data ShellData, name string) {
 	}
 }
 
-// BudgetPage is the budget view (placeholder until islands are wired up).
+// BudgetPage placeholder — will become the horizon chart page.
 templ BudgetPage(data ShellData) {
 	@PlaceholderPage(data, "Budget")
 }
 
-// LedgerPage is the ledger view (placeholder).
-templ LedgerPage(data ShellData) {
-	@PlaceholderPage(data, "Ledger")
-}
-
-// ActivityPage is the activity view (placeholder).
-templ ActivityPage(data ShellData) {
-	@PlaceholderPage(data, "Activity")
-}
-
-// AccountPage is the account view (placeholder).
-templ AccountPage(data ShellData, accountID string) {
-	@PlaceholderPage(data, "Account")
-}
-
-// ConfigurationPage is the configuration view (placeholder).
+// ConfigurationPage placeholder — will become labels + institutions.
 templ ConfigurationPage(data ShellData) {
 	@PlaceholderPage(data, "Configuration")
 }
 
-// SettingsPage is the settings view (placeholder).
-templ SettingsPage(data ShellData) {
-	@PlaceholderPage(data, "Settings")
-}
-
-// GlossaryPage is the glossary view (placeholder).
-templ GlossaryPage(data ShellData) {
-	@PlaceholderPage(data, "Glossary")
-}
-
-// ReportsPage is the reports view (placeholder).
+// ReportsPage placeholder.
 templ ReportsPage(data ShellData) {
 	@PlaceholderPage(data, "Reports")
+}
+
+// SettingsPage — profile settings (placeholder, matches React).
+templ SettingsPage(data ShellData) {
+	@Shell(data) {
+		<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
+			<div style="padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
+				<h1 style="margin:0;font-size:18px;font-weight:700;color:var(--text);letter-spacing:-0.02em">Settings</h1>
+			</div>
+			<div style="flex:1;overflow:auto;padding:24px 20px">
+				<section style="max-width:480px">
+					<h2 style="margin:0 0 4px;font-size:15px;font-weight:700;color:var(--text)">Profile</h2>
+					<p style="margin:0 0 20px;font-size:12px;color:var(--text3)">
+						Manage your display name, email, and password.
+					</p>
+					<div style="padding:32px 0;color:var(--text3);font-size:13px">
+						Profile settings coming soon.
+					</div>
+				</section>
+			</div>
+		</div>
+	}
 }

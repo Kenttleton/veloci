@@ -128,7 +128,7 @@ Dots in the config key path become underscores. Examples:
 | `database.app.password` | `VELOCI_DATABASE_APP_PASSWORD` |
 | `auth.jwt_secret` | `VELOCI_AUTH_JWT_SECRET` |
 | `auth.port` | `VELOCI_AUTH_PORT` |
-| `api.port` | `VELOCI_API_PORT` |
+| `veloci.port` | `VELOCI_PORT` |
 
 Env vars take precedence over the config file. This is useful in containerized deployments where you'd rather inject secrets than mount a file.
 

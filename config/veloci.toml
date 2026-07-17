@@ -38,13 +38,12 @@ host = "localhost"
 email = "admin@veloci.local"
 password = "changeme"
 
-# ── veloci-api ────────────────────────────────────────────────────────────────
+# ── veloci ────────────────────────────────────────────────────────────────
 
-[api]
+[veloci]
 port = 8080
-host = "localhost"
 
-[api.pool]
+[veloci.pool]
 max = 5
 
 # ── veloci-engine ─────────────────────────────────────────────────────────────

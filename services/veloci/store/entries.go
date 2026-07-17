@@ -67,8 +67,11 @@ const entryCols = `
 // statusFilter defaults to active-only; pass "all" for every status.
 func (s *Store) ListEntries(ctx context.Context, entityID string, dr DateRange, accountID, statusFilter string, limit int, cursor string) ([]EntryRow, error) {
 	statusCond := `e.status = 'active'`
-	if statusFilter == "all" {
+	switch statusFilter {
+	case "all":
 		statusCond = `1=1`
+	case "pending_review", "inactive":
+		statusCond = `e.status = '` + statusFilter + `'`
 	}
 
 	args := []any{entityID}
@@ -436,4 +439,73 @@ func (s *Store) RejectEntryReview(ctx context.Context, entityID, entryID, userID
 		WHERE entity_id = $1 AND id = $2::uuid AND status = 'pending_review'
 	`, entityID, entryID, userID)
 	return err
+}
+
+// EntryCounts holds per-status counts for Ledger filter pills.
+type EntryCounts struct {
+	PendingReview int
+	Active        int
+	Inactive      int
+}
+
+// CountEntriesByStatus returns the number of entries per status for a given entity.
+func (s *Store) CountEntriesByStatus(ctx context.Context, entityID string) (EntryCounts, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT status, COUNT(*)::int
+		FROM entries
+		WHERE entity_id = $1
+		GROUP BY status
+	`, entityID)
+	if err != nil {
+		return EntryCounts{}, err
+	}
+	defer rows.Close()
+	var c EntryCounts
+	for rows.Next() {
+		var status string
+		var count int
+		if err := rows.Scan(&status, &count); err != nil {
+			return EntryCounts{}, err
+		}
+		switch status {
+		case "pending_review":
+			c.PendingReview = count
+		case "active":
+			c.Active = count
+		case "inactive":
+			c.Inactive = count
+		}
+	}
+	return c, rows.Err()
+}
+
+// ListAllEntriesSorted returns up to 1000 entries sorted so pending_review
+// comes first, then active, then inactive; within each group ordered by
+// start_date DESC, id DESC. No cursor pagination — used by the Ledger "all" view.
+func (s *Store) ListAllEntriesSorted(ctx context.Context, entityID string) ([]EntryRow, error) {
+	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
+		SELECT %s
+		FROM entries e
+		LEFT JOIN labels l ON l.id = e.label_id
+		LEFT JOIN LATERAL (
+			SELECT actual_rate_per_day, drift_per_day
+			FROM snapshots
+			WHERE entity_id = e.entity_id AND node_id = e.id AND node_type = 'entry'
+			ORDER BY snapshot_date DESC LIMIT 1
+		) s ON true
+		WHERE e.entity_id = $1
+		ORDER BY
+			CASE e.status
+				WHEN 'pending_review' THEN 0
+				WHEN 'active'         THEN 1
+				ELSE                       2
+			END,
+			e.start_date DESC,
+			e.id DESC
+		LIMIT 1000
+	`, entryCols), entityID)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowToStructByName[EntryRow])
 }

@@ -83,6 +83,37 @@ func AuthenticateCookieOrRedirect(client *authclient.Client) func(http.Handler) 
 	}
 }
 
+// AuthenticateBearerOrCookie accepts a Bearer token OR the session cookie.
+// Returns JSON 401 on failure — suitable for same-origin JS island API calls
+// that send the session cookie (no Bearer header needed).
+func AuthenticateBearerOrCookie(client *authclient.Client) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Bearer token takes priority.
+			if header := r.Header.Get("Authorization"); strings.HasPrefix(header, "Bearer ") {
+				token := strings.TrimPrefix(header, "Bearer ")
+				req, ok := validateToken(client, token, w, r)
+				if !ok {
+					return
+				}
+				next.ServeHTTP(w, req)
+				return
+			}
+			// Fall back to session cookie.
+			cookie, err := r.Cookie(SessionCookie)
+			if err != nil || cookie.Value == "" {
+				http.Error(w, `{"code":"UNAUTHORIZED"}`, http.StatusUnauthorized)
+				return
+			}
+			req, ok := validateToken(client, cookie.Value, w, r)
+			if !ok {
+				return
+			}
+			next.ServeHTTP(w, req)
+		})
+	}
+}
+
 // Authenticate validates the Bearer token via veloci-auth /tokens/validate.
 // Only access tokens are accepted — invite tokens are rejected with 401.
 // Verified claims (entity_id, entity_role, system_role, sub) are injected into context.

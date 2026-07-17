@@ -11,6 +11,18 @@ templ base(title string) {
 		</head>
 		<body>
 			{ children... }
+			<script>
+				// Copy job error to clipboard via data attributes on .js-copy-error buttons.
+				document.addEventListener('click', function(e) {
+					var btn = e.target.closest('.js-copy-error');
+					if (!btn) return;
+					var text = 'Job ID: ' + btn.dataset.jobId + '\nError: ' + btn.dataset.error;
+					navigator.clipboard.writeText(text);
+					var prev = btn.textContent;
+					btn.textContent = 'Copied';
+					setTimeout(function() { btn.textContent = prev; }, 1500);
+				});
+			</script>
 		</body>
 	</html>
 }

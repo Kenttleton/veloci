@@ -1,0 +1,220 @@
+package page
+
+import (
+	"encoding/json"
+	"fmt"
+	"time"
+
+	"github.com/veloci/veloci/store"
+)
+
+// ActivityData holds the page-level data for the Activity page.
+type ActivityData struct {
+	Jobs        []store.ProcessingJob
+	NextCursor  string
+	TargetJobID string
+}
+
+templ ActivityPage(shell ShellData, data ActivityData) {
+	@Shell(shell) {
+		<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
+			<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
+				<h1 style="margin:0;font-size:18px;font-weight:700;color:var(--text);letter-spacing:-0.02em">Activity</h1>
+			</div>
+			<div style="flex:1;overflow:auto;padding:16px 20px">
+				if len(data.Jobs) == 0 {
+					<div style="text-align:center;padding-top:48px">
+						<p style="color:var(--text2);margin-bottom:8px;font-size:15px">No activity yet.</p>
+						<p style="color:var(--text3);font-size:13px">
+							Jobs appear here after you import transactions or make changes that trigger a recalculation.
+						</p>
+					</div>
+				} else {
+					for _, job := range data.Jobs {
+						@jobCard(job, job.ID == data.TargetJobID)
+					}
+					if data.NextCursor != "" {
+						<div style="text-align:center;padding:16px">
+							<a
+								href={ templ.SafeURL("/activity?cursor=" + data.NextCursor) }
+								style="display:inline-block;border:1px solid var(--border);border-radius:4px;padding:6px 16px;color:var(--text2);font-size:13px;text-decoration:none"
+							>
+								Load older
+							</a>
+						</div>
+					}
+				}
+			</div>
+		</div>
+	}
+}
+
+templ jobCard(job store.ProcessingJob, isTarget bool) {
+	<div
+		id={ "job-" + job.ID }
+		style={ jobCardStyle(job.Status) }
+	>
+		<details open?={ job.Status == "failed" || isTarget }>
+			<summary style={ jobSummaryStyle(job.Status) }>
+				<div style="flex-shrink:0;margin-top:2px">
+					@jobStatusIcon(job.Status)
+				</div>
+				<div style="flex:1;min-width:0">
+					<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
+						<span style="font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+							{ jobTypeLabel(job.JobType) }
+						</span>
+						<span style="font-size:11px;color:var(--text3);flex-shrink:0">
+							{ formatJobTimestamp(job.QueuedAt) }
+						</span>
+					</div>
+					<div style="font-size:12px;color:var(--text3);margin-top:1px">
+						Triggered by { job.TriggeredBy }
+					</div>
+					<div style="font-size:12px;color:var(--text2);margin-top:2px">
+						{ jobSummaryLine(job) }
+					</div>
+				</div>
+			</summary>
+			if job.Status == "failed" && job.Error != nil {
+				<div style="border-top:1px solid var(--border);padding:8px 14px 12px 32px;display:flex;flex-direction:column;gap:4px">
+					<div style="padding:8px 10px;background:var(--surface2);border-radius:4px;font-family:monospace;font-size:12px;color:var(--text2);line-height:1.5">
+						{ *job.Error }
+					</div>
+					<div style="display:flex;gap:8px;margin-top:4px">
+						<button
+							class="js-copy-error"
+							data-job-id={ job.ID }
+							data-error={ *job.Error }
+							style="background:none;border:1px solid var(--border);border-radius:4px;padding:4px 10px;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit"
+						>
+							Copy error
+						</button>
+					</div>
+				</div>
+			}
+		</details>
+	</div>
+}
+
+func jobCardStyle(status string) string {
+	base := "border:1px solid var(--border);border-radius:4px;margin-bottom:8px;overflow:hidden;"
+	if status == "failed" {
+		return base + "background:color-mix(in srgb,var(--surface) 94%,var(--commit) 6%)"
+	}
+	return base + "background:var(--surface)"
+}
+
+func jobSummaryStyle(status string) string {
+	cursor := "pointer"
+	if status == "queued" {
+		cursor = "default"
+	}
+	return fmt.Sprintf("display:flex;align-items:flex-start;gap:10px;padding:12px 14px;cursor:%s;list-style:none", cursor)
+}
+
+func jobTypeLabel(jobType string) string {
+	switch jobType {
+	case "import.process":
+		return "Import"
+	case "entries.reprocess":
+		return "Entries reprocess"
+	case "account.analyze":
+		return "Recalculate"
+	default:
+		return jobType
+	}
+}
+
+func formatJobTimestamp(t time.Time) string {
+	now := time.Now()
+	today := now.Truncate(24 * time.Hour)
+	yesterday := today.Add(-24 * time.Hour)
+	ts := t.Local()
+	timeStr := ts.Format("3:04 PM")
+	day := ts.Truncate(24 * time.Hour)
+	switch {
+	case day.Equal(today):
+		return timeStr
+	case day.Equal(yesterday):
+		return "Yesterday · " + timeStr
+	default:
+		return ts.Format("Jan 2") + " · " + timeStr
+	}
+}
+
+type jobMeta struct {
+	TransactionsImported   *int `json:"transactions_imported"`
+	TransactionsSkippedDup *int `json:"transactions_skipped_duplicate"`
+	EntriesProcessed       *int `json:"entries_processed"`
+	SnapshotsWritten       *int `json:"snapshots_written"`
+}
+
+func jobSummaryLine(job store.ProcessingJob) string {
+	switch job.Status {
+	case "queued":
+		return "Waiting to start"
+	case "processing":
+		return "Processing"
+	case "failed":
+		return "Failed"
+	case "complete":
+		var meta jobMeta
+		_ = json.Unmarshal(job.Metadata, &meta)
+
+		start := job.QueuedAt
+		if job.StartedAt != nil {
+			start = *job.StartedAt
+		}
+		var parts []string
+		if job.CompletedAt != nil {
+			elapsed := job.CompletedAt.Sub(start).Seconds()
+			parts = append(parts, fmt.Sprintf("Completed in %.1fs", elapsed))
+		}
+		switch job.JobType {
+		case "import.process":
+			if meta.TransactionsImported != nil {
+				parts = append(parts, fmt.Sprintf("%d transactions imported", *meta.TransactionsImported))
+			}
+			if meta.TransactionsSkippedDup != nil && *meta.TransactionsSkippedDup > 0 {
+				parts = append(parts, fmt.Sprintf("%d duplicates skipped", *meta.TransactionsSkippedDup))
+			}
+		case "entries.reprocess":
+			if meta.EntriesProcessed != nil {
+				parts = append(parts, fmt.Sprintf("%d entries reprocessed", *meta.EntriesProcessed))
+			}
+		case "account.analyze":
+			if meta.SnapshotsWritten != nil {
+				parts = append(parts, fmt.Sprintf("%d snapshots written", *meta.SnapshotsWritten))
+			}
+		}
+		if len(parts) == 0 {
+			return "Complete"
+		}
+		result := parts[0]
+		for _, p := range parts[1:] {
+			result += " · " + p
+		}
+		return result
+	}
+	return ""
+}
+
+templ jobStatusIcon(status string) {
+	switch status {
+	case "complete":
+		<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--margin-pos)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+			<polyline points="20 6 9 17 4 12"></polyline>
+		</svg>
+	case "failed":
+		<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--commit)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+			<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path>
+			<line x1="12" y1="9" x2="12" y2="13"></line>
+			<line x1="12" y1="17" x2="12.01" y2="17"></line>
+		</svg>
+	case "processing":
+		<span style="width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block;flex-shrink:0"></span>
+	default:
+		<span style="width:8px;height:8px;border-radius:50%;background:var(--text3);display:inline-block;flex-shrink:0"></span>
+	}
+}

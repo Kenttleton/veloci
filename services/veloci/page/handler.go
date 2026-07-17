@@ -267,17 +267,303 @@ func (s *Server) Budget(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, BudgetPage(s.buildShellData(r)))
 }
 
+// LedgerData is passed to the Ledger page template.
+type LedgerData struct {
+	Entries []store.EntryRow
+	Counts  store.EntryCounts
+	Filter  string
+}
+
 func (s *Server) Ledger(w http.ResponseWriter, r *http.Request) {
-	s.render(w, r, LedgerPage(s.buildShellData(r)))
+	ctx := r.Context()
+	entityID := middleware.EntityID(ctx)
+
+	filter := r.URL.Query().Get("filter")
+	if filter == "" {
+		filter = "all"
+	}
+
+	counts, _ := s.store.CountEntriesByStatus(ctx, entityID)
+
+	var entries []store.EntryRow
+	if filter == "all" {
+		entries, _ = s.store.ListAllEntriesSorted(ctx, entityID)
+	} else {
+		entries, _ = s.store.ListEntries(ctx, entityID, store.DateRange{}, "", filter, 500, "")
+	}
+
+	data := LedgerData{
+		Entries: entries,
+		Counts:  counts,
+		Filter:  filter,
+	}
+	s.render(w, r, LedgerPage(s.buildShellData(r), data))
 }
 
 func (s *Server) Activity(w http.ResponseWriter, r *http.Request) {
-	s.render(w, r, ActivityPage(s.buildShellData(r)))
+	const pageSize = 50
+	cursor := r.URL.Query().Get("cursor")
+	targetJobID := r.URL.Query().Get("job")
+	entityID := middleware.EntityID(r.Context())
+
+	jobs, _ := s.store.ListJobs(r.Context(), entityID, pageSize, cursor)
+
+	var nextCursor string
+	if len(jobs) == pageSize {
+		last := jobs[len(jobs)-1]
+		nextCursor = store.EncodeCursor(last.ID, last.QueuedAt)
+	}
+
+	data := ActivityData{
+		Jobs:        jobs,
+		NextCursor:  nextCursor,
+		TargetJobID: targetJobID,
+	}
+	s.render(w, r, ActivityPage(s.buildShellData(r), data))
+}
+
+// AccountData is passed to the Account page template.
+type AccountData struct {
+	Account      store.Account
+	Institution  *store.Institution
+	Transactions []store.Transaction
+	NextCursor   string
 }
 
 func (s *Server) Account(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	s.render(w, r, AccountPage(s.buildShellData(r), id))
+	ctx := r.Context()
+	entityID := middleware.EntityID(ctx)
+
+	account, err := s.store.GetAccount(ctx, entityID, id)
+	if err != nil {
+		http.Error(w, "account not found", http.StatusNotFound)
+		return
+	}
+
+	var institution *store.Institution
+	if account.InstitutionID != nil {
+		inst, err := s.store.GetInstitution(ctx, entityID, *account.InstitutionID)
+		if err == nil {
+			institution = &inst
+		}
+	}
+
+	txns, _ := s.store.ListTransactions(ctx, entityID, store.DateRange{}, id, "", 200, "")
+
+	var nextCursor string
+	if len(txns) == 200 {
+		last := txns[len(txns)-1]
+		nextCursor = store.EncodeDateCursor(last.ID, last.Date)
+	}
+
+	data := AccountData{
+		Account:      account,
+		Institution:  institution,
+		Transactions: txns,
+		NextCursor:   nextCursor,
+	}
+	s.render(w, r, AccountPage(s.buildShellData(r), data))
+}
+
+// ─── Page helpers ─────────────────────────────────────────────────────────────
+
+// accountTypeLabel returns a display-friendly account type name.
+func accountTypeLabel(t string) string {
+	switch t {
+	case "checking":
+		return "Checking"
+	case "savings":
+		return "Savings"
+	case "credit":
+		return "Credit"
+	case "loan":
+		return "Loan"
+	case "mortgage":
+		return "Mortgage"
+	case "investment":
+		return "Investment"
+	default:
+		return t
+	}
+}
+
+// isAccountNegativeBalance returns true for credit/loan/mortgage with negative balance.
+func isAccountNegativeBalance(a store.Account) bool {
+	if a.BalanceCents == nil || *a.BalanceCents >= 0 {
+		return false
+	}
+	return a.AccountType == "credit" || a.AccountType == "loan" || a.AccountType == "mortgage"
+}
+
+// directionLabel returns "Debit" or "Credit".
+func directionLabel(d string) string {
+	if d == "credit" {
+		return "Credit"
+	}
+	return "Debit"
+}
+
+// entryTypeLabel returns a readable label for entry type.
+func entryTypeLabel(t string) string {
+	switch t {
+	case "fixed":
+		return "Fixed"
+	case "variable":
+		return "Variable"
+	case "one_time":
+		return "One-time"
+	default:
+		return t
+	}
+}
+
+// alertTypeLabel returns a display label for alert type.
+func alertTypeLabel(t *string) string {
+	if t == nil {
+		return ""
+	}
+	switch *t {
+	case "new_recurring":
+		return "New"
+	case "drift":
+		return "Drift"
+	case "anomaly":
+		return "Anomaly"
+	default:
+		return *t
+	}
+}
+
+// ratePerMo returns a formatted monthly rate estimate from projected_rate_per_day.
+func ratePerMo(e store.EntryRow) string {
+	if e.ProjectedRatePerDay == nil {
+		return "—"
+	}
+	monthly := *e.ProjectedRatePerDay * 30.44
+	if monthly < 0 {
+		monthly = -monthly
+	}
+	return "$" + fmt.Sprintf("%.0f", monthly) + "/mo"
+}
+
+// confPct formats a confidence float as a percentage string.
+func confPct(f *float64) string {
+	if f == nil {
+		return "—"
+	}
+	return fmt.Sprintf("%.0f%%", *f*100)
+}
+
+// confColor returns a CSS color variable for a confidence value.
+func confColor(f *float64) string {
+	if f == nil {
+		return "var(--text3)"
+	}
+	if *f >= 0.8 {
+		return "var(--income)"
+	}
+	if *f >= 0.5 {
+		return "var(--accent)"
+	}
+	return "var(--commit)"
+}
+
+// entryStatusColor returns a CSS color for an entry status.
+func entryStatusColor(status string) string {
+	switch status {
+	case "active":
+		return "var(--income)"
+	case "pending_review":
+		return "var(--accent)"
+	default:
+		return "var(--text3)"
+	}
+}
+
+// conditionsFormatted returns pretty-printed JSON conditions or an empty object.
+func conditionsFormatted(raw json.RawMessage) string {
+	if len(raw) == 0 || string(raw) == "null" {
+		return "{}"
+	}
+	var v any
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return string(raw)
+	}
+	b, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return string(raw)
+	}
+	return string(b)
+}
+
+// entryPutBody is the JSON shape expected by PUT /entries/{id}.
+type entryPutBody struct {
+	LabelID             *string         `json:"label_id"`
+	Direction           string          `json:"direction"`
+	EntryType           string          `json:"entry_type"`
+	PeriodDays          int             `json:"period_days"`
+	VariableMethod      *string         `json:"variable_method"`
+	ProjectedRatePerDay *float64        `json:"projected_rate_per_day"`
+	Conditions          json.RawMessage `json:"conditions"`
+	Priority            int             `json:"priority"`
+	Status              string          `json:"status"`
+	StartDate           string          `json:"start_date"`
+	EndDate             *string         `json:"end_date"`
+	ProjectTentatively  bool            `json:"project_tentatively"`
+}
+
+// entryDataJSON serializes the entry into the PUT /entries/{id} body format.
+// The JS review panel reads this from data-entry to pre-populate and then PUT.
+func entryDataJSON(e store.EntryRow) string {
+	var endDate *string
+	if e.EndDate != nil {
+		s := e.EndDate.Format("2006-01-02")
+		endDate = &s
+	}
+	conds := e.Conditions
+	if len(conds) == 0 || string(conds) == "null" {
+		conds = json.RawMessage(`{}`)
+	}
+	b, _ := json.Marshal(entryPutBody{
+		LabelID:             e.LabelID,
+		Direction:           e.Direction,
+		EntryType:           e.EntryType,
+		PeriodDays:          e.PeriodDays,
+		VariableMethod:      e.VariableMethod,
+		ProjectedRatePerDay: e.ProjectedRatePerDay,
+		Conditions:          conds,
+		Priority:            e.Priority,
+		Status:              e.Status,
+		StartDate:           e.StartDate.Format("2006-01-02"),
+		EndDate:             endDate,
+		ProjectTentatively:  e.ProjectTentatively,
+	})
+	return string(b)
+}
+
+// formatCents formats an int64 cents value as a USD amount string.
+func formatCents(cents int64) string {
+	neg := cents < 0
+	abs := cents
+	if neg {
+		abs = -cents
+	}
+	dollars := abs / 100
+	rem := abs % 100
+	s := commaInt(dollars) + "." + fmt.Sprintf("%02d", rem)
+	if neg {
+		return "-$" + s
+	}
+	return "$" + s
+}
+
+// txnAmountStyle returns a CSS color for a transaction amount (debit vs credit).
+func txnAmountStyle(cents int64) string {
+	if cents >= 0 {
+		return "color:var(--income);font-variant-numeric:tabular-nums"
+	}
+	return "color:var(--commit);font-variant-numeric:tabular-nums"
 }
 
 func (s *Server) Configuration(w http.ResponseWriter, r *http.Request) {

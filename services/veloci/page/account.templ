@@ -1,0 +1,277 @@
+package page
+
+import (
+	"fmt"
+
+	"github.com/veloci/veloci/store"
+)
+
+templ AccountPage(shell ShellData, data AccountData) {
+	@Shell(shell) {
+		<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
+			<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0;gap:12px">
+				<div style="display:flex;align-items:center;gap:10px;min-width:0">
+					<h1 style="margin:0;font-size:18px;font-weight:700;color:var(--text);letter-spacing:-0.02em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+						{ data.Account.Name }
+					</h1>
+					<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);flex-shrink:0">
+						{ accountTypeLabel(data.Account.AccountType) }
+					</span>
+				</div>
+				<div style="display:flex;align-items:center;gap:16px;flex-shrink:0">
+					<span style={ "font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-0.02em;" + accountBalanceColor(data.Account) }>
+						{ FormatBalance(data.Account.BalanceCents) }
+					</span>
+					<div style="display:flex;gap:6px">
+						if data.Account.InstitutionID != nil {
+							<button
+								id="upload-csv-btn"
+								style="background:var(--accent);border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit"
+							>Upload CSV</button>
+						} else {
+							<button
+								disabled
+								title="Set an institution for this account before uploading"
+								style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 14px;cursor:not-allowed;font-size:13px;color:var(--text3);font-family:inherit;opacity:0.6"
+							>Upload CSV</button>
+						}
+						<button
+							id="delete-account-btn"
+							style="background:transparent;border:1px solid var(--border);border-radius:6px;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit"
+						>Delete</button>
+					</div>
+				</div>
+			</div>
+			<div style="padding:8px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
+				<input
+					id="merchant-filter"
+					type="text"
+					placeholder="Filter by merchant…"
+					style="background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);outline:none;width:260px"
+				/>
+			</div>
+			<div style="flex:1;overflow:auto">
+				if len(data.Transactions) == 0 {
+					<div style="padding:48px 20px;text-align:center;color:var(--text3);font-size:13px">
+						No transactions yet. Upload a CSV to get started.
+					</div>
+				} else {
+					<table style="width:100%;border-collapse:collapse">
+						<thead>
+							<tr style="position:sticky;top:0;background:var(--surface);z-index:1;border-bottom:1px solid var(--border)">
+								<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);width:90px">Date</th>
+								<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3)">Merchant</th>
+								<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3)">Raw Payee</th>
+								<th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:var(--text3);width:100px">Amount</th>
+								<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);width:80px">Status</th>
+							</tr>
+						</thead>
+						<tbody id="tx-tbody">
+							for _, t := range data.Transactions {
+								@txRow(t)
+							}
+						</tbody>
+					</table>
+					if data.NextCursor != "" {
+						<div style="text-align:center;padding:16px">
+							<a
+								href={ templ.SafeURL("?cursor=" + data.NextCursor) }
+								style="display:inline-block;border:1px solid var(--border);border-radius:4px;padding:6px 16px;color:var(--text2);font-size:13px;text-decoration:none"
+							>Load older</a>
+						</div>
+					}
+				}
+			</div>
+		</div>
+		<dialog
+			id="upload-csv-dialog"
+			data-account-id={ data.Account.ID }
+			style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0;color:var(--text);width:440px;max-width:90vw"
+		>
+			<div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+				<span style="font-size:15px;font-weight:700">Upload CSV</span>
+				<button
+					id="upload-dialog-close"
+					style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:18px;line-height:1;padding:0 4px"
+				>✕</button>
+			</div>
+			<div style="padding:20px">
+				if data.Institution != nil {
+					<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;padding:8px 10px;background:var(--surface2);border-radius:6px;border:1px solid var(--border)">
+						<span style="font-size:12px;color:var(--text3)">Institution</span>
+						<span style="font-size:13px;color:var(--text);font-weight:500">{ data.Institution.InstitutionName }</span>
+					</div>
+				}
+				<div style="display:flex;flex-direction:column;gap:10px">
+					<label style="display:block">
+						<span style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px">CSV file</span>
+						<input
+							id="csv-file-input"
+							type="file"
+							accept=".csv,text/csv"
+							style="font-size:13px;color:var(--text);width:100%"
+						/>
+					</label>
+					<div id="upload-error" style="color:var(--commit);font-size:12px;display:none"></div>
+					<button
+						id="upload-submit-btn"
+						style="background:var(--accent);border:none;border-radius:6px;padding:8px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit;width:100%"
+					>Upload</button>
+				</div>
+			</div>
+		</dialog>
+		<dialog
+			id="delete-account-dialog"
+			style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0;color:var(--text);width:380px;max-width:90vw"
+		>
+			<div style="padding:16px 20px;border-bottom:1px solid var(--border)">
+				<span style="font-size:15px;font-weight:700">Delete account?</span>
+			</div>
+			<div style="padding:16px 20px;display:flex;flex-direction:column;gap:16px">
+				<p style="margin:0;font-size:13px;color:var(--text2)">
+					This will permanently delete <strong>{ data.Account.Name }</strong> and all associated transactions. This cannot be undone.
+				</p>
+				<div style="display:flex;gap:8px;justify-content:flex-end">
+					<button
+						id="delete-cancel-btn"
+						style="background:transparent;border:1px solid var(--border);border-radius:6px;padding:6px 16px;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit"
+					>Cancel</button>
+					<button
+						id="delete-confirm-btn"
+						data-account-id={ data.Account.ID }
+						style="background:var(--commit);border:none;border-radius:6px;padding:6px 16px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit"
+					>Delete</button>
+				</div>
+			</div>
+		</dialog>
+		<script>
+			(function() {
+				var uploadBtn = document.getElementById('upload-csv-btn');
+				var uploadDialog = document.getElementById('upload-csv-dialog');
+				var uploadClose = document.getElementById('upload-dialog-close');
+				var uploadSubmit = document.getElementById('upload-submit-btn');
+				var uploadError = document.getElementById('upload-error');
+				var csvInput = document.getElementById('csv-file-input');
+				var accountId = (uploadDialog || {dataset:{}}).dataset.accountId;
+
+				if (uploadBtn && uploadDialog) {
+					uploadBtn.addEventListener('click', function() { uploadDialog.showModal(); });
+					uploadClose.addEventListener('click', function() { uploadDialog.close(); });
+					uploadDialog.addEventListener('click', function(e) {
+						if (e.target === uploadDialog) uploadDialog.close();
+					});
+					uploadSubmit.addEventListener('click', function() {
+						var file = csvInput ? csvInput.files[0] : null;
+						if (!file) {
+							uploadError.textContent = 'Please choose a CSV file.';
+							uploadError.style.display = '';
+							return;
+						}
+						uploadSubmit.disabled = true;
+						uploadSubmit.textContent = 'Uploading…';
+						uploadError.style.display = 'none';
+						var form = new FormData();
+						form.append('csv', file);
+						form.append('account_id', accountId);
+						fetch('/imports', {method:'POST', body: form})
+							.then(function(r) {
+								if (!r.ok) return r.json().then(function(e){ throw new Error(e.detail||'Upload failed'); });
+								uploadDialog.close();
+								location.reload();
+							})
+							.catch(function(err) {
+								uploadError.textContent = err.message || 'Upload failed.';
+								uploadError.style.display = '';
+								uploadSubmit.disabled = false;
+								uploadSubmit.textContent = 'Upload';
+							});
+					});
+				}
+
+				var deleteBtn = document.getElementById('delete-account-btn');
+				var deleteDialog = document.getElementById('delete-account-dialog');
+				var deleteCancelBtn = document.getElementById('delete-cancel-btn');
+				var deleteConfirmBtn = document.getElementById('delete-confirm-btn');
+
+				if (deleteBtn && deleteDialog) {
+					deleteBtn.addEventListener('click', function() { deleteDialog.showModal(); });
+					deleteCancelBtn.addEventListener('click', function() { deleteDialog.close(); });
+					deleteDialog.addEventListener('click', function(e) {
+						if (e.target === deleteDialog) deleteDialog.close();
+					});
+					deleteConfirmBtn.addEventListener('click', function() {
+						var aid = deleteConfirmBtn.dataset.accountId;
+						deleteConfirmBtn.disabled = true;
+						deleteConfirmBtn.textContent = 'Deleting…';
+						fetch('/accounts/' + aid, {method:'DELETE'})
+							.then(function(r) {
+								if (r.ok || r.status === 404) {
+									window.location.href = '/';
+								} else {
+									deleteConfirmBtn.disabled = false;
+									deleteConfirmBtn.textContent = 'Delete';
+								}
+							});
+					});
+				}
+
+				// Merchant filter
+				var merchantInput = document.getElementById('merchant-filter');
+				var txTbody = document.getElementById('tx-tbody');
+				if (merchantInput && txTbody) {
+					merchantInput.addEventListener('input', function() {
+						var q = merchantInput.value.toLowerCase();
+						var rows = txTbody.querySelectorAll('tr');
+						rows.forEach(function(row) {
+							var merch = (row.dataset.merchant || '').toLowerCase();
+							row.style.display = (!q || merch.includes(q)) ? '' : 'none';
+						});
+					});
+				}
+			})();
+		</script>
+	}
+}
+
+templ txRow(t store.Transaction) {
+	<tr
+		data-merchant={ t.MerchantNormalized }
+		style="border-bottom:1px solid var(--border)"
+	>
+		<td style="padding:8px 12px;font-size:13px;color:var(--text2);white-space:nowrap">
+			{ t.Date.Format("Jan 2, 2006") }
+		</td>
+		<td style="padding:8px 12px;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:0">
+			if t.MerchantNormalized != "" {
+				{ t.MerchantNormalized }
+			} else {
+				<span style="color:var(--text3)">—</span>
+			}
+		</td>
+		<td style="padding:8px 12px;font-size:12px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:0">
+			{ t.ImportedPayee }
+		</td>
+		<td style="padding:8px 12px;text-align:right">
+			<span style={ txnAmountStyle(t.AmountCents) }>{ formatCents(t.AmountCents) }</span>
+		</td>
+		<td style="padding:8px 12px">
+			<span style={ txSettlementStyle(t.SettlementStatus) }>
+				{ t.SettlementStatus }
+			</span>
+		</td>
+	</tr>
+}
+
+func accountBalanceColor(a store.Account) string {
+	if isAccountNegativeBalance(a) {
+		return "color:var(--commit)"
+	}
+	return "color:var(--text)"
+}
+
+func txSettlementStyle(status string) string {
+	if status == "settled" {
+		return "font-size:11px;padding:2px 6px;border-radius:4px;background:color-mix(in srgb,var(--surface2) 80%,var(--income) 20%);color:var(--income)"
+	}
+	return fmt.Sprintf("font-size:11px;padding:2px 6px;border-radius:4px;background:var(--surface2);color:var(--text3)")
+}

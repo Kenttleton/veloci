@@ -50,7 +50,7 @@ func base(title string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</body></html>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<script>\n\t\t\t\t// Copy job error to clipboard via data attributes on .js-copy-error buttons.\n\t\t\t\tdocument.addEventListener('click', function(e) {\n\t\t\t\t\tvar btn = e.target.closest('.js-copy-error');\n\t\t\t\t\tif (!btn) return;\n\t\t\t\t\tvar text = 'Job ID: ' + btn.dataset.jobId + '\\nError: ' + btn.dataset.error;\n\t\t\t\t\tnavigator.clipboard.writeText(text);\n\t\t\t\t\tvar prev = btn.textContent;\n\t\t\t\t\tbtn.textContent = 'Copied';\n\t\t\t\t\tsetTimeout(function() { btn.textContent = prev; }, 1500);\n\t\t\t\t});\n\t\t\t</script></body></html>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

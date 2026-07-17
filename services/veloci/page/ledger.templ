@@ -1,0 +1,355 @@
+package page
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/veloci/veloci/store"
+)
+
+templ LedgerPage(shell ShellData, data LedgerData) {
+	@Shell(shell) {
+		<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
+			<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
+				<h1 style="margin:0;font-size:18px;font-weight:700;color:var(--text);letter-spacing:-0.02em">Ledger</h1>
+				<button
+					id="run-engine-btn"
+					style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit"
+				>Run Engine</button>
+			</div>
+			<div style="display:flex;gap:6px;padding:10px 20px;border-bottom:1px solid var(--border);flex-shrink:0;align-items:center">
+				@ledgerPill("all", "All", data.Filter, data.Counts.PendingReview+data.Counts.Active+data.Counts.Inactive)
+				@ledgerPill("pending_review", "Review", data.Filter, data.Counts.PendingReview)
+				@ledgerPill("active", "Active", data.Filter, data.Counts.Active)
+				@ledgerPill("inactive", "Inactive", data.Filter, data.Counts.Inactive)
+			</div>
+			<div style="flex:1;overflow:auto">
+				if len(data.Entries) == 0 {
+					<div style="padding:48px 20px;text-align:center;color:var(--text3);font-size:13px">No entries found.</div>
+				} else {
+					for _, e := range data.Entries {
+						@ledgerEntryRow(e)
+					}
+				}
+			</div>
+		</div>
+		<script>
+			(function() {
+				// Run Engine
+				var runBtn = document.getElementById('run-engine-btn');
+				if (runBtn) {
+					runBtn.addEventListener('click', function() {
+						runBtn.disabled = true;
+						runBtn.textContent = 'Running…';
+						fetch('/jobs/reprocess', {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})
+							.then(function(r) {
+								runBtn.textContent = r.ok ? 'Engine started' : 'Failed';
+								setTimeout(function(){ runBtn.disabled=false; runBtn.textContent='Run Engine'; }, 3000);
+							})
+							.catch(function(){ runBtn.disabled=false; runBtn.textContent='Run Engine'; });
+					});
+				}
+
+				// Chevron rotation for open entries
+				document.addEventListener('toggle', function(e) {
+					var det = e.target;
+					if (!det.classList.contains('js-entry-details')) return;
+					var chev = det.querySelector('.entry-chevron');
+					if (chev) chev.style.transform = det.open ? 'rotate(90deg)' : '';
+				}, true);
+
+				// Lazy-load transactions when entry opened
+				document.addEventListener('toggle', function(e) {
+					var det = e.target;
+					if (!det.classList.contains('js-entry-details') || !det.open) return;
+					var entryId = det.dataset.entryId;
+					var txPanel = det.querySelector('.js-tx-panel');
+					if (!txPanel || txPanel.dataset.loaded) return;
+					txPanel.dataset.loaded = '1';
+					txPanel.innerHTML = '<p style="color:var(--text3);font-size:12px">Loading…</p>';
+					fetch('/transactions?entry_id=' + entryId + '&limit=50')
+						.then(function(r){ return r.json(); })
+						.then(function(env) {
+							var txns = env.data || [];
+							if (!txns.length) {
+								txPanel.innerHTML = '<p style="color:var(--text3);font-size:12px">No matched transactions.</p>';
+								return;
+							}
+							var rows = txns.map(function(t) {
+								var abs = Math.abs(t.amount_cents);
+								var s = (t.amount_cents < 0 ? '-' : '') + '$' + (abs/100).toFixed(2);
+								var col = t.amount_cents >= 0 ? 'var(--income)' : 'var(--commit)';
+								var merch = t.merchant_normalized || t.imported_payee || '';
+								return '<tr style="border-top:1px solid var(--border)">' +
+									'<td style="padding:5px 8px;font-size:12px;color:var(--text2)">' + t.date + '</td>' +
+									'<td style="padding:5px 8px;font-size:12px;color:var(--text)">' + merch + '</td>' +
+									'<td style="padding:5px 8px;font-size:12px;color:' + col + ';text-align:right;font-variant-numeric:tabular-nums">' + s + '</td>' +
+									'<td style="padding:5px 8px;font-size:12px;color:var(--text3)">' + t.settlement_status + '</td>' +
+									'</tr>';
+							}).join('');
+							txPanel.innerHTML = '<table style="width:100%;border-collapse:collapse">' +
+								'<thead><tr>' +
+								'<th style="padding:5px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:600">Date</th>' +
+								'<th style="padding:5px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:600">Merchant</th>' +
+								'<th style="padding:5px 8px;text-align:right;font-size:11px;color:var(--text3);font-weight:600">Amount</th>' +
+								'<th style="padding:5px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:600">Status</th>' +
+								'</tr></thead><tbody>' + rows + '</tbody></table>';
+						})
+						.catch(function() {
+							txPanel.innerHTML = '<p style="color:var(--commit);font-size:12px">Failed to load.</p>';
+						});
+				}, true);
+
+				// Conditions save on blur (capture phase)
+				document.addEventListener('blur', function(e) {
+					var ta = e.target;
+					if (!ta.classList.contains('js-conditions-ta')) return;
+					var entryId = ta.dataset.entryId;
+					var val = ta.value.trim();
+					var parsed;
+					try { parsed = JSON.parse(val); } catch(ex) {
+						ta.style.borderColor = 'var(--commit)';
+						return;
+					}
+					ta.style.borderColor = '';
+					fetch('/entries/' + entryId + '/conditions', {
+						method:'PATCH',
+						headers:{'Content-Type':'application/json'},
+						body: JSON.stringify({conditions: parsed})
+					});
+				}, true);
+
+				// Approve / Reject
+				document.addEventListener('click', function(e) {
+					var btn = e.target.closest('.js-review-btn');
+					if (!btn) return;
+					var panel = btn.closest('.js-review-panel');
+					if (!panel) return;
+					var entryId = panel.dataset.entryId;
+					var entry = JSON.parse(panel.dataset.entry);
+					var action = btn.dataset.action;
+					var labelInput = panel.querySelector('.js-label-input');
+					var dirSel = panel.querySelector('.js-direction-sel');
+					var typeSel = panel.querySelector('.js-type-sel');
+					var ta = document.querySelector('.js-conditions-ta[data-entry-id="' + entryId + '"]');
+					var conds = entry.conditions || {};
+					try { if (ta) conds = JSON.parse(ta.value); } catch(ex) {}
+
+					function resolveLabel(cb) {
+						var name = labelInput ? labelInput.value.trim() : '';
+						if (!name) { cb(entry.label_id); return; }
+						fetch('/labels?limit=500')
+							.then(function(r){ return r.json(); })
+							.then(function(env) {
+								var found = (env.data||[]).find(function(l){ return l.name.toLowerCase()===name.toLowerCase(); });
+								if (found) { cb(found.id); return; }
+								fetch('/labels',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})
+									.then(function(r){ return r.json(); })
+									.then(function(c){ cb(c.data ? c.data.id : null); });
+							});
+					}
+
+					btn.disabled = true;
+					btn.textContent = '…';
+
+					resolveLabel(function(labelId) {
+						var body = Object.assign({}, entry, {
+							label_id: labelId,
+							direction: dirSel ? dirSel.value : entry.direction,
+							entry_type: typeSel ? typeSel.value : entry.entry_type,
+							conditions: conds
+						});
+						fetch('/entries/' + entryId, {
+							method:'PUT',
+							headers:{'Content-Type':'application/json'},
+							body: JSON.stringify(body)
+						})
+						.then(function(r) {
+							if (!r.ok) throw new Error('put-failed');
+							var ep = action==='approve'
+								? '/entries/'+entryId+'/approve'
+								: '/entries/'+entryId+'/reject';
+							return fetch(ep, {method:'POST'});
+						})
+						.then(function(r) {
+							if (!r || !r.ok) throw new Error('action-failed');
+							var row = document.querySelector('.js-entry-details[data-entry-id="'+entryId+'"]');
+							if (row) row.remove();
+						})
+						.catch(function() {
+							btn.disabled = false;
+							btn.textContent = action==='approve' ? 'Approve' : 'Reject';
+						});
+					});
+				});
+			})();
+		</script>
+	}
+}
+
+templ ledgerPill(value, label, current string, count int) {
+	<a
+		href={ templ.SafeURL("?filter=" + value) }
+		style={ ledgerPillStyle(value == current) }
+	>
+		{ label }
+		<span style={ ledgerPillCountStyle(value == current) }>{ fmt.Sprintf("%d", count) }</span>
+	</a>
+}
+
+templ ledgerEntryRow(e store.EntryRow) {
+	<details
+		class="js-entry-details"
+		data-entry-id={ e.ID }
+		style="border-bottom:1px solid var(--border)"
+	>
+		<summary style="display:flex;align-items:center;gap:10px;padding:10px 20px;cursor:pointer;list-style:none;user-select:none">
+			<span style={ "width:8px;height:8px;border-radius:50%;flex-shrink:0;background:" + entryStatusColor(e.Status) }></span>
+			<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:500;color:var(--text)">
+				if e.LabelName != nil && *e.LabelName != "" {
+					{ *e.LabelName }
+				} else {
+					<span style="color:var(--text3);font-style:italic">Unlabeled</span>
+				}
+			</span>
+			if e.AlertType != nil {
+				<span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;background:var(--accent);color:#fff;flex-shrink:0">
+					{ alertTypeLabel(e.AlertType) }
+				</span>
+			}
+			<span style={ "font-size:11px;font-weight:600;padding:2px 7px;border-radius:4px;flex-shrink:0;" + ledgerDirectionBadgeStyle(e.Direction) }>
+				{ directionLabel(e.Direction) }
+			</span>
+			<span style="font-size:12px;color:var(--text3);flex-shrink:0;width:62px">
+				{ entryTypeLabel(e.EntryType) }
+			</span>
+			<span style="font-size:12px;color:var(--text2);flex-shrink:0;width:68px;text-align:right;font-variant-numeric:tabular-nums">
+				{ ratePerMo(e) }
+			</span>
+			<span style="font-size:11px;color:var(--text3);flex-shrink:0;width:72px;text-align:right">
+				{ e.StartDate.Format("Jan 2006") }
+			</span>
+			<span class="entry-chevron" style="color:var(--text3);flex-shrink:0;font-size:10px;transition:transform 0.15s">▶</span>
+		</summary>
+		<div style="border-top:1px solid var(--border);background:var(--surface);padding:12px 20px;display:flex;flex-direction:column;gap:14px">
+			<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+				<div
+					class="js-review-panel"
+					data-entry-id={ e.ID }
+					data-entry={ entryDataJSON(e) }
+					style="display:flex;flex-direction:column;gap:8px"
+				>
+					<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em">Review</div>
+					<input
+						class="js-label-input"
+						type="text"
+						placeholder="Label name"
+						value={ func() string {
+							if e.LabelName != nil {
+								return *e.LabelName
+							}
+							return ""
+						}() }
+						style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;color:var(--text);outline:none;width:100%"
+					/>
+					<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+						<select
+							class="js-direction-sel"
+							style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;color:var(--text);outline:none"
+						>
+							<option value="debit" selected?={ e.Direction == "debit" }>Debit</option>
+							<option value="credit" selected?={ e.Direction == "credit" }>Credit</option>
+						</select>
+						<select
+							class="js-type-sel"
+							style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;color:var(--text);outline:none"
+						>
+							<option value="fixed" selected?={ e.EntryType == "fixed" }>Fixed</option>
+							<option value="variable" selected?={ e.EntryType == "variable" }>Variable</option>
+							<option value="one_time" selected?={ e.EntryType == "one_time" }>One-time</option>
+						</select>
+					</div>
+					<div style="display:flex;gap:6px">
+						<button
+							class="js-review-btn"
+							data-action="approve"
+							style="flex:1;padding:7px;border-radius:5px;border:none;cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;background:var(--income);color:#fff"
+						>Approve</button>
+						<button
+							class="js-review-btn"
+							data-action="reject"
+							style="flex:1;padding:7px;border-radius:5px;border:1px solid var(--border);cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;background:transparent;color:var(--text2)"
+						>Reject</button>
+					</div>
+					if len(e.SampleMerchants) > 0 {
+						<div style="font-size:11px;color:var(--text3);line-height:1.5">
+							{ strings.Join(e.SampleMerchants[:min(3, len(e.SampleMerchants))], " · ") }
+						</div>
+					}
+				</div>
+				<div style="display:flex;flex-direction:column;gap:8px">
+					<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em">Conditions</div>
+					<textarea
+						class="js-conditions-ta"
+						data-entry-id={ e.ID }
+						style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:12px;font-family:monospace;color:var(--text);outline:none;resize:vertical;min-height:80px;width:100%"
+						spellcheck="false"
+					>{ conditionsFormatted(e.Conditions) }</textarea>
+					if e.Confidence != nil {
+						<div style="display:flex;flex-direction:column;gap:5px">
+							@ledgerConfBar("Overall", e.Confidence)
+							@ledgerConfBar("Merchant", e.MerchantConfidence)
+							@ledgerConfBar("Timing", e.TimingConfidence)
+							@ledgerConfBar("Amount", e.AmountConfidence)
+						</div>
+					}
+				</div>
+			</div>
+			<div>
+				<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Transactions</div>
+				<div class="js-tx-panel" data-entry-id={ e.ID }>
+					<p style="color:var(--text3);font-size:12px">Open to load matched transactions.</p>
+				</div>
+			</div>
+		</div>
+	</details>
+}
+
+templ ledgerConfBar(label string, f *float64) {
+	<div style="display:flex;align-items:center;gap:8px">
+		<span style="font-size:11px;color:var(--text3);min-width:52px">{ label }</span>
+		<div style="flex:1;background:var(--surface2);border-radius:3px;height:5px;overflow:hidden">
+			<div style={ ledgerConfBarFill(f) }></div>
+		</div>
+		<span style={ "font-size:11px;min-width:28px;text-align:right;color:" + confColor(f) }>{ confPct(f) }</span>
+	</div>
+}
+
+func ledgerPillStyle(active bool) string {
+	if active {
+		return "display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:16px;font-size:12px;font-weight:500;cursor:pointer;text-decoration:none;background:var(--accent);color:#fff;border:1px solid transparent"
+	}
+	return "display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:16px;font-size:12px;font-weight:500;cursor:pointer;text-decoration:none;background:transparent;color:var(--text2);border:1px solid var(--border)"
+}
+
+func ledgerPillCountStyle(active bool) string {
+	if active {
+		return "background:rgba(255,255,255,0.25);border-radius:8px;padding:0 5px;font-size:11px;line-height:17px"
+	}
+	return "background:var(--surface2);border-radius:8px;padding:0 5px;font-size:11px;line-height:17px"
+}
+
+func ledgerDirectionBadgeStyle(d string) string {
+	if d == "credit" {
+		return "background:color-mix(in srgb,var(--surface2) 80%,var(--income) 20%);color:var(--income)"
+	}
+	return "background:color-mix(in srgb,var(--surface2) 80%,var(--commit) 20%);color:var(--commit)"
+}
+
+func ledgerConfBarFill(f *float64) string {
+	pct := 0
+	if f != nil {
+		pct = int(*f * 100)
+	}
+	return fmt.Sprintf("height:100%%;width:%d%%;background:%s;border-radius:3px", pct, confColor(f))
+}

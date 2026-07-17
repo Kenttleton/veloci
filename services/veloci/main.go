@@ -148,7 +148,7 @@ func runServe(_ *cobra.Command, _ []string) error {
 	handler.RegisterHealthRoutes(internalAPI)
 
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.Authenticate(authClient))
+		r.Use(middleware.AuthenticateBearerOrCookie(authClient))
 		subAPI := humachi.New(r, huma.DefaultConfig("Veloci", "1.0.0"))
 
 		handler.RegisterUsersRoutes(subAPI, s, authClient, pub, perms)
