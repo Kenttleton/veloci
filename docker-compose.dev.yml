@@ -1,0 +1,49 @@
+services:
+  veloci-auth:
+    build:
+      context: ./services/auth
+      dockerfile: Dockerfile.dev
+    command: air
+    volumes:
+      - ./services/auth:/app
+      - auth-go-cache:/root/go/pkg/mod
+
+  veloci-api:
+    build:
+      context: ./services/api
+      dockerfile: Dockerfile.dev
+    command: air
+    volumes:
+      - ./services/api:/app
+      - api-go-cache:/root/go/pkg/mod
+
+  veloci-engine:
+    build:
+      context: ./services/engine
+      dockerfile: Dockerfile.dev
+    command: cargo watch -x run
+    volumes:
+      - ./services/engine:/app
+      - engine-cargo-registry:/usr/local/cargo/registry
+      - engine-target:/app/target
+
+  veloci-web:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 3000"
+    environment:
+      API_TARGET: http://veloci-api:8080
+    volumes:
+      - ./services/web:/app
+      - web-node-modules:/app/node_modules
+    ports:
+      - "3000:3000"
+    networks:
+      - veloci
+
+volumes:
+  auth-go-cache:
+  api-go-cache:
+  engine-cargo-registry:
+  engine-target:
+  web-node-modules:

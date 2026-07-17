@@ -1,0 +1,13 @@
+[build]
+  cmd        = "go build -o ./tmp/veloci-api ."
+  bin        = "./tmp/veloci-api"
+  args_bin   = ["serve"]
+  include_ext = ["go", "toml"]
+  exclude_dir = ["tmp"]
+  delay      = 500
+
+[log]
+  time = false
+
+[color]
+  main = "magenta"

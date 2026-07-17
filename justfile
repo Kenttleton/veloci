@@ -2,15 +2,15 @@ set dotenv-load := true
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
 # Load env vars from .env. All defaults match .env.example.
-pg_user   := env_var_or_default("POSTGRES_USER",          "postgres")
-app_db    := env_var_or_default("VELOCI_APP_DB",           "veloci_app")
-app_user  := env_var_or_default("VELOCI_APP_DB_USER",      "veloci_app_user")
-app_pass  := env_var_or_default("VELOCI_APP_DB_PASSWORD",  "changeme_app")
-auth_db   := env_var_or_default("VELOCI_AUTH_DB",          "veloci_auth")
-auth_user := env_var_or_default("VELOCI_AUTH_DB_USER",     "veloci_auth_user")
-auth_pass := env_var_or_default("VELOCI_AUTH_DB_PASSWORD", "changeme_auth")
-mq_user   := env_var_or_default("RABBITMQ_USER",           "veloci")
-mq_pass   := env_var_or_default("RABBITMQ_PASSWORD",       "changeme")
+pg_user   := env("POSTGRES_USER",          "postgres")
+app_db    := env("VELOCI_APP_DB",           "veloci_app")
+app_user  := env("VELOCI_APP_DB_USER",      "veloci_app_user")
+app_pass  := env("VELOCI_APP_DB_PASSWORD",  "changeme_app")
+auth_db   := env("VELOCI_AUTH_DB",          "veloci_auth")
+auth_user := env("VELOCI_AUTH_DB_USER",     "veloci_auth_user")
+auth_pass := env("VELOCI_AUTH_DB_PASSWORD", "changeme_auth")
+mq_user   := env("RABBITMQ_USER",           "veloci")
+mq_pass   := env("RABBITMQ_PASSWORD",       "changeme")
 
 # ─── Help ─────────────────────────────────────────────────────────────────────
 
@@ -45,9 +45,13 @@ web:
 
 # ─── Compound commands ────────────────────────────────────────────────────────
 
-# Start all services
+# Start all services (production build)
 all:
     docker compose up -d
+
+# Start all services in dev mode with live reload (air for Go, cargo-watch for Rust, Vite HMR for web)
+dev:
+    docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 
 # Start infrastructure only (postgres + rabbitmq), wait for healthy, then migrate.
 # Use this for engine/API development without running the full stack.
@@ -61,6 +65,10 @@ infra:
 # Stop all running services (preserves volumes)
 down:
     docker compose down
+
+# Stop dev services
+dev-down:
+    docker compose -f docker-compose.yml -f docker-compose.dev.yml down
 
 # Remove all containers AND volumes — next start is fully fresh
 clean:

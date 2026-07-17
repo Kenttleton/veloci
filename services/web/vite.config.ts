@@ -12,9 +12,16 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api': {
-        target: 'http://localhost:8080',
+      // SSE must be listed first — more specific path wins.
+      '/api/jobs/stream': {
+        target: process.env.API_TARGET ?? 'http://localhost:8080',
         rewrite: (p) => p.replace(/^\/api/, ''),
+        changeOrigin: true,
+      },
+      '/api': {
+        target: process.env.API_TARGET ?? 'http://localhost:8080',
+        rewrite: (p) => p.replace(/^\/api/, ''),
+        changeOrigin: true,
       },
     },
   },
