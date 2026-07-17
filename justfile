@@ -33,7 +33,7 @@ auth:
 
 # Start veloci (BFF — API + web)
 veloci:
-    docker compose up -d veloci
+    docker compose up -d api
 
 # Start veloci-engine (Rust queue consumer)
 engine:

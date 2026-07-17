@@ -55,7 +55,7 @@ services:
     networks:
       - veloci
 
-  veloci:
+  api:
     build: ./services/veloci
     environment:
       VELOCI_CONFIG_PATH: /etc/veloci/veloci.toml

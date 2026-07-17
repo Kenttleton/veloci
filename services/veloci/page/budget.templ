@@ -1,0 +1,280 @@
+package page
+
+import (
+	"fmt"
+	"strconv"
+
+	"github.com/veloci/veloci/store"
+)
+
+templ BudgetPage(shell ShellData, data BudgetData) {
+	@Shell(shell) {
+		<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
+			<!-- Header -->
+			<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
+				<h1 style="margin:0;font-size:18px;font-weight:700;color:var(--text);letter-spacing:-0.02em">Budget</h1>
+				<div style="display:flex;gap:4px" id="gran-toggle">
+					<button
+						class="js-gran active-gran"
+						data-gran="day"
+						style="background:var(--accent);color:#fff;border:none;border-radius:5px;padding:4px 12px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit"
+					>Day</button>
+					<button
+						class="js-gran"
+						data-gran="month"
+						style="background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:5px;padding:4px 12px;cursor:pointer;font-size:12px;font-weight:500;font-family:inherit"
+					>Month</button>
+				</div>
+			</div>
+			<!-- Summary strip -->
+			<div style="display:flex;align-items:center;gap:20px;padding:10px 20px;border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto">
+				@budgetSummaryChip("Income", data.Summary.IncomeRate, "var(--income)")
+				@budgetSummaryChip("Commitments", data.Summary.CommitmentsRate, "var(--commit)")
+				@budgetSummaryChipMargin(data.Summary.IncomeRate - data.Summary.CommitmentsRate)
+				@budgetSummaryChipDrift(data.Summary.DriftRate)
+			</div>
+			<!-- Main: entry list + chart -->
+			<div style="display:flex;flex:1;overflow:hidden">
+				<!-- Entry list -->
+				<div style="width:264px;flex-shrink:0;overflow-y:auto;border-right:1px solid var(--border)">
+					if len(data.Income) > 0 {
+						@budgetEntryGroup("Income", data.Income)
+					}
+					if len(data.Commits) > 0 {
+						@budgetEntryGroup("Commitments", data.Commits)
+					}
+					if len(data.Income) == 0 && len(data.Commits) == 0 {
+						<div style="padding:32px 16px;color:var(--text3);font-size:13px;text-align:center">
+							No active entries. Run the engine on the Ledger page to generate budget data.
+						</div>
+					}
+				</div>
+				<!-- Chart area -->
+				<div style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0">
+					<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--border);flex-shrink:0">
+						<div style="display:flex;align-items:center;gap:8px">
+							<span id="chart-entry-name" style="font-size:14px;font-weight:600;color:var(--text3)">Select an entry</span>
+						</div>
+						<div id="chart-legend" style="display:none;align-items:center;gap:14px;font-size:11px;color:var(--text3)">
+							<span style="display:flex;align-items:center;gap:4px">
+								<span style="width:10px;height:10px;border-radius:2px;background:var(--income);display:inline-block"></span>
+								Ahead of target
+							</span>
+							<span style="display:flex;align-items:center;gap:4px">
+								<span style="width:10px;height:10px;border-radius:2px;background:var(--commit);display:inline-block"></span>
+								Behind target
+							</span>
+							<span style="display:flex;align-items:center;gap:4px">
+								<span style="width:24px;height:2px;border-top:2px dashed var(--accent);display:inline-block"></span>
+								Projection
+							</span>
+						</div>
+					</div>
+					<div style="flex:1;position:relative;overflow:hidden">
+						<canvas id="budget-canvas" style="display:block"></canvas>
+					</div>
+				</div>
+			</div>
+		</div>
+		<script src="/static/js/veloci-chart.js"></script>
+		<script>
+			(function () {
+				var canvas = document.getElementById('budget-canvas');
+				var chart  = new VelociChart(canvas);
+				var activeEntryId = null;
+				var activeGran    = 'day';
+
+				// ── Granularity toggle ────────────────────────────────────────────────
+				document.addEventListener('click', function (e) {
+					var btn = e.target.closest('.js-gran');
+					if (!btn) return;
+					activeGran = btn.dataset.gran;
+					document.querySelectorAll('.js-gran').forEach(function (b) {
+						var on = b.dataset.gran === activeGran;
+						b.style.background = on ? 'var(--accent)' : 'var(--surface2)';
+						b.style.color      = on ? '#fff'          : 'var(--text2)';
+						b.style.border     = on ? 'none'          : '1px solid var(--border)';
+						if (on) b.classList.add('active-gran');
+						else    b.classList.remove('active-gran');
+					});
+					chart.setGranularity(activeGran);
+					if (activeEntryId) loadHistory(activeEntryId, null);
+				});
+
+				// ── Entry selection ───────────────────────────────────────────────────
+				document.addEventListener('click', function (e) {
+					var row = e.target.closest('.js-budget-entry');
+					if (!row) return;
+
+					document.querySelectorAll('.js-budget-entry').forEach(function (r) {
+						r.style.background = '';
+						r.style.borderLeft = '3px solid transparent';
+					});
+					row.style.background  = 'var(--surface2)';
+					row.style.borderLeft  = '3px solid var(--accent)';
+
+					var entryId = row.dataset.entryId;
+					var name    = row.dataset.name;
+					var rate    = row.dataset.rate ? parseFloat(row.dataset.rate) : null;
+
+					document.getElementById('chart-entry-name').textContent = name;
+					document.getElementById('chart-entry-name').style.color = 'var(--text)';
+					document.getElementById('chart-legend').style.display   = 'flex';
+
+					chart.setProjection(rate);
+
+					if (entryId !== activeEntryId) {
+						activeEntryId = entryId;
+						loadHistory(entryId, null);
+					}
+				});
+
+				// ── History fetch ─────────────────────────────────────────────────────
+				function loadHistory(entryId, cursor) {
+					var url = '/snapshots/' + entryId + '/history?limit=90&granularity=' + activeGran;
+					if (cursor) url += '&cursor=' + cursor;
+					fetch(url)
+						.then(function (r) {
+							if (!r.ok) throw new Error('fetch failed');
+							return r.json();
+						})
+						.then(function (env) {
+							var points = Array.isArray(env.data) ? env.data : [];
+							if (!cursor) {
+								chart.load(points);
+							} else {
+								chart.prepend(points);
+							}
+						})
+						.catch(function () { /* no-op: chart shows stale data */ });
+				}
+
+				// ── Lazy-load older pages ─────────────────────────────────────────────
+				chart.onNeedMore = function (oldest) {
+					if (!activeEntryId || !oldest) return;
+					loadHistory(activeEntryId, oldest);
+				};
+			})();
+		</script>
+	}
+}
+
+templ budgetSummaryChip(label string, ratePerDay float64, color string) {
+	<div style="flex-shrink:0">
+		<div style="font-size:10px;font-weight:600;color:var(--text3);letter-spacing:0.04em;text-transform:uppercase;margin-bottom:2px">
+			{ label }
+		</div>
+		<div style={ "font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;color:" + color }>
+			{ budgetFmtMo(ratePerDay) }
+		</div>
+	</div>
+}
+
+templ budgetSummaryChipMargin(marginPerDay float64) {
+	<div style="flex-shrink:0">
+		<div style="font-size:10px;font-weight:600;color:var(--text3);letter-spacing:0.04em;text-transform:uppercase;margin-bottom:2px">
+			Margin
+		</div>
+		<div style={ "font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;" + budgetMarginColor(marginPerDay) }>
+			{ budgetFmtMo(marginPerDay) }
+		</div>
+	</div>
+}
+
+templ budgetSummaryChipDrift(driftPerDay float64) {
+	<div style="flex-shrink:0">
+		<div style="font-size:10px;font-weight:600;color:var(--text3);letter-spacing:0.04em;text-transform:uppercase;margin-bottom:2px">
+			Drift
+		</div>
+		<div style={ "font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;" + budgetDriftColor(driftPerDay) }>
+			if driftPerDay >= 0 {
+				+{ budgetFmtMo(driftPerDay) }
+			} else {
+				{ budgetFmtMo(driftPerDay) }
+			}
+		</div>
+	</div>
+}
+
+templ budgetEntryGroup(title string, entries []store.EntryRow) {
+	<div>
+		<div style="padding:8px 14px 4px;font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--text3);position:sticky;top:0;background:var(--surface);z-index:1">
+			{ title }
+		</div>
+		for _, e := range entries {
+			@budgetEntryRow(e)
+		}
+	</div>
+}
+
+templ budgetEntryRow(e store.EntryRow) {
+	<div
+		class="js-budget-entry"
+		data-entry-id={ e.ID }
+		data-rate={ budgetRateStr(e) }
+		data-name={ budgetEntryName(e) }
+		style="padding:8px 14px 8px 17px;border-left:3px solid transparent;cursor:pointer;border-bottom:1px solid var(--border)"
+	>
+		<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+			<span style="font-size:13px;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">
+				{ budgetEntryName(e) }
+			</span>
+			<span style="font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--text2);flex-shrink:0">
+				{ budgetEntryRate(e) }
+			</span>
+		</div>
+		if e.AlertType != nil {
+			<div style="font-size:11px;color:var(--commit);margin-top:2px">{ *e.AlertType }</div>
+		}
+	</div>
+}
+
+func budgetEntryName(e store.EntryRow) string {
+	if e.LabelName != nil && *e.LabelName != "" {
+		return *e.LabelName
+	}
+	return "Unlabeled"
+}
+
+func budgetRateStr(e store.EntryRow) string {
+	if e.ProjectedRatePerDay == nil {
+		return ""
+	}
+	return strconv.FormatFloat(*e.ProjectedRatePerDay, 'f', 6, 64)
+}
+
+func budgetEntryRate(e store.EntryRow) string {
+	if e.ProjectedRatePerDay == nil {
+		return "—"
+	}
+	mo := *e.ProjectedRatePerDay * 30.44
+	return fmt.Sprintf("$%.0f/mo", mo)
+}
+
+func budgetFmtMo(ratePerDay float64) string {
+	mo := ratePerDay * 30.44
+	if mo < 0 {
+		return fmt.Sprintf("-$%.0f/mo", -mo)
+	}
+	return fmt.Sprintf("$%.0f/mo", mo)
+}
+
+func budgetMarginColor(marginPerDay float64) string {
+	if marginPerDay > 0 {
+		return "color:var(--income)"
+	}
+	if marginPerDay < 0 {
+		return "color:var(--commit)"
+	}
+	return "color:var(--text2)"
+}
+
+func budgetDriftColor(driftPerDay float64) string {
+	if driftPerDay > 0 {
+		return "color:var(--income)"
+	}
+	if driftPerDay < 0 {
+		return "color:var(--commit)"
+	}
+	return "color:var(--text2)"
+}

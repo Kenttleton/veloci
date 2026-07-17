@@ -45,7 +45,7 @@ func init() {
 	viper.SetEnvPrefix("VELOCI")
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()
-	viper.SetDefault("api.port", 8080)
+	viper.SetDefault("veloci.port", 8080)
 }
 
 func buildDBDSN() string {
@@ -56,6 +56,17 @@ func buildDBDSN() string {
 		viper.GetInt("database.port"),
 		viper.GetString("database.app.name"),
 	)
+}
+
+func buildPool(ctx context.Context) (*pgxpool.Pool, error) {
+	cfg, err := pgxpool.ParseConfig(buildDBDSN())
+	if err != nil {
+		return nil, err
+	}
+	if max := viper.GetInt32("veloci.pool.max"); max > 0 {
+		cfg.MaxConns = max
+	}
+	return pgxpool.NewWithConfig(ctx, cfg)
 }
 
 func loadConfig() {
@@ -86,7 +97,7 @@ func runServe(_ *cobra.Command, _ []string) error {
 
 	pub := queue.NewPublisher(amqpURI)
 
-	pool, err := pgxpool.New(context.Background(), buildDBDSN())
+	pool, err := buildPool(context.Background())
 	if err != nil {
 		return fmt.Errorf("database: %w", err)
 	}
@@ -172,7 +183,7 @@ func runServe(_ *cobra.Command, _ []string) error {
 
 	_ = internalAPI // suppress unused warning; routes registered via side-effect
 
-	port := viper.GetInt("api.port")
+	port := viper.GetInt("veloci.port")
 	log.Printf("veloci listening on :%d", port)
 	return http.ListenAndServe(fmt.Sprintf(":%d", port), r)
 }
@@ -180,7 +191,7 @@ func runServe(_ *cobra.Command, _ []string) error {
 func runMigrate(_ *cobra.Command, _ []string) error {
 	loadConfig()
 
-	pool, err := pgxpool.New(context.Background(), buildDBDSN())
+	pool, err := buildPool(context.Background())
 	if err != nil {
 		return fmt.Errorf("database: %w", err)
 	}
@@ -311,7 +322,7 @@ func runSeed(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("authclient: %w", err)
 	}
 
-	pool, err := pgxpool.New(context.Background(), buildDBDSN())
+	pool, err := buildPool(context.Background())
 	if err != nil {
 		return fmt.Errorf("database: %w", err)
 	}

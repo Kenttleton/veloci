@@ -263,8 +263,35 @@ func (s *Server) PostLogout(w http.ResponseWriter, r *http.Request) {
 
 // ─── Page handlers ───────────────────────────────────────────────────────────
 
+// BudgetData is passed to the Budget page template.
+type BudgetData struct {
+	Summary store.SnapshotSummary
+	Income  []store.EntryRow
+	Commits []store.EntryRow
+}
+
 func (s *Server) Budget(w http.ResponseWriter, r *http.Request) {
-	s.render(w, r, BudgetPage(s.buildShellData(r)))
+	ctx := r.Context()
+	entityID := middleware.EntityID(ctx)
+
+	summary, _ := s.store.GetSnapshotSummary(ctx, entityID)
+
+	entries, _ := s.store.ListEntries(ctx, entityID, store.DateRange{}, "", "active", 500, "")
+
+	var income, commits []store.EntryRow
+	for _, e := range entries {
+		if e.Direction == "income" {
+			income = append(income, e)
+		} else {
+			commits = append(commits, e)
+		}
+	}
+
+	s.render(w, r, BudgetPage(s.buildShellData(r), BudgetData{
+		Summary: summary,
+		Income:  income,
+		Commits: commits,
+	}))
 }
 
 // LedgerData is passed to the Ledger page template.
