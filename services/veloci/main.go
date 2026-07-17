@@ -18,11 +18,11 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/veloci/api/authclient"
-	"github.com/veloci/api/handler"
-	"github.com/veloci/api/middleware"
-	"github.com/veloci/api/queue"
-	"github.com/veloci/api/store"
+	"github.com/veloci/veloci/authclient"
+	"github.com/veloci/veloci/handler"
+	"github.com/veloci/veloci/middleware"
+	"github.com/veloci/veloci/queue"
+	"github.com/veloci/veloci/store"
 )
 
 type appDBImpl struct {

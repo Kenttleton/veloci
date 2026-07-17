@@ -7,8 +7,8 @@ import (
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/veloci/api/authclient"
-	"github.com/veloci/api/middleware"
+	"github.com/veloci/veloci/authclient"
+	"github.com/veloci/veloci/middleware"
 )
 
 // UserEntity holds the resolved entity context for a user looked up in veloci_app.

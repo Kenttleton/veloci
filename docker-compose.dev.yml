@@ -8,14 +8,14 @@ services:
       - ./services/auth:/app
       - auth-go-cache:/root/go/pkg/mod
 
-  veloci-api:
+  veloci:
     build:
-      context: ./services/api
+      context: ./services/veloci
       dockerfile: Dockerfile.dev
     command: air
     volumes:
-      - ./services/api:/app
-      - api-go-cache:/root/go/pkg/mod
+      - ./services/veloci:/app
+      - veloci-go-cache:/root/go/pkg/mod
 
   veloci-engine:
     build:
@@ -27,21 +27,8 @@ services:
       - engine-cargo-registry:/usr/local/cargo/registry
       - engine-target:/app/target
 
-  veloci-web:
-    image: node:22-alpine
-    working_dir: /app
-    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 80"
-    environment:
-      API_TARGET: http://veloci-api:8080
-    volumes:
-      - ./services/web:/app
-      - web-node-modules:/app/node_modules
-    networks:
-      - veloci
-
 volumes:
   auth-go-cache:
-  api-go-cache:
+  veloci-go-cache:
   engine-cargo-registry:
   engine-target:
-  web-node-modules:

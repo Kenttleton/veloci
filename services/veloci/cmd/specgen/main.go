@@ -14,8 +14,8 @@ import (
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
 
-	"github.com/veloci/api/handler"
-	"github.com/veloci/api/middleware"
+	"github.com/veloci/veloci/handler"
+	"github.com/veloci/veloci/middleware"
 )
 
 func main() {

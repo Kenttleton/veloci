@@ -6,10 +6,10 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/veloci/api/middleware"
-	"github.com/veloci/api/queue"
-	"github.com/veloci/api/response"
-	"github.com/veloci/api/store"
+	"github.com/veloci/veloci/middleware"
+	"github.com/veloci/veloci/queue"
+	"github.com/veloci/veloci/response"
+	"github.com/veloci/veloci/store"
 )
 
 // SnapshotsHandler handles snapshot endpoints.

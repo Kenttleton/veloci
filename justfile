@@ -31,17 +31,13 @@ rabbitmq:
 auth:
     docker compose up -d veloci-auth
 
-# Start veloci-api
-api:
-    docker compose up -d veloci-api
+# Start veloci (BFF — API + web)
+veloci:
+    docker compose up -d veloci
 
 # Start veloci-engine (Rust queue consumer)
 engine:
     docker compose up -d veloci-engine
-
-# Start veloci-web (React SPA)
-web:
-    docker compose up -d veloci-web
 
 # ─── Compound commands ────────────────────────────────────────────────────────
 

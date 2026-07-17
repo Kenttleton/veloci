@@ -55,8 +55,8 @@ services:
     networks:
       - veloci
 
-  veloci-api:
-    build: ./services/api
+  veloci:
+    build: ./services/veloci
     environment:
       VELOCI_CONFIG_PATH: /etc/veloci/veloci.toml
       VELOCI_DATABASE_HOST: postgres
@@ -95,13 +95,6 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-
-  veloci-web:
-    build: ./services/web
-    networks:
-      - veloci
-    ports:
-      - "3000:80"
 
 volumes:
   postgres_data:

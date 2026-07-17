@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/veloci/api/authclient"
+	"github.com/veloci/veloci/authclient"
 )
 
 type contextKey string

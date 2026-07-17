@@ -3,7 +3,7 @@ package store
 import (
 	"context"
 
-	"github.com/veloci/api/middleware"
+	"github.com/veloci/veloci/middleware"
 )
 
 // LoadPermissions reads all role→permission pairs and returns a PermissionCache.

@@ -1,4 +1,4 @@
-module github.com/veloci/api
+module github.com/veloci/veloci
 
 go 1.26
 

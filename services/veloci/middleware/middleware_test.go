@@ -6,8 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/veloci/api/authclient"
-	"github.com/veloci/api/middleware"
+	"github.com/veloci/veloci/authclient"
+	"github.com/veloci/veloci/middleware"
 )
 
 func mustAuthClient(t *testing.T, url string) *authclient.Client {

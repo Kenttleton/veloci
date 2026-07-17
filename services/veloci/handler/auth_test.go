@@ -11,8 +11,8 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
-	"github.com/veloci/api/authclient"
-	"github.com/veloci/api/handler"
+	"github.com/veloci/veloci/authclient"
+	"github.com/veloci/veloci/handler"
 )
 
 func authRouter(authURL string, db handler.AppDB) (*chi.Mux, error) {
