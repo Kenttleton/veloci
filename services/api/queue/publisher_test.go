@@ -64,9 +64,11 @@ func TestJobRoundTrips(t *testing.T) {
 	}
 }
 
-func TestNewPublisher_FailsWithUnreachableHost(t *testing.T) {
-	_, err := queue.NewPublisher("amqp://localhost:1/")
-	if err == nil {
-		t.Error("expected error connecting to unreachable host")
+func TestNewPublisher_StartsWithUnreachableHost(t *testing.T) {
+	// The publisher must not fail at construction time — the API should start
+	// even when RabbitMQ is unavailable and reconnect on the first publish.
+	pub := queue.NewPublisher("amqp://localhost:1/")
+	if pub == nil {
+		t.Fatal("expected non-nil publisher even when RabbitMQ is unreachable")
 	}
 }

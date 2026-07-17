@@ -99,10 +99,7 @@ func runServe(_ *cobra.Command, _ []string) error {
 		viper.GetInt("rabbitmq.port"),
 	)
 
-	pub, err := queue.NewPublisher(amqpURI)
-	if err != nil {
-		return fmt.Errorf("queue: %w", err)
-	}
+	pub := queue.NewPublisher(amqpURI)
 
 	pool, err := pgxpool.New(context.Background(), buildDBDSN())
 	if err != nil {
