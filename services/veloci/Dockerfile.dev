@@ -1,3 +1,4 @@
 FROM golang:1.26-alpine
-RUN go install github.com/air-verse/air@latest
+RUN go install github.com/air-verse/air@latest && \
+    go install github.com/a-h/templ/cmd/templ@latest
 WORKDIR /app

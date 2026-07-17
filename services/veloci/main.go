@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -21,25 +20,11 @@ import (
 	"github.com/veloci/veloci/authclient"
 	"github.com/veloci/veloci/handler"
 	"github.com/veloci/veloci/middleware"
+	"github.com/veloci/veloci/page"
 	"github.com/veloci/veloci/queue"
 	"github.com/veloci/veloci/store"
 )
 
-type appDBImpl struct {
-	pool *pgxpool.Pool
-}
-
-func (d *appDBImpl) FindUserEntity(ctx context.Context, email string) (handler.UserEntity, error) {
-	var ue handler.UserEntity
-	err := d.pool.QueryRow(ctx, `
-		SELECT u.id::text, eu.entity_id::text, eu.entity_role
-		FROM users u
-		JOIN entity_users eu ON eu.user_id = u.id
-		WHERE u.email = $1
-		LIMIT 1
-	`, email).Scan(&ue.UserID, &ue.EntityID, &ue.EntityRole)
-	return ue, err
-}
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
@@ -128,25 +113,44 @@ func runServe(_ *cobra.Command, _ []string) error {
 		perms = make(middleware.PermissionCache)
 	}
 
-	authHandler := handler.NewAuthHandler(authClient, &appDBImpl{pool: pool})
+	pages := page.NewServer(s, authClient, pool)
+	jobsHandler := handler.NewJobsHandler(s, pub, pool)
 
 	r := chi.NewRouter()
 	r.Use(chimiddleware.Logger)
-	r.Use(corsMiddleware)
-	api := humachi.New(r, huma.DefaultConfig("Veloci API", "1.0.0"))
 
-	handler.RegisterHealthRoutes(api)
-	handler.RegisterAuthRoutes(api, authHandler)
+	// Static assets (CSS, JS islands).
+	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 
-	jobsHandler := handler.NewJobsHandler(s, pub, pool)
+	// ─── Public page routes ───────────────────────────────────────────────────
+	r.Get("/login", pages.GetLogin)
+	r.Post("/login", pages.PostLogin)
+
+	// ─── Protected page routes (cookie auth) ─────────────────────────────────
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.AuthenticateCookieOrRedirect(authClient))
+		r.Post("/logout", pages.PostLogout)
+		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "/budget", http.StatusFound)
+		})
+		r.Get("/budget", pages.Budget)
+		r.Get("/reports", pages.Reports)
+		r.Get("/ledger", pages.Ledger)
+		r.Get("/activity", pages.Activity)
+		r.Get("/accounts/{id}", pages.Account)
+		r.Get("/settings", pages.Settings)
+		r.Get("/glossary", pages.Glossary)
+		r.Get("/configuration", pages.Configuration)
+	})
+
+	// ─── Internal API routes (cookie or Bearer, same-origin JS islands) ───────
+	internalAPI := humachi.New(r, huma.DefaultConfig("Veloci", "1.0.0"))
+	handler.RegisterHealthRoutes(internalAPI)
 
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Authenticate(authClient))
+		subAPI := humachi.New(r, huma.DefaultConfig("Veloci", "1.0.0"))
 
-		// Mount Huma-registered routes inside the authenticated group via a sub-router.
-		subAPI := humachi.New(r, huma.DefaultConfig("Veloci API", "1.0.0"))
-
-		handler.RegisterLogoutRoute(subAPI, authHandler)
 		handler.RegisterUsersRoutes(subAPI, s, authClient, pub, perms)
 		handler.RegisterInstitutionsRoutes(subAPI, s, pub, perms)
 		handler.RegisterAccountsRoutes(subAPI, s, pub, perms)
@@ -154,29 +158,22 @@ func runServe(_ *cobra.Command, _ []string) error {
 		handler.RegisterEntriesRoutes(subAPI, s, pub, perms)
 		handler.RegisterClassificationsRoutes(subAPI, s, pub, perms)
 		handler.RegisterTransactionsRoutes(subAPI, s, pub, perms)
-		handler.RegisterImportsRoutes(subAPI, s, pub, perms)
 		handler.RegisterSnapshotsRoutes(subAPI, s, pub, perms)
 		handler.RegisterProjectionsRoutes(subAPI, s, pub, perms)
 		handler.RegisterAdminRoutes(subAPI, s, pub, perms)
 		handler.RegisterJobsRoutes(subAPI, jobsHandler, perms)
 
-		// Raw chi handler that cannot use Huma (multipart upload).
+		// Raw chi handler (multipart upload cannot use Huma).
 		r.Post("/imports", handler.NewImportsHandler(s, pub).UploadImport)
 	})
 
-	// SSE endpoint: browsers cannot send Authorization headers, so the token is
-	// passed as ?token= and validated by AuthenticateSSE rather than Authenticate.
-	r.With(middleware.AuthenticateSSE(authClient)).Get("/jobs/stream", jobsHandler.StreamJobs)
+	// SSE uses cookie auth (same-origin; EventSource sends cookies automatically).
+	r.With(middleware.AuthenticateCookieOrRedirect(authClient)).Get("/jobs/stream", jobsHandler.StreamJobs)
 
-	r.Get("/openapi.json", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		if err := json.NewEncoder(w).Encode(api.OpenAPI()); err != nil {
-			http.Error(w, "failed to encode spec", http.StatusInternalServerError)
-		}
-	})
+	_ = internalAPI // suppress unused warning; routes registered via side-effect
 
 	port := viper.GetInt("api.port")
-	log.Printf("veloci-api listening on :%d", port)
+	log.Printf("veloci listening on :%d", port)
 	return http.ListenAndServe(fmt.Sprintf(":%d", port), r)
 }
 
@@ -295,24 +292,6 @@ func syncAdminUser(ctx context.Context, authClient *authclient.Client, s *store.
 	return nil
 }
 
-// corsMiddleware echoes the request Origin back as the allowed origin so any
-// client (browser on localhost or a deployed host) can reach the API without
-// a same-origin proxy. Handles OPTIONS preflight responses.
-func corsMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if origin := r.Header.Get("Origin"); origin != "" {
-			w.Header().Set("Access-Control-Allow-Origin", origin)
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, QUERY")
-			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
-			w.Header().Set("Vary", "Origin")
-		}
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
 
 func runSeed(_ *cobra.Command, _ []string) error {
 	loadConfig()

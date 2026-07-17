@@ -118,16 +118,16 @@ _migrate-app-seed:
 gen-auth:
     cd services/auth && go run ./cmd/specgen -o api/openapi.json
 
-# Regenerate api authclient (ogen), patch unknown-field handling, and generate api OpenAPI spec
-gen-api: gen-auth
-    cd services/api && go generate ./generate.go
+# Regenerate veloci authclient from the auth spec (ogen + patch)
+gen-veloci: gen-auth
+    cd services/veloci && go generate ./generate.go
 
-# Generate web client from api spec (requires gen-api to have run first)
-gen-web:
-    cd services/web && npx orval
+# Regenerate Templ components
+gen-templ:
+    cd services/veloci && templ generate
 
-# Run full generation chain (auth spec → api client → api spec → web client)
-gen: gen-api gen-web
+# Run full generation chain
+gen: gen-veloci gen-templ
 
 # ─── sqlx compile-time SQL verification ──────────────────────────────────────
 # Requires a running postgres (just infra). Generates .sqlx/ offline query cache.

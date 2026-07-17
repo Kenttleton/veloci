@@ -16,6 +16,7 @@ const (
 	ctxEntityRole contextKey = "entity_role"
 	ctxSystemRole contextKey = "system_role"
 	ctxUserID     contextKey = "sub"
+	ctxEmail      contextKey = "email"
 	ctxJTI        contextKey = "jti"
 )
 
@@ -52,9 +53,34 @@ func validateToken(client *authclient.Client, token string, w http.ResponseWrite
 			ctx = context.WithValue(ctx, ctxSystemRole, s)
 		case "sub":
 			ctx = context.WithValue(ctx, ctxUserID, s)
+		case "email":
+			ctx = context.WithValue(ctx, ctxEmail, s)
 		}
 	}
 	return r.WithContext(ctx), true
+}
+
+const SessionCookie = "veloci_session"
+
+// AuthenticateCookieOrRedirect reads the session cookie, validates the token, and
+// injects claims into context. Unauthenticated requests are redirected to /login.
+func AuthenticateCookieOrRedirect(client *authclient.Client) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			cookie, err := r.Cookie(SessionCookie)
+			if err != nil || cookie.Value == "" {
+				http.Redirect(w, r, "/login", http.StatusFound)
+				return
+			}
+			req, ok := validateToken(client, cookie.Value, w, r)
+			if !ok {
+				http.SetCookie(w, &http.Cookie{Name: SessionCookie, Value: "", Path: "/", MaxAge: -1})
+				http.Redirect(w, r, "/login", http.StatusFound)
+				return
+			}
+			next.ServeHTTP(w, req)
+		})
+	}
 }
 
 // Authenticate validates the Bearer token via veloci-auth /tokens/validate.
@@ -124,5 +150,11 @@ func UserID(ctx context.Context) string {
 // JTI returns the access token JTI injected by Authenticate.
 func JTI(ctx context.Context) string {
 	v, _ := ctx.Value(ctxJTI).(string)
+	return v
+}
+
+// Email returns the email claim injected by Authenticate.
+func Email(ctx context.Context) string {
+	v, _ := ctx.Value(ctxEmail).(string)
 	return v
 }

@@ -1,9 +1,10 @@
 [build]
-  cmd        = "go build -o ./tmp/veloci-api ."
-  bin        = "./tmp/veloci-api"
+  pre_cmd    = ["templ generate"]
+  cmd        = "go build -o ./tmp/veloci ."
+  bin        = "./tmp/veloci"
   args_bin   = ["serve"]
-  include_ext = ["go", "toml"]
-  exclude_dir = ["tmp"]
+  include_ext = ["go", "templ", "toml", "css"]
+  exclude_dir = ["tmp", "static"]
   delay      = 500
 
 [log]

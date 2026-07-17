@@ -1,0 +1,48 @@
+package page
+
+// PlaceholderPage renders the shell with a "coming soon" message.
+templ PlaceholderPage(data ShellData, name string) {
+	@Shell(data) {
+		<div class="page-placeholder">{ name } — coming soon</div>
+	}
+}
+
+// BudgetPage is the budget view (placeholder until islands are wired up).
+templ BudgetPage(data ShellData) {
+	@PlaceholderPage(data, "Budget")
+}
+
+// LedgerPage is the ledger view (placeholder).
+templ LedgerPage(data ShellData) {
+	@PlaceholderPage(data, "Ledger")
+}
+
+// ActivityPage is the activity view (placeholder).
+templ ActivityPage(data ShellData) {
+	@PlaceholderPage(data, "Activity")
+}
+
+// AccountPage is the account view (placeholder).
+templ AccountPage(data ShellData, accountID string) {
+	@PlaceholderPage(data, "Account")
+}
+
+// ConfigurationPage is the configuration view (placeholder).
+templ ConfigurationPage(data ShellData) {
+	@PlaceholderPage(data, "Configuration")
+}
+
+// SettingsPage is the settings view (placeholder).
+templ SettingsPage(data ShellData) {
+	@PlaceholderPage(data, "Settings")
+}
+
+// GlossaryPage is the glossary view (placeholder).
+templ GlossaryPage(data ShellData) {
+	@PlaceholderPage(data, "Glossary")
+}
+
+// ReportsPage is the reports view (placeholder).
+templ ReportsPage(data ShellData) {
+	@PlaceholderPage(data, "Reports")
+}

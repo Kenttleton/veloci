@@ -1,0 +1,29 @@
+package page
+
+templ Login(errMsg, email string) {
+	@base("Sign in") {
+		<main class="login-page">
+			<form method="POST" action="/login" class="login-form">
+				<h1 class="login-title">Veloci</h1>
+				if errMsg != "" {
+					<p class="login-error">{ errMsg }</p>
+				}
+				<input
+					type="email"
+					name="email"
+					value={ email }
+					placeholder="Email"
+					required
+					autofocus
+				/>
+				<input
+					type="password"
+					name="password"
+					placeholder="Password"
+					required
+				/>
+				<button type="submit" class="btn-primary">Sign in</button>
+			</form>
+		</main>
+	}
+}
