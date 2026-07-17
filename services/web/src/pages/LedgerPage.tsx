@@ -448,7 +448,7 @@ export function LedgerPage() {
           </button>
         ))}
         <button
-          onClick={() => reprocess.mutate({})}
+          onClick={() => reprocess.mutate()}
           disabled={reprocess.isPending}
           style={{
             marginLeft: 'auto', padding: '4px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
