@@ -8,7 +8,7 @@
 # (https://docs.rs/figment) — composable providers, used by Rocket framework.
 
 [database]
-host = "localhost"
+host = "postgres"
 port = 5432
 
 [database.app]
@@ -22,7 +22,7 @@ user = "veloci_auth_user"
 password = "changeme"
 
 [rabbitmq]
-host = "localhost"
+host = "rabbitmq"
 port = 5672
 user = "veloci"
 password = "changeme"
@@ -32,7 +32,7 @@ password = "changeme"
 [auth]
 jwt_secret = "change-this-to-a-long-random-string-at-least-32-chars"
 port = 8081
-host = "localhost"
+host = "auth"
 
 [auth.admin]
 email = "admin@veloci.local"

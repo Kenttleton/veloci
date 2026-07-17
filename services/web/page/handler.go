@@ -628,8 +628,47 @@ func (s *Server) Glossary(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, GlossaryPage(s.buildShellData(r)))
 }
 
+// ReportsData is passed to the Reports page template.
+type ReportsData struct {
+	Summary     store.SnapshotSummary
+	Projections []store.Projection
+	PinchCount  int
+}
+
 func (s *Server) Reports(w http.ResponseWriter, r *http.Request) {
-	s.render(w, r, ReportsPage(s.buildShellData(r)))
+	ctx := r.Context()
+	entityID := middleware.EntityID(ctx)
+
+	summary, _ := s.store.GetSnapshotSummary(ctx, entityID)
+
+	// Fetch up to 180 projections (DESC from store), then reverse to ascending.
+	all, _ := s.store.ListProjections(ctx, entityID, 180, "")
+
+	// Keep only entity-level rows (account_id IS NULL = aggregate projection).
+	projections := all[:0]
+	for _, p := range all {
+		if p.AccountID == nil {
+			projections = append(projections, p)
+		}
+	}
+
+	// Reverse to ascending (soonest date first).
+	for i, j := 0, len(projections)-1; i < j; i, j = i+1, j-1 {
+		projections[i], projections[j] = projections[j], projections[i]
+	}
+
+	pinchCount := 0
+	for _, p := range projections {
+		if p.IsPinchPoint {
+			pinchCount++
+		}
+	}
+
+	s.render(w, r, ReportsPage(s.buildShellData(r), ReportsData{
+		Summary:     summary,
+		Projections: projections,
+		PinchCount:  pinchCount,
+	}))
 }
 
 // fetchUserName looks up the display name for a user by ID.

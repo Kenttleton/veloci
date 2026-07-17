@@ -29,15 +29,15 @@ rabbitmq:
 
 # Start veloci-auth
 auth:
-    docker compose up -d veloci-auth
+    docker compose up -d auth
 
 # Start veloci (BFF — API + web)
 veloci:
-    docker compose up -d api
+    docker compose up -d web
 
 # Start veloci-engine (Rust queue consumer)
 engine:
-    docker compose up -d veloci-engine
+    docker compose up -d engine
 
 # ─── Compound commands ────────────────────────────────────────────────────────
 
@@ -120,11 +120,11 @@ gen-auth:
 
 # Regenerate veloci authclient from the auth spec (ogen + patch)
 gen-veloci: gen-auth
-    cd services/veloci && go generate ./generate.go
+    cd services/web && go generate ./generate.go
 
 # Regenerate Templ components
 gen-templ:
-    cd services/veloci && templ generate
+    cd services/web && templ generate
 
 # Run full generation chain
 gen: gen-veloci gen-templ

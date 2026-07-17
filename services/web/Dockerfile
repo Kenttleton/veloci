@@ -1,10 +1,10 @@
-FROM node:22-alpine AS build
+FROM golang:1.26-alpine AS build
 WORKDIR /app
-COPY package*.json ./
-RUN npm install
+COPY go.mod go.sum ./
+RUN go mod download
 COPY . .
-RUN npm run build
+RUN go build -o veloci-api .
 
-FROM nginx:alpine
-COPY --from=build /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+FROM alpine:3.24
+COPY --from=build /app/veloci-api /veloci-api
+ENTRYPOINT ["/veloci-api", "serve"]

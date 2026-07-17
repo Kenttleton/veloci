@@ -1,23 +1,34 @@
 services:
-  veloci-auth:
+  postgres:
+    ports:
+      - "5432:5432"
+
+  rabbitmq:
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  auth:
     build:
       context: ./services/auth
       dockerfile: Dockerfile.dev
     command: air
+    ports:
+      - "8081:8081"
     volumes:
       - ./services/auth:/app
       - auth-go-cache:/root/go/pkg/mod
 
-  api:
+  web:
     build:
-      context: ./services/veloci
+      context: ./services/web
       dockerfile: Dockerfile.dev
     command: air
     volumes:
-      - ./services/veloci:/app
+      - ./services/web:/app
       - veloci-go-cache:/root/go/pkg/mod
 
-  veloci-engine:
+  engine:
     build:
       context: ./services/engine
       dockerfile: Dockerfile.dev

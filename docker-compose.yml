@@ -14,8 +14,6 @@ services:
       - postgres_data:/var/lib/postgresql
       - ./scripts/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
       - ./migrations:/migrations
-    ports:
-      - "5432:5432"
     networks:
       - veloci
     healthcheck:
@@ -32,9 +30,6 @@ services:
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
-    ports:
-      - "5672:5672"
-      - "15672:15672"
     networks:
       - veloci
     healthcheck:
@@ -42,11 +37,11 @@ services:
       interval: 10s
       retries: 5
 
-  veloci-auth:
+  auth:
     build: ./services/auth
     environment:
       VELOCI_CONFIG_PATH: /etc/veloci/veloci.toml
-      VELOCI_DATABASE_HOST: postgres
+      VELOCI_DATABASE_HOST: ${VELOCI_DATABASE_HOST}
       VELOCI_DATABASE_AUTH_NAME: ${VELOCI_AUTH_DB}
       VELOCI_DATABASE_AUTH_USER: ${VELOCI_AUTH_DB_USER}
       VELOCI_DATABASE_AUTH_PASSWORD: ${VELOCI_AUTH_DB_PASSWORD}
@@ -55,18 +50,18 @@ services:
     networks:
       - veloci
 
-  api:
-    build: ./services/veloci
+  web:
+    build: ./services/web
     environment:
       VELOCI_CONFIG_PATH: /etc/veloci/veloci.toml
-      VELOCI_DATABASE_HOST: postgres
+      VELOCI_DATABASE_HOST: ${VELOCI_DATABASE_HOST}
       VELOCI_DATABASE_APP_NAME: ${VELOCI_APP_DB}
       VELOCI_DATABASE_APP_USER: ${VELOCI_APP_DB_USER}
       VELOCI_DATABASE_APP_PASSWORD: ${VELOCI_APP_DB_PASSWORD}
-      VELOCI_RABBITMQ_HOST: rabbitmq
+      VELOCI_RABBITMQ_HOST: ${VELOCI_RABBITMQ_HOST}
       VELOCI_RABBITMQ_USER: ${RABBITMQ_USER}
       VELOCI_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
-      VELOCI_AUTH_HOST: veloci-auth
+      VELOCI_AUTH_HOST: ${VELOCI_AUTH_HOST}
     volumes:
       - ./config/veloci.toml:/etc/veloci/veloci.toml:ro
     networks:
@@ -74,16 +69,16 @@ services:
     ports:
       - "8080:8080"
 
-  veloci-engine:
+  engine:
     build: ./services/engine
     environment:
       RUST_LOG: ${RUST_LOG:-info}
       VELOCI_CONFIG_PATH: /etc/veloci/veloci.toml
-      VELOCI_DATABASE_HOST: postgres
+      VELOCI_DATABASE_HOST: ${VELOCI_DATABASE_HOST}
       VELOCI_DATABASE_APP_NAME: ${VELOCI_APP_DB}
       VELOCI_DATABASE_APP_USER: ${VELOCI_APP_DB_USER}
       VELOCI_DATABASE_APP_PASSWORD: ${VELOCI_APP_DB_PASSWORD}
-      VELOCI_RABBITMQ_HOST: rabbitmq
+      VELOCI_RABBITMQ_HOST: ${VELOCI_RABBITMQ_HOST}
       VELOCI_RABBITMQ_USER: ${RABBITMQ_USER}
       VELOCI_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
     volumes:

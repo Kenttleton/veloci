@@ -1,0 +1,149 @@
+package page
+
+import (
+	"fmt"
+
+	"github.com/veloci/veloci/store"
+)
+
+templ ReportsPage(shell ShellData, data ReportsData) {
+	@Shell(shell) {
+		<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
+			<!-- Header -->
+			<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
+				<h1 style="margin:0;font-size:18px;font-weight:700;color:var(--text);letter-spacing:-0.02em">Reports</h1>
+				if data.PinchCount > 0 {
+					<div style="display:flex;align-items:center;gap:6px;padding:4px 12px;background:color-mix(in srgb,var(--surface2) 60%,var(--commit) 40%);border:1px solid var(--commit);border-radius:20px">
+						<span style="width:6px;height:6px;border-radius:50%;background:var(--commit);display:inline-block"></span>
+						<span style="font-size:12px;font-weight:600;color:var(--commit)">
+							{ fmt.Sprintf("%d pinch point", data.PinchCount) }
+							if data.PinchCount != 1 {
+								s
+							}
+						</span>
+					</div>
+				}
+			</div>
+			<!-- Summary strip -->
+			<div style="display:flex;align-items:center;gap:24px;padding:10px 20px;border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto">
+				@rptSummaryChip("Income", data.Summary.IncomeRate, "var(--income)")
+				@rptSummaryChip("Commitments", data.Summary.CommitmentsRate, "var(--commit)")
+				@rptSummaryChipComputed("Margin", data.Summary.IncomeRate-data.Summary.CommitmentsRate)
+				@rptSummaryChipDrift(data.Summary.DriftRate)
+			</div>
+			<!-- Projections table -->
+			<div style="flex:1;overflow:auto">
+				if len(data.Projections) == 0 {
+					<div style="padding:48px 20px;text-align:center;color:var(--text3);font-size:13px">
+						No projections yet. Run the engine on the Ledger page to generate a forecast.
+					</div>
+				} else {
+					<table style="width:100%;border-collapse:collapse">
+						<thead>
+							<tr style="position:sticky;top:0;background:var(--surface);z-index:1;border-bottom:1px solid var(--border)">
+								<th style="padding:8px 20px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);width:100px">Date</th>
+								<th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:var(--text3)">Income</th>
+								<th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:var(--text3)">Commitments</th>
+								<th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:var(--text3)">Margin</th>
+								<th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:var(--text3)">Balance</th>
+								<th style="padding:8px 12px;text-align:center;font-size:11px;font-weight:600;color:var(--text3);width:80px">Status</th>
+							</tr>
+						</thead>
+						<tbody>
+							for _, p := range data.Projections {
+								@rptProjectionRow(p)
+							}
+						</tbody>
+					</table>
+				}
+			</div>
+		</div>
+	}
+}
+
+templ rptProjectionRow(p store.Projection) {
+	<tr style={ rptRowStyle(p.IsPinchPoint) }>
+		<td style="padding:8px 20px;font-size:13px;color:var(--text2);white-space:nowrap;font-variant-numeric:tabular-nums">
+			{ p.ProjectedDate.Format("Jan 2, 2006") }
+		</td>
+		<td style="padding:8px 12px;text-align:right;font-size:13px;font-variant-numeric:tabular-nums;color:var(--income)">
+			{ rptFmtMo(p.IncomeRatePerDay) }
+		</td>
+		<td style="padding:8px 12px;text-align:right;font-size:13px;font-variant-numeric:tabular-nums;color:var(--commit)">
+			{ rptFmtMo(p.CommitmentRatePerDay) }
+		</td>
+		<td style={ "padding:8px 12px;text-align:right;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;" + rptMarginColor(p.MarginRatePerDay) }>
+			{ rptFmtMoSigned(p.MarginRatePerDay) }
+		</td>
+		<td style="padding:8px 12px;text-align:right;font-size:13px;font-variant-numeric:tabular-nums;color:var(--text2)">
+			if p.ProjectedBalanceCents != nil {
+				{ FormatBalance(p.ProjectedBalanceCents) }
+			} else {
+				<span style="color:var(--text3)">—</span>
+			}
+		</td>
+		<td style="padding:8px 12px;text-align:center">
+			if p.IsPinchPoint {
+				<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:color-mix(in srgb,var(--surface2) 60%,var(--commit) 40%);color:var(--commit)">Pinch</span>
+			}
+		</td>
+	</tr>
+}
+
+templ rptSummaryChip(label string, ratePerDay float64, color string) {
+	<div style="flex-shrink:0">
+		<div style="font-size:10px;font-weight:600;color:var(--text3);letter-spacing:0.04em;text-transform:uppercase;margin-bottom:2px">{ label }</div>
+		<div style={ "font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;color:" + color }>
+			{ rptFmtMo(ratePerDay) }
+		</div>
+	</div>
+}
+
+templ rptSummaryChipComputed(label string, ratePerDay float64) {
+	<div style="flex-shrink:0">
+		<div style="font-size:10px;font-weight:600;color:var(--text3);letter-spacing:0.04em;text-transform:uppercase;margin-bottom:2px">{ label }</div>
+		<div style={ "font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;" + rptMarginColor(ratePerDay) }>
+			{ rptFmtMoSigned(ratePerDay) }
+		</div>
+	</div>
+}
+
+templ rptSummaryChipDrift(ratePerDay float64) {
+	<div style="flex-shrink:0">
+		<div style="font-size:10px;font-weight:600;color:var(--text3);letter-spacing:0.04em;text-transform:uppercase;margin-bottom:2px">Drift</div>
+		<div style={ "font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;" + rptMarginColor(ratePerDay) }>
+			{ rptFmtMoSigned(ratePerDay) }
+		</div>
+	</div>
+}
+
+func rptFmtMo(ratePerDay float64) string {
+	mo := ratePerDay * 30.44
+	return fmt.Sprintf("$%.0f/mo", mo)
+}
+
+func rptFmtMoSigned(ratePerDay float64) string {
+	mo := ratePerDay * 30.44
+	if mo >= 0 {
+		return fmt.Sprintf("+$%.0f/mo", mo)
+	}
+	return fmt.Sprintf("-$%.0f/mo", -mo)
+}
+
+func rptMarginColor(ratePerDay float64) string {
+	if ratePerDay > 0 {
+		return "color:var(--income)"
+	}
+	if ratePerDay < 0 {
+		return "color:var(--commit)"
+	}
+	return "color:var(--text2)"
+}
+
+func rptRowStyle(isPinch bool) string {
+	base := "border-bottom:1px solid var(--border)"
+	if isPinch {
+		return base + ";background:color-mix(in srgb,var(--surface) 80%,var(--commit) 20%)"
+	}
+	return base
+}
