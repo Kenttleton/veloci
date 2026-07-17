@@ -88,8 +88,8 @@ func loadConfig() {
 func runServe(_ *cobra.Command, _ []string) error {
 	loadConfig()
 
-	authHost := viper.GetString("api.auth.host")
-	authPort := viper.GetInt("api.auth.port")
+	authHost := viper.GetString("auth.host")
+	authPort := viper.GetInt("auth.port")
 	authURL := fmt.Sprintf("http://%s:%d", authHost, authPort)
 
 	amqpURI := fmt.Sprintf("amqp://%s:%s@%s:%d/",
@@ -317,8 +317,8 @@ func corsMiddleware(next http.Handler) http.Handler {
 func runSeed(_ *cobra.Command, _ []string) error {
 	loadConfig()
 
-	authHost := viper.GetString("api.auth.host")
-	authPort := viper.GetInt("api.auth.port")
+	authHost := viper.GetString("auth.host")
+	authPort := viper.GetInt("auth.port")
 	authURL := fmt.Sprintf("http://%s:%d", authHost, authPort)
 
 	email := viper.GetString("auth.admin.email")

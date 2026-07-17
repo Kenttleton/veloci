@@ -32,6 +32,7 @@ password = "changeme"
 [auth]
 jwt_secret = "change-this-to-a-long-random-string-at-least-32-chars"
 port = 8081
+host = "localhost"
 
 [auth.admin]
 email = "admin@veloci.local"
@@ -41,13 +42,10 @@ password = "changeme"
 
 [api]
 port = 8080
+host = "localhost"
 
 [api.pool]
 max = 5
-
-[api.auth]
-host = "localhost"
-port = 8081
 
 # ── veloci-engine ─────────────────────────────────────────────────────────────
 
