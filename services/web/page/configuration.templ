@@ -126,7 +126,17 @@ templ ConfigurationPage(shell ShellData, data ConfigurationData) {
 					}
 					return '<td style="padding:8px 12px;font-size:13px;color:var(--text);cursor:pointer" class="js-label-name-cell" data-label-id="' + id + '" data-label-name="' + escHtml(name) + '" data-entry-count="' + entryCount + '">' + escHtml(name) + '</td>' +
 						'<td style="padding:8px 12px;font-size:12px;color:var(--text2)">' + countStr + '</td>' +
-						'<td style="padding:8px 12px"><button class="js-label-rename" data-label-id="' + id + '" data-label-name="' + escHtml(name) + '" data-entry-count="' + entryCount + '" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:0">Rename</button></td>';
+						'<td style="padding:8px 12px">' +
+						  '<div class="js-label-actions-normal" style="display:flex;gap:6px">' +
+						    '<button class="js-label-rename" data-label-id="' + id + '" data-label-name="' + escHtml(name) + '" data-entry-count="' + entryCount + '" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:0">Rename</button>' +
+						    '<button class="js-label-delete" data-label-id="' + id + '" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit;padding:0">Delete</button>' +
+						  '</div>' +
+						  '<div class="js-label-delete-confirm" style="display:none;align-items:center;gap:4px">' +
+						    '<span style="font-size:11px;color:var(--commit)">Delete?</span>' +
+						    '<button class="js-label-delete-yes" data-label-id="' + id + '" style="background:none;border:none;cursor:pointer;color:var(--commit);font-size:11px;font-family:inherit;padding:2px 4px">Yes</button>' +
+						    '<button class="js-label-delete-no" data-label-id="' + id + '" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:11px;font-family:inherit;padding:2px 4px">No</button>' +
+						  '</div>' +
+						'</td>';
 				}
 
 				function escHtml(s) {
@@ -191,6 +201,46 @@ templ ConfigurationPage(shell ShellData, data ConfigurationData) {
 					if (save) { saveEdit(save.dataset.labelId); return; }
 					var cancelEdit_ = e.target.closest('.js-label-cancel-edit');
 					if (cancelEdit_) { cancelEdit(cancelEdit_.dataset.labelId, cancelEdit_.dataset.originalName, parseInt(cancelEdit_.dataset.entryCount||'0',10)); return; }
+					var labelDel = e.target.closest('.js-label-delete');
+					if (labelDel) {
+						var row = labelDel.closest('tr[data-label-id]');
+						if (row) {
+							var norm = row.querySelector('.js-label-actions-normal');
+							var conf = row.querySelector('.js-label-delete-confirm');
+							if (norm) norm.style.display = 'none';
+							if (conf) { conf.style.display = 'flex'; }
+						}
+						return;
+					}
+					var labelDelNo = e.target.closest('.js-label-delete-no');
+					if (labelDelNo) {
+						var row = labelDelNo.closest('tr[data-label-id]');
+						if (row) {
+							var norm = row.querySelector('.js-label-actions-normal');
+							var conf = row.querySelector('.js-label-delete-confirm');
+							if (norm) norm.style.display = 'flex';
+							if (conf) conf.style.display = 'none';
+						}
+						return;
+					}
+					var labelDelYes = e.target.closest('.js-label-delete-yes');
+					if (labelDelYes) {
+						var lid = labelDelYes.dataset.labelId;
+						labelDelYes.disabled = true;
+						fetch('/api/labels/' + lid, {method: 'DELETE'})
+							.then(function(r) {
+								if (r.ok || r.status === 404) {
+									var row = labelsBody ? labelsBody.querySelector('tr[data-label-id="' + lid + '"]') : null;
+									if (row) row.remove();
+									if (labelsBody && !labelsBody.querySelector('tr[data-label-id]')) {
+										var empty = document.getElementById('labels-empty');
+										if (empty) empty.style.display = '';
+									}
+								} else { labelDelYes.disabled = false; }
+							})
+							.catch(function() { labelDelYes.disabled = false; });
+						return;
+					}
 				});
 
 				document.addEventListener('keydown', function(e) {
@@ -234,7 +284,7 @@ templ ConfigurationPage(shell ShellData, data ConfigurationData) {
 					var name = newMerchantInput ? newMerchantInput.value.trim() : '';
 					if (!name) { newMerchantRow.style.display = 'none'; return; }
 					newMerchantInput.disabled = true;
-					fetch('/canonical-merchants', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})
+					fetch('/api/canonical-merchants', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})
 						.then(function(r){ return r.json(); })
 						.then(function(env) {
 							var m = env.data;
@@ -322,7 +372,7 @@ templ ConfigurationPage(shell ShellData, data ConfigurationData) {
 					var aliasCount = cancelBtn ? parseInt(cancelBtn.dataset.aliasCount||'0',10) : 0;
 					if (!name) { cancelMerchantEdit(id, origName, source, aliasCount); return; }
 					if (input) input.disabled = true;
-					fetch('/canonical-merchants/' + id, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})
+					fetch('/api/canonical-merchants/' + id, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})
 						.then(function(r){ return r.json(); })
 						.then(function(env) {
 							var m = env.data;
@@ -396,7 +446,7 @@ templ ConfigurationPage(shell ShellData, data ConfigurationData) {
 				}
 
 				function loadMerchantAliases(id) {
-					fetch('/canonical-merchants/' + id + '/aliases')
+					fetch('/api/canonical-merchants/' + id + '/aliases')
 						.then(function(r){ return r.json(); })
 						.then(function(env) {
 							var aliases = env.data || [];
@@ -510,7 +560,7 @@ templ ConfigurationPage(shell ShellData, data ConfigurationData) {
 					if (delYes) {
 						var mid = delYes.dataset.merchantId;
 						delYes.disabled = true;
-						fetch('/canonical-merchants/' + mid, {method:'DELETE'})
+						fetch('/api/canonical-merchants/' + mid, {method:'DELETE'})
 							.then(function(r) {
 								if (r.ok || r.status===404) {
 									var row = merchantsBody ? merchantsBody.querySelector('tr[data-merchant-id="' + mid + '"]') : null;
@@ -535,7 +585,7 @@ templ ConfigurationPage(shell ShellData, data ConfigurationData) {
 					if (aliasRemove) {
 						var mid = aliasRemove.dataset.merchantId;
 						var aname = aliasRemove.dataset.normalizedName;
-						fetch('/canonical-merchants/' + mid + '/aliases/' + encodeURIComponent(aname), {method:'DELETE'})
+						fetch('/api/canonical-merchants/' + mid + '/aliases/' + encodeURIComponent(aname), {method:'DELETE'})
 							.then(function(r) {
 								if (r.ok || r.status===404) {
 									var arr = (_aliasCache[mid] || []).filter(function(a){ return a.normalized_name !== aname; });
@@ -556,7 +606,7 @@ templ ConfigurationPage(shell ShellData, data ConfigurationData) {
 						if (!aname) return;
 						aliasAdd.disabled = true;
 						if (errEl) errEl.textContent = '';
-						fetch('/canonical-merchants/' + mid + '/aliases', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({normalized_name:aname})})
+						fetch('/api/canonical-merchants/' + mid + '/aliases', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({normalized_name:aname})})
 							.then(function(r){ return r.json(); })
 							.then(function(env) {
 								aliasAdd.disabled = false;
@@ -584,7 +634,7 @@ templ ConfigurationPage(shell ShellData, data ConfigurationData) {
 						if (!absorbId) { if (errEl) errEl.textContent = 'Select a merchant to absorb.'; return; }
 						mergeBtn.disabled = true;
 						if (errEl) errEl.textContent = '';
-						fetch('/canonical-merchants/' + mid + '/merge', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({absorb_id:absorbId})})
+						fetch('/api/canonical-merchants/' + mid + '/merge', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({absorb_id:absorbId})})
 							.then(function(r){
 								if (!r.ok) return r.json().then(function(e){ throw new Error(e.detail||'Merge failed'); });
 								location.reload();
@@ -608,7 +658,7 @@ templ ConfigurationPage(shell ShellData, data ConfigurationData) {
 						if (!aliases.length) { if (errEl) errEl.textContent = 'Select at least one alias.'; return; }
 						splitBtn.disabled = true;
 						if (errEl) errEl.textContent = '';
-						fetch('/canonical-merchants/' + mid + '/split', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({new_name:newName,aliases:aliases})})
+						fetch('/api/canonical-merchants/' + mid + '/split', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({new_name:newName,aliases:aliases})})
 							.then(function(r){
 								if (!r.ok) return r.json().then(function(e){ throw new Error(e.detail||'Split failed'); });
 								location.reload();
@@ -665,7 +715,7 @@ templ ConfigurationPage(shell ShellData, data ConfigurationData) {
 					setField('inst-sign', inst ? inst.amount_sign_convention : 'positive_is_credit');
 					setField('inst-settlement', inst ? inst.settlement_window_days : '14');
 					setField('inst-dedup', inst ? inst.dedup_window_days : '3');
-					setField('inst-tolerance', inst ? inst.amount_tolerance_pct : '0.5');
+					setField('inst-tolerance', inst ? (inst.amount_tolerance_pct * 100).toFixed(3).replace(/\.?0+$/, '') : '0.5');
 					if (instDialogError) { instDialogError.textContent = ''; instDialogError.style.display = 'none'; }
 					if (instDialog) instDialog.showModal();
 				}
@@ -687,52 +737,6 @@ templ ConfigurationPage(shell ShellData, data ConfigurationData) {
 				document.addEventListener('click', function(e) {
 					var newBtn = e.target.closest('#new-inst-btn');
 					if (newBtn) { openInstDialog(null); return; }
-					var editBtn = e.target.closest('.js-inst-edit');
-					if (editBtn) {
-						try { openInstDialog(JSON.parse(editBtn.dataset.institution)); } catch(ex){}
-						return;
-					}
-					var delBtn = e.target.closest('.js-inst-delete');
-					if (delBtn) {
-						var row = delBtn.closest('[data-inst-id]');
-						if (row) {
-							var confirm_ = row.querySelector('.js-inst-delete-confirm');
-							var normal = row.querySelector('.js-inst-actions-normal');
-							if (confirm_) confirm_.style.display = '';
-							if (normal) normal.style.display = 'none';
-						}
-						return;
-					}
-					var delNo = e.target.closest('.js-inst-delete-no');
-					if (delNo) {
-						var row = delNo.closest('[data-inst-id]');
-						if (row) {
-							var confirm_ = row.querySelector('.js-inst-delete-confirm');
-							var normal = row.querySelector('.js-inst-actions-normal');
-							if (confirm_) confirm_.style.display = 'none';
-							if (normal) normal.style.display = '';
-						}
-						return;
-					}
-					var delYes = e.target.closest('.js-inst-delete-yes');
-					if (delYes) {
-						var id = delYes.dataset.instId;
-						delYes.disabled = true;
-						fetch('/api/institutions/' + id, {method:'DELETE'})
-							.then(function(r) {
-								if (r.ok || r.status===404) {
-									var row = document.querySelector('[data-inst-id="' + id + '"]');
-									if (row) row.remove();
-									var list = document.getElementById('inst-list');
-									if (list && !list.querySelector('[data-inst-id]')) {
-										var empty = document.getElementById('inst-empty');
-										if (empty) empty.style.display = '';
-									}
-								}
-							})
-							.catch(function(){ delYes.disabled = false; });
-						return;
-					}
 				});
 
 				if (instDialogSave) instDialogSave.addEventListener('click', function() {
@@ -753,11 +757,11 @@ templ ConfigurationPage(shell ShellData, data ConfigurationData) {
 						amount_sign_convention: getField('inst-sign') || 'positive_is_credit',
 						settlement_window_days: parseInt(getField('inst-settlement')) || 14,
 						dedup_window_days: parseInt(getField('inst-dedup')) || 3,
-						amount_tolerance_pct: parseFloat(getField('inst-tolerance')) || 0.5
+						amount_tolerance_pct: (parseFloat(getField('inst-tolerance')) / 100) || 0.005
 					};
 					instDialogSave.disabled = true;
 					instDialogSave.textContent = 'Saving…';
-					var url = instEditId ? '/institutions/' + instEditId : '/institutions';
+					var url = instEditId ? '/api/institutions/' + instEditId : '/api/institutions';
 					var method = instEditId ? 'PUT' : 'POST';
 					fetch(url, {method:method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
 						.then(function(r) {
@@ -771,6 +775,62 @@ templ ConfigurationPage(shell ShellData, data ConfigurationData) {
 							if (instDialogError) { instDialogError.textContent = err.message||'Save failed.'; instDialogError.style.display = ''; }
 						});
 				});
+
+				// Direct listeners for institution buttons — document delegation is blocked by
+				// the stopPropagation wrapper inside <summary>, so we attach here instead.
+				(function() {
+					function bindInstButtons() {
+						document.querySelectorAll('.js-inst-edit').forEach(function(btn) {
+							btn.addEventListener('click', function(e) {
+								e.stopPropagation();
+								try { openInstDialog(JSON.parse(btn.dataset.institution)); } catch(ex) {}
+							});
+						});
+						document.querySelectorAll('.js-inst-delete').forEach(function(btn) {
+							btn.addEventListener('click', function(e) {
+								e.stopPropagation();
+								var row = btn.closest('[data-inst-id]');
+								if (!row) return;
+								var norm = row.querySelector('.js-inst-actions-normal');
+								var conf = row.querySelector('.js-inst-delete-confirm');
+								if (norm) norm.style.display = 'none';
+								if (conf) conf.style.display = '';
+							});
+						});
+						document.querySelectorAll('.js-inst-delete-no').forEach(function(btn) {
+							btn.addEventListener('click', function(e) {
+								e.stopPropagation();
+								var row = btn.closest('[data-inst-id]');
+								if (!row) return;
+								var norm = row.querySelector('.js-inst-actions-normal');
+								var conf = row.querySelector('.js-inst-delete-confirm');
+								if (norm) norm.style.display = '';
+								if (conf) conf.style.display = 'none';
+							});
+						});
+						document.querySelectorAll('.js-inst-delete-yes').forEach(function(btn) {
+							btn.addEventListener('click', function(e) {
+								e.stopPropagation();
+								var id = btn.dataset.instId;
+								btn.disabled = true;
+								fetch('/api/institutions/' + id, {method: 'DELETE'})
+									.then(function(r) {
+										if (r.ok || r.status === 404) {
+											var row = document.querySelector('[data-inst-id="' + id + '"]');
+											if (row) row.remove();
+											var list = document.getElementById('inst-list');
+											if (list && !list.querySelector('[data-inst-id]')) {
+												var empty = document.getElementById('inst-empty');
+												if (empty) empty.style.display = '';
+											}
+										} else { btn.disabled = false; }
+									})
+									.catch(function() { btn.disabled = false; });
+							});
+						});
+					}
+					bindInstButtons();
+				})();
 			})();
 		</script>
 	}
@@ -851,13 +911,15 @@ templ cfgLabelsSection(labels []store.LabelWithCount) {
 									}
 								</td>
 								<td style="padding:8px 12px">
-									<button
-										class="js-label-rename"
-										data-label-id={ l.ID }
-										data-label-name={ l.Name }
-										data-entry-count={ fmt.Sprintf("%d", l.EntryCount) }
-										style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:0"
-									>Rename</button>
+									<div class="js-label-actions-normal" style="display:flex;gap:6px">
+										<button class="js-label-rename" data-label-id={ l.ID } data-label-name={ l.Name } data-entry-count={ fmt.Sprintf("%d", l.EntryCount) } style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:0">Rename</button>
+										<button class="js-label-delete" data-label-id={ l.ID } style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit;padding:0">Delete</button>
+									</div>
+									<div class="js-label-delete-confirm" style="display:none;align-items:center;gap:4px">
+										<span style="font-size:11px;color:var(--commit)">Delete?</span>
+										<button class="js-label-delete-yes" data-label-id={ l.ID } style="background:none;border:none;cursor:pointer;color:var(--commit);font-size:11px;font-family:inherit;padding:2px 4px">Yes</button>
+										<button class="js-label-delete-no" data-label-id={ l.ID } style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:11px;font-family:inherit;padding:2px 4px">No</button>
+									</div>
 								</td>
 							</tr>
 						}
@@ -1081,8 +1143,9 @@ templ cfgInstOptField(label string, value *string) {
 templ cfgInstDialog() {
 	<dialog
 		id="inst-dialog"
-		style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0;color:var(--text);width:520px;max-width:95vw;max-height:90vh;overflow:hidden;display:flex;flex-direction:column"
+		style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0;color:var(--text);width:520px;max-width:95vw;max-height:90vh"
 	>
+		<div style="display:flex;flex-direction:column;max-height:90vh;overflow:hidden">
 		<div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
 			<span id="inst-dialog-title" style="font-size:15px;font-weight:700">New Institution Mapping</span>
 			<button id="inst-dialog-close" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:18px;line-height:1;padding:0 4px">✕</button>
@@ -1125,6 +1188,7 @@ templ cfgInstDialog() {
 				id="inst-dialog-save"
 				style="background:var(--accent);border:none;border-radius:6px;padding:6px 16px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit"
 			>Save mapping</button>
+		</div>
 		</div>
 	</dialog>
 }

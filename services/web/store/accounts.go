@@ -26,9 +26,7 @@ type Account struct {
 const accountCols = `
 	id::text, entity_id::text, institution_id::text,
 	name, account_type, status,
-	interest_rate, starting_balance_cents,
-	(starting_balance_cents + COALESCE((SELECT SUM(t.amount_cents) FROM transactions t WHERE t.account_id = accounts.id), 0)) AS balance_cents,
-	credit_limit_cents, created_at
+	interest_rate, starting_balance_cents, balance_cents, credit_limit_cents, created_at
 `
 
 // GetAccount fetches a single account by id for an entity.
@@ -107,15 +105,16 @@ func (s *Store) ListAccountsByInstitution(ctx context.Context, entityID, institu
 	return pgx.CollectRows(rows, pgx.RowToStructByName[Account])
 }
 
-// CreateAccount inserts a new account row.
+// CreateAccount inserts a new account row. balance_cents starts equal to
+// starting_balance_cents since no transactions exist yet.
 func (s *Store) CreateAccount(ctx context.Context, entityID string, in Account) (Account, error) {
 	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
 		INSERT INTO accounts (
 			id, entity_id, institution_id, name, account_type, status,
-			interest_rate, starting_balance_cents, credit_limit_cents, created_at
+			interest_rate, starting_balance_cents, balance_cents, credit_limit_cents, created_at
 		) VALUES (
 			gen_random_uuid(), $1, $2::uuid, $3, $4, $5,
-			$6, $7, $8, NOW()
+			$6, $7, $7, $8, NOW()
 		)
 		RETURNING %s
 	`, accountCols),
@@ -130,6 +129,7 @@ func (s *Store) CreateAccount(ctx context.Context, entityID string, in Account) 
 
 // UpdateAccount updates mutable fields on an account row. A nil InstitutionID
 // leaves the existing institution_id untouched — pass a non-nil value to relink.
+// balance_cents is recalculated inline whenever starting_balance_cents changes.
 func (s *Store) UpdateAccount(ctx context.Context, entityID, id string, in Account) (Account, error) {
 	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
 		UPDATE accounts SET
@@ -138,6 +138,8 @@ func (s *Store) UpdateAccount(ctx context.Context, entityID, id string, in Accou
 			status = $5,
 			interest_rate = $6,
 			starting_balance_cents = $7,
+			balance_cents = $7 + COALESCE(
+				(SELECT SUM(amount_cents) FROM transactions WHERE account_id = $2::uuid), 0),
 			credit_limit_cents = $8,
 			institution_id = COALESCE($9::uuid, institution_id)
 		WHERE entity_id = $1 AND id = $2
@@ -152,6 +154,22 @@ func (s *Store) UpdateAccount(ctx context.Context, entityID, id string, in Accou
 		return Account{}, err
 	}
 	return pgx.CollectOneRow(rows, pgx.RowToStructByName[Account])
+}
+
+// RecalculateBalanceForJob updates balance_cents for every account touched by
+// an import.process job. Called after the Rust engine signals completion so the
+// stored balance reflects the newly inserted transactions.
+func (s *Store) RecalculateBalanceForJob(ctx context.Context, entityID, jobID string) error {
+	_, err := s.pool.Exec(ctx, `
+		UPDATE accounts
+		SET balance_cents = starting_balance_cents + COALESCE(
+			(SELECT SUM(amount_cents) FROM transactions WHERE account_id = accounts.id), 0)
+		WHERE entity_id = $1
+		  AND id IN (
+			SELECT DISTINCT account_id FROM pending_imports WHERE job_id = $2
+		  )
+	`, entityID, jobID)
+	return err
 }
 
 // DeleteAccount removes an account row.

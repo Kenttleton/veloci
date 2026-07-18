@@ -21,6 +21,71 @@ templ Shell(data ShellData) {
 // refreshes the transactions table in-place when a transaction job completes.
 templ jobStream() {
 	<script>
+		// ── Session management ────────────────────────────────────────────────────────
+		(function() {
+			var lastActivity = Date.now();
+			var lastRefreshTime = Date.now();
+			var idleRefreshCount = 0;
+
+			// Track user activity
+			['click', 'keydown', 'scroll', 'touchstart'].forEach(function(evt) {
+				document.addEventListener(evt, function() { lastActivity = Date.now(); }, {passive: true, capture: true});
+			});
+			// Throttled mousemove (avoid per-pixel updates)
+			var lastMouseUpdate = 0;
+			document.addEventListener('mousemove', function() {
+				var now = Date.now();
+				if (now - lastMouseUpdate > 10000) { lastActivity = now; lastMouseUpdate = now; }
+			}, {passive: true});
+
+			function doLogout() {
+				fetch('/logout', {method: 'POST', credentials: 'same-origin'}).finally(function() {
+					window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search);
+				});
+			}
+
+			function scheduleRefresh() {
+				setTimeout(performRefresh, 13 * 60 * 1000);
+			}
+
+			function performRefresh() {
+				var wasActive = lastActivity > lastRefreshTime;
+				if (wasActive) {
+					idleRefreshCount = 0;
+				} else {
+					idleRefreshCount++;
+				}
+				// After 1 consecutive idle refresh, skip the next and logout
+				if (idleRefreshCount > 1) {
+					doLogout();
+					return;
+				}
+				fetch('/api/session/refresh', {method: 'POST', credentials: 'same-origin'})
+					.then(function(r) {
+						lastRefreshTime = Date.now();
+						if (!r.ok) { doLogout(); return; }
+						scheduleRefresh();
+					})
+					.catch(function() {
+						// Network error — retry in 60s without resetting idle counter
+						setTimeout(performRefresh, 60 * 1000);
+					});
+			}
+
+			scheduleRefresh();
+
+			// Global 401 intercept — redirect to login preserving current URL
+			var _fetch = window.fetch;
+			window.fetch = function(url, opts) {
+				return _fetch(url, opts).then(function(r) {
+					if (r.status === 401) {
+						window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search);
+					}
+					return r;
+				});
+			};
+		})();
+
 		(function() {
 			var TX_JOBS = { 'import.process': true, 'account.analyze': true, 'rules.reprocess': true };
 			var running = {};
@@ -219,7 +284,7 @@ templ addAccountDialog() {
 				</div>
 			</div>
 			<div>
-				<label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px" for="aa-balance">Balance (optional)</label>
+				<label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px" for="aa-balance">Starting Balance (optional)</label>
 				<div style="position:relative">
 					<span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:13px;pointer-events:none">$</span>
 					<input
@@ -491,7 +556,7 @@ templ addAccountDialog() {
 				html += row('Sign convention', inst.amount_sign_convention === 'positive_is_credit' ? 'Positive is credit' : 'Positive is debit');
 				html += row('Dedup window', inst.dedup_window_days + ' days');
 				html += row('Settlement window', inst.settlement_window_days + ' days');
-				html += row('Amount tolerance', inst.amount_tolerance_pct + '%');
+				html += row('Amount tolerance', (inst.amount_tolerance_pct * 100).toFixed(3).replace(/\.?0+$/, '') + '%');
 				existingPreview.innerHTML = html;
 				existingPreview.style.display = '';
 			}
@@ -511,7 +576,7 @@ templ addAccountDialog() {
 				fetch('/api/institutions')
 					.then(function(r) { return r.json(); })
 					.then(function(body) {
-						allInstitutions = (body && body.data && body.data.data) || [];
+						allInstitutions = (body && Array.isArray(body.data) ? body.data : []);
 						while (existingSelect.options.length > 1) existingSelect.remove(1);
 						allInstitutions.forEach(function(inst) {
 							var opt = document.createElement('option');
@@ -608,12 +673,12 @@ templ addAccountDialog() {
 				errorEl.style.display = 'none';
 
 				var accountBody = {
-					name:               name,
-					account_type:       typeSelect.value,
-					status:             statusSelect.value,
-					balance_cents:      dollarsToCents(balanceInput.value),
-					interest_rate:      rateWrap.style.display !== 'none' && rateInput.value.trim() ? parseFloat(rateInput.value) : null,
-					credit_limit_cents: limitWrap.style.display !== 'none' ? dollarsToCents(limitInput.value) : null,
+					name:                   name,
+					account_type:           typeSelect.value,
+					status:                 statusSelect.value,
+					starting_balance_cents: dollarsToCents(balanceInput.value) || 0,
+					interest_rate:          rateWrap.style.display !== 'none' && rateInput.value.trim() ? parseFloat(rateInput.value) : null,
+					credit_limit_cents:     limitWrap.style.display !== 'none' ? dollarsToCents(limitInput.value) : null,
 				};
 
 				function createAccount(institutionId) {

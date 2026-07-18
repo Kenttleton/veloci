@@ -182,6 +182,8 @@ func runServe(_ *cobra.Command, _ []string) error {
 		r.Get("/configuration", pages.Configuration)
 	})
 
+	r.Post("/api/session/refresh", pages.PostSessionRefresh)
+
 	// ─── Internal API routes (cookie or Bearer, same-origin JS islands) ───────
 	// All data endpoints are mounted under /api/ to avoid conflicts with page routes.
 	internalAPI := humachi.New(r, huma.DefaultConfig("Veloci", "1.0.0"))

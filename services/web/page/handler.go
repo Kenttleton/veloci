@@ -247,6 +247,13 @@ func (s *Server) PostLogin(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
+	http.SetCookie(w, &http.Cookie{
+		Name:     "veloci_refresh",
+		Value:    minted.RefreshToken,
+		Path:     "/api/session/refresh",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
 
 	http.Redirect(w, r, next, http.StatusFound)
 }
@@ -263,7 +270,50 @@ func (s *Server) PostLogout(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   -1,
 		HttpOnly: true,
 	})
+	http.SetCookie(w, &http.Cookie{
+		Name:     "veloci_refresh",
+		Value:    "",
+		Path:     "/api/session/refresh",
+		HttpOnly: true,
+		MaxAge:   -1,
+	})
 	http.Redirect(w, r, "/login", http.StatusFound)
+}
+
+// PostSessionRefresh uses the veloci_refresh cookie to issue a new token pair.
+// Not behind auth middleware — the access token may be expired when this is called.
+func (s *Server) PostSessionRefresh(w http.ResponseWriter, r *http.Request) {
+	cookie, err := r.Cookie("veloci_refresh")
+	if err != nil || cookie.Value == "" {
+		http.Error(w, `{"code":"UNAUTHORIZED"}`, http.StatusUnauthorized)
+		return
+	}
+	minted, err := s.auth.RefreshToken(r.Context(), &authclient.RefreshTokenInputBody{
+		RefreshToken: cookie.Value,
+	})
+	if err != nil {
+		http.SetCookie(w, &http.Cookie{Name: "veloci_refresh", Value: "", Path: "/api/session/refresh", MaxAge: -1})
+		http.Error(w, `{"code":"UNAUTHORIZED"}`, http.StatusUnauthorized)
+		return
+	}
+	expiry, _ := time.Parse(time.RFC3339, minted.ExpiresAt)
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookie,
+		Value:    minted.AccessToken,
+		Path:     "/",
+		Expires:  expiry,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+	http.SetCookie(w, &http.Cookie{
+		Name:     "veloci_refresh",
+		Value:    minted.RefreshToken,
+		Path:     "/api/session/refresh",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"ok":true}`))
 }
 
 // ─── Page handlers ───────────────────────────────────────────────────────────
@@ -653,15 +703,14 @@ func (s *Server) Configuration(w http.ResponseWriter, r *http.Request) {
 		tab = "labels"
 	}
 
-	labels, _ := s.store.ListLabelsWithEntryCount(ctx, entityID)
-	institutions, _ := s.store.ListInstitutions(ctx, entityID)
-	merchants, _ := s.store.ListCanonicalMerchants(ctx, 500, "")
-
-	data := ConfigurationData{
-		Tab:                tab,
-		Labels:             labels,
-		Institutions:       institutions,
-		CanonicalMerchants: merchants,
+	data := ConfigurationData{Tab: tab}
+	switch tab {
+	case "merchants":
+		data.CanonicalMerchants, _ = s.store.ListCanonicalMerchants(ctx, 500, "")
+	case "institutions":
+		data.Institutions, _ = s.store.ListInstitutions(ctx, entityID)
+	default:
+		data.Labels, _ = s.store.ListLabelsWithEntryCount(ctx, entityID)
 	}
 	s.render(w, r, ConfigurationPage(s.buildShellData(r), data))
 }

@@ -251,6 +251,12 @@ func (h *JobsHandler) StreamJobs(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
+		if event.JobType == "import.process" && event.Status == "complete" {
+			go func(jobID string) { //nolint:errcheck
+				h.s.RecalculateBalanceForJob(context.Background(), entityID, jobID)
+			}(event.JobID)
+		}
+
 		b, _ := json.Marshal(event)
 		fmt.Fprintf(w, "data: %s\n\n", b)
 		flusher.Flush()

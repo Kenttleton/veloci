@@ -77,6 +77,7 @@ func AuthenticateCookieOrRedirect(client *authclient.Client) func(http.Handler) 
 			req, ok := validateToken(client, cookie.Value, r)
 			if !ok {
 				http.SetCookie(w, &http.Cookie{Name: SessionCookie, Value: "", Path: "/", MaxAge: -1})
+				http.SetCookie(w, &http.Cookie{Name: "veloci_refresh", Value: "", Path: "/api/session/refresh", MaxAge: -1})
 				http.Redirect(w, r, loginURL, http.StatusFound)
 				return
 			}

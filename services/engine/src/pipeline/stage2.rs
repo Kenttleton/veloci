@@ -403,23 +403,39 @@ async fn persist_cluster(
     let last_tx_date = cluster.transactions.iter().map(|t| t.date).max();
     let next_due_date = last_tx_date.map(|d| d + Duration::days(i64::from(period_days)));
 
+    // Upsert a label using the canonical merchant name so the entry has a
+    // human-readable display name in the ledger.
+    let (label_id,): (Uuid,) = sqlx::query_as(
+        r#"
+        INSERT INTO labels (name)
+        VALUES ($1)
+        ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+        RETURNING id
+        "#,
+    )
+    .bind(&cluster.representative_merchant)
+    .fetch_one(pool)
+    .await
+    .context("failed to upsert label for canonical merchant entry")?;
+
     let entry_id: (Uuid,) = sqlx::query_as(
         r#"
         INSERT INTO entries (
-          entity_id, direction, entry_type, period_days, next_due_date,
+          entity_id, label_id, direction, entry_type, period_days, next_due_date,
           conditions, projected_rate_per_day, status, source, project_tentatively, start_date,
           alert_type, confidence, merchant_confidence, timing_confidence, amount_confidence,
           sample_merchants, matched_transaction_count
         ) VALUES (
-          $1, $2, $3, $4, $5,
-          $6, $7, 'pending_review', 'engine', false, $8,
-          'new', $9, $10, $11, $12,
-          $13, $14
+          $1, $2, $3, $4, $5, $6,
+          $7, $8, 'pending_review', 'engine', false, $9,
+          'new', $10, $11, $12, $13,
+          $14, $15
         )
         RETURNING id
         "#,
     )
     .bind(entity_id)
+    .bind(label_id)
     .bind(direction)
     .bind(score.entry_type)
     .bind(period_days)
