@@ -202,6 +202,7 @@ func runServe(_ *cobra.Command, _ []string) error {
 		handler.RegisterProjectionsRoutes(subAPI, s, pub, perms)
 		handler.RegisterAdminRoutes(subAPI, s, pub, perms)
 		handler.RegisterJobsRoutes(subAPI, jobsHandler, perms)
+		handler.RegisterCanonicalMerchantsRoutes(subAPI, s, pub, perms)
 
 		// Raw chi handler (multipart upload cannot use Huma).
 		r.Post("/imports", handler.NewImportsHandler(s, pub).UploadImport)
