@@ -205,7 +205,7 @@ templ ConfigurationPage(shell ShellData, data ConfigurationData) {
 					}
 				});
 
-				// ── Merchants ────────────────────────────────────────────────────────────
+								// ── Merchants ────────────────────────────────────────────────────────────
 
 				var merchantsBody = document.getElementById('merchants-body');
 				var addMerchantBtn = document.getElementById('add-merchant-btn');
@@ -222,12 +222,10 @@ templ ConfigurationPage(shell ShellData, data ConfigurationData) {
 						newMerchantError.textContent = '';
 						newMerchantInput.focus();
 					});
-					newMerchantCancel.addEventListener('click', function() {
-						newMerchantRow.style.display = 'none';
-					});
+					newMerchantCancel.addEventListener('click', function() { newMerchantRow.style.display = 'none'; });
 					newMerchantInput.addEventListener('keydown', function(e) {
 						if (e.key === 'Enter') saveNewMerchant();
-						if (e.key === 'Escape') { newMerchantRow.style.display = 'none'; }
+						if (e.key === 'Escape') newMerchantRow.style.display = 'none';
 					});
 					newMerchantSave.addEventListener('click', saveNewMerchant);
 				}
@@ -243,73 +241,93 @@ templ ConfigurationPage(shell ShellData, data ConfigurationData) {
 							if (!m) throw new Error('no data');
 							newMerchantRow.style.display = 'none';
 							newMerchantInput.disabled = false;
-							var row = buildMerchantRow(m.id, m.name, m.source, m.alias_count || 0);
-							if (merchantsBody) {
-								var first = merchantsBody.querySelector('tr:not(#new-merchant-row)');
-								if (first) merchantsBody.insertBefore(row, first);
-								else merchantsBody.appendChild(row);
-							}
+							insertMerchantRow(m.id, m.name, m.source || 'user', m.alias_count || 0);
 							var empty = document.getElementById('merchants-empty');
 							if (empty) empty.style.display = 'none';
 						})
 						.catch(function() {
 							newMerchantInput.disabled = false;
-							newMerchantError.textContent = 'Failed to create merchant.';
+							if (newMerchantError) newMerchantError.textContent = 'Failed to create merchant.';
 						});
 				}
 
-				function buildMerchantRow(id, name, source, aliasCount) {
+				function insertMerchantRow(id, name, source, aliasCount) {
 					var tr = document.createElement('tr');
 					tr.dataset.merchantId = id;
+					tr.dataset.merchantName = name;
+					tr.dataset.merchantSource = source;
 					tr.style.borderBottom = '1px solid var(--border)';
-					tr.innerHTML = merchantRowHTML(id, name, source, aliasCount, false);
-					return tr;
+					tr.innerHTML = merchantViewCells(id, name, source, aliasCount);
+					if (merchantsBody) {
+						var ref = merchantsBody.querySelector('tr:not(#new-merchant-row)');
+						if (ref) merchantsBody.insertBefore(tr, ref);
+						else merchantsBody.appendChild(tr);
+					}
 				}
 
-				function merchantRowHTML(id, name, source, aliasCount, editing) {
-					var sourceBadge = '<span style="font-size:11px;color:' + (source==='user'?'var(--accent)':'var(--text3)') + ';background:var(--surface2);padding:2px 6px;border-radius:4px">' + escHtml(source) + '</span>';
-					var aliasStr = aliasCount > 0 ? String(aliasCount) : '—';
-					if (editing) {
-						return '<td style="padding:8px 12px"><input class="merchant-edit-input" data-merchant-id="' + id + '" type="text" value="' + escHtml(name) + '" style="background:var(--surface2);border:1px solid var(--accent);border-radius:4px;padding:4px 8px;font-size:13px;color:var(--text);outline:none;width:100%"/><div class="merchant-edit-error" style="font-size:11px;color:var(--commit);margin-top:2px"></div></td>' +
-							'<td style="padding:8px 12px">' + sourceBadge + '</td>' +
-							'<td style="padding:8px 12px;font-size:12px;color:var(--text2)">' + aliasStr + '</td>' +
-							'<td style="padding:8px 12px"><div style="display:flex;gap:6px">' +
+				// Returns the 4 <td> cells for a merchant row in view mode
+				function merchantViewCells(id, name, source, aliasCount) {
+					var badge = '<span style="font-size:11px;color:' + (source==='user'?'var(--accent)':'var(--text3)') + ';background:var(--surface2);padding:2px 6px;border-radius:4px">' + escHtml(source) + '</span>';
+					var aliasBtn = aliasCount > 0
+						? '<button class="js-merchant-aliases-toggle" data-merchant-id="' + id + '" data-merchant-name="' + escHtml(name) + '" style="background:none;border:none;cursor:pointer;color:var(--accent);font-size:12px;font-family:inherit;padding:0;text-decoration:underline">' + aliasCount + ' alias' + (aliasCount===1?'':'es') + '</button>'
+						: '<button class="js-merchant-aliases-toggle" data-merchant-id="' + id + '" data-merchant-name="' + escHtml(name) + '" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit;padding:0">+ aliases</button>';
+					var actions =
+						'<div class="js-merchant-actions-normal" style="display:flex;gap:8px">' +
+							'<button class="js-merchant-rename" data-merchant-id="' + id + '" data-merchant-name="' + escHtml(name) + '" data-source="' + escHtml(source) + '" data-alias-count="' + aliasCount + '" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:0">Rename</button>' +
+							'<button class="js-merchant-delete" data-merchant-id="' + id + '" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit;padding:0">Delete</button>' +
+						'</div>' +
+						'<div class="js-merchant-delete-confirm" style="display:none;align-items:center;gap:4px">' +
+							'<span style="font-size:11px;color:var(--commit)">Delete?</span>' +
+							'<button class="js-merchant-delete-yes" data-merchant-id="' + id + '" style="background:none;border:none;cursor:pointer;color:var(--commit);font-size:11px;font-family:inherit;padding:2px 4px">Yes</button>' +
+							'<button class="js-merchant-delete-no" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:11px;font-family:inherit;padding:2px 4px">No</button>' +
+						'</div>';
+					return '<td style="padding:8px 12px;font-size:13px;color:var(--text);cursor:pointer" class="js-merchant-name-cell" data-merchant-id="' + id + '" data-merchant-name="' + escHtml(name) + '">' + escHtml(name) + '</td>' +
+						'<td style="padding:8px 12px">' + badge + '</td>' +
+						'<td style="padding:8px 12px">' + aliasBtn + '</td>' +
+						'<td style="padding:8px 12px">' + actions + '</td>';
+				}
+
+				// Returns 4 <td> cells for a merchant row in rename-edit mode
+				function merchantEditCells(id, name, source, aliasCount) {
+					var badge = '<span style="font-size:11px;color:' + (source==='user'?'var(--accent)':'var(--text3)') + ';background:var(--surface2);padding:2px 6px;border-radius:4px">' + escHtml(source) + '</span>';
+					return '<td style="padding:8px 12px">' +
+							'<input class="merchant-edit-input" data-merchant-id="' + id + '" type="text" value="' + escHtml(name) + '" style="background:var(--surface2);border:1px solid var(--accent);border-radius:4px;padding:4px 8px;font-size:13px;color:var(--text);outline:none;width:100%"/>' +
+							'<div class="merchant-edit-error" style="font-size:11px;color:var(--commit);margin-top:2px"></div>' +
+						'</td>' +
+						'<td style="padding:8px 12px">' + badge + '</td>' +
+						'<td style="padding:8px 12px"></td>' +
+						'<td style="padding:8px 12px"><div style="display:flex;gap:6px">' +
 							'<button class="js-merchant-save" data-merchant-id="' + id + '" style="background:none;border:none;cursor:pointer;color:var(--income);font-size:12px;font-family:inherit;padding:0">Save</button>' +
 							'<button class="js-merchant-cancel-edit" data-merchant-id="' + id + '" data-original-name="' + escHtml(name) + '" data-source="' + escHtml(source) + '" data-alias-count="' + aliasCount + '" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit;padding:0">Cancel</button>' +
-							'</div></td>';
-					}
-					return '<td style="padding:8px 12px;font-size:13px;color:var(--text);cursor:pointer" class="js-merchant-name-cell" data-merchant-id="' + id + '" data-merchant-name="' + escHtml(name) + '">' + escHtml(name) + '</td>' +
-						'<td style="padding:8px 12px">' + sourceBadge + '</td>' +
-						'<td style="padding:8px 12px;font-size:12px;color:var(--text2)">' + aliasStr + '</td>' +
-						'<td style="padding:8px 12px"><button class="js-merchant-rename" data-merchant-id="' + id + '" data-merchant-name="' + escHtml(name) + '" data-source="' + escHtml(source) + '" data-alias-count="' + aliasCount + '" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:0">Rename</button></td>';
+						'</div></td>';
 				}
 
 				function startMerchantEdit(id, name, source, aliasCount) {
-					var tr = merchantsBody ? merchantsBody.querySelector('[data-merchant-id="' + id + '"]') : null;
-					if (!tr) return;
-					tr.innerHTML = merchantRowHTML(id, name, source, aliasCount, true);
+					var tr = merchantsBody ? merchantsBody.querySelector('tr[data-merchant-id="' + id + '"]') : null;
+					if (!tr || tr.id === 'new-merchant-row') return;
+					tr.innerHTML = merchantEditCells(id, name, source, aliasCount);
 					var input = tr.querySelector('.merchant-edit-input');
 					if (input) { input.focus(); input.select(); }
 				}
 
 				function saveMerchantEdit(id) {
-					var tr = merchantsBody ? merchantsBody.querySelector('[data-merchant-id="' + id + '"]') : null;
+					var tr = merchantsBody ? merchantsBody.querySelector('tr[data-merchant-id="' + id + '"]') : null;
 					if (!tr) return;
 					var input = tr.querySelector('.merchant-edit-input');
 					var errorEl = tr.querySelector('.merchant-edit-error');
 					var name = input ? input.value.trim() : '';
 					var cancelBtn = tr.querySelector('[data-original-name]');
 					var origName = cancelBtn ? cancelBtn.dataset.originalName : '';
-					if (!name) { cancelMerchantEdit(id, origName, '', 0); return; }
+					var source = cancelBtn ? (cancelBtn.dataset.source||'engine') : 'engine';
+					var aliasCount = cancelBtn ? parseInt(cancelBtn.dataset.aliasCount||'0',10) : 0;
+					if (!name) { cancelMerchantEdit(id, origName, source, aliasCount); return; }
 					if (input) input.disabled = true;
 					fetch('/canonical-merchants/' + id, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})
 						.then(function(r){ return r.json(); })
 						.then(function(env) {
 							var m = env.data;
-							var btn = tr.querySelector('[data-alias-count]');
-							var cnt = btn ? parseInt(btn.dataset.aliasCount||'0',10) : 0;
-							var src = btn ? btn.dataset.source : 'engine';
-							tr.innerHTML = merchantRowHTML(m.id, m.name, src, cnt, false);
+							tr.dataset.merchantName = m.name;
+							tr.innerHTML = merchantViewCells(m.id, m.name, source, aliasCount);
 						})
 						.catch(function() {
 							if (input) input.disabled = false;
@@ -318,35 +336,309 @@ templ ConfigurationPage(shell ShellData, data ConfigurationData) {
 				}
 
 				function cancelMerchantEdit(id, name, source, aliasCount) {
-					var tr = merchantsBody ? merchantsBody.querySelector('[data-merchant-id="' + id + '"]') : null;
+					var tr = merchantsBody ? merchantsBody.querySelector('tr[data-merchant-id="' + id + '"]') : null;
 					if (!tr) return;
-					var btn = tr.querySelector('[data-original-name]');
-					var src = btn ? (btn.dataset.source||'engine') : source;
-					var cnt = btn ? parseInt((btn.dataset.aliasCount||'0'),10) : aliasCount;
-					tr.innerHTML = merchantRowHTML(id, name, src, cnt, false);
+					tr.innerHTML = merchantViewCells(id, name, source, aliasCount);
 				}
+
+				// ── Alias expansion ───────────────────────────────────────────────────────
+
+				var _aliasCache = {};
+
+				function getMerchantExpansionRow(id) {
+					return document.querySelector('tr[data-merchant-expansion="' + id + '"]');
+				}
+
+				function toggleMerchantExpansion(id, name) {
+					var existing = getMerchantExpansionRow(id);
+					if (existing) { existing.remove(); return; }
+					var merchantTr = merchantsBody ? merchantsBody.querySelector('tr[data-merchant-id="' + id + '"]') : null;
+					if (!merchantTr) return;
+					var expTr = document.createElement('tr');
+					expTr.dataset.merchantExpansion = id;
+					expTr.innerHTML = '<td colspan="4" style="padding:12px 16px;background:var(--bg);border-bottom:1px solid var(--border)">' + buildExpansionHTML(id, name) + '</td>';
+					merchantTr.parentNode.insertBefore(expTr, merchantTr.nextSibling);
+					loadMerchantAliases(id);
+					populateMergeSelect(id);
+				}
+
+				function buildExpansionHTML(id, name) {
+					return '<div style="display:grid;gap:16px">' +
+						'<div>' +
+							'<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Aliases</div>' +
+							'<div id="alias-chips-' + id + '" style="display:flex;flex-wrap:wrap;gap:6px;min-height:24px;margin-bottom:8px"><span style="color:var(--text3);font-size:12px">Loading…</span></div>' +
+							'<div style="display:flex;gap:6px;align-items:center">' +
+								'<input id="add-alias-input-' + id + '" type="text" placeholder="normalized alias" style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:12px;color:var(--text);outline:none;width:220px"/>' +
+								'<button class="js-alias-add" data-merchant-id="' + id + '" style="background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--accent);font-size:12px;font-family:inherit;padding:3px 10px">Add alias</button>' +
+								'<span id="add-alias-err-' + id + '" style="color:var(--commit);font-size:11px"></span>' +
+							'</div>' +
+						'</div>' +
+						'<div style="border-top:1px solid var(--border);padding-top:12px">' +
+							'<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Merge</div>' +
+							'<div style="font-size:12px;color:var(--text3);margin-bottom:6px">Absorb another merchant into <strong style=\"color:var(--text)\">' + escHtml(name) + '</strong> — its aliases move here and it is deleted.</div>' +
+							'<div style="display:flex;gap:6px;align-items:center">' +
+								'<select id="merge-select-' + id + '" style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:12px;color:var(--text);outline:none;width:240px"><option value="">— select merchant to absorb —</option></select>' +
+								'<button class="js-merge-confirm" data-merchant-id="' + id + '" style="background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--commit);font-size:12px;font-family:inherit;padding:3px 10px">Absorb &amp; delete</button>' +
+								'<span id="merge-err-' + id + '" style="color:var(--commit);font-size:11px"></span>' +
+							'</div>' +
+						'</div>' +
+						'<div style="border-top:1px solid var(--border);padding-top:12px">' +
+							'<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Split</div>' +
+							'<div style="font-size:12px;color:var(--text3);margin-bottom:8px">Move selected aliases to a new merchant name.</div>' +
+							'<div id="split-checks-' + id + '" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"><span style="color:var(--text3);font-size:12px">Load aliases first…</span></div>' +
+							'<div style="display:flex;gap:6px;align-items:center">' +
+								'<input id="split-name-' + id + '" type="text" placeholder="new merchant name" style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:12px;color:var(--text);outline:none;width:200px"/>' +
+								'<button class="js-split-confirm" data-merchant-id="' + id + '" style="background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--accent);font-size:12px;font-family:inherit;padding:3px 10px">Create split</button>' +
+								'<span id="split-err-' + id + '" style="color:var(--commit);font-size:11px"></span>' +
+							'</div>' +
+						'</div>' +
+					'</div>';
+				}
+
+				function loadMerchantAliases(id) {
+					fetch('/canonical-merchants/' + id + '/aliases')
+						.then(function(r){ return r.json(); })
+						.then(function(env) {
+							var aliases = env.data || [];
+							_aliasCache[id] = aliases;
+							renderAliasChips(id, aliases);
+							renderSplitCheckboxes(id, aliases);
+						})
+						.catch(function() {
+							var el = document.getElementById('alias-chips-' + id);
+							if (el) el.innerHTML = '<span style="color:var(--commit);font-size:12px">Failed to load.</span>';
+						});
+				}
+
+				function renderAliasChips(id, aliases) {
+					var el = document.getElementById('alias-chips-' + id);
+					if (!el) return;
+					if (!aliases.length) { el.innerHTML = '<span style="color:var(--text3);font-size:12px">No aliases yet.</span>'; return; }
+					el.innerHTML = aliases.map(function(a) {
+						return '<span style="display:inline-flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:12px;color:var(--text)">' +
+							escHtml(a.normalized_name) +
+							'<button class="js-alias-remove" data-merchant-id="' + id + '" data-normalized-name="' + escHtml(a.normalized_name) + '" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:11px;line-height:1;padding:0 1px" title="Remove">×</button>' +
+							'</span>';
+					}).join('');
+				}
+
+				function renderSplitCheckboxes(id, aliases) {
+					var el = document.getElementById('split-checks-' + id);
+					if (!el) return;
+					if (!aliases.length) { el.innerHTML = '<span style="color:var(--text3);font-size:12px">No aliases to split.</span>'; return; }
+					el.innerHTML = aliases.map(function(a) {
+						return '<label style="display:inline-flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-size:12px;cursor:pointer">' +
+							'<input type="checkbox" data-split-alias="' + escHtml(a.normalized_name) + '" style="cursor:pointer"/>' +
+							escHtml(a.normalized_name) +
+							'</label>';
+					}).join('');
+				}
+
+				function populateMergeSelect(id) {
+					var sel = document.getElementById('merge-select-' + id);
+					if (!sel) return;
+					var rows = merchantsBody ? merchantsBody.querySelectorAll('tr[data-merchant-id]') : [];
+					rows.forEach(function(tr) {
+						var mid = tr.dataset.merchantId;
+						var mname = tr.dataset.merchantName;
+						if (mid && mid !== id && mname) {
+							var opt = document.createElement('option');
+							opt.value = mid;
+							opt.textContent = mname;
+							sel.appendChild(opt);
+						}
+					});
+				}
+
+				function updateMerchantAliasCount(id, count) {
+					var tr = merchantsBody ? merchantsBody.querySelector('tr[data-merchant-id="' + id + '"]') : null;
+					if (!tr) return;
+					var aliasCell = tr.children[2];
+					if (!aliasCell) return;
+					var name = tr.dataset.merchantName || '';
+					aliasCell.innerHTML = count > 0
+						? '<button class="js-merchant-aliases-toggle" data-merchant-id="' + id + '" data-merchant-name="' + escHtml(name) + '" style="background:none;border:none;cursor:pointer;color:var(--accent);font-size:12px;font-family:inherit;padding:0;text-decoration:underline">' + count + ' alias' + (count===1?'':'es') + '</button>'
+						: '<button class="js-merchant-aliases-toggle" data-merchant-id="' + id + '" data-merchant-name="' + escHtml(name) + '" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit;padding:0">+ aliases</button>';
+					var renameBtn = tr.querySelector('.js-merchant-rename');
+					if (renameBtn) renameBtn.dataset.aliasCount = String(count);
+				}
+
+				// ── Merchant event delegation ─────────────────────────────────────────────
 
 				document.addEventListener('click', function(e) {
 					var rename = e.target.closest('.js-merchant-rename');
-					if (rename) { startMerchantEdit(rename.dataset.merchantId, rename.dataset.merchantName, rename.dataset.source||'engine', parseInt(rename.dataset.aliasCount||'0',10)); return; }
+					if (rename) {
+						startMerchantEdit(rename.dataset.merchantId, rename.dataset.merchantName, rename.dataset.source||'engine', parseInt(rename.dataset.aliasCount||'0',10));
+						return;
+					}
 					var nameCell = e.target.closest('.js-merchant-name-cell');
-					if (nameCell) { startMerchantEdit(nameCell.dataset.merchantId, nameCell.dataset.merchantName, 'engine', 0); return; }
+					if (nameCell && !e.target.closest('.js-merchant-aliases-toggle')) {
+						var tr = nameCell.closest('tr[data-merchant-id]');
+						var src = tr ? (tr.dataset.merchantSource||'engine') : 'engine';
+						var renBtn = tr ? tr.querySelector('.js-merchant-rename') : null;
+						var cnt = renBtn ? parseInt(renBtn.dataset.aliasCount||'0',10) : 0;
+						startMerchantEdit(nameCell.dataset.merchantId, nameCell.dataset.merchantName, src, cnt);
+						return;
+					}
 					var mSave = e.target.closest('.js-merchant-save');
 					if (mSave) { saveMerchantEdit(mSave.dataset.merchantId); return; }
 					var mCancel = e.target.closest('.js-merchant-cancel-edit');
 					if (mCancel) { cancelMerchantEdit(mCancel.dataset.merchantId, mCancel.dataset.originalName, mCancel.dataset.source||'engine', parseInt(mCancel.dataset.aliasCount||'0',10)); return; }
+					var del = e.target.closest('.js-merchant-delete');
+					if (del) {
+						var row = del.closest('tr[data-merchant-id]');
+						if (row) {
+							var norm = row.querySelector('.js-merchant-actions-normal');
+							var conf = row.querySelector('.js-merchant-delete-confirm');
+							if (norm) norm.style.display = 'none';
+							if (conf) conf.style.display = 'flex';
+						}
+						return;
+					}
+					var delNo = e.target.closest('.js-merchant-delete-no');
+					if (delNo) {
+						var row = delNo.closest('tr[data-merchant-id]');
+						if (row) {
+							var norm = row.querySelector('.js-merchant-actions-normal');
+							var conf = row.querySelector('.js-merchant-delete-confirm');
+							if (norm) norm.style.display = 'flex';
+							if (conf) conf.style.display = 'none';
+						}
+						return;
+					}
+					var delYes = e.target.closest('.js-merchant-delete-yes');
+					if (delYes) {
+						var mid = delYes.dataset.merchantId;
+						delYes.disabled = true;
+						fetch('/canonical-merchants/' + mid, {method:'DELETE'})
+							.then(function(r) {
+								if (r.ok || r.status===404) {
+									var row = merchantsBody ? merchantsBody.querySelector('tr[data-merchant-id="' + mid + '"]') : null;
+									if (row) row.remove();
+									var exp = getMerchantExpansionRow(mid);
+									if (exp) exp.remove();
+									if (merchantsBody && !merchantsBody.querySelector('tr[data-merchant-id]')) {
+										var empty = document.getElementById('merchants-empty');
+										if (empty) empty.style.display = '';
+									}
+								} else { delYes.disabled = false; }
+							})
+							.catch(function() { delYes.disabled = false; });
+						return;
+					}
+					var toggle = e.target.closest('.js-merchant-aliases-toggle');
+					if (toggle) {
+						toggleMerchantExpansion(toggle.dataset.merchantId, toggle.dataset.merchantName);
+						return;
+					}
+					var aliasRemove = e.target.closest('.js-alias-remove');
+					if (aliasRemove) {
+						var mid = aliasRemove.dataset.merchantId;
+						var aname = aliasRemove.dataset.normalizedName;
+						fetch('/canonical-merchants/' + mid + '/aliases/' + encodeURIComponent(aname), {method:'DELETE'})
+							.then(function(r) {
+								if (r.ok || r.status===404) {
+									var arr = (_aliasCache[mid] || []).filter(function(a){ return a.normalized_name !== aname; });
+									_aliasCache[mid] = arr;
+									renderAliasChips(mid, arr);
+									renderSplitCheckboxes(mid, arr);
+									updateMerchantAliasCount(mid, arr.length);
+								}
+							});
+						return;
+					}
+					var aliasAdd = e.target.closest('.js-alias-add');
+					if (aliasAdd) {
+						var mid = aliasAdd.dataset.merchantId;
+						var inp = document.getElementById('add-alias-input-' + mid);
+						var errEl = document.getElementById('add-alias-err-' + mid);
+						var aname = inp ? inp.value.trim() : '';
+						if (!aname) return;
+						aliasAdd.disabled = true;
+						if (errEl) errEl.textContent = '';
+						fetch('/canonical-merchants/' + mid + '/aliases', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({normalized_name:aname})})
+							.then(function(r){ return r.json(); })
+							.then(function(env) {
+								aliasAdd.disabled = false;
+								var alias = env.data;
+								if (!alias || !alias.normalized_name) throw new Error('no data');
+								if (inp) inp.value = '';
+								var arr = (_aliasCache[mid] || []).concat([{normalized_name:alias.normalized_name}]);
+								_aliasCache[mid] = arr;
+								renderAliasChips(mid, arr);
+								renderSplitCheckboxes(mid, arr);
+								updateMerchantAliasCount(mid, arr.length);
+							})
+							.catch(function(err) {
+								aliasAdd.disabled = false;
+								if (errEl) errEl.textContent = (err && err.message && err.message !== '[object Object]') ? err.message : 'Failed.';
+							});
+						return;
+					}
+					var mergeBtn = e.target.closest('.js-merge-confirm');
+					if (mergeBtn) {
+						var mid = mergeBtn.dataset.merchantId;
+						var sel = document.getElementById('merge-select-' + mid);
+						var errEl = document.getElementById('merge-err-' + mid);
+						var absorbId = sel ? sel.value : '';
+						if (!absorbId) { if (errEl) errEl.textContent = 'Select a merchant to absorb.'; return; }
+						mergeBtn.disabled = true;
+						if (errEl) errEl.textContent = '';
+						fetch('/canonical-merchants/' + mid + '/merge', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({absorb_id:absorbId})})
+							.then(function(r){
+								if (!r.ok) return r.json().then(function(e){ throw new Error(e.detail||'Merge failed'); });
+								location.reload();
+							})
+							.catch(function(err) {
+								mergeBtn.disabled = false;
+								if (errEl) errEl.textContent = (err && err.message) ? err.message : 'Merge failed.';
+							});
+						return;
+					}
+					var splitBtn = e.target.closest('.js-split-confirm');
+					if (splitBtn) {
+						var mid = splitBtn.dataset.merchantId;
+						var errEl = document.getElementById('split-err-' + mid);
+						var nameInp = document.getElementById('split-name-' + mid);
+						var newName = nameInp ? nameInp.value.trim() : '';
+						if (!newName) { if (errEl) errEl.textContent = 'Enter a new merchant name.'; return; }
+						var checked = document.querySelectorAll('#split-checks-' + mid + ' input[type=checkbox]:checked');
+						var aliases = [];
+						checked.forEach(function(cb){ if (cb.dataset.splitAlias) aliases.push(cb.dataset.splitAlias); });
+						if (!aliases.length) { if (errEl) errEl.textContent = 'Select at least one alias.'; return; }
+						splitBtn.disabled = true;
+						if (errEl) errEl.textContent = '';
+						fetch('/canonical-merchants/' + mid + '/split', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({new_name:newName,aliases:aliases})})
+							.then(function(r){
+								if (!r.ok) return r.json().then(function(e){ throw new Error(e.detail||'Split failed'); });
+								location.reload();
+							})
+							.catch(function(err) {
+								splitBtn.disabled = false;
+								if (errEl) errEl.textContent = (err && err.message) ? err.message : 'Split failed.';
+							});
+						return;
+					}
 				});
 
 				document.addEventListener('keydown', function(e) {
+					if (e.target.id && e.target.id.indexOf('add-alias-input-') === 0) {
+						if (e.key === 'Enter') {
+							var mid = e.target.id.slice('add-alias-input-'.length);
+							var btn = document.querySelector('.js-alias-add[data-merchant-id="' + mid + '"]');
+							if (btn) btn.click();
+						}
+						return;
+					}
 					if (!e.target.classList.contains('merchant-edit-input')) return;
 					var id = e.target.dataset.merchantId;
 					if (e.key === 'Enter') saveMerchantEdit(id);
 					if (e.key === 'Escape') {
-						var btn = e.target.closest('tr') ? e.target.closest('tr').querySelector('[data-original-name]') : null;
-						var name = btn ? btn.dataset.originalName : '';
-						var src = btn ? (btn.dataset.source||'engine') : 'engine';
-						var cnt = btn ? parseInt(btn.dataset.aliasCount||'0',10) : 0;
-						cancelMerchantEdit(id, name, src, cnt);
+						var cancelBtn = e.target.closest('tr') ? e.target.closest('tr').querySelector('[data-original-name]') : null;
+						cancelMerchantEdit(id,
+							cancelBtn ? cancelBtn.dataset.originalName : '',
+							cancelBtn ? (cancelBtn.dataset.source||'engine') : 'engine',
+							cancelBtn ? parseInt(cancelBtn.dataset.aliasCount||'0',10) : 0);
 					}
 				});
 
@@ -577,7 +869,7 @@ templ cfgLabelsSection(labels []store.LabelWithCount) {
 }
 
 templ cfgMerchantsSection(merchants []store.CanonicalMerchantWithCounts) {
-	<section style="max-width:640px">
+	<section style="max-width:760px">
 		<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
 			<div>
 				<h2 style="margin:0;font-size:15px;font-weight:700;color:var(--text)">Merchants</h2>
@@ -593,9 +885,9 @@ templ cfgMerchantsSection(merchants []store.CanonicalMerchantWithCounts) {
 				<thead>
 					<tr style="background:var(--surface);border-bottom:1px solid var(--border)">
 						<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em">Name</th>
-						<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;width:80px">Source</th>
+						<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;width:70px">Source</th>
 						<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;width:100px">Aliases</th>
-						<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;width:80px">Actions</th>
+						<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;width:140px">Actions</th>
 					</tr>
 				</thead>
 				<tbody id="merchants-body">
@@ -623,15 +915,12 @@ templ cfgMerchantsSection(merchants []store.CanonicalMerchantWithCounts) {
 							<td colspan="4" style="padding:16px 12px;color:var(--text3);font-size:13px">No merchants yet. They are created automatically by the engine or you can add one above.</td>
 						</tr>
 					} else {
-						for i, m := range merchants {
+						for _, m := range merchants {
 							<tr
 								data-merchant-id={ m.ID }
-								style={ func() string {
-									if i < len(merchants)-1 {
-										return "border-bottom:1px solid var(--border)"
-									}
-									return ""
-								}() }
+								data-merchant-name={ m.Name }
+								data-merchant-source={ m.Source }
+								style="border-bottom:1px solid var(--border)"
 							>
 								<td
 									class="js-merchant-name-cell"
@@ -642,20 +931,51 @@ templ cfgMerchantsSection(merchants []store.CanonicalMerchantWithCounts) {
 								<td style="padding:8px 12px">
 									<span style={ merchantSourceBadge(m.Source) }>{ m.Source }</span>
 								</td>
-								<td style="padding:8px 12px;font-size:12px;color:var(--text2)">
+								<td style="padding:8px 12px">
 									if m.AliasCount > 0 {
-										{ fmt.Sprintf("%d", m.AliasCount) }
+										<button
+											class="js-merchant-aliases-toggle"
+											data-merchant-id={ m.ID }
+											data-merchant-name={ m.Name }
+											style="background:none;border:none;cursor:pointer;color:var(--accent);font-size:12px;font-family:inherit;padding:0;text-decoration:underline"
+										>{ merchantAliasCountText(m.AliasCount) }</button>
 									} else {
-										<span style="color:var(--text3)">—</span>
+										<button
+											class="js-merchant-aliases-toggle"
+											data-merchant-id={ m.ID }
+											data-merchant-name={ m.Name }
+											style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit;padding:0"
+										>+ aliases</button>
 									}
 								</td>
 								<td style="padding:8px 12px">
-									<button
-										class="js-merchant-rename"
-										data-merchant-id={ m.ID }
-										data-merchant-name={ m.Name }
-										style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:0"
-									>Rename</button>
+									<div class="js-merchant-actions-normal" style="display:flex;gap:8px">
+										<button
+											class="js-merchant-rename"
+											data-merchant-id={ m.ID }
+											data-merchant-name={ m.Name }
+											data-source={ m.Source }
+											data-alias-count={ fmt.Sprintf("%d", m.AliasCount) }
+											style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:0"
+										>Rename</button>
+										<button
+											class="js-merchant-delete"
+											data-merchant-id={ m.ID }
+											style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit;padding:0"
+										>Delete</button>
+									</div>
+									<div class="js-merchant-delete-confirm" style="display:none;align-items:center;gap:4px">
+										<span style="font-size:11px;color:var(--commit)">Delete?</span>
+										<button
+											class="js-merchant-delete-yes"
+											data-merchant-id={ m.ID }
+											style="background:none;border:none;cursor:pointer;color:var(--commit);font-size:11px;font-family:inherit;padding:2px 4px"
+										>Yes</button>
+										<button
+											class="js-merchant-delete-no"
+											style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:11px;font-family:inherit;padding:2px 4px"
+										>No</button>
+									</div>
 								</td>
 							</tr>
 						}
@@ -831,6 +1151,13 @@ func cfgTabStyle(active bool) string {
 		return "display:inline-block;padding:6px 14px;border-radius:6px 6px 0 0;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;background:var(--bg);color:var(--text);border:1px solid var(--border);border-bottom:1px solid var(--bg)"
 	}
 	return "display:inline-block;padding:6px 14px;border-radius:6px 6px 0 0;font-size:13px;font-weight:400;cursor:pointer;text-decoration:none;background:transparent;color:var(--text2)"
+}
+
+func merchantAliasCountText(n int) string {
+	if n == 1 {
+		return "1 alias"
+	}
+	return fmt.Sprintf("%d aliases", n)
 }
 
 func merchantSourceBadge(source string) string {
