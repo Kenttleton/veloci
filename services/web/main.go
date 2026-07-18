@@ -153,6 +153,11 @@ func runServe(_ *cobra.Command, _ []string) error {
 	r := chi.NewRouter()
 	r.Use(chimiddleware.Logger)
 
+	// Unknown routes redirect to budget (authenticated users) or login (everyone else).
+	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/budget", http.StatusFound)
+	})
+
 	// Static assets (CSS, JS islands).
 	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 

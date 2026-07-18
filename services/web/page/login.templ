@@ -1,12 +1,15 @@
 package page
 
-templ Login(errMsg, email string) {
+templ Login(errMsg, email, next string) {
 	@base("Sign in") {
 		<main class="login-page">
 			<form method="POST" action="/login" class="login-form">
 				<h1 class="login-title">Veloci</h1>
 				if errMsg != "" {
 					<p class="login-error">{ errMsg }</p>
+				}
+				if next != "" {
+					<input type="hidden" name="next" value={ next }/>
 				}
 				<input
 					type="email"

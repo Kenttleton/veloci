@@ -21,17 +21,17 @@ const (
 )
 
 // validateToken calls veloci-auth to verify a raw token string and injects
-// claims into the request context. Returns false and writes 401 on failure.
-func validateToken(client *authclient.Client, token string, w http.ResponseWriter, r *http.Request) (*http.Request, bool) {
+// claims into the request context. Returns the enriched request and true on
+// success, or the original request and false on failure — callers write their
+// own error response so page routes can redirect while API routes return JSON.
+func validateToken(client *authclient.Client, token string, r *http.Request) (*http.Request, bool) {
 	result, err := client.ValidateToken(r.Context(), &authclient.ValidateTokenInputBody{
 		Token: token,
 	})
 	if err != nil {
-		http.Error(w, `{"code":"UNAUTHORIZED"}`, http.StatusUnauthorized)
 		return r, false
 	}
 	if result.TokenType != authclient.ValidateTokenOutputBodyTokenTypeAccess {
-		http.Error(w, `{"code":"UNAUTHORIZED"}`, http.StatusUnauthorized)
 		return r, false
 	}
 
@@ -63,19 +63,21 @@ func validateToken(client *authclient.Client, token string, w http.ResponseWrite
 const SessionCookie = "veloci_session"
 
 // AuthenticateCookieOrRedirect reads the session cookie, validates the token, and
-// injects claims into context. Unauthenticated requests are redirected to /login.
+// injects claims into context. Invalid or missing tokens clear the cookie and
+// redirect to /login?next=<original-path> — never returns JSON.
 func AuthenticateCookieOrRedirect(client *authclient.Client) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			loginURL := "/login?next=" + r.URL.RequestURI()
 			cookie, err := r.Cookie(SessionCookie)
 			if err != nil || cookie.Value == "" {
-				http.Redirect(w, r, "/login", http.StatusFound)
+				http.Redirect(w, r, loginURL, http.StatusFound)
 				return
 			}
-			req, ok := validateToken(client, cookie.Value, w, r)
+			req, ok := validateToken(client, cookie.Value, r)
 			if !ok {
 				http.SetCookie(w, &http.Cookie{Name: SessionCookie, Value: "", Path: "/", MaxAge: -1})
-				http.Redirect(w, r, "/login", http.StatusFound)
+				http.Redirect(w, r, loginURL, http.StatusFound)
 				return
 			}
 			next.ServeHTTP(w, req)
@@ -84,16 +86,16 @@ func AuthenticateCookieOrRedirect(client *authclient.Client) func(http.Handler) 
 }
 
 // AuthenticateBearerOrCookie accepts a Bearer token OR the session cookie.
-// Returns JSON 401 on failure — suitable for same-origin JS island API calls
-// that send the session cookie (no Bearer header needed).
+// Returns JSON 401 on failure — suitable for same-origin JS fetch calls.
 func AuthenticateBearerOrCookie(client *authclient.Client) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Bearer token takes priority.
 			if header := r.Header.Get("Authorization"); strings.HasPrefix(header, "Bearer ") {
 				token := strings.TrimPrefix(header, "Bearer ")
-				req, ok := validateToken(client, token, w, r)
+				req, ok := validateToken(client, token, r)
 				if !ok {
+					http.Error(w, `{"code":"UNAUTHORIZED"}`, http.StatusUnauthorized)
 					return
 				}
 				next.ServeHTTP(w, req)
@@ -105,8 +107,9 @@ func AuthenticateBearerOrCookie(client *authclient.Client) func(http.Handler) ht
 				http.Error(w, `{"code":"UNAUTHORIZED"}`, http.StatusUnauthorized)
 				return
 			}
-			req, ok := validateToken(client, cookie.Value, w, r)
+			req, ok := validateToken(client, cookie.Value, r)
 			if !ok {
+				http.Error(w, `{"code":"UNAUTHORIZED"}`, http.StatusUnauthorized)
 				return
 			}
 			next.ServeHTTP(w, req)
@@ -126,8 +129,9 @@ func Authenticate(client *authclient.Client) func(http.Handler) http.Handler {
 				return
 			}
 			token := strings.TrimPrefix(header, "Bearer ")
-			req, ok := validateToken(client, token, w, r)
+			req, ok := validateToken(client, token, r)
 			if !ok {
+				http.Error(w, `{"code":"UNAUTHORIZED"}`, http.StatusUnauthorized)
 				return
 			}
 			next.ServeHTTP(w, req)
@@ -145,8 +149,9 @@ func AuthenticateSSE(client *authclient.Client) func(http.Handler) http.Handler 
 				http.Error(w, `{"code":"UNAUTHORIZED"}`, http.StatusUnauthorized)
 				return
 			}
-			req, ok := validateToken(client, token, w, r)
+			req, ok := validateToken(client, token, r)
 			if !ok {
+				http.Error(w, `{"code":"UNAUTHORIZED"}`, http.StatusUnauthorized)
 				return
 			}
 			next.ServeHTTP(w, req)

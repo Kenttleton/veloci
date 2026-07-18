@@ -177,17 +177,22 @@ func (s *Server) buildShellData(r *http.Request) ShellData {
 
 // GetLogin renders the login form.
 func (s *Server) GetLogin(w http.ResponseWriter, r *http.Request) {
-	s.render(w, r, Login("", ""))
+	s.render(w, r, Login("", "", r.URL.Query().Get("next")))
 }
 
 // PostLogin handles login form submission.
 func (s *Server) PostLogin(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		s.render(w, r, Login("Invalid request", ""))
+		s.render(w, r, Login("Invalid request", "", ""))
 		return
 	}
 	email := r.FormValue("email")
 	password := r.FormValue("password")
+	next := r.FormValue("next")
+	// Only allow relative paths to prevent open-redirect attacks.
+	if next == "" || !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") {
+		next = "/"
+	}
 	ctx := r.Context()
 
 	cred, err := s.auth.ValidateCredential(ctx, &authclient.ValidateCredentialInputBody{
@@ -195,7 +200,7 @@ func (s *Server) PostLogin(w http.ResponseWriter, r *http.Request) {
 		Password: password,
 	})
 	if err != nil {
-		s.render(w, r, Login("Invalid email or password", email))
+		s.render(w, r, Login("Invalid email or password", email, next))
 		return
 	}
 
@@ -208,7 +213,7 @@ func (s *Server) PostLogin(w http.ResponseWriter, r *http.Request) {
 		LIMIT 1
 	`, email).Scan(&userID, &entityID, &entityRole)
 	if err != nil {
-		s.render(w, r, Login("Invalid email or password", email))
+		s.render(w, r, Login("Invalid email or password", email, next))
 		return
 	}
 
@@ -229,7 +234,7 @@ func (s *Server) PostLogin(w http.ResponseWriter, r *http.Request) {
 		Claims:       claims,
 	})
 	if err != nil {
-		s.render(w, r, Login("Login failed, please try again", email))
+		s.render(w, r, Login("Login failed, please try again", email, next))
 		return
 	}
 
@@ -243,7 +248,7 @@ func (s *Server) PostLogin(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	http.Redirect(w, r, "/", http.StatusFound)
+	http.Redirect(w, r, next, http.StatusFound)
 }
 
 // PostLogout revokes the session token and clears the cookie.
@@ -364,7 +369,7 @@ func (s *Server) Account(w http.ResponseWriter, r *http.Request) {
 
 	account, err := s.store.GetAccount(ctx, entityID, id)
 	if err != nil {
-		http.Error(w, "account not found", http.StatusNotFound)
+		http.Redirect(w, r, "/budget", http.StatusFound)
 		return
 	}
 
