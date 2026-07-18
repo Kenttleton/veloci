@@ -49,7 +49,7 @@ all:
 
 # Start all services in dev mode with live reload (air for Go, cargo-watch for Rust, Vite HMR for web)
 dev:
-    docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+    docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 
 # Start infrastructure only (postgres + rabbitmq), wait for healthy, then migrate.
 # Use this for engine/API development without running the full stack.
