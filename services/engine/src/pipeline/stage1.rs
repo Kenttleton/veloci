@@ -17,15 +17,28 @@
 //! 6. Collect unmatched transaction IDs for Stage 2.
 //! 7. Bulk INSERT assignments (delete-then-insert for idempotency).
 
+use std::collections::HashMap;
+
 use anyhow::{bail, Context, Result};
-use chrono::NaiveDate;
 use chrono::Datelike;
+use chrono::NaiveDate;
 use rayon::prelude::*;
 use regex::Regex;
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::pipeline::types::Stage1Output;
+
+// ---------------------------------------------------------------------------
+// Canonical alias map
+// ---------------------------------------------------------------------------
+
+/// Map from `merchant_normalized` to `canonical_merchant_id`.
+///
+/// Loaded once per Stage 1 run and shared (read-only) across rayon worker
+/// threads. Used to evaluate [`CompiledConditionTree::CanonicalMerchant`]
+/// conditions without any per-transaction DB calls.
+pub type CanonicalAliasMap = HashMap<String, Uuid>;
 
 // ---------------------------------------------------------------------------
 // Compiled entry tree
@@ -71,6 +84,9 @@ pub enum CompiledConditionTree {
     /// Post-stage only: matches when the transaction has been assigned to any
     /// entry whose `label_id` equals the referenced label UUID.
     LabelMatched(Uuid),
+    /// Matches when the transaction's `merchant_normalized` is mapped to the
+    /// given canonical merchant UUID in the [`CanonicalAliasMap`].
+    CanonicalMerchant(Uuid),
 }
 
 // ---------------------------------------------------------------------------
@@ -108,12 +124,15 @@ pub async fn run(entity_id: Uuid, pool: &PgPool) -> Result<Stage1Output> {
     // Load all active entries.
     let entry_rows = load_entries(entity_id, pool).await?;
 
+    // Load canonical alias map once — shared across all rayon workers below.
+    let canonical_aliases = load_canonical_aliases(pool).await?;
+
     // Pre-compile entries; skip malformed entries (log and continue).
     let mut compiled_entries: Vec<CompiledEntry> = entry_rows
         .into_iter()
         .filter_map(|row| {
             let entry_id = row.id;
-            match compile_entry(row) {
+            match compile_entry(row, &canonical_aliases) {
                 Ok(e) => Some(e),
                 Err(e) => {
                     tracing::warn!(%entry_id, "entry compile error (skipped): {e:?}");
@@ -135,7 +154,7 @@ pub async fn run(entity_id: Uuid, pool: &PgPool) -> Result<Stage1Output> {
         .map(|txn| {
             let matched: Vec<Uuid> = compiled_entries
                 .iter()
-                .filter(|entry| evaluate_entry(&entry.conditions, txn))
+                .filter(|entry| evaluate_entry(&entry.conditions, txn, &canonical_aliases))
                 .map(|entry| entry.entry_id)
                 .collect();
             let unmatched = matched.is_empty();
@@ -175,19 +194,23 @@ pub async fn run(entity_id: Uuid, pool: &PgPool) -> Result<Stage1Output> {
 // ---------------------------------------------------------------------------
 
 /// Evaluate a compiled condition tree against a transaction.
+///
+/// `aliases` maps `merchant_normalized` → `canonical_merchant_id` and is used
+/// to evaluate [`CompiledConditionTree::CanonicalMerchant`] leaves.
 pub fn evaluate_entry(
-    tree: &CompiledConditionTree,
-    txn: &TransactionRow,
+    tree:    &CompiledConditionTree,
+    txn:     &TransactionRow,
+    aliases: &CanonicalAliasMap,
 ) -> bool {
-    evaluate(tree, txn)
+    evaluate(tree, txn, aliases)
 }
 
-fn evaluate(node: &CompiledConditionTree, txn: &TransactionRow) -> bool {
+fn evaluate(node: &CompiledConditionTree, txn: &TransactionRow, aliases: &CanonicalAliasMap) -> bool {
     match node {
-        CompiledConditionTree::And(children) => children.iter().all(|c| evaluate(c, txn)),
-        CompiledConditionTree::Or(children)  => children.iter().any(|c| evaluate(c, txn)),
-        CompiledConditionTree::Not(child)    => !evaluate(child, txn),
-        CompiledConditionTree::Xor(a, b)    => evaluate(a, txn) ^ evaluate(b, txn),
+        CompiledConditionTree::And(children) => children.iter().all(|c| evaluate(c, txn, aliases)),
+        CompiledConditionTree::Or(children)  => children.iter().any(|c| evaluate(c, txn, aliases)),
+        CompiledConditionTree::Not(child)    => !evaluate(child, txn, aliases),
+        CompiledConditionTree::Xor(a, b)    => evaluate(a, txn, aliases) ^ evaluate(b, txn, aliases),
 
         CompiledConditionTree::PayeeExact(s) => {
             txn.merchant_normalized.eq_ignore_ascii_case(s)
@@ -226,6 +249,15 @@ fn evaluate(node: &CompiledConditionTree, txn: &TransactionRow) -> bool {
         // pre-stage entry assignments are accumulated. In the current single-pass
         // implementation this always returns false during transaction matching.
         CompiledConditionTree::LabelMatched(_label_id) => false,
+
+        // CanonicalMerchant: look up the transaction's merchant_normalized in the
+        // alias map. True only when the mapped canonical_merchant_id equals the
+        // condition's canonical_merchant_id.
+        CompiledConditionTree::CanonicalMerchant(canonical_id) => {
+            aliases
+                .get(&txn.merchant_normalized)
+                .map_or(false, |id| id == canonical_id)
+        }
     }
 }
 
@@ -233,8 +265,8 @@ fn evaluate(node: &CompiledConditionTree, txn: &TransactionRow) -> bool {
 // Compilation (pure — can panic on invalid JSONB, returns Result)
 // ---------------------------------------------------------------------------
 
-fn compile_entry(row: EntryRow) -> Result<CompiledEntry> {
-    let conditions = compile_tree(&row.conditions)
+fn compile_entry(row: EntryRow, aliases: &CanonicalAliasMap) -> Result<CompiledEntry> {
+    let conditions = compile_tree(&row.conditions, aliases)
         .with_context(|| format!("failed to compile conditions for entry {}", row.id))?;
     Ok(CompiledEntry {
         entry_id: row.id,
@@ -243,7 +275,11 @@ fn compile_entry(row: EntryRow) -> Result<CompiledEntry> {
     })
 }
 
-fn compile_tree(v: &serde_json::Value) -> Result<CompiledConditionTree> {
+/// Compile a JSONB condition tree value into an evaluatable [`CompiledConditionTree`].
+///
+/// `aliases` is threaded through but not consumed during compilation — it is
+/// only used at evaluation time via [`evaluate_entry`].
+pub fn compile_tree(v: &serde_json::Value, aliases: &CanonicalAliasMap) -> Result<CompiledConditionTree> {
     if let Some(op) = v.get("op").and_then(|o| o.as_str()) {
         // Logical node.
         let children_val = v
@@ -253,7 +289,7 @@ fn compile_tree(v: &serde_json::Value) -> Result<CompiledConditionTree> {
 
         let children: Vec<CompiledConditionTree> = children_val
             .iter()
-            .map(compile_tree)
+            .map(|c| compile_tree(c, aliases))
             .collect::<Result<_>>()?;
 
         return match op {
@@ -354,6 +390,13 @@ fn compile_tree(v: &serde_json::Value) -> Result<CompiledConditionTree> {
                 .with_context(|| format!("invalid UUID in label leaf: {id_str}"))?;
             Ok(CompiledConditionTree::LabelMatched(id))
         }
+        "canonical_merchant" => {
+            let id_str = string_value(v, "canonical_merchant_id")?;
+            let id: Uuid = id_str
+                .parse()
+                .with_context(|| format!("invalid UUID in canonical_merchant leaf: {id_str}"))?;
+            Ok(CompiledConditionTree::CanonicalMerchant(id))
+        }
         other => bail!("unknown leaf type: {other}"),
     }
 }
@@ -435,6 +478,31 @@ async fn load_entries(entity_id: Uuid, pool: &PgPool) -> Result<Vec<EntryRow>> {
             priority:   r.priority,
             conditions: r.conditions,
         })
+        .collect())
+}
+
+/// Load the full `canonical_merchant_aliases` table as a `CanonicalAliasMap`.
+///
+/// The result is read-only after loading and shared across rayon workers
+/// during evaluation. Loading the entire table is intentional: entries are
+/// global, not scoped to a single entity.
+pub async fn load_canonical_aliases(pool: &PgPool) -> Result<CanonicalAliasMap> {
+    #[derive(sqlx::FromRow)]
+    struct Row {
+        normalized_name:       String,
+        canonical_merchant_id: Uuid,
+    }
+
+    let rows: Vec<Row> = sqlx::query_as(
+        "SELECT normalized_name, canonical_merchant_id FROM canonical_merchant_aliases",
+    )
+    .fetch_all(pool)
+    .await
+    .context("failed to load canonical_merchant_aliases for stage 1")?;
+
+    Ok(rows
+        .into_iter()
+        .map(|r| (r.normalized_name, r.canonical_merchant_id))
         .collect())
 }
 
@@ -554,10 +622,11 @@ mod tests {
         Uuid::nil()
     }
 
-    // Helper: compile a JSONB condition and evaluate.
+    // Helper: compile a JSONB condition and evaluate with an empty alias map.
     fn eval(json: serde_json::Value, txn: &TransactionRow) -> bool {
-        let tree = compile_tree(&json).unwrap();
-        evaluate(&tree, txn)
+        let aliases = CanonicalAliasMap::default();
+        let tree = compile_tree(&json, &aliases).unwrap();
+        evaluate(&tree, txn, &aliases)
     }
 
     #[test]
@@ -696,34 +765,38 @@ mod tests {
 
     #[test]
     fn malformed_regex_compile_error() {
-        let result = compile_tree(&json!({"type": "imported_payee_regex", "value": "[invalid"}));
+        let aliases = CanonicalAliasMap::default();
+        let result = compile_tree(&json!({"type": "imported_payee_regex", "value": "[invalid"}), &aliases);
         assert!(result.is_err(), "invalid regex should return Err");
     }
 
     #[test]
     fn unknown_op_compile_error() {
-        let result = compile_tree(&json!({"op": "NAND", "children": []}));
+        let aliases = CanonicalAliasMap::default();
+        let result = compile_tree(&json!({"op": "NAND", "children": []}), &aliases);
         assert!(result.is_err());
     }
 
     #[test]
     fn not_requires_exactly_one_child() {
+        let aliases = CanonicalAliasMap::default();
         let result = compile_tree(&json!({
             "op": "NOT",
             "children": [
                 {"type": "imported_payee_exact", "value": "A"},
                 {"type": "imported_payee_exact", "value": "B"}
             ]
-        }));
+        }), &aliases);
         assert!(result.is_err());
     }
 
     #[test]
     fn xor_requires_exactly_two_children() {
+        let aliases = CanonicalAliasMap::default();
         let result = compile_tree(&json!({
             "op": "XOR",
             "children": [{"type": "imported_payee_exact", "value": "A"}]
-        }));
+        }), &aliases);
         assert!(result.is_err());
     }
 
@@ -745,5 +818,80 @@ mod tests {
         entries.sort_by_key(|e| e.priority);
         assert_eq!(entries[0].priority, 10);
         assert_eq!(entries[1].priority, 200);
+    }
+
+    /// `canonical_merchant` leaf compiles and evaluates via alias map lookup.
+    #[test]
+    fn canonical_merchant_leaf_matches_via_alias_map() {
+        let canonical_id = Uuid::parse_str("00000000-0000-0000-0000-000000000099").unwrap();
+        let mut aliases = CanonicalAliasMap::default();
+        aliases.insert("Netflix".to_string(), canonical_id);
+
+        let cond_json = json!({
+            "type": "canonical_merchant",
+            "canonical_merchant_id": canonical_id.to_string()
+        });
+        let tree = compile_tree(&cond_json, &aliases).unwrap();
+
+        // Transaction whose merchant_normalized is aliased to canonical_id → match.
+        let txn_match = make_txn(any_uuid(), any_uuid(), "2026-03-01", -1500, "Netflix");
+        assert!(evaluate_entry(&tree, &txn_match, &aliases));
+
+        // Transaction whose merchant_normalized maps to a different canonical → no match.
+        let other_canonical = Uuid::parse_str("00000000-0000-0000-0000-000000000002").unwrap();
+        let mut aliases2 = CanonicalAliasMap::default();
+        aliases2.insert("Hulu".to_string(), other_canonical);
+        let txn_other = make_txn(any_uuid(), any_uuid(), "2026-03-01", -1000, "Hulu");
+        assert!(!evaluate_entry(&tree, &txn_other, &aliases));
+
+        // Transaction with no alias → no match.
+        let txn_unknown = make_txn(any_uuid(), any_uuid(), "2026-03-01", -900, "UnknownStore");
+        assert!(!evaluate_entry(&tree, &txn_unknown, &aliases));
+    }
+
+    /// `canonical_merchant` with an empty alias map never matches.
+    #[test]
+    fn canonical_merchant_no_aliases_never_matches() {
+        let canonical_id = Uuid::parse_str("00000000-0000-0000-0000-000000000099").unwrap();
+        let aliases = CanonicalAliasMap::default();
+        let cond_json = json!({
+            "type": "canonical_merchant",
+            "canonical_merchant_id": canonical_id.to_string()
+        });
+        let tree = compile_tree(&cond_json, &aliases).unwrap();
+        let txn = make_txn(any_uuid(), any_uuid(), "2026-03-01", -1500, "Netflix");
+        assert!(!evaluate_entry(&tree, &txn, &aliases));
+    }
+
+    /// `canonical_merchant` embedded in an AND tree still evaluates correctly.
+    #[test]
+    fn canonical_merchant_in_and_tree() {
+        let canonical_id = Uuid::parse_str("00000000-0000-0000-0000-000000000099").unwrap();
+        let mut aliases = CanonicalAliasMap::default();
+        aliases.insert("Netflix".to_string(), canonical_id);
+
+        let cond_json = json!({
+            "op": "AND",
+            "children": [
+                {
+                    "type": "canonical_merchant",
+                    "canonical_merchant_id": canonical_id.to_string()
+                },
+                {
+                    "type": "amount_range",
+                    "min_cents": -2000,
+                    "max_cents": -1000
+                }
+            ]
+        });
+        let tree = compile_tree(&cond_json, &aliases).unwrap();
+
+        // Matches: correct canonical AND amount in range.
+        let txn = make_txn(any_uuid(), any_uuid(), "2026-03-01", -1500, "Netflix");
+        assert!(evaluate_entry(&tree, &txn, &aliases));
+
+        // Amount out of range → no match.
+        let txn2 = make_txn(any_uuid(), any_uuid(), "2026-03-01", -500, "Netflix");
+        assert!(!evaluate_entry(&tree, &txn2, &aliases));
     }
 }
