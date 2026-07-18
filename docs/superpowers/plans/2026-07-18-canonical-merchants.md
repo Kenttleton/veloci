@@ -23,7 +23,6 @@
 ## File Map
 
 **New files:**
-- `migrations/app/003_canonical_merchants.sql` — DB schema
 - `services/web/store/canonical_merchants.go` — Go store: CRUD + merge + split
 - `services/web/handler/canonical_merchants.go` — Go handler: 9 API endpoints
 
@@ -37,69 +36,62 @@
 
 ---
 
-## Task 1: DB Migration
+## Task 1: Schema — Add Canonical Merchant Tables
 
 **Files:**
-- Create: `migrations/app/003_canonical_merchants.sql`
+
+- Modify: `migrations/app/002_financial_schema.sql`
 
 **Interfaces:**
+
 - Produces: `canonical_merchants(id, name, source, created_at, updated_at)` table; `canonical_merchant_aliases(normalized_name, canonical_merchant_id, source, created_at)` table
 
-- [ ] **Step 1: Write the migration file**
+- [ ] **Step 1: Add tables to `002_financial_schema.sql`**
+
+Insert the following block immediately after the `labels` section (around line 192) and before the `label_rules` section. These tables are global like labels — no `entity_id`.
 
 ```sql
--- migrations/app/003_canonical_merchants.sql
--- Global canonical merchant registry. Maps normalized merchant strings to a
--- single canonical identity used by the entry conditions system.
--- Global like labels — no entity_id.
+-- ── CANONICAL MERCHANTS ──────────────────────────────────────────────────────
+-- Global registry mapping normalized merchant strings to a single canonical
+-- identity. Used by the entry conditions system via the canonical_merchant
+-- condition type. Global like labels — no entity_id.
 
 CREATE TABLE canonical_merchants (
-    id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    name       TEXT        NOT NULL,
-    source     TEXT        NOT NULL DEFAULT 'engine'
-                           CHECK (source IN ('engine', 'user')),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (name)
+  id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  name       TEXT        NOT NULL,
+  source     TEXT        NOT NULL DEFAULT 'engine'
+             CHECK (source IN ('engine', 'user')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (name)
 );
 
--- Normalized merchant strings that map to a canonical merchant.
--- normalized_name is the PRIMARY KEY — one string maps to exactly one canonical.
+-- One normalized_name maps to exactly one canonical merchant (PK enforces this).
 CREATE TABLE canonical_merchant_aliases (
-    normalized_name       TEXT        PRIMARY KEY,
-    canonical_merchant_id UUID        NOT NULL
-                          REFERENCES canonical_merchants(id) ON DELETE CASCADE,
-    source                TEXT        NOT NULL DEFAULT 'engine'
-                          CHECK (source IN ('engine', 'user')),
-    created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  normalized_name       TEXT        PRIMARY KEY,
+  canonical_merchant_id UUID        NOT NULL
+                        REFERENCES canonical_merchants(id) ON DELETE CASCADE,
+  source                TEXT        NOT NULL DEFAULT 'engine'
+                        CHECK (source IN ('engine', 'user')),
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_canonical_merchant_aliases_canonical_id
     ON canonical_merchant_aliases (canonical_merchant_id);
 ```
 
-- [ ] **Step 2: Apply the migration**
+- [ ] **Step 2: Verify the schema file parses cleanly**
 
 ```bash
-# From the repo root — adjust to your migration runner
-psql "$DATABASE_URL" -f migrations/app/003_canonical_merchants.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/app/002_financial_schema.sql 2>&1 | grep -E "ERROR|already exists"
 ```
 
-Expected: no errors, two new tables visible in `\dt`.
+Expected: `already exists` errors for existing tables are acceptable if the DB is already set up; no `ERROR` for the two new tables. If running against a fresh DB, expect zero errors.
 
-- [ ] **Step 3: Verify the schema**
-
-```bash
-psql "$DATABASE_URL" -c "\d canonical_merchants"
-psql "$DATABASE_URL" -c "\d canonical_merchant_aliases"
-```
-
-Expected output includes: `id uuid`, `name text`, `source text`, `UNIQUE constraint on name` for canonical_merchants; `normalized_name text (PK)`, `canonical_merchant_id uuid (FK → canonical_merchants.id ON DELETE CASCADE)` for aliases.
-
-- [ ] **Step 4: Commit**
+- [ ] **Step 3: Commit**
 
 ```bash
-git add migrations/app/003_canonical_merchants.sql
+git add migrations/app/002_financial_schema.sql
 git commit -m "feat: add canonical_merchants and canonical_merchant_aliases tables"
 ```
 
