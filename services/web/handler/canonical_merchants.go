@@ -343,6 +343,48 @@ func (h *CanonicalMerchantsHandler) MergeCanonicalMerchant(ctx context.Context, 
 	return out, nil
 }
 
+// ── Split ────────────────────────────────────────────────────────────────────
+
+type splitCanonicalMerchantInput struct {
+	PathID string `path:"id"`
+	Body   struct {
+		// NewName is the name for the newly created canonical merchant.
+		NewName string `json:"new_name" required:"true"`
+		// Aliases is the list of normalized_name values to move to the new merchant.
+		Aliases []string `json:"aliases" required:"true"`
+	}
+}
+
+type splitCanonicalMerchantOutput struct {
+	Body response.Envelope[canonicalMerchantView]
+}
+
+func (h *CanonicalMerchantsHandler) SplitCanonicalMerchant(ctx context.Context, input *splitCanonicalMerchantInput) (*splitCanonicalMerchantOutput, error) {
+	if len(input.Body.Aliases) == 0 {
+		return nil, huma.Error422UnprocessableEntity("aliases must not be empty")
+	}
+
+	newMerchant, err := h.s.SplitCanonicalMerchant(ctx, input.PathID, input.Body.Aliases, input.Body.NewName)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, huma.Error404NotFound("not found")
+	}
+	if err != nil {
+		if strings.Contains(err.Error(), "unique") || strings.Contains(err.Error(), "duplicate") {
+			return nil, huma.Error409Conflict("canonical merchant name already exists")
+		}
+		return nil, huma.Error500InternalServerError("internal error")
+	}
+
+	// Trigger reprocess so engine re-evaluates entries with the updated alias mapping.
+	entityID := middleware.EntityID(ctx)
+	userID := middleware.UserID(ctx)
+	h.triggerReprocess(ctx, entityID, userID)
+
+	out := &splitCanonicalMerchantOutput{}
+	out.Body = response.Single(toCanonicalMerchantView(newMerchant, len(input.Body.Aliases)))
+	return out, nil
+}
+
 // RegisterCanonicalMerchantsRoutes registers canonical merchant endpoints on the given Huma API.
 func RegisterCanonicalMerchantsRoutes(api huma.API, s *store.Store, pub *queue.Publisher, perms middleware.PermissionCache) {
 	h := NewCanonicalMerchantsHandler(s, pub)
@@ -429,4 +471,13 @@ func RegisterCanonicalMerchantsRoutes(api huma.API, s *store.Store, pub *queue.P
 		Tags:        []string{"canonical-merchants"},
 		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "labels:write")},
 	}, h.MergeCanonicalMerchant)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "split-canonical-merchant",
+		Method:      http.MethodPost,
+		Path:        "/canonical-merchants/{id}/split",
+		Summary:     "Split selected aliases into a new canonical merchant",
+		Tags:        []string{"canonical-merchants"},
+		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "labels:write")},
+	}, h.SplitCanonicalMerchant)
 }
