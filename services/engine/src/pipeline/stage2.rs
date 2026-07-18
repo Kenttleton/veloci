@@ -23,7 +23,7 @@ use uuid::Uuid;
 
 use chrono::Duration;
 
-use crate::pipeline::{stage0::lcs_ratio, types::Stage2Output};
+use crate::pipeline::types::Stage2Output;
 
 // ---------------------------------------------------------------------------
 // Classification constants
@@ -31,9 +31,6 @@ use crate::pipeline::{stage0::lcs_ratio, types::Stage2Output};
 
 /// Clusters below this confidence are not surfaced to the user.
 const MIN_CONFIDENCE: f64 = 0.3;
-
-/// LCS ratio threshold for grouping into the same merchant cluster.
-const MERCHANT_SIMILARITY_THRESHOLD: f64 = 0.70;
 
 /// Amount variance threshold for standing classification.
 /// All transactions must be within ±2% of the cluster median.
@@ -77,9 +74,10 @@ pub(crate) struct UnmatchedTxn {
     merchant_normalized: String,
 }
 
-/// A group of unmatched transactions with similar merchant names.
+/// A group of unmatched transactions belonging to the same canonical merchant.
 #[derive(Debug)]
 pub(crate) struct Cluster {
+    canonical_merchant_id:   Uuid,
     representative_merchant: String,
     transactions:            Vec<UnmatchedTxn>,
 }
@@ -113,32 +111,42 @@ pub struct ClusterScore {
 // ---------------------------------------------------------------------------
 
 /// Run Stage 2 for the given unmatched transaction IDs.
-pub async fn run(
-    entity_id: Uuid,
-    unmatched_tx_ids: &[Uuid],
-    pool: &PgPool,
-) -> Result<Stage2Output> {
+pub async fn run(entity_id: Uuid, unmatched_tx_ids: &[Uuid], pool: &PgPool) -> Result<Stage2Output> {
+    // Delete stale engine pending_review entries before re-running.
+    sqlx::query(
+        "DELETE FROM entries WHERE entity_id = $1 AND source = 'engine' AND status = 'pending_review'",
+    )
+    .bind(entity_id)
+    .execute(pool)
+    .await?;
+
     if unmatched_tx_ids.is_empty() {
         return Ok(Stage2Output { clusters_created: 0 });
     }
 
-    // Load full transaction rows for unmatched IDs.
     let txns = load_unmatched(entity_id, unmatched_tx_ids, pool).await?;
+    let (alias_map, name_map) = load_canonical_for_stage2(pool).await?;
+    let grouped = group_by_canonical(txns, &alias_map);
 
-    // Sequential global clustering pass.
-    let clusters = cluster_by_merchant(txns);
-
-    // Parallel confidence scoring.
-    let scored: Vec<(Cluster, ClusterScore)> = clusters
-        .into_par_iter()
-        .map(|cluster| {
-            let score = score_cluster(&cluster);
-            (cluster, score)
+    let clusters: Vec<Cluster> = grouped
+        .into_iter()
+        .filter(|(id, _)| !id.is_nil())
+        .map(|(canonical_id, transactions)| Cluster {
+            canonical_merchant_id: canonical_id,
+            representative_merchant: name_map.get(&canonical_id).cloned().unwrap_or_default(),
+            transactions,
         })
         .collect();
 
-    // Persist clusters above threshold.
-    let mut clusters_created: u32 = 0;
+    let scored: Vec<(Cluster, ClusterScore)> = clusters
+        .into_par_iter()
+        .map(|c| {
+            let s = score_cluster(&c);
+            (c, s)
+        })
+        .collect();
+
+    let mut clusters_created = 0u32;
     for (cluster, score) in scored {
         if score.confidence < MIN_CONFIDENCE {
             continue;
@@ -146,43 +154,67 @@ pub async fn run(
         persist_cluster(entity_id, &cluster, &score, pool).await?;
         clusters_created += 1;
     }
-
     Ok(Stage2Output { clusters_created })
 }
 
 // ---------------------------------------------------------------------------
-// Clustering (sequential — must see all unmatched at once)
+// Canonical grouping
 // ---------------------------------------------------------------------------
 
-/// Strip store-number and phone-number suffixes before similarity comparison.
-///
-/// `"STARBUCKS #12043"` → `"STARBUCKS"`
-/// `"NETFLIX.COM 866-579-7172"` → `"NETFLIX.COM"`
-pub(crate) fn extract_brand(merchant: &str) -> String {
-    // Everything from " #" onward is a store location code.
-    let s = merchant.find(" #").map_or(merchant, |i| &merchant[..i]);
-    // Drop trailing whitespace-separated tokens that are purely digits or dashes
-    // (phone numbers, reference IDs).
-    let mut parts: Vec<&str> = s.split_whitespace().collect();
-    while let Some(&last) = parts.last() {
-        if last.chars().all(|c| c.is_ascii_digit() || c == '-') {
-            parts.pop();
-        } else {
-            break;
-        }
+async fn load_canonical_for_stage2(
+    pool: &PgPool,
+) -> Result<(
+    std::collections::HashMap<String, Uuid>,
+    std::collections::HashMap<Uuid, String>,
+)> {
+    #[derive(sqlx::FromRow)]
+    struct Row {
+        normalized_name:       String,
+        canonical_merchant_id: Uuid,
+        name:                  String,
     }
-    if parts.is_empty() { merchant.to_string() } else { parts.join(" ") }
+
+    let rows: Vec<Row> = sqlx::query_as(
+        "SELECT cma.normalized_name, cma.canonical_merchant_id, cm.name
+         FROM canonical_merchant_aliases cma
+         JOIN canonical_merchants cm ON cm.id = cma.canonical_merchant_id",
+    )
+    .fetch_all(pool)
+    .await
+    .context("load canonical for stage 2")?;
+
+    let mut alias_map = std::collections::HashMap::new();
+    let mut name_map  = std::collections::HashMap::new();
+    for row in rows {
+        alias_map.insert(row.normalized_name, row.canonical_merchant_id);
+        name_map.entry(row.canonical_merchant_id).or_insert(row.name);
+    }
+    Ok((alias_map, name_map))
 }
 
-/// Mean LCS ratio of all cluster members against the representative merchant.
-fn compute_merchant_confidence(cluster: &Cluster) -> f64 {
-    if cluster.transactions.len() == 1 { return 1.0; }
-    let rep = extract_brand(&cluster.representative_merchant);
-    let sum: f64 = cluster.transactions.iter()
-        .map(|t| lcs_ratio(&rep, &extract_brand(&t.merchant_normalized)))
-        .sum();
-    sum / cluster.transactions.len() as f64
+/// Group unmatched transactions by canonical merchant ID.
+///
+/// Transactions whose `merchant_normalized` does not appear in `alias_map` are
+/// grouped under `Uuid::nil()` and filtered out by the caller.
+pub(crate) fn group_by_canonical(
+    txns: Vec<UnmatchedTxn>,
+    alias_map: &std::collections::HashMap<String, Uuid>,
+) -> Vec<(Uuid, Vec<UnmatchedTxn>)> {
+    let mut groups: std::collections::HashMap<Uuid, Vec<UnmatchedTxn>> =
+        std::collections::HashMap::new();
+    for txn in txns {
+        let id = alias_map
+            .get(&txn.merchant_normalized)
+            .copied()
+            .unwrap_or(Uuid::nil());
+        groups.entry(id).or_default().push(txn);
+    }
+    groups.into_iter().collect()
 }
+
+// ---------------------------------------------------------------------------
+// Amount confidence (pure — used by score_cluster)
+// ---------------------------------------------------------------------------
 
 /// How consistent amounts are within the cluster (1.0 = identical, decays toward 0).
 fn compute_amount_confidence(txns: &[UnmatchedTxn], median: i64) -> f64 {
@@ -192,33 +224,6 @@ fn compute_amount_confidence(txns: &[UnmatchedTxn], median: i64) -> f64 {
         .map(|t| (t.amount_cents - median).unsigned_abs() as f64 / denom)
         .fold(0.0_f64, f64::max);
     (1.0 - max_dev).clamp(0.0, 1.0)
-}
-
-/// Group transactions into merchant clusters using brand-extracted LCS similarity.
-///
-/// Brand extraction (`extract_brand`) is applied before comparison so that
-/// "STARBUCKS #12043" and "STARBUCKS STORE #04821" land in the same cluster.
-/// Time complexity: O(n²) — acceptable for typical unmatched counts. The pass
-/// must remain sequential since cluster membership affects future assignments.
-pub(crate) fn cluster_by_merchant(txns: Vec<UnmatchedTxn>) -> Vec<Cluster> {
-    let mut clusters: Vec<Cluster> = Vec::new();
-
-    'outer: for txn in txns {
-        let txn_brand = extract_brand(&txn.merchant_normalized);
-        for cluster in &mut clusters {
-            let rep_brand = extract_brand(&cluster.representative_merchant);
-            if lcs_ratio(&rep_brand, &txn_brand) >= MERCHANT_SIMILARITY_THRESHOLD {
-                cluster.transactions.push(txn);
-                continue 'outer;
-            }
-        }
-        clusters.push(Cluster {
-            representative_merchant: txn.merchant_normalized.clone(),
-            transactions: vec![txn],
-        });
-    }
-
-    clusters
 }
 
 // ---------------------------------------------------------------------------
@@ -252,7 +257,7 @@ pub fn score_cluster(cluster: &Cluster) -> ClusterScore {
 
     let median_amount_cents = median_amount(&cluster.transactions);
 
-    let merchant_confidence = compute_merchant_confidence(cluster);
+    let merchant_confidence = 1.0_f64;
     let amount_confidence   = compute_amount_confidence(&cluster.transactions, median_amount_cents);
 
     // timing_confidence: 1.0 when interval std dev ≤ threshold, decays as
@@ -381,10 +386,7 @@ async fn persist_cluster(
 ) -> Result<()> {
     let conditions = serde_json::json!({
         "op": "AND",
-        "children": [{
-            "type": "imported_payee_contains",
-            "value": cluster.representative_merchant
-        }]
+        "children": [{"type": "canonical_merchant", "canonical_merchant_id": cluster.canonical_merchant_id.to_string()}]
     });
 
     // Use the detected interval as period_days; fall back to 30 for single-
@@ -399,42 +401,25 @@ async fn persist_cluster(
 
     // next_due_date = last transaction date + detected period.
     let last_tx_date = cluster.transactions.iter().map(|t| t.date).max();
-    let next_due_date = last_tx_date
-        .map(|d| d + Duration::days(i64::from(period_days)));
-
-    // Lookup-or-create a global label for this merchant name.
-    let label_id: (Uuid,) = sqlx::query_as(
-        r#"
-        INSERT INTO labels (name)
-        VALUES ($1)
-        ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
-        RETURNING id
-        "#,
-    )
-    .bind(&score.suggested_name)
-    .fetch_one(pool)
-    .await
-    .context("failed to upsert label for stage 2 cluster")?;
-    let label_id = label_id.0;
+    let next_due_date = last_tx_date.map(|d| d + Duration::days(i64::from(period_days)));
 
     let entry_id: (Uuid,) = sqlx::query_as(
         r#"
         INSERT INTO entries (
-          entity_id, label_id, direction, entry_type, period_days, next_due_date,
+          entity_id, direction, entry_type, period_days, next_due_date,
           conditions, projected_rate_per_day, status, source, project_tentatively, start_date,
           alert_type, confidence, merchant_confidence, timing_confidence, amount_confidence,
           sample_merchants, matched_transaction_count
         ) VALUES (
-          $1, $2, $3, $4, $5, $6,
-          $7, $8, 'pending_review', 'engine', false, $9,
-          'new', $10, $11, $12, $13,
-          $14, $15
+          $1, $2, $3, $4, $5,
+          $6, $7, 'pending_review', 'engine', false, $8,
+          'new', $9, $10, $11, $12,
+          $13, $14
         )
         RETURNING id
         "#,
     )
     .bind(entity_id)
-    .bind(label_id)
     .bind(direction)
     .bind(score.entry_type)
     .bind(period_days)
@@ -493,38 +478,35 @@ mod tests {
         }
     }
 
-    #[test]
-    fn clustering_groups_similar_merchants() {
-        let txns = vec![
-            make_txn("00000000-0000-0000-0000-000000000001", "2026-01-07", -1499, "Netflix"),
-            make_txn("00000000-0000-0000-0000-000000000002", "2026-02-07", -1499, "Netflix"),
-            make_txn("00000000-0000-0000-0000-000000000003", "2026-01-15", -899, "Spotify"),
-        ];
-        let clusters = cluster_by_merchant(txns);
-        assert_eq!(clusters.len(), 2, "Netflix and Spotify should form separate clusters");
-        let netflix = clusters.iter().find(|c| c.representative_merchant == "Netflix").unwrap();
-        assert_eq!(netflix.transactions.len(), 2);
+    fn make_unmatched_txn(date: &str, amount_cents: i64, merchant: &str) -> UnmatchedTxn {
+        UnmatchedTxn {
+            id: Uuid::new_v4(),
+            date: NaiveDate::parse_from_str(date, "%Y-%m-%d").unwrap(),
+            amount_cents,
+            merchant_normalized: merchant.to_string(),
+        }
     }
 
     #[test]
-    fn clustering_groups_fuzzy_matches() {
-        // "AMZ Prime" and "Amazon Prime" share enough characters (LCS ratio ≥ 0.70)
-        // to be grouped together.
+    fn group_by_canonical_groups_correctly() {
+        use std::collections::HashMap;
+        let id_netflix = uuid::Uuid::new_v4();
+        let id_spotify = uuid::Uuid::new_v4();
+        let alias_map: HashMap<String, uuid::Uuid> = [
+            ("Netflixcom".to_string(), id_netflix),
+            ("Netflix Llc".to_string(), id_netflix),
+            ("Spotify".to_string(), id_spotify),
+        ]
+        .into();
         let txns = vec![
-            make_txn("00000000-0000-0000-0000-000000000001", "2026-01-07", -1399, "Amazon Prime"),
-            make_txn("00000000-0000-0000-0000-000000000002", "2026-02-07", -1399, "Amzn Prime"),
+            make_unmatched_txn("2026-01-07", -1499, "Netflixcom"),
+            make_unmatched_txn("2026-02-07", -1499, "Netflix Llc"),
+            make_unmatched_txn("2026-01-15", -899, "Spotify"),
         ];
-        let clusters = cluster_by_merchant(txns);
-        // Depending on LCS ratio — "Amazon Prime" vs "Amzn Prime":
-        // LCS("Amazon Prime", "Amzn Prime") — check manually: both 10+ chars, high overlap.
-        // If they cluster: 1 cluster. If not: 2.
-        // The threshold is 0.70. Let's verify:
-        let ratio = lcs_ratio("Amazon Prime", "Amzn Prime");
-        if ratio >= MERCHANT_SIMILARITY_THRESHOLD {
-            assert_eq!(clusters.len(), 1, "should cluster as same merchant (ratio={ratio})");
-        } else {
-            assert_eq!(clusters.len(), 2, "insufficient similarity, separate clusters (ratio={ratio})");
-        }
+        let groups = group_by_canonical(txns, &alias_map);
+        assert_eq!(groups.len(), 2);
+        let netflix = groups.iter().find(|(id, _)| *id == id_netflix).unwrap();
+        assert_eq!(netflix.1.len(), 2);
     }
 
     #[test]
@@ -549,6 +531,7 @@ mod tests {
     #[test]
     fn score_irregular_income_detection() {
         let cluster = Cluster {
+            canonical_merchant_id: Uuid::nil(),
             representative_merchant: "IRS Treas 310".to_string(),
             transactions: vec![make_txn(
                 "00000000-0000-0000-0000-000000000001",
@@ -564,6 +547,7 @@ mod tests {
     #[test]
     fn score_irregular_single_transaction_low_confidence() {
         let cluster = Cluster {
+            canonical_merchant_id: Uuid::nil(),
             representative_merchant: "OneTime".to_string(),
             transactions: vec![make_txn(
                 "00000000-0000-0000-0000-000000000001",
@@ -586,6 +570,7 @@ mod tests {
     fn score_regular_transactions_standing() {
         // Three monthly Netflix charges — should classify as standing.
         let cluster = Cluster {
+            canonical_merchant_id: Uuid::nil(),
             representative_merchant: "Netflix".to_string(),
             transactions: vec![
                 make_txn("00000000-0000-0000-0000-000000000001", "2026-01-07", -1499, "Netflix"),
@@ -602,6 +587,7 @@ mod tests {
     fn score_variable_amounts_with_regular_timing_classify_as_variable() {
         // Weekly grocery runs with varying amounts — timing is regular, amounts differ.
         let cluster = Cluster {
+            canonical_merchant_id: Uuid::nil(),
             representative_merchant: "Grocery".to_string(),
             transactions: vec![
                 make_txn("00000000-0000-0000-0000-000000000001", "2026-01-10", -3500, "Grocery"),
@@ -618,6 +604,7 @@ mod tests {
         // Biweekly $2000 payroll: mean interval ≈ 14 days.
         // rate_per_day should be ~$142/day, not ~$66/day (the 30-day fallback).
         let cluster = Cluster {
+            canonical_merchant_id: Uuid::nil(),
             representative_merchant: "Payroll".to_string(),
             transactions: vec![
                 make_txn("00000000-0000-0000-0000-000000000001", "2026-01-15", 200000, "Payroll"),
@@ -645,6 +632,7 @@ mod tests {
         // With only 2 txns there is exactly 1 interval → std_dev = 0 → timing_score = 1.0.
         // This would falsely pass the timing gate, so STANDING_MIN_OBSERVATIONS = 3 blocks it.
         let cluster = Cluster {
+            canonical_merchant_id: Uuid::nil(),
             representative_merchant: "Uber Eats".to_string(),
             transactions: vec![
                 make_txn("00000000-0000-0000-0000-000000000001", "2026-05-20", -2975, "Uber Eats"),
@@ -659,6 +647,7 @@ mod tests {
     fn consistent_amount_irregular_timing_falls_through_to_one_time() {
         // Same amount every time but random gaps — should not be standing or variable.
         let cluster = Cluster {
+            canonical_merchant_id: Uuid::nil(),
             representative_merchant: "DoorDash".to_string(),
             transactions: vec![
                 make_txn("00000000-0000-0000-0000-000000000001", "2026-01-10", -3850, "DoorDash"),
@@ -674,6 +663,7 @@ mod tests {
     #[test]
     fn confidence_is_clamped_between_zero_and_one() {
         let cluster = Cluster {
+            canonical_merchant_id: Uuid::nil(),
             representative_merchant: "Test".to_string(),
             transactions: (0..100)
                 .map(|i| make_txn(
