@@ -186,6 +186,32 @@ CREATE TABLE labels (
   UNIQUE (name)
 );
 
+-- ── CANONICAL MERCHANTS ─────────────────────────────────────────────────────
+-- Global registry of canonical merchant identities resolved by the engine and
+-- curated by users. No entity_id — like labels, these are shared reference data.
+
+CREATE TABLE canonical_merchants (
+  id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  name       TEXT        NOT NULL,
+  source     TEXT        NOT NULL DEFAULT 'engine'
+             CHECK (source IN ('engine', 'user')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (name)
+);
+
+CREATE TABLE canonical_merchant_aliases (
+  normalized_name       TEXT        PRIMARY KEY,
+  canonical_merchant_id UUID        NOT NULL
+                        REFERENCES canonical_merchants(id) ON DELETE CASCADE,
+  source                TEXT        NOT NULL DEFAULT 'engine'
+                        CHECK (source IN ('engine', 'user')),
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_canonical_merchant_aliases_canonical_id
+    ON canonical_merchant_aliases (canonical_merchant_id);
+
 -- ── ENTRIES ──────────────────────────────────────────────────────────────────
 -- One row per continuous rate signal instance (absorbs rules + rule_epochs).
 -- start_date = when this signal instance began (first matching transaction date).

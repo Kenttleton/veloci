@@ -638,9 +638,10 @@ func txnAmountStyle(cents int64) string {
 
 // ConfigurationData is passed to the Configuration page template.
 type ConfigurationData struct {
-	Tab          string
-	Labels       []store.LabelWithCount
-	Institutions []store.Institution
+	Tab                string
+	Labels             []store.LabelWithCount
+	Institutions       []store.Institution
+	CanonicalMerchants []store.CanonicalMerchantWithCounts
 }
 
 func (s *Server) Configuration(w http.ResponseWriter, r *http.Request) {
@@ -654,11 +655,13 @@ func (s *Server) Configuration(w http.ResponseWriter, r *http.Request) {
 
 	labels, _ := s.store.ListLabelsWithEntryCount(ctx, entityID)
 	institutions, _ := s.store.ListInstitutions(ctx, entityID)
+	merchants, _ := s.store.ListCanonicalMerchants(ctx, 500, "")
 
 	data := ConfigurationData{
-		Tab:          tab,
-		Labels:       labels,
-		Institutions: institutions,
+		Tab:                tab,
+		Labels:             labels,
+		Institutions:       institutions,
+		CanonicalMerchants: merchants,
 	}
 	s.render(w, r, ConfigurationPage(s.buildShellData(r), data))
 }

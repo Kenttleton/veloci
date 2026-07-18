@@ -55,30 +55,48 @@ func ConfigurationPage(shell ShellData, data ConfigurationData) templ.Component 
 			var templ_7745c5c3_Var3 string
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(cfgTabStyle(data.Tab == "labels"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 18, Col: 47}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 18, Col: 47}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\">Labels</a> <a href=\"?tab=institutions\" style=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\">Labels</a> <a href=\"?tab=merchants\" style=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var4 string
-			templ_7745c5c3_Var4, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(cfgTabStyle(data.Tab == "institutions"))
+			templ_7745c5c3_Var4, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(cfgTabStyle(data.Tab == "merchants"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 22, Col: 53}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 22, Col: 50}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\">Institution Mappings</a></div></div><div style=\"flex:1;overflow:auto;padding:24px 20px\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\">Merchants</a> <a href=\"?tab=institutions\" style=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			if data.Tab == "institutions" {
+			var templ_7745c5c3_Var5 string
+			templ_7745c5c3_Var5, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(cfgTabStyle(data.Tab == "institutions"))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 26, Col: 53}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "\">Institution Mappings</a></div></div><div style=\"flex:1;overflow:auto;padding:24px 20px\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if data.Tab == "merchants" {
+				templ_7745c5c3_Err = cfgMerchantsSection(data.CanonicalMerchants).Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			} else if data.Tab == "institutions" {
 				templ_7745c5c3_Err = cfgInstitutionsSection(data.Institutions).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
@@ -89,7 +107,7 @@ func ConfigurationPage(shell ShellData, data ConfigurationData) templ.Component 
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</div></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -97,7 +115,7 @@ func ConfigurationPage(shell ShellData, data ConfigurationData) templ.Component 
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, " <script>\n\t\t\t(function() {\n\t\t\t\t// ── Labels ────────────────────────────────────────────────────────────────\n\n\t\t\t\tvar labelsBody = document.getElementById('labels-body');\n\t\t\t\tvar addLabelBtn = document.getElementById('add-label-btn');\n\t\t\t\tvar newLabelRow = document.getElementById('new-label-row');\n\t\t\t\tvar newLabelInput = document.getElementById('new-label-input');\n\t\t\t\tvar newLabelError = document.getElementById('new-label-error');\n\t\t\t\tvar newLabelSave = document.getElementById('new-label-save');\n\t\t\t\tvar newLabelCancel = document.getElementById('new-label-cancel');\n\n\t\t\t\tfunction labelNames() {\n\t\t\t\t\tvar names = [];\n\t\t\t\t\t(labelsBody ? labelsBody.querySelectorAll('[data-label-name]') : []).forEach(function(el) {\n\t\t\t\t\t\tnames.push(el.dataset.labelName.toLowerCase());\n\t\t\t\t\t});\n\t\t\t\t\treturn names;\n\t\t\t\t}\n\n\t\t\t\tif (addLabelBtn && newLabelRow) {\n\t\t\t\t\taddLabelBtn.addEventListener('click', function() {\n\t\t\t\t\t\tnewLabelRow.style.display = '';\n\t\t\t\t\t\tnewLabelInput.value = '';\n\t\t\t\t\t\tnewLabelError.textContent = '';\n\t\t\t\t\t\tnewLabelInput.focus();\n\t\t\t\t\t});\n\t\t\t\t\tnewLabelCancel.addEventListener('click', function() {\n\t\t\t\t\t\tnewLabelRow.style.display = 'none';\n\t\t\t\t\t});\n\t\t\t\t\tnewLabelInput.addEventListener('keydown', function(e) {\n\t\t\t\t\t\tif (e.key === 'Enter') saveNewLabel();\n\t\t\t\t\t\tif (e.key === 'Escape') { newLabelRow.style.display = 'none'; }\n\t\t\t\t\t});\n\t\t\t\t\tnewLabelSave.addEventListener('click', saveNewLabel);\n\t\t\t\t}\n\n\t\t\t\tfunction saveNewLabel() {\n\t\t\t\t\tvar name = newLabelInput ? newLabelInput.value.trim() : '';\n\t\t\t\t\tif (!name) { newLabelRow.style.display = 'none'; return; }\n\t\t\t\t\tif (labelNames().includes(name.toLowerCase())) {\n\t\t\t\t\t\tnewLabelError.textContent = 'A label with this name already exists.';\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tnewLabelInput.disabled = true;\n\t\t\t\t\tfetch('/api/labels', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})\n\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t.then(function(env) {\n\t\t\t\t\t\t\tvar label = env.data;\n\t\t\t\t\t\t\tif (!label) throw new Error('no data');\n\t\t\t\t\t\t\tnewLabelRow.style.display = 'none';\n\t\t\t\t\t\t\tnewLabelInput.disabled = false;\n\t\t\t\t\t\t\t// Prepend row to table\n\t\t\t\t\t\t\tvar row = buildLabelRow(label.id, label.name, 0);\n\t\t\t\t\t\t\tif (labelsBody) {\n\t\t\t\t\t\t\t\tvar first = labelsBody.querySelector('tr');\n\t\t\t\t\t\t\t\tif (first) labelsBody.insertBefore(row, first);\n\t\t\t\t\t\t\t\telse labelsBody.appendChild(row);\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\tvar empty = document.getElementById('labels-empty');\n\t\t\t\t\t\t\tif (empty) empty.style.display = 'none';\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function() {\n\t\t\t\t\t\t\tnewLabelInput.disabled = false;\n\t\t\t\t\t\t\tnewLabelError.textContent = 'Failed to create label.';\n\t\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\tfunction buildLabelRow(id, name, entryCount) {\n\t\t\t\t\tvar tr = document.createElement('tr');\n\t\t\t\t\ttr.dataset.labelId = id;\n\t\t\t\t\ttr.style.borderBottom = '1px solid var(--border)';\n\t\t\t\t\ttr.innerHTML = labelRowHTML(id, name, entryCount, false);\n\t\t\t\t\treturn tr;\n\t\t\t\t}\n\n\t\t\t\tfunction labelRowHTML(id, name, entryCount, editing) {\n\t\t\t\t\tvar countStr = entryCount > 0 ? entryCount + ' entr' + (entryCount === 1 ? 'y' : 'ies') : '—';\n\t\t\t\t\tif (editing) {\n\t\t\t\t\t\treturn '<td style=\"padding:8px 12px\"><input class=\"label-edit-input\" data-label-id=\"' + id + '\" type=\"text\" value=\"' + escHtml(name) + '\" style=\"background:var(--surface2);border:1px solid var(--accent);border-radius:4px;padding:4px 8px;font-size:13px;color:var(--text);outline:none;width:100%\"/><div class=\"label-edit-error\" style=\"font-size:11px;color:var(--commit);margin-top:2px\"></div></td>' +\n\t\t\t\t\t\t\t'<td style=\"padding:8px 12px;font-size:12px;color:var(--text2)\">' + countStr + '</td>' +\n\t\t\t\t\t\t\t'<td style=\"padding:8px 12px\"><div style=\"display:flex;gap:6px\">' +\n\t\t\t\t\t\t\t'<button class=\"js-label-save\" data-label-id=\"' + id + '\" style=\"background:none;border:none;cursor:pointer;color:var(--income);font-size:12px;font-family:inherit;padding:0\">Save</button>' +\n\t\t\t\t\t\t\t'<button class=\"js-label-cancel-edit\" data-label-id=\"' + id + '\" data-original-name=\"' + escHtml(name) + '\" data-entry-count=\"' + entryCount + '\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit;padding:0\">Cancel</button>' +\n\t\t\t\t\t\t\t'</div></td>';\n\t\t\t\t\t}\n\t\t\t\t\treturn '<td style=\"padding:8px 12px;font-size:13px;color:var(--text);cursor:pointer\" class=\"js-label-name-cell\" data-label-id=\"' + id + '\" data-label-name=\"' + escHtml(name) + '\" data-entry-count=\"' + entryCount + '\">' + escHtml(name) + '</td>' +\n\t\t\t\t\t\t'<td style=\"padding:8px 12px;font-size:12px;color:var(--text2)\">' + countStr + '</td>' +\n\t\t\t\t\t\t'<td style=\"padding:8px 12px\"><button class=\"js-label-rename\" data-label-id=\"' + id + '\" data-label-name=\"' + escHtml(name) + '\" data-entry-count=\"' + entryCount + '\" style=\"background:none;border:none;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:0\">Rename</button></td>';\n\t\t\t\t}\n\n\t\t\t\tfunction escHtml(s) {\n\t\t\t\t\treturn String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;');\n\t\t\t\t}\n\n\t\t\t\tfunction startEdit(id, name, entryCount) {\n\t\t\t\t\tvar tr = labelsBody ? labelsBody.querySelector('[data-label-id=\"' + id + '\"]') : null;\n\t\t\t\t\tif (!tr) return;\n\t\t\t\t\ttr.innerHTML = labelRowHTML(id, name, entryCount, true);\n\t\t\t\t\tvar input = tr.querySelector('.label-edit-input');\n\t\t\t\t\tif (input) { input.focus(); input.select(); }\n\t\t\t\t}\n\n\t\t\t\tfunction saveEdit(id) {\n\t\t\t\t\tvar tr = labelsBody ? labelsBody.querySelector('[data-label-id=\"' + id + '\"]') : null;\n\t\t\t\t\tif (!tr) return;\n\t\t\t\t\tvar input = tr.querySelector('.label-edit-input');\n\t\t\t\t\tvar errorEl = tr.querySelector('.label-edit-error');\n\t\t\t\t\tvar name = input ? input.value.trim() : '';\n\t\t\t\t\tvar originalName = tr.querySelector('[data-original-name]');\n\t\t\t\t\tvar origName = originalName ? originalName.dataset.originalName : '';\n\t\t\t\t\tif (!name) { cancelEdit(id, origName, 0); return; }\n\t\t\t\t\t// Check duplicate (exclude self)\n\t\t\t\t\tvar others = [];\n\t\t\t\t\t(labelsBody ? labelsBody.querySelectorAll('[data-label-name]') : []).forEach(function(el) {\n\t\t\t\t\t\tif (el.dataset.labelId !== id) others.push(el.dataset.labelName.toLowerCase());\n\t\t\t\t\t});\n\t\t\t\t\tif (others.includes(name.toLowerCase())) {\n\t\t\t\t\t\tif (errorEl) errorEl.textContent = 'A label with this name already exists.';\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tif (input) input.disabled = true;\n\t\t\t\t\tfetch('/api/labels/' + id, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})\n\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t.then(function(env) {\n\t\t\t\t\t\t\tvar label = env.data;\n\t\t\t\t\t\t\tvar cnt = tr.querySelector('[data-entry-count]');\n\t\t\t\t\t\t\tvar count = cnt ? parseInt(cnt.dataset.entryCount||'0',10) : 0;\n\t\t\t\t\t\t\ttr.innerHTML = labelRowHTML(label.id, label.name, count, false);\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function() {\n\t\t\t\t\t\t\tif (input) input.disabled = false;\n\t\t\t\t\t\t\tif (errorEl) errorEl.textContent = 'Failed to save.';\n\t\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\tfunction cancelEdit(id, name, entryCount) {\n\t\t\t\t\tvar tr = labelsBody ? labelsBody.querySelector('[data-label-id=\"' + id + '\"]') : null;\n\t\t\t\t\tif (!tr) return;\n\t\t\t\t\tvar btn = tr.querySelector('[data-original-name]');\n\t\t\t\t\tvar cnt = btn ? parseInt((btn.dataset.entryCount||'0'),10) : entryCount;\n\t\t\t\t\ttr.innerHTML = labelRowHTML(id, name, cnt, false);\n\t\t\t\t}\n\n\t\t\t\tdocument.addEventListener('click', function(e) {\n\t\t\t\t\tvar rename = e.target.closest('.js-label-rename');\n\t\t\t\t\tif (rename) { startEdit(rename.dataset.labelId, rename.dataset.labelName, parseInt(rename.dataset.entryCount||'0',10)); return; }\n\t\t\t\t\tvar nameCell = e.target.closest('.js-label-name-cell');\n\t\t\t\t\tif (nameCell) { startEdit(nameCell.dataset.labelId, nameCell.dataset.labelName, parseInt(nameCell.dataset.entryCount||'0',10)); return; }\n\t\t\t\t\tvar save = e.target.closest('.js-label-save');\n\t\t\t\t\tif (save) { saveEdit(save.dataset.labelId); return; }\n\t\t\t\t\tvar cancelEdit_ = e.target.closest('.js-label-cancel-edit');\n\t\t\t\t\tif (cancelEdit_) { cancelEdit(cancelEdit_.dataset.labelId, cancelEdit_.dataset.originalName, parseInt(cancelEdit_.dataset.entryCount||'0',10)); return; }\n\t\t\t\t});\n\n\t\t\t\tdocument.addEventListener('keydown', function(e) {\n\t\t\t\t\tif (!e.target.classList.contains('label-edit-input')) return;\n\t\t\t\t\tvar id = e.target.dataset.labelId;\n\t\t\t\t\tif (e.key === 'Enter') saveEdit(id);\n\t\t\t\t\tif (e.key === 'Escape') {\n\t\t\t\t\t\tvar btn = e.target.closest('tr') ? e.target.closest('tr').querySelector('[data-original-name]') : null;\n\t\t\t\t\t\tvar name = btn ? btn.dataset.originalName : '';\n\t\t\t\t\t\tvar cnt = btn ? parseInt(btn.dataset.entryCount||'0',10) : 0;\n\t\t\t\t\t\tcancelEdit(id, name, cnt);\n\t\t\t\t\t}\n\t\t\t\t});\n\n\t\t\t\t// ── Institutions ──────────────────────────────────────────────────────────\n\n\t\t\t\tvar instDialog = document.getElementById('inst-dialog');\n\t\t\t\tvar instDialogTitle = document.getElementById('inst-dialog-title');\n\t\t\t\tvar instDialogClose = document.getElementById('inst-dialog-close');\n\t\t\t\tvar instDialogCancel = document.getElementById('inst-dialog-cancel');\n\t\t\t\tvar instDialogSave = document.getElementById('inst-dialog-save');\n\t\t\t\tvar instDialogError = document.getElementById('inst-dialog-error');\n\t\t\t\tvar instEditId = null;\n\n\t\t\t\tfunction openInstDialog(inst) {\n\t\t\t\t\tinstEditId = inst ? inst.id : null;\n\t\t\t\t\tif (instDialogTitle) instDialogTitle.textContent = inst ? 'Edit: ' + inst.institution_name : 'New Institution Mapping';\n\t\t\t\t\tsetField('inst-name', inst ? inst.institution_name : '');\n\t\t\t\t\tsetField('inst-date-col', inst ? inst.date_col : 'date');\n\t\t\t\t\tsetField('inst-amount-col', inst ? inst.amount_col : 'amount');\n\t\t\t\t\tsetField('inst-merchant-col', inst ? inst.merchant_col : 'description');\n\t\t\t\t\tsetField('inst-balance-col', inst ? (inst.balance_col||'') : '');\n\t\t\t\t\tsetField('inst-dc-col', inst ? (inst.debit_credit_col||'') : '');\n\t\t\t\t\tsetField('inst-id-col', inst ? (inst.imported_id_col||'') : '');\n\t\t\t\t\tsetField('inst-sign', inst ? inst.amount_sign_convention : 'positive_is_credit');\n\t\t\t\t\tsetField('inst-settlement', inst ? inst.settlement_window_days : '14');\n\t\t\t\t\tsetField('inst-dedup', inst ? inst.dedup_window_days : '3');\n\t\t\t\t\tsetField('inst-tolerance', inst ? inst.amount_tolerance_pct : '0.5');\n\t\t\t\t\tif (instDialogError) { instDialogError.textContent = ''; instDialogError.style.display = 'none'; }\n\t\t\t\t\tif (instDialog) instDialog.showModal();\n\t\t\t\t}\n\n\t\t\t\tfunction setField(id, val) {\n\t\t\t\t\tvar el = document.getElementById(id);\n\t\t\t\t\tif (el) el.value = String(val === null || val === undefined ? '' : val);\n\t\t\t\t}\n\n\t\t\t\tfunction getField(id) {\n\t\t\t\t\tvar el = document.getElementById(id);\n\t\t\t\t\treturn el ? el.value.trim() : '';\n\t\t\t\t}\n\n\t\t\t\tif (instDialogClose) instDialogClose.addEventListener('click', function(){ if(instDialog) instDialog.close(); });\n\t\t\t\tif (instDialogCancel) instDialogCancel.addEventListener('click', function(){ if(instDialog) instDialog.close(); });\n\t\t\t\tif (instDialog) instDialog.addEventListener('click', function(e){ if(e.target===instDialog) instDialog.close(); });\n\n\t\t\t\tdocument.addEventListener('click', function(e) {\n\t\t\t\t\tvar newBtn = e.target.closest('#new-inst-btn');\n\t\t\t\t\tif (newBtn) { openInstDialog(null); return; }\n\t\t\t\t\tvar editBtn = e.target.closest('.js-inst-edit');\n\t\t\t\t\tif (editBtn) {\n\t\t\t\t\t\ttry { openInstDialog(JSON.parse(editBtn.dataset.institution)); } catch(ex){}\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tvar delBtn = e.target.closest('.js-inst-delete');\n\t\t\t\t\tif (delBtn) {\n\t\t\t\t\t\tvar row = delBtn.closest('[data-inst-id]');\n\t\t\t\t\t\tif (row) {\n\t\t\t\t\t\t\tvar confirm_ = row.querySelector('.js-inst-delete-confirm');\n\t\t\t\t\t\t\tvar normal = row.querySelector('.js-inst-actions-normal');\n\t\t\t\t\t\t\tif (confirm_) confirm_.style.display = '';\n\t\t\t\t\t\t\tif (normal) normal.style.display = 'none';\n\t\t\t\t\t\t}\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tvar delNo = e.target.closest('.js-inst-delete-no');\n\t\t\t\t\tif (delNo) {\n\t\t\t\t\t\tvar row = delNo.closest('[data-inst-id]');\n\t\t\t\t\t\tif (row) {\n\t\t\t\t\t\t\tvar confirm_ = row.querySelector('.js-inst-delete-confirm');\n\t\t\t\t\t\t\tvar normal = row.querySelector('.js-inst-actions-normal');\n\t\t\t\t\t\t\tif (confirm_) confirm_.style.display = 'none';\n\t\t\t\t\t\t\tif (normal) normal.style.display = '';\n\t\t\t\t\t\t}\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tvar delYes = e.target.closest('.js-inst-delete-yes');\n\t\t\t\t\tif (delYes) {\n\t\t\t\t\t\tvar id = delYes.dataset.instId;\n\t\t\t\t\t\tdelYes.disabled = true;\n\t\t\t\t\t\tfetch('/api/institutions/' + id, {method:'DELETE'})\n\t\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\t\tif (r.ok || r.status===404) {\n\t\t\t\t\t\t\t\t\tvar row = document.querySelector('[data-inst-id=\"' + id + '\"]');\n\t\t\t\t\t\t\t\t\tif (row) row.remove();\n\t\t\t\t\t\t\t\t\tvar list = document.getElementById('inst-list');\n\t\t\t\t\t\t\t\t\tif (list && !list.querySelector('[data-inst-id]')) {\n\t\t\t\t\t\t\t\t\t\tvar empty = document.getElementById('inst-empty');\n\t\t\t\t\t\t\t\t\t\tif (empty) empty.style.display = '';\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t.catch(function(){ delYes.disabled = false; });\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t});\n\n\t\t\t\tif (instDialogSave) instDialogSave.addEventListener('click', function() {\n\t\t\t\t\tvar name = getField('inst-name');\n\t\t\t\t\tif (!name) {\n\t\t\t\t\t\tif (instDialogError) { instDialogError.textContent = 'Institution name is required.'; instDialogError.style.display = ''; }\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tvar body = {\n\t\t\t\t\t\tinstitution_name: name,\n\t\t\t\t\t\tsource_type: 'csv',\n\t\t\t\t\t\tdate_col: getField('inst-date-col') || 'date',\n\t\t\t\t\t\tamount_col: getField('inst-amount-col') || 'amount',\n\t\t\t\t\t\tmerchant_col: getField('inst-merchant-col') || 'description',\n\t\t\t\t\t\tbalance_col: getField('inst-balance-col') || null,\n\t\t\t\t\t\tdebit_credit_col: getField('inst-dc-col') || null,\n\t\t\t\t\t\timported_id_col: getField('inst-id-col') || null,\n\t\t\t\t\t\tamount_sign_convention: getField('inst-sign') || 'positive_is_credit',\n\t\t\t\t\t\tsettlement_window_days: parseInt(getField('inst-settlement')) || 14,\n\t\t\t\t\t\tdedup_window_days: parseInt(getField('inst-dedup')) || 3,\n\t\t\t\t\t\tamount_tolerance_pct: parseFloat(getField('inst-tolerance')) || 0.5\n\t\t\t\t\t};\n\t\t\t\t\tinstDialogSave.disabled = true;\n\t\t\t\t\tinstDialogSave.textContent = 'Saving…';\n\t\t\t\t\tvar url = instEditId ? '/institutions/' + instEditId : '/institutions';\n\t\t\t\t\tvar method = instEditId ? 'PUT' : 'POST';\n\t\t\t\t\tfetch(url, {method:method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})\n\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\tif (!r.ok) return r.json().then(function(e){ throw new Error(e.detail||'Save failed'); });\n\t\t\t\t\t\t\tif (instDialog) instDialog.close();\n\t\t\t\t\t\t\tlocation.reload();\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function(err) {\n\t\t\t\t\t\t\tinstDialogSave.disabled = false;\n\t\t\t\t\t\t\tinstDialogSave.textContent = 'Save mapping';\n\t\t\t\t\t\t\tif (instDialogError) { instDialogError.textContent = err.message||'Save failed.'; instDialogError.style.display = ''; }\n\t\t\t\t\t\t});\n\t\t\t\t});\n\t\t\t})();\n\t\t</script>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, " <script>\n\t\t\t(function() {\n\t\t\t\t// ── Labels ────────────────────────────────────────────────────────────────\n\n\t\t\t\tvar labelsBody = document.getElementById('labels-body');\n\t\t\t\tvar addLabelBtn = document.getElementById('add-label-btn');\n\t\t\t\tvar newLabelRow = document.getElementById('new-label-row');\n\t\t\t\tvar newLabelInput = document.getElementById('new-label-input');\n\t\t\t\tvar newLabelError = document.getElementById('new-label-error');\n\t\t\t\tvar newLabelSave = document.getElementById('new-label-save');\n\t\t\t\tvar newLabelCancel = document.getElementById('new-label-cancel');\n\n\t\t\t\tfunction labelNames() {\n\t\t\t\t\tvar names = [];\n\t\t\t\t\t(labelsBody ? labelsBody.querySelectorAll('[data-label-name]') : []).forEach(function(el) {\n\t\t\t\t\t\tnames.push(el.dataset.labelName.toLowerCase());\n\t\t\t\t\t});\n\t\t\t\t\treturn names;\n\t\t\t\t}\n\n\t\t\t\tif (addLabelBtn && newLabelRow) {\n\t\t\t\t\taddLabelBtn.addEventListener('click', function() {\n\t\t\t\t\t\tnewLabelRow.style.display = '';\n\t\t\t\t\t\tnewLabelInput.value = '';\n\t\t\t\t\t\tnewLabelError.textContent = '';\n\t\t\t\t\t\tnewLabelInput.focus();\n\t\t\t\t\t});\n\t\t\t\t\tnewLabelCancel.addEventListener('click', function() {\n\t\t\t\t\t\tnewLabelRow.style.display = 'none';\n\t\t\t\t\t});\n\t\t\t\t\tnewLabelInput.addEventListener('keydown', function(e) {\n\t\t\t\t\t\tif (e.key === 'Enter') saveNewLabel();\n\t\t\t\t\t\tif (e.key === 'Escape') { newLabelRow.style.display = 'none'; }\n\t\t\t\t\t});\n\t\t\t\t\tnewLabelSave.addEventListener('click', saveNewLabel);\n\t\t\t\t}\n\n\t\t\t\tfunction saveNewLabel() {\n\t\t\t\t\tvar name = newLabelInput ? newLabelInput.value.trim() : '';\n\t\t\t\t\tif (!name) { newLabelRow.style.display = 'none'; return; }\n\t\t\t\t\tif (labelNames().includes(name.toLowerCase())) {\n\t\t\t\t\t\tnewLabelError.textContent = 'A label with this name already exists.';\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tnewLabelInput.disabled = true;\n\t\t\t\t\tfetch('/api/labels', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})\n\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t.then(function(env) {\n\t\t\t\t\t\t\tvar label = env.data;\n\t\t\t\t\t\t\tif (!label) throw new Error('no data');\n\t\t\t\t\t\t\tnewLabelRow.style.display = 'none';\n\t\t\t\t\t\t\tnewLabelInput.disabled = false;\n\t\t\t\t\t\t\t// Prepend row to table\n\t\t\t\t\t\t\tvar row = buildLabelRow(label.id, label.name, 0);\n\t\t\t\t\t\t\tif (labelsBody) {\n\t\t\t\t\t\t\t\tvar first = labelsBody.querySelector('tr');\n\t\t\t\t\t\t\t\tif (first) labelsBody.insertBefore(row, first);\n\t\t\t\t\t\t\t\telse labelsBody.appendChild(row);\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\tvar empty = document.getElementById('labels-empty');\n\t\t\t\t\t\t\tif (empty) empty.style.display = 'none';\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function() {\n\t\t\t\t\t\t\tnewLabelInput.disabled = false;\n\t\t\t\t\t\t\tnewLabelError.textContent = 'Failed to create label.';\n\t\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\tfunction buildLabelRow(id, name, entryCount) {\n\t\t\t\t\tvar tr = document.createElement('tr');\n\t\t\t\t\ttr.dataset.labelId = id;\n\t\t\t\t\ttr.style.borderBottom = '1px solid var(--border)';\n\t\t\t\t\ttr.innerHTML = labelRowHTML(id, name, entryCount, false);\n\t\t\t\t\treturn tr;\n\t\t\t\t}\n\n\t\t\t\tfunction labelRowHTML(id, name, entryCount, editing) {\n\t\t\t\t\tvar countStr = entryCount > 0 ? entryCount + ' entr' + (entryCount === 1 ? 'y' : 'ies') : '—';\n\t\t\t\t\tif (editing) {\n\t\t\t\t\t\treturn '<td style=\"padding:8px 12px\"><input class=\"label-edit-input\" data-label-id=\"' + id + '\" type=\"text\" value=\"' + escHtml(name) + '\" style=\"background:var(--surface2);border:1px solid var(--accent);border-radius:4px;padding:4px 8px;font-size:13px;color:var(--text);outline:none;width:100%\"/><div class=\"label-edit-error\" style=\"font-size:11px;color:var(--commit);margin-top:2px\"></div></td>' +\n\t\t\t\t\t\t\t'<td style=\"padding:8px 12px;font-size:12px;color:var(--text2)\">' + countStr + '</td>' +\n\t\t\t\t\t\t\t'<td style=\"padding:8px 12px\"><div style=\"display:flex;gap:6px\">' +\n\t\t\t\t\t\t\t'<button class=\"js-label-save\" data-label-id=\"' + id + '\" style=\"background:none;border:none;cursor:pointer;color:var(--income);font-size:12px;font-family:inherit;padding:0\">Save</button>' +\n\t\t\t\t\t\t\t'<button class=\"js-label-cancel-edit\" data-label-id=\"' + id + '\" data-original-name=\"' + escHtml(name) + '\" data-entry-count=\"' + entryCount + '\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit;padding:0\">Cancel</button>' +\n\t\t\t\t\t\t\t'</div></td>';\n\t\t\t\t\t}\n\t\t\t\t\treturn '<td style=\"padding:8px 12px;font-size:13px;color:var(--text);cursor:pointer\" class=\"js-label-name-cell\" data-label-id=\"' + id + '\" data-label-name=\"' + escHtml(name) + '\" data-entry-count=\"' + entryCount + '\">' + escHtml(name) + '</td>' +\n\t\t\t\t\t\t'<td style=\"padding:8px 12px;font-size:12px;color:var(--text2)\">' + countStr + '</td>' +\n\t\t\t\t\t\t'<td style=\"padding:8px 12px\"><button class=\"js-label-rename\" data-label-id=\"' + id + '\" data-label-name=\"' + escHtml(name) + '\" data-entry-count=\"' + entryCount + '\" style=\"background:none;border:none;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:0\">Rename</button></td>';\n\t\t\t\t}\n\n\t\t\t\tfunction escHtml(s) {\n\t\t\t\t\treturn String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;');\n\t\t\t\t}\n\n\t\t\t\tfunction startEdit(id, name, entryCount) {\n\t\t\t\t\tvar tr = labelsBody ? labelsBody.querySelector('[data-label-id=\"' + id + '\"]') : null;\n\t\t\t\t\tif (!tr) return;\n\t\t\t\t\ttr.innerHTML = labelRowHTML(id, name, entryCount, true);\n\t\t\t\t\tvar input = tr.querySelector('.label-edit-input');\n\t\t\t\t\tif (input) { input.focus(); input.select(); }\n\t\t\t\t}\n\n\t\t\t\tfunction saveEdit(id) {\n\t\t\t\t\tvar tr = labelsBody ? labelsBody.querySelector('[data-label-id=\"' + id + '\"]') : null;\n\t\t\t\t\tif (!tr) return;\n\t\t\t\t\tvar input = tr.querySelector('.label-edit-input');\n\t\t\t\t\tvar errorEl = tr.querySelector('.label-edit-error');\n\t\t\t\t\tvar name = input ? input.value.trim() : '';\n\t\t\t\t\tvar originalName = tr.querySelector('[data-original-name]');\n\t\t\t\t\tvar origName = originalName ? originalName.dataset.originalName : '';\n\t\t\t\t\tif (!name) { cancelEdit(id, origName, 0); return; }\n\t\t\t\t\t// Check duplicate (exclude self)\n\t\t\t\t\tvar others = [];\n\t\t\t\t\t(labelsBody ? labelsBody.querySelectorAll('[data-label-name]') : []).forEach(function(el) {\n\t\t\t\t\t\tif (el.dataset.labelId !== id) others.push(el.dataset.labelName.toLowerCase());\n\t\t\t\t\t});\n\t\t\t\t\tif (others.includes(name.toLowerCase())) {\n\t\t\t\t\t\tif (errorEl) errorEl.textContent = 'A label with this name already exists.';\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tif (input) input.disabled = true;\n\t\t\t\t\tfetch('/api/labels/' + id, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})\n\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t.then(function(env) {\n\t\t\t\t\t\t\tvar label = env.data;\n\t\t\t\t\t\t\tvar cnt = tr.querySelector('[data-entry-count]');\n\t\t\t\t\t\t\tvar count = cnt ? parseInt(cnt.dataset.entryCount||'0',10) : 0;\n\t\t\t\t\t\t\ttr.innerHTML = labelRowHTML(label.id, label.name, count, false);\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function() {\n\t\t\t\t\t\t\tif (input) input.disabled = false;\n\t\t\t\t\t\t\tif (errorEl) errorEl.textContent = 'Failed to save.';\n\t\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\tfunction cancelEdit(id, name, entryCount) {\n\t\t\t\t\tvar tr = labelsBody ? labelsBody.querySelector('[data-label-id=\"' + id + '\"]') : null;\n\t\t\t\t\tif (!tr) return;\n\t\t\t\t\tvar btn = tr.querySelector('[data-original-name]');\n\t\t\t\t\tvar cnt = btn ? parseInt((btn.dataset.entryCount||'0'),10) : entryCount;\n\t\t\t\t\ttr.innerHTML = labelRowHTML(id, name, cnt, false);\n\t\t\t\t}\n\n\t\t\t\tdocument.addEventListener('click', function(e) {\n\t\t\t\t\tvar rename = e.target.closest('.js-label-rename');\n\t\t\t\t\tif (rename) { startEdit(rename.dataset.labelId, rename.dataset.labelName, parseInt(rename.dataset.entryCount||'0',10)); return; }\n\t\t\t\t\tvar nameCell = e.target.closest('.js-label-name-cell');\n\t\t\t\t\tif (nameCell) { startEdit(nameCell.dataset.labelId, nameCell.dataset.labelName, parseInt(nameCell.dataset.entryCount||'0',10)); return; }\n\t\t\t\t\tvar save = e.target.closest('.js-label-save');\n\t\t\t\t\tif (save) { saveEdit(save.dataset.labelId); return; }\n\t\t\t\t\tvar cancelEdit_ = e.target.closest('.js-label-cancel-edit');\n\t\t\t\t\tif (cancelEdit_) { cancelEdit(cancelEdit_.dataset.labelId, cancelEdit_.dataset.originalName, parseInt(cancelEdit_.dataset.entryCount||'0',10)); return; }\n\t\t\t\t});\n\n\t\t\t\tdocument.addEventListener('keydown', function(e) {\n\t\t\t\t\tif (!e.target.classList.contains('label-edit-input')) return;\n\t\t\t\t\tvar id = e.target.dataset.labelId;\n\t\t\t\t\tif (e.key === 'Enter') saveEdit(id);\n\t\t\t\t\tif (e.key === 'Escape') {\n\t\t\t\t\t\tvar btn = e.target.closest('tr') ? e.target.closest('tr').querySelector('[data-original-name]') : null;\n\t\t\t\t\t\tvar name = btn ? btn.dataset.originalName : '';\n\t\t\t\t\t\tvar cnt = btn ? parseInt(btn.dataset.entryCount||'0',10) : 0;\n\t\t\t\t\t\tcancelEdit(id, name, cnt);\n\t\t\t\t\t}\n\t\t\t\t});\n\n\t\t\t\t\t\t\t\t// ── Merchants ────────────────────────────────────────────────────────────\n\n\t\t\t\tvar merchantsBody = document.getElementById('merchants-body');\n\t\t\t\tvar addMerchantBtn = document.getElementById('add-merchant-btn');\n\t\t\t\tvar newMerchantRow = document.getElementById('new-merchant-row');\n\t\t\t\tvar newMerchantInput = document.getElementById('new-merchant-input');\n\t\t\t\tvar newMerchantError = document.getElementById('new-merchant-error');\n\t\t\t\tvar newMerchantSave = document.getElementById('new-merchant-save');\n\t\t\t\tvar newMerchantCancel = document.getElementById('new-merchant-cancel');\n\n\t\t\t\tif (addMerchantBtn && newMerchantRow) {\n\t\t\t\t\taddMerchantBtn.addEventListener('click', function() {\n\t\t\t\t\t\tnewMerchantRow.style.display = '';\n\t\t\t\t\t\tnewMerchantInput.value = '';\n\t\t\t\t\t\tnewMerchantError.textContent = '';\n\t\t\t\t\t\tnewMerchantInput.focus();\n\t\t\t\t\t});\n\t\t\t\t\tnewMerchantCancel.addEventListener('click', function() { newMerchantRow.style.display = 'none'; });\n\t\t\t\t\tnewMerchantInput.addEventListener('keydown', function(e) {\n\t\t\t\t\t\tif (e.key === 'Enter') saveNewMerchant();\n\t\t\t\t\t\tif (e.key === 'Escape') newMerchantRow.style.display = 'none';\n\t\t\t\t\t});\n\t\t\t\t\tnewMerchantSave.addEventListener('click', saveNewMerchant);\n\t\t\t\t}\n\n\t\t\t\tfunction saveNewMerchant() {\n\t\t\t\t\tvar name = newMerchantInput ? newMerchantInput.value.trim() : '';\n\t\t\t\t\tif (!name) { newMerchantRow.style.display = 'none'; return; }\n\t\t\t\t\tnewMerchantInput.disabled = true;\n\t\t\t\t\tfetch('/canonical-merchants', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})\n\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t.then(function(env) {\n\t\t\t\t\t\t\tvar m = env.data;\n\t\t\t\t\t\t\tif (!m) throw new Error('no data');\n\t\t\t\t\t\t\tnewMerchantRow.style.display = 'none';\n\t\t\t\t\t\t\tnewMerchantInput.disabled = false;\n\t\t\t\t\t\t\tinsertMerchantRow(m.id, m.name, m.source || 'user', m.alias_count || 0);\n\t\t\t\t\t\t\tvar empty = document.getElementById('merchants-empty');\n\t\t\t\t\t\t\tif (empty) empty.style.display = 'none';\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function() {\n\t\t\t\t\t\t\tnewMerchantInput.disabled = false;\n\t\t\t\t\t\t\tif (newMerchantError) newMerchantError.textContent = 'Failed to create merchant.';\n\t\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\tfunction insertMerchantRow(id, name, source, aliasCount) {\n\t\t\t\t\tvar tr = document.createElement('tr');\n\t\t\t\t\ttr.dataset.merchantId = id;\n\t\t\t\t\ttr.dataset.merchantName = name;\n\t\t\t\t\ttr.dataset.merchantSource = source;\n\t\t\t\t\ttr.style.borderBottom = '1px solid var(--border)';\n\t\t\t\t\ttr.innerHTML = merchantViewCells(id, name, source, aliasCount);\n\t\t\t\t\tif (merchantsBody) {\n\t\t\t\t\t\tvar ref = merchantsBody.querySelector('tr:not(#new-merchant-row)');\n\t\t\t\t\t\tif (ref) merchantsBody.insertBefore(tr, ref);\n\t\t\t\t\t\telse merchantsBody.appendChild(tr);\n\t\t\t\t\t}\n\t\t\t\t}\n\n\t\t\t\t// Returns the 4 <td> cells for a merchant row in view mode\n\t\t\t\tfunction merchantViewCells(id, name, source, aliasCount) {\n\t\t\t\t\tvar badge = '<span style=\"font-size:11px;color:' + (source==='user'?'var(--accent)':'var(--text3)') + ';background:var(--surface2);padding:2px 6px;border-radius:4px\">' + escHtml(source) + '</span>';\n\t\t\t\t\tvar aliasBtn = aliasCount > 0\n\t\t\t\t\t\t? '<button class=\"js-merchant-aliases-toggle\" data-merchant-id=\"' + id + '\" data-merchant-name=\"' + escHtml(name) + '\" style=\"background:none;border:none;cursor:pointer;color:var(--accent);font-size:12px;font-family:inherit;padding:0;text-decoration:underline\">' + aliasCount + ' alias' + (aliasCount===1?'':'es') + '</button>'\n\t\t\t\t\t\t: '<button class=\"js-merchant-aliases-toggle\" data-merchant-id=\"' + id + '\" data-merchant-name=\"' + escHtml(name) + '\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit;padding:0\">+ aliases</button>';\n\t\t\t\t\tvar actions =\n\t\t\t\t\t\t'<div class=\"js-merchant-actions-normal\" style=\"display:flex;gap:8px\">' +\n\t\t\t\t\t\t\t'<button class=\"js-merchant-rename\" data-merchant-id=\"' + id + '\" data-merchant-name=\"' + escHtml(name) + '\" data-source=\"' + escHtml(source) + '\" data-alias-count=\"' + aliasCount + '\" style=\"background:none;border:none;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:0\">Rename</button>' +\n\t\t\t\t\t\t\t'<button class=\"js-merchant-delete\" data-merchant-id=\"' + id + '\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit;padding:0\">Delete</button>' +\n\t\t\t\t\t\t'</div>' +\n\t\t\t\t\t\t'<div class=\"js-merchant-delete-confirm\" style=\"display:none;align-items:center;gap:4px\">' +\n\t\t\t\t\t\t\t'<span style=\"font-size:11px;color:var(--commit)\">Delete?</span>' +\n\t\t\t\t\t\t\t'<button class=\"js-merchant-delete-yes\" data-merchant-id=\"' + id + '\" style=\"background:none;border:none;cursor:pointer;color:var(--commit);font-size:11px;font-family:inherit;padding:2px 4px\">Yes</button>' +\n\t\t\t\t\t\t\t'<button class=\"js-merchant-delete-no\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:11px;font-family:inherit;padding:2px 4px\">No</button>' +\n\t\t\t\t\t\t'</div>';\n\t\t\t\t\treturn '<td style=\"padding:8px 12px;font-size:13px;color:var(--text);cursor:pointer\" class=\"js-merchant-name-cell\" data-merchant-id=\"' + id + '\" data-merchant-name=\"' + escHtml(name) + '\">' + escHtml(name) + '</td>' +\n\t\t\t\t\t\t'<td style=\"padding:8px 12px\">' + badge + '</td>' +\n\t\t\t\t\t\t'<td style=\"padding:8px 12px\">' + aliasBtn + '</td>' +\n\t\t\t\t\t\t'<td style=\"padding:8px 12px\">' + actions + '</td>';\n\t\t\t\t}\n\n\t\t\t\t// Returns 4 <td> cells for a merchant row in rename-edit mode\n\t\t\t\tfunction merchantEditCells(id, name, source, aliasCount) {\n\t\t\t\t\tvar badge = '<span style=\"font-size:11px;color:' + (source==='user'?'var(--accent)':'var(--text3)') + ';background:var(--surface2);padding:2px 6px;border-radius:4px\">' + escHtml(source) + '</span>';\n\t\t\t\t\treturn '<td style=\"padding:8px 12px\">' +\n\t\t\t\t\t\t\t'<input class=\"merchant-edit-input\" data-merchant-id=\"' + id + '\" type=\"text\" value=\"' + escHtml(name) + '\" style=\"background:var(--surface2);border:1px solid var(--accent);border-radius:4px;padding:4px 8px;font-size:13px;color:var(--text);outline:none;width:100%\"/>' +\n\t\t\t\t\t\t\t'<div class=\"merchant-edit-error\" style=\"font-size:11px;color:var(--commit);margin-top:2px\"></div>' +\n\t\t\t\t\t\t'</td>' +\n\t\t\t\t\t\t'<td style=\"padding:8px 12px\">' + badge + '</td>' +\n\t\t\t\t\t\t'<td style=\"padding:8px 12px\"></td>' +\n\t\t\t\t\t\t'<td style=\"padding:8px 12px\"><div style=\"display:flex;gap:6px\">' +\n\t\t\t\t\t\t\t'<button class=\"js-merchant-save\" data-merchant-id=\"' + id + '\" style=\"background:none;border:none;cursor:pointer;color:var(--income);font-size:12px;font-family:inherit;padding:0\">Save</button>' +\n\t\t\t\t\t\t\t'<button class=\"js-merchant-cancel-edit\" data-merchant-id=\"' + id + '\" data-original-name=\"' + escHtml(name) + '\" data-source=\"' + escHtml(source) + '\" data-alias-count=\"' + aliasCount + '\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit;padding:0\">Cancel</button>' +\n\t\t\t\t\t\t'</div></td>';\n\t\t\t\t}\n\n\t\t\t\tfunction startMerchantEdit(id, name, source, aliasCount) {\n\t\t\t\t\tvar tr = merchantsBody ? merchantsBody.querySelector('tr[data-merchant-id=\"' + id + '\"]') : null;\n\t\t\t\t\tif (!tr || tr.id === 'new-merchant-row') return;\n\t\t\t\t\ttr.innerHTML = merchantEditCells(id, name, source, aliasCount);\n\t\t\t\t\tvar input = tr.querySelector('.merchant-edit-input');\n\t\t\t\t\tif (input) { input.focus(); input.select(); }\n\t\t\t\t}\n\n\t\t\t\tfunction saveMerchantEdit(id) {\n\t\t\t\t\tvar tr = merchantsBody ? merchantsBody.querySelector('tr[data-merchant-id=\"' + id + '\"]') : null;\n\t\t\t\t\tif (!tr) return;\n\t\t\t\t\tvar input = tr.querySelector('.merchant-edit-input');\n\t\t\t\t\tvar errorEl = tr.querySelector('.merchant-edit-error');\n\t\t\t\t\tvar name = input ? input.value.trim() : '';\n\t\t\t\t\tvar cancelBtn = tr.querySelector('[data-original-name]');\n\t\t\t\t\tvar origName = cancelBtn ? cancelBtn.dataset.originalName : '';\n\t\t\t\t\tvar source = cancelBtn ? (cancelBtn.dataset.source||'engine') : 'engine';\n\t\t\t\t\tvar aliasCount = cancelBtn ? parseInt(cancelBtn.dataset.aliasCount||'0',10) : 0;\n\t\t\t\t\tif (!name) { cancelMerchantEdit(id, origName, source, aliasCount); return; }\n\t\t\t\t\tif (input) input.disabled = true;\n\t\t\t\t\tfetch('/canonical-merchants/' + id, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})\n\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t.then(function(env) {\n\t\t\t\t\t\t\tvar m = env.data;\n\t\t\t\t\t\t\ttr.dataset.merchantName = m.name;\n\t\t\t\t\t\t\ttr.innerHTML = merchantViewCells(m.id, m.name, source, aliasCount);\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function() {\n\t\t\t\t\t\t\tif (input) input.disabled = false;\n\t\t\t\t\t\t\tif (errorEl) errorEl.textContent = 'Failed to save.';\n\t\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\tfunction cancelMerchantEdit(id, name, source, aliasCount) {\n\t\t\t\t\tvar tr = merchantsBody ? merchantsBody.querySelector('tr[data-merchant-id=\"' + id + '\"]') : null;\n\t\t\t\t\tif (!tr) return;\n\t\t\t\t\ttr.innerHTML = merchantViewCells(id, name, source, aliasCount);\n\t\t\t\t}\n\n\t\t\t\t// ── Alias expansion ───────────────────────────────────────────────────────\n\n\t\t\t\tvar _aliasCache = {};\n\n\t\t\t\tfunction getMerchantExpansionRow(id) {\n\t\t\t\t\treturn document.querySelector('tr[data-merchant-expansion=\"' + id + '\"]');\n\t\t\t\t}\n\n\t\t\t\tfunction toggleMerchantExpansion(id, name) {\n\t\t\t\t\tvar existing = getMerchantExpansionRow(id);\n\t\t\t\t\tif (existing) { existing.remove(); return; }\n\t\t\t\t\tvar merchantTr = merchantsBody ? merchantsBody.querySelector('tr[data-merchant-id=\"' + id + '\"]') : null;\n\t\t\t\t\tif (!merchantTr) return;\n\t\t\t\t\tvar expTr = document.createElement('tr');\n\t\t\t\t\texpTr.dataset.merchantExpansion = id;\n\t\t\t\t\texpTr.innerHTML = '<td colspan=\"4\" style=\"padding:12px 16px;background:var(--bg);border-bottom:1px solid var(--border)\">' + buildExpansionHTML(id, name) + '</td>';\n\t\t\t\t\tmerchantTr.parentNode.insertBefore(expTr, merchantTr.nextSibling);\n\t\t\t\t\tloadMerchantAliases(id);\n\t\t\t\t\tpopulateMergeSelect(id);\n\t\t\t\t}\n\n\t\t\t\tfunction buildExpansionHTML(id, name) {\n\t\t\t\t\treturn '<div style=\"display:grid;gap:16px\">' +\n\t\t\t\t\t\t'<div>' +\n\t\t\t\t\t\t\t'<div style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px\">Aliases</div>' +\n\t\t\t\t\t\t\t'<div id=\"alias-chips-' + id + '\" style=\"display:flex;flex-wrap:wrap;gap:6px;min-height:24px;margin-bottom:8px\"><span style=\"color:var(--text3);font-size:12px\">Loading…</span></div>' +\n\t\t\t\t\t\t\t'<div style=\"display:flex;gap:6px;align-items:center\">' +\n\t\t\t\t\t\t\t\t'<input id=\"add-alias-input-' + id + '\" type=\"text\" placeholder=\"normalized alias\" style=\"background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:12px;color:var(--text);outline:none;width:220px\"/>' +\n\t\t\t\t\t\t\t\t'<button class=\"js-alias-add\" data-merchant-id=\"' + id + '\" style=\"background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--accent);font-size:12px;font-family:inherit;padding:3px 10px\">Add alias</button>' +\n\t\t\t\t\t\t\t\t'<span id=\"add-alias-err-' + id + '\" style=\"color:var(--commit);font-size:11px\"></span>' +\n\t\t\t\t\t\t\t'</div>' +\n\t\t\t\t\t\t'</div>' +\n\t\t\t\t\t\t'<div style=\"border-top:1px solid var(--border);padding-top:12px\">' +\n\t\t\t\t\t\t\t'<div style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px\">Merge</div>' +\n\t\t\t\t\t\t\t'<div style=\"font-size:12px;color:var(--text3);margin-bottom:6px\">Absorb another merchant into <strong style=\\\"color:var(--text)\\\">' + escHtml(name) + '</strong> — its aliases move here and it is deleted.</div>' +\n\t\t\t\t\t\t\t'<div style=\"display:flex;gap:6px;align-items:center\">' +\n\t\t\t\t\t\t\t\t'<select id=\"merge-select-' + id + '\" style=\"background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:12px;color:var(--text);outline:none;width:240px\"><option value=\"\">— select merchant to absorb —</option></select>' +\n\t\t\t\t\t\t\t\t'<button class=\"js-merge-confirm\" data-merchant-id=\"' + id + '\" style=\"background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--commit);font-size:12px;font-family:inherit;padding:3px 10px\">Absorb &amp; delete</button>' +\n\t\t\t\t\t\t\t\t'<span id=\"merge-err-' + id + '\" style=\"color:var(--commit);font-size:11px\"></span>' +\n\t\t\t\t\t\t\t'</div>' +\n\t\t\t\t\t\t'</div>' +\n\t\t\t\t\t\t'<div style=\"border-top:1px solid var(--border);padding-top:12px\">' +\n\t\t\t\t\t\t\t'<div style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px\">Split</div>' +\n\t\t\t\t\t\t\t'<div style=\"font-size:12px;color:var(--text3);margin-bottom:8px\">Move selected aliases to a new merchant name.</div>' +\n\t\t\t\t\t\t\t'<div id=\"split-checks-' + id + '\" style=\"display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px\"><span style=\"color:var(--text3);font-size:12px\">Load aliases first…</span></div>' +\n\t\t\t\t\t\t\t'<div style=\"display:flex;gap:6px;align-items:center\">' +\n\t\t\t\t\t\t\t\t'<input id=\"split-name-' + id + '\" type=\"text\" placeholder=\"new merchant name\" style=\"background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:12px;color:var(--text);outline:none;width:200px\"/>' +\n\t\t\t\t\t\t\t\t'<button class=\"js-split-confirm\" data-merchant-id=\"' + id + '\" style=\"background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--accent);font-size:12px;font-family:inherit;padding:3px 10px\">Create split</button>' +\n\t\t\t\t\t\t\t\t'<span id=\"split-err-' + id + '\" style=\"color:var(--commit);font-size:11px\"></span>' +\n\t\t\t\t\t\t\t'</div>' +\n\t\t\t\t\t\t'</div>' +\n\t\t\t\t\t'</div>';\n\t\t\t\t}\n\n\t\t\t\tfunction loadMerchantAliases(id) {\n\t\t\t\t\tfetch('/canonical-merchants/' + id + '/aliases')\n\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t.then(function(env) {\n\t\t\t\t\t\t\tvar aliases = env.data || [];\n\t\t\t\t\t\t\t_aliasCache[id] = aliases;\n\t\t\t\t\t\t\trenderAliasChips(id, aliases);\n\t\t\t\t\t\t\trenderSplitCheckboxes(id, aliases);\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function() {\n\t\t\t\t\t\t\tvar el = document.getElementById('alias-chips-' + id);\n\t\t\t\t\t\t\tif (el) el.innerHTML = '<span style=\"color:var(--commit);font-size:12px\">Failed to load.</span>';\n\t\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\tfunction renderAliasChips(id, aliases) {\n\t\t\t\t\tvar el = document.getElementById('alias-chips-' + id);\n\t\t\t\t\tif (!el) return;\n\t\t\t\t\tif (!aliases.length) { el.innerHTML = '<span style=\"color:var(--text3);font-size:12px\">No aliases yet.</span>'; return; }\n\t\t\t\t\tel.innerHTML = aliases.map(function(a) {\n\t\t\t\t\t\treturn '<span style=\"display:inline-flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:12px;color:var(--text)\">' +\n\t\t\t\t\t\t\tescHtml(a.normalized_name) +\n\t\t\t\t\t\t\t'<button class=\"js-alias-remove\" data-merchant-id=\"' + id + '\" data-normalized-name=\"' + escHtml(a.normalized_name) + '\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:11px;line-height:1;padding:0 1px\" title=\"Remove\">×</button>' +\n\t\t\t\t\t\t\t'</span>';\n\t\t\t\t\t}).join('');\n\t\t\t\t}\n\n\t\t\t\tfunction renderSplitCheckboxes(id, aliases) {\n\t\t\t\t\tvar el = document.getElementById('split-checks-' + id);\n\t\t\t\t\tif (!el) return;\n\t\t\t\t\tif (!aliases.length) { el.innerHTML = '<span style=\"color:var(--text3);font-size:12px\">No aliases to split.</span>'; return; }\n\t\t\t\t\tel.innerHTML = aliases.map(function(a) {\n\t\t\t\t\t\treturn '<label style=\"display:inline-flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-size:12px;cursor:pointer\">' +\n\t\t\t\t\t\t\t'<input type=\"checkbox\" data-split-alias=\"' + escHtml(a.normalized_name) + '\" style=\"cursor:pointer\"/>' +\n\t\t\t\t\t\t\tescHtml(a.normalized_name) +\n\t\t\t\t\t\t\t'</label>';\n\t\t\t\t\t}).join('');\n\t\t\t\t}\n\n\t\t\t\tfunction populateMergeSelect(id) {\n\t\t\t\t\tvar sel = document.getElementById('merge-select-' + id);\n\t\t\t\t\tif (!sel) return;\n\t\t\t\t\tvar rows = merchantsBody ? merchantsBody.querySelectorAll('tr[data-merchant-id]') : [];\n\t\t\t\t\trows.forEach(function(tr) {\n\t\t\t\t\t\tvar mid = tr.dataset.merchantId;\n\t\t\t\t\t\tvar mname = tr.dataset.merchantName;\n\t\t\t\t\t\tif (mid && mid !== id && mname) {\n\t\t\t\t\t\t\tvar opt = document.createElement('option');\n\t\t\t\t\t\t\topt.value = mid;\n\t\t\t\t\t\t\topt.textContent = mname;\n\t\t\t\t\t\t\tsel.appendChild(opt);\n\t\t\t\t\t\t}\n\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\tfunction updateMerchantAliasCount(id, count) {\n\t\t\t\t\tvar tr = merchantsBody ? merchantsBody.querySelector('tr[data-merchant-id=\"' + id + '\"]') : null;\n\t\t\t\t\tif (!tr) return;\n\t\t\t\t\tvar aliasCell = tr.children[2];\n\t\t\t\t\tif (!aliasCell) return;\n\t\t\t\t\tvar name = tr.dataset.merchantName || '';\n\t\t\t\t\taliasCell.innerHTML = count > 0\n\t\t\t\t\t\t? '<button class=\"js-merchant-aliases-toggle\" data-merchant-id=\"' + id + '\" data-merchant-name=\"' + escHtml(name) + '\" style=\"background:none;border:none;cursor:pointer;color:var(--accent);font-size:12px;font-family:inherit;padding:0;text-decoration:underline\">' + count + ' alias' + (count===1?'':'es') + '</button>'\n\t\t\t\t\t\t: '<button class=\"js-merchant-aliases-toggle\" data-merchant-id=\"' + id + '\" data-merchant-name=\"' + escHtml(name) + '\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit;padding:0\">+ aliases</button>';\n\t\t\t\t\tvar renameBtn = tr.querySelector('.js-merchant-rename');\n\t\t\t\t\tif (renameBtn) renameBtn.dataset.aliasCount = String(count);\n\t\t\t\t}\n\n\t\t\t\t// ── Merchant event delegation ─────────────────────────────────────────────\n\n\t\t\t\tdocument.addEventListener('click', function(e) {\n\t\t\t\t\tvar rename = e.target.closest('.js-merchant-rename');\n\t\t\t\t\tif (rename) {\n\t\t\t\t\t\tstartMerchantEdit(rename.dataset.merchantId, rename.dataset.merchantName, rename.dataset.source||'engine', parseInt(rename.dataset.aliasCount||'0',10));\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tvar nameCell = e.target.closest('.js-merchant-name-cell');\n\t\t\t\t\tif (nameCell && !e.target.closest('.js-merchant-aliases-toggle')) {\n\t\t\t\t\t\tvar tr = nameCell.closest('tr[data-merchant-id]');\n\t\t\t\t\t\tvar src = tr ? (tr.dataset.merchantSource||'engine') : 'engine';\n\t\t\t\t\t\tvar renBtn = tr ? tr.querySelector('.js-merchant-rename') : null;\n\t\t\t\t\t\tvar cnt = renBtn ? parseInt(renBtn.dataset.aliasCount||'0',10) : 0;\n\t\t\t\t\t\tstartMerchantEdit(nameCell.dataset.merchantId, nameCell.dataset.merchantName, src, cnt);\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tvar mSave = e.target.closest('.js-merchant-save');\n\t\t\t\t\tif (mSave) { saveMerchantEdit(mSave.dataset.merchantId); return; }\n\t\t\t\t\tvar mCancel = e.target.closest('.js-merchant-cancel-edit');\n\t\t\t\t\tif (mCancel) { cancelMerchantEdit(mCancel.dataset.merchantId, mCancel.dataset.originalName, mCancel.dataset.source||'engine', parseInt(mCancel.dataset.aliasCount||'0',10)); return; }\n\t\t\t\t\tvar del = e.target.closest('.js-merchant-delete');\n\t\t\t\t\tif (del) {\n\t\t\t\t\t\tvar row = del.closest('tr[data-merchant-id]');\n\t\t\t\t\t\tif (row) {\n\t\t\t\t\t\t\tvar norm = row.querySelector('.js-merchant-actions-normal');\n\t\t\t\t\t\t\tvar conf = row.querySelector('.js-merchant-delete-confirm');\n\t\t\t\t\t\t\tif (norm) norm.style.display = 'none';\n\t\t\t\t\t\t\tif (conf) conf.style.display = 'flex';\n\t\t\t\t\t\t}\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tvar delNo = e.target.closest('.js-merchant-delete-no');\n\t\t\t\t\tif (delNo) {\n\t\t\t\t\t\tvar row = delNo.closest('tr[data-merchant-id]');\n\t\t\t\t\t\tif (row) {\n\t\t\t\t\t\t\tvar norm = row.querySelector('.js-merchant-actions-normal');\n\t\t\t\t\t\t\tvar conf = row.querySelector('.js-merchant-delete-confirm');\n\t\t\t\t\t\t\tif (norm) norm.style.display = 'flex';\n\t\t\t\t\t\t\tif (conf) conf.style.display = 'none';\n\t\t\t\t\t\t}\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tvar delYes = e.target.closest('.js-merchant-delete-yes');\n\t\t\t\t\tif (delYes) {\n\t\t\t\t\t\tvar mid = delYes.dataset.merchantId;\n\t\t\t\t\t\tdelYes.disabled = true;\n\t\t\t\t\t\tfetch('/canonical-merchants/' + mid, {method:'DELETE'})\n\t\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\t\tif (r.ok || r.status===404) {\n\t\t\t\t\t\t\t\t\tvar row = merchantsBody ? merchantsBody.querySelector('tr[data-merchant-id=\"' + mid + '\"]') : null;\n\t\t\t\t\t\t\t\t\tif (row) row.remove();\n\t\t\t\t\t\t\t\t\tvar exp = getMerchantExpansionRow(mid);\n\t\t\t\t\t\t\t\t\tif (exp) exp.remove();\n\t\t\t\t\t\t\t\t\tif (merchantsBody && !merchantsBody.querySelector('tr[data-merchant-id]')) {\n\t\t\t\t\t\t\t\t\t\tvar empty = document.getElementById('merchants-empty');\n\t\t\t\t\t\t\t\t\t\tif (empty) empty.style.display = '';\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t} else { delYes.disabled = false; }\n\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t.catch(function() { delYes.disabled = false; });\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tvar toggle = e.target.closest('.js-merchant-aliases-toggle');\n\t\t\t\t\tif (toggle) {\n\t\t\t\t\t\ttoggleMerchantExpansion(toggle.dataset.merchantId, toggle.dataset.merchantName);\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tvar aliasRemove = e.target.closest('.js-alias-remove');\n\t\t\t\t\tif (aliasRemove) {\n\t\t\t\t\t\tvar mid = aliasRemove.dataset.merchantId;\n\t\t\t\t\t\tvar aname = aliasRemove.dataset.normalizedName;\n\t\t\t\t\t\tfetch('/canonical-merchants/' + mid + '/aliases/' + encodeURIComponent(aname), {method:'DELETE'})\n\t\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\t\tif (r.ok || r.status===404) {\n\t\t\t\t\t\t\t\t\tvar arr = (_aliasCache[mid] || []).filter(function(a){ return a.normalized_name !== aname; });\n\t\t\t\t\t\t\t\t\t_aliasCache[mid] = arr;\n\t\t\t\t\t\t\t\t\trenderAliasChips(mid, arr);\n\t\t\t\t\t\t\t\t\trenderSplitCheckboxes(mid, arr);\n\t\t\t\t\t\t\t\t\tupdateMerchantAliasCount(mid, arr.length);\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t});\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tvar aliasAdd = e.target.closest('.js-alias-add');\n\t\t\t\t\tif (aliasAdd) {\n\t\t\t\t\t\tvar mid = aliasAdd.dataset.merchantId;\n\t\t\t\t\t\tvar inp = document.getElementById('add-alias-input-' + mid);\n\t\t\t\t\t\tvar errEl = document.getElementById('add-alias-err-' + mid);\n\t\t\t\t\t\tvar aname = inp ? inp.value.trim() : '';\n\t\t\t\t\t\tif (!aname) return;\n\t\t\t\t\t\taliasAdd.disabled = true;\n\t\t\t\t\t\tif (errEl) errEl.textContent = '';\n\t\t\t\t\t\tfetch('/canonical-merchants/' + mid + '/aliases', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({normalized_name:aname})})\n\t\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t\t.then(function(env) {\n\t\t\t\t\t\t\t\taliasAdd.disabled = false;\n\t\t\t\t\t\t\t\tvar alias = env.data;\n\t\t\t\t\t\t\t\tif (!alias || !alias.normalized_name) throw new Error('no data');\n\t\t\t\t\t\t\t\tif (inp) inp.value = '';\n\t\t\t\t\t\t\t\tvar arr = (_aliasCache[mid] || []).concat([{normalized_name:alias.normalized_name}]);\n\t\t\t\t\t\t\t\t_aliasCache[mid] = arr;\n\t\t\t\t\t\t\t\trenderAliasChips(mid, arr);\n\t\t\t\t\t\t\t\trenderSplitCheckboxes(mid, arr);\n\t\t\t\t\t\t\t\tupdateMerchantAliasCount(mid, arr.length);\n\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t.catch(function(err) {\n\t\t\t\t\t\t\t\taliasAdd.disabled = false;\n\t\t\t\t\t\t\t\tif (errEl) errEl.textContent = (err && err.message && err.message !== '[object Object]') ? err.message : 'Failed.';\n\t\t\t\t\t\t\t});\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tvar mergeBtn = e.target.closest('.js-merge-confirm');\n\t\t\t\t\tif (mergeBtn) {\n\t\t\t\t\t\tvar mid = mergeBtn.dataset.merchantId;\n\t\t\t\t\t\tvar sel = document.getElementById('merge-select-' + mid);\n\t\t\t\t\t\tvar errEl = document.getElementById('merge-err-' + mid);\n\t\t\t\t\t\tvar absorbId = sel ? sel.value : '';\n\t\t\t\t\t\tif (!absorbId) { if (errEl) errEl.textContent = 'Select a merchant to absorb.'; return; }\n\t\t\t\t\t\tmergeBtn.disabled = true;\n\t\t\t\t\t\tif (errEl) errEl.textContent = '';\n\t\t\t\t\t\tfetch('/canonical-merchants/' + mid + '/merge', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({absorb_id:absorbId})})\n\t\t\t\t\t\t\t.then(function(r){\n\t\t\t\t\t\t\t\tif (!r.ok) return r.json().then(function(e){ throw new Error(e.detail||'Merge failed'); });\n\t\t\t\t\t\t\t\tlocation.reload();\n\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t.catch(function(err) {\n\t\t\t\t\t\t\t\tmergeBtn.disabled = false;\n\t\t\t\t\t\t\t\tif (errEl) errEl.textContent = (err && err.message) ? err.message : 'Merge failed.';\n\t\t\t\t\t\t\t});\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tvar splitBtn = e.target.closest('.js-split-confirm');\n\t\t\t\t\tif (splitBtn) {\n\t\t\t\t\t\tvar mid = splitBtn.dataset.merchantId;\n\t\t\t\t\t\tvar errEl = document.getElementById('split-err-' + mid);\n\t\t\t\t\t\tvar nameInp = document.getElementById('split-name-' + mid);\n\t\t\t\t\t\tvar newName = nameInp ? nameInp.value.trim() : '';\n\t\t\t\t\t\tif (!newName) { if (errEl) errEl.textContent = 'Enter a new merchant name.'; return; }\n\t\t\t\t\t\tvar checked = document.querySelectorAll('#split-checks-' + mid + ' input[type=checkbox]:checked');\n\t\t\t\t\t\tvar aliases = [];\n\t\t\t\t\t\tchecked.forEach(function(cb){ if (cb.dataset.splitAlias) aliases.push(cb.dataset.splitAlias); });\n\t\t\t\t\t\tif (!aliases.length) { if (errEl) errEl.textContent = 'Select at least one alias.'; return; }\n\t\t\t\t\t\tsplitBtn.disabled = true;\n\t\t\t\t\t\tif (errEl) errEl.textContent = '';\n\t\t\t\t\t\tfetch('/canonical-merchants/' + mid + '/split', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({new_name:newName,aliases:aliases})})\n\t\t\t\t\t\t\t.then(function(r){\n\t\t\t\t\t\t\t\tif (!r.ok) return r.json().then(function(e){ throw new Error(e.detail||'Split failed'); });\n\t\t\t\t\t\t\t\tlocation.reload();\n\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t.catch(function(err) {\n\t\t\t\t\t\t\t\tsplitBtn.disabled = false;\n\t\t\t\t\t\t\t\tif (errEl) errEl.textContent = (err && err.message) ? err.message : 'Split failed.';\n\t\t\t\t\t\t\t});\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t});\n\n\t\t\t\tdocument.addEventListener('keydown', function(e) {\n\t\t\t\t\tif (e.target.id && e.target.id.indexOf('add-alias-input-') === 0) {\n\t\t\t\t\t\tif (e.key === 'Enter') {\n\t\t\t\t\t\t\tvar mid = e.target.id.slice('add-alias-input-'.length);\n\t\t\t\t\t\t\tvar btn = document.querySelector('.js-alias-add[data-merchant-id=\"' + mid + '\"]');\n\t\t\t\t\t\t\tif (btn) btn.click();\n\t\t\t\t\t\t}\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tif (!e.target.classList.contains('merchant-edit-input')) return;\n\t\t\t\t\tvar id = e.target.dataset.merchantId;\n\t\t\t\t\tif (e.key === 'Enter') saveMerchantEdit(id);\n\t\t\t\t\tif (e.key === 'Escape') {\n\t\t\t\t\t\tvar cancelBtn = e.target.closest('tr') ? e.target.closest('tr').querySelector('[data-original-name]') : null;\n\t\t\t\t\t\tcancelMerchantEdit(id,\n\t\t\t\t\t\t\tcancelBtn ? cancelBtn.dataset.originalName : '',\n\t\t\t\t\t\t\tcancelBtn ? (cancelBtn.dataset.source||'engine') : 'engine',\n\t\t\t\t\t\t\tcancelBtn ? parseInt(cancelBtn.dataset.aliasCount||'0',10) : 0);\n\t\t\t\t\t}\n\t\t\t\t});\n\n\t\t\t\t// ── Institutions ──────────────────────────────────────────────────────────\n\n\t\t\t\tvar instDialog = document.getElementById('inst-dialog');\n\t\t\t\tvar instDialogTitle = document.getElementById('inst-dialog-title');\n\t\t\t\tvar instDialogClose = document.getElementById('inst-dialog-close');\n\t\t\t\tvar instDialogCancel = document.getElementById('inst-dialog-cancel');\n\t\t\t\tvar instDialogSave = document.getElementById('inst-dialog-save');\n\t\t\t\tvar instDialogError = document.getElementById('inst-dialog-error');\n\t\t\t\tvar instEditId = null;\n\n\t\t\t\tfunction openInstDialog(inst) {\n\t\t\t\t\tinstEditId = inst ? inst.id : null;\n\t\t\t\t\tif (instDialogTitle) instDialogTitle.textContent = inst ? 'Edit: ' + inst.institution_name : 'New Institution Mapping';\n\t\t\t\t\tsetField('inst-name', inst ? inst.institution_name : '');\n\t\t\t\t\tsetField('inst-date-col', inst ? inst.date_col : 'date');\n\t\t\t\t\tsetField('inst-amount-col', inst ? inst.amount_col : 'amount');\n\t\t\t\t\tsetField('inst-merchant-col', inst ? inst.merchant_col : 'description');\n\t\t\t\t\tsetField('inst-balance-col', inst ? (inst.balance_col||'') : '');\n\t\t\t\t\tsetField('inst-dc-col', inst ? (inst.debit_credit_col||'') : '');\n\t\t\t\t\tsetField('inst-id-col', inst ? (inst.imported_id_col||'') : '');\n\t\t\t\t\tsetField('inst-sign', inst ? inst.amount_sign_convention : 'positive_is_credit');\n\t\t\t\t\tsetField('inst-settlement', inst ? inst.settlement_window_days : '14');\n\t\t\t\t\tsetField('inst-dedup', inst ? inst.dedup_window_days : '3');\n\t\t\t\t\tsetField('inst-tolerance', inst ? inst.amount_tolerance_pct : '0.5');\n\t\t\t\t\tif (instDialogError) { instDialogError.textContent = ''; instDialogError.style.display = 'none'; }\n\t\t\t\t\tif (instDialog) instDialog.showModal();\n\t\t\t\t}\n\n\t\t\t\tfunction setField(id, val) {\n\t\t\t\t\tvar el = document.getElementById(id);\n\t\t\t\t\tif (el) el.value = String(val === null || val === undefined ? '' : val);\n\t\t\t\t}\n\n\t\t\t\tfunction getField(id) {\n\t\t\t\t\tvar el = document.getElementById(id);\n\t\t\t\t\treturn el ? el.value.trim() : '';\n\t\t\t\t}\n\n\t\t\t\tif (instDialogClose) instDialogClose.addEventListener('click', function(){ if(instDialog) instDialog.close(); });\n\t\t\t\tif (instDialogCancel) instDialogCancel.addEventListener('click', function(){ if(instDialog) instDialog.close(); });\n\t\t\t\tif (instDialog) instDialog.addEventListener('click', function(e){ if(e.target===instDialog) instDialog.close(); });\n\n\t\t\t\tdocument.addEventListener('click', function(e) {\n\t\t\t\t\tvar newBtn = e.target.closest('#new-inst-btn');\n\t\t\t\t\tif (newBtn) { openInstDialog(null); return; }\n\t\t\t\t\tvar editBtn = e.target.closest('.js-inst-edit');\n\t\t\t\t\tif (editBtn) {\n\t\t\t\t\t\ttry { openInstDialog(JSON.parse(editBtn.dataset.institution)); } catch(ex){}\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tvar delBtn = e.target.closest('.js-inst-delete');\n\t\t\t\t\tif (delBtn) {\n\t\t\t\t\t\tvar row = delBtn.closest('[data-inst-id]');\n\t\t\t\t\t\tif (row) {\n\t\t\t\t\t\t\tvar confirm_ = row.querySelector('.js-inst-delete-confirm');\n\t\t\t\t\t\t\tvar normal = row.querySelector('.js-inst-actions-normal');\n\t\t\t\t\t\t\tif (confirm_) confirm_.style.display = '';\n\t\t\t\t\t\t\tif (normal) normal.style.display = 'none';\n\t\t\t\t\t\t}\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tvar delNo = e.target.closest('.js-inst-delete-no');\n\t\t\t\t\tif (delNo) {\n\t\t\t\t\t\tvar row = delNo.closest('[data-inst-id]');\n\t\t\t\t\t\tif (row) {\n\t\t\t\t\t\t\tvar confirm_ = row.querySelector('.js-inst-delete-confirm');\n\t\t\t\t\t\t\tvar normal = row.querySelector('.js-inst-actions-normal');\n\t\t\t\t\t\t\tif (confirm_) confirm_.style.display = 'none';\n\t\t\t\t\t\t\tif (normal) normal.style.display = '';\n\t\t\t\t\t\t}\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tvar delYes = e.target.closest('.js-inst-delete-yes');\n\t\t\t\t\tif (delYes) {\n\t\t\t\t\t\tvar id = delYes.dataset.instId;\n\t\t\t\t\t\tdelYes.disabled = true;\n\t\t\t\t\t\tfetch('/api/institutions/' + id, {method:'DELETE'})\n\t\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\t\tif (r.ok || r.status===404) {\n\t\t\t\t\t\t\t\t\tvar row = document.querySelector('[data-inst-id=\"' + id + '\"]');\n\t\t\t\t\t\t\t\t\tif (row) row.remove();\n\t\t\t\t\t\t\t\t\tvar list = document.getElementById('inst-list');\n\t\t\t\t\t\t\t\t\tif (list && !list.querySelector('[data-inst-id]')) {\n\t\t\t\t\t\t\t\t\t\tvar empty = document.getElementById('inst-empty');\n\t\t\t\t\t\t\t\t\t\tif (empty) empty.style.display = '';\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t.catch(function(){ delYes.disabled = false; });\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t});\n\n\t\t\t\tif (instDialogSave) instDialogSave.addEventListener('click', function() {\n\t\t\t\t\tvar name = getField('inst-name');\n\t\t\t\t\tif (!name) {\n\t\t\t\t\t\tif (instDialogError) { instDialogError.textContent = 'Institution name is required.'; instDialogError.style.display = ''; }\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tvar body = {\n\t\t\t\t\t\tinstitution_name: name,\n\t\t\t\t\t\tsource_type: 'csv',\n\t\t\t\t\t\tdate_col: getField('inst-date-col') || 'date',\n\t\t\t\t\t\tamount_col: getField('inst-amount-col') || 'amount',\n\t\t\t\t\t\tmerchant_col: getField('inst-merchant-col') || 'description',\n\t\t\t\t\t\tbalance_col: getField('inst-balance-col') || null,\n\t\t\t\t\t\tdebit_credit_col: getField('inst-dc-col') || null,\n\t\t\t\t\t\timported_id_col: getField('inst-id-col') || null,\n\t\t\t\t\t\tamount_sign_convention: getField('inst-sign') || 'positive_is_credit',\n\t\t\t\t\t\tsettlement_window_days: parseInt(getField('inst-settlement')) || 14,\n\t\t\t\t\t\tdedup_window_days: parseInt(getField('inst-dedup')) || 3,\n\t\t\t\t\t\tamount_tolerance_pct: parseFloat(getField('inst-tolerance')) || 0.5\n\t\t\t\t\t};\n\t\t\t\t\tinstDialogSave.disabled = true;\n\t\t\t\t\tinstDialogSave.textContent = 'Saving…';\n\t\t\t\t\tvar url = instEditId ? '/institutions/' + instEditId : '/institutions';\n\t\t\t\t\tvar method = instEditId ? 'PUT' : 'POST';\n\t\t\t\t\tfetch(url, {method:method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})\n\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\tif (!r.ok) return r.json().then(function(e){ throw new Error(e.detail||'Save failed'); });\n\t\t\t\t\t\t\tif (instDialog) instDialog.close();\n\t\t\t\t\t\t\tlocation.reload();\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function(err) {\n\t\t\t\t\t\t\tinstDialogSave.disabled = false;\n\t\t\t\t\t\t\tinstDialogSave.textContent = 'Save mapping';\n\t\t\t\t\t\t\tif (instDialogError) { instDialogError.textContent = err.message||'Save failed.'; instDialogError.style.display = ''; }\n\t\t\t\t\t\t});\n\t\t\t\t});\n\t\t\t})();\n\t\t</script>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -127,196 +145,504 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var5 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var5 == nil {
-			templ_7745c5c3_Var5 = templ.NopComponent
+		templ_7745c5c3_Var6 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var6 == nil {
+			templ_7745c5c3_Var6 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<section style=\"max-width:560px\"><div style=\"display:flex;align-items:center;justify-content:space-between;margin-bottom:16px\"><div><h2 style=\"margin:0;font-size:15px;font-weight:700;color:var(--text)\">Labels</h2><p style=\"margin:4px 0 0;font-size:12px;color:var(--text3)\">Used to tag and group budget entries</p></div><button id=\"add-label-btn\" style=\"background:none;border:none;cursor:pointer;color:var(--accent);font-size:13px;font-family:inherit;padding:4px 0;display:flex;align-items:center;gap:4px\">+ New label</button></div><div style=\"border:1px solid var(--border);border-radius:4px;overflow:hidden\"><table style=\"width:100%;border-collapse:collapse\"><thead><tr style=\"background:var(--surface);border-bottom:1px solid var(--border)\"><th style=\"padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em\">Name</th><th style=\"padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;width:110px\">Used by</th><th style=\"padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;width:80px\">Actions</th></tr></thead> <tbody id=\"labels-body\"><tr id=\"new-label-row\" style=\"display:none;border-bottom:1px solid var(--border);background:var(--bg)\"><td style=\"padding:8px 12px\"><input id=\"new-label-input\" type=\"text\" placeholder=\"Label name\" style=\"background:var(--surface2);border:1px solid var(--accent);border-radius:4px;padding:4px 8px;font-size:13px;color:var(--text);outline:none;width:100%\"><div id=\"new-label-error\" style=\"font-size:11px;color:var(--commit);margin-top:2px\"></div></td><td style=\"padding:8px 12px;font-size:12px;color:var(--text3)\">—</td><td style=\"padding:8px 12px\"><div style=\"display:flex;gap:6px\"><button id=\"new-label-save\" style=\"background:none;border:none;cursor:pointer;color:var(--income);font-size:12px;font-family:inherit;padding:0\">Save</button> <button id=\"new-label-cancel\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit;padding:0\">Cancel</button></div></td></tr>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<section style=\"max-width:560px\"><div style=\"display:flex;align-items:center;justify-content:space-between;margin-bottom:16px\"><div><h2 style=\"margin:0;font-size:15px;font-weight:700;color:var(--text)\">Labels</h2><p style=\"margin:4px 0 0;font-size:12px;color:var(--text3)\">Used to tag and group budget entries</p></div><button id=\"add-label-btn\" style=\"background:none;border:none;cursor:pointer;color:var(--accent);font-size:13px;font-family:inherit;padding:4px 0;display:flex;align-items:center;gap:4px\">+ New label</button></div><div style=\"border:1px solid var(--border);border-radius:4px;overflow:hidden\"><table style=\"width:100%;border-collapse:collapse\"><thead><tr style=\"background:var(--surface);border-bottom:1px solid var(--border)\"><th style=\"padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em\">Name</th><th style=\"padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;width:110px\">Used by</th><th style=\"padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;width:80px\">Actions</th></tr></thead> <tbody id=\"labels-body\"><tr id=\"new-label-row\" style=\"display:none;border-bottom:1px solid var(--border);background:var(--bg)\"><td style=\"padding:8px 12px\"><input id=\"new-label-input\" type=\"text\" placeholder=\"Label name\" style=\"background:var(--surface2);border:1px solid var(--accent);border-radius:4px;padding:4px 8px;font-size:13px;color:var(--text);outline:none;width:100%\"><div id=\"new-label-error\" style=\"font-size:11px;color:var(--commit);margin-top:2px\"></div></td><td style=\"padding:8px 12px;font-size:12px;color:var(--text3)\">—</td><td style=\"padding:8px 12px\"><div style=\"display:flex;gap:6px\"><button id=\"new-label-save\" style=\"background:none;border:none;cursor:pointer;color:var(--income);font-size:12px;font-family:inherit;padding:0\">Save</button> <button id=\"new-label-cancel\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit;padding:0\">Cancel</button></div></td></tr>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if len(labels) == 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<tr id=\"labels-empty\"><td colspan=\"3\" style=\"padding:16px 12px;color:var(--text3);font-size:13px\">No labels yet. Create one above.</td></tr>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<tr id=\"labels-empty\"><td colspan=\"3\" style=\"padding:16px 12px;color:var(--text3);font-size:13px\">No labels yet. Create one above.</td></tr>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
 			for i, l := range labels {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<tr data-label-id=\"")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var6 string
-				templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(l.ID)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 383, Col: 28}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "\" style=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<tr data-label-id=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var7 string
-				templ_7745c5c3_Var7, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(func() string {
+				templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.ResolveAttributeValue(l.ID)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 826, Col: 28}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\" style=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var8 string
+				templ_7745c5c3_Var8, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(func() string {
 					if i < len(labels)-1 {
 						return "border-bottom:1px solid var(--border)"
 					}
 					return ""
 				}())
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 389, Col: 11}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 832, Col: 11}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\"><td class=\"js-label-name-cell\" data-label-id=\"")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var8 string
-				templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(l.ID)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 393, Col: 29}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "\" data-label-name=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "\"><td class=\"js-label-name-cell\" data-label-id=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var9 string
-				templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.ResolveAttributeValue(l.Name)
+				templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.ResolveAttributeValue(l.ID)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 394, Col: 33}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 836, Col: 29}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var9)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "\" data-entry-count=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "\" data-label-name=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var10 string
-				templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", l.EntryCount))
+				templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(l.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 395, Col: 59}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 837, Col: 33}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "\" style=\"padding:8px 12px;font-size:13px;color:var(--text);cursor:pointer\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "\" data-entry-count=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var11 string
-				templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(l.Name)
+				templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", l.EntryCount))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 397, Col: 17}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 838, Col: 59}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var11)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</td><td style=\"padding:8px 12px;font-size:12px;color:var(--text2)\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "\" style=\"padding:8px 12px;font-size:13px;color:var(--text);cursor:pointer\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var12 string
+				templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(l.Name)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 840, Col: 17}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</td><td style=\"padding:8px 12px;font-size:12px;color:var(--text2)\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				if l.EntryCount > 0 {
-					var templ_7745c5c3_Var12 string
-					templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", l.EntryCount))
+					var templ_7745c5c3_Var13 string
+					templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", l.EntryCount))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 400, Col: 43}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 843, Col: 43}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, " ")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, " ")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					if l.EntryCount == 1 {
-						var templ_7745c5c3_Var13 string
-						templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(" entry")
-						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 402, Col: 21}
-						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-					} else {
 						var templ_7745c5c3_Var14 string
-						templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(" entries")
+						templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(" entry")
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 404, Col: 23}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 845, Col: 21}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
+					} else {
+						var templ_7745c5c3_Var15 string
+						templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(" entries")
+						if templ_7745c5c3_Err != nil {
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 847, Col: 23}
+						}
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
 					}
 				} else {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<span style=\"color:var(--text3)\">—</span>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<span style=\"color:var(--text3)\">—</span>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "</td><td style=\"padding:8px 12px\"><button class=\"js-label-rename\" data-label-id=\"")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var15 string
-				templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.ResolveAttributeValue(l.ID)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 413, Col: 30}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var15)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "\" data-label-name=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "</td><td style=\"padding:8px 12px\"><button class=\"js-label-rename\" data-label-id=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var16 string
-				templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.ResolveAttributeValue(l.Name)
+				templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.ResolveAttributeValue(l.ID)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 414, Col: 34}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 856, Col: 30}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var16)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "\" data-entry-count=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "\" data-label-name=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var17 string
-				templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", l.EntryCount))
+				templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.ResolveAttributeValue(l.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 415, Col: 60}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 857, Col: 34}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var17)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "\" style=\"background:none;border:none;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:0\">Rename</button></td></tr>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "\" data-entry-count=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var18 string
+				templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", l.EntryCount))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 858, Col: 60}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var18)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "\" style=\"background:none;border:none;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:0\">Rename</button></td></tr>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "</tbody></table></div></section>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "</tbody></table></div></section>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		return nil
+	})
+}
+
+func cfgMerchantsSection(merchants []store.CanonicalMerchantWithCounts) templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var19 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var19 == nil {
+			templ_7745c5c3_Var19 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "<section style=\"max-width:760px\"><div style=\"display:flex;align-items:center;justify-content:space-between;margin-bottom:16px\"><div><h2 style=\"margin:0;font-size:15px;font-weight:700;color:var(--text)\">Merchants</h2><p style=\"margin:4px 0 0;font-size:12px;color:var(--text3)\">Canonical merchant identities resolved from transaction data</p></div><button id=\"add-merchant-btn\" style=\"background:none;border:none;cursor:pointer;color:var(--accent);font-size:13px;font-family:inherit;padding:4px 0;display:flex;align-items:center;gap:4px\">+ New merchant</button></div><div style=\"border:1px solid var(--border);border-radius:4px;overflow:hidden\"><table style=\"width:100%;border-collapse:collapse\"><thead><tr style=\"background:var(--surface);border-bottom:1px solid var(--border)\"><th style=\"padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em\">Name</th><th style=\"padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;width:70px\">Source</th><th style=\"padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;width:100px\">Aliases</th><th style=\"padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;width:140px\">Actions</th></tr></thead> <tbody id=\"merchants-body\"><tr id=\"new-merchant-row\" style=\"display:none;border-bottom:1px solid var(--border);background:var(--bg)\"><td style=\"padding:8px 12px\"><input id=\"new-merchant-input\" type=\"text\" placeholder=\"Merchant name\" style=\"background:var(--surface2);border:1px solid var(--accent);border-radius:4px;padding:4px 8px;font-size:13px;color:var(--text);outline:none;width:100%\"><div id=\"new-merchant-error\" style=\"font-size:11px;color:var(--commit);margin-top:2px\"></div></td><td style=\"padding:8px 12px;font-size:12px;color:var(--text3)\">user</td><td style=\"padding:8px 12px;font-size:12px;color:var(--text3)\">—</td><td style=\"padding:8px 12px\"><div style=\"display:flex;gap:6px\"><button id=\"new-merchant-save\" style=\"background:none;border:none;cursor:pointer;color:var(--income);font-size:12px;font-family:inherit;padding:0\">Save</button> <button id=\"new-merchant-cancel\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit;padding:0\">Cancel</button></div></td></tr>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if len(merchants) == 0 {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "<tr id=\"merchants-empty\"><td colspan=\"4\" style=\"padding:16px 12px;color:var(--text3);font-size:13px\">No merchants yet. They are created automatically by the engine or you can add one above.</td></tr>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		} else {
+			for _, m := range merchants {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "<tr data-merchant-id=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var20 string
+				templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.ResolveAttributeValue(m.ID)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 920, Col: 31}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var20)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "\" data-merchant-name=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var21 string
+				templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.ResolveAttributeValue(m.Name)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 921, Col: 35}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var21)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "\" data-merchant-source=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var22 string
+				templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.ResolveAttributeValue(m.Source)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 922, Col: 39}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var22)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "\" style=\"border-bottom:1px solid var(--border)\"><td class=\"js-merchant-name-cell\" data-merchant-id=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var23 string
+				templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.ResolveAttributeValue(m.ID)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 927, Col: 32}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var23)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "\" data-merchant-name=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var24 string
+				templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.ResolveAttributeValue(m.Name)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 928, Col: 36}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var24)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "\" style=\"padding:8px 12px;font-size:13px;color:var(--text);cursor:pointer\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var25 string
+				templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(m.Name)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 930, Col: 17}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "</td><td style=\"padding:8px 12px\"><span style=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var26 string
+				templ_7745c5c3_Var26, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(merchantSourceBadge(m.Source))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 932, Col: 52}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var27 string
+				templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(m.Source)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 932, Col: 65}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "</span></td><td style=\"padding:8px 12px\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				if m.AliasCount > 0 {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "<button class=\"js-merchant-aliases-toggle\" data-merchant-id=\"")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var28 string
+					templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.ResolveAttributeValue(m.ID)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 938, Col: 34}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var28)
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "\" data-merchant-name=\"")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var29 string
+					templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.ResolveAttributeValue(m.Name)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 939, Col: 38}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var29)
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "\" style=\"background:none;border:none;cursor:pointer;color:var(--accent);font-size:12px;font-family:inherit;padding:0;text-decoration:underline\">")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var30 string
+					templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(merchantAliasCountText(m.AliasCount))
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 941, Col: 49}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "</button>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				} else {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "<button class=\"js-merchant-aliases-toggle\" data-merchant-id=\"")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var31 string
+					templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.ResolveAttributeValue(m.ID)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 945, Col: 34}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var31)
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "\" data-merchant-name=\"")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var32 string
+					templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.ResolveAttributeValue(m.Name)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 946, Col: 38}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var32)
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit;padding:0\">+ aliases</button>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "</td><td style=\"padding:8px 12px\"><div class=\"js-merchant-actions-normal\" style=\"display:flex;gap:8px\"><button class=\"js-merchant-rename\" data-merchant-id=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var33 string
+				templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.ResolveAttributeValue(m.ID)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 955, Col: 34}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var33)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "\" data-merchant-name=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var34 string
+				templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.ResolveAttributeValue(m.Name)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 956, Col: 38}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var34)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "\" data-source=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var35 string
+				templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.ResolveAttributeValue(m.Source)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 957, Col: 33}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var35)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "\" data-alias-count=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var36 string
+				templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", m.AliasCount))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 958, Col: 61}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var36)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "\" style=\"background:none;border:none;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:0\">Rename</button> <button class=\"js-merchant-delete\" data-merchant-id=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var37 string
+				templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.ResolveAttributeValue(m.ID)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 963, Col: 34}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var37)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit;padding:0\">Delete</button></div><div class=\"js-merchant-delete-confirm\" style=\"display:none;align-items:center;gap:4px\"><span style=\"font-size:11px;color:var(--commit)\">Delete?</span> <button class=\"js-merchant-delete-yes\" data-merchant-id=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var38 string
+				templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.ResolveAttributeValue(m.ID)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 971, Col: 34}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var38)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "\" style=\"background:none;border:none;cursor:pointer;color:var(--commit);font-size:11px;font-family:inherit;padding:2px 4px\">Yes</button> <button class=\"js-merchant-delete-no\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:11px;font-family:inherit;padding:2px 4px\">No</button></div></td></tr>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "</tbody></table></div></section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -340,17 +666,17 @@ func cfgInstitutionsSection(institutions []store.Institution) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var18 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var18 == nil {
-			templ_7745c5c3_Var18 = templ.NopComponent
+		templ_7745c5c3_Var39 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var39 == nil {
+			templ_7745c5c3_Var39 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "<section style=\"max-width:640px\"><div style=\"display:flex;align-items:center;justify-content:space-between;margin-bottom:16px\"><div><h2 style=\"margin:0;font-size:15px;font-weight:700;color:var(--text)\">Institution Mappings</h2><p style=\"margin:4px 0 0;font-size:12px;color:var(--text3)\">CSV column mappings for each financial institution</p></div><button id=\"new-inst-btn\" style=\"background:none;border:none;cursor:pointer;color:var(--accent);font-size:13px;font-family:inherit;padding:4px 0;display:flex;align-items:center;gap:4px\">+ New mapping</button></div><div id=\"inst-list\" style=\"border:1px solid var(--border);border-radius:4px;overflow:hidden\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "<section style=\"max-width:640px\"><div style=\"display:flex;align-items:center;justify-content:space-between;margin-bottom:16px\"><div><h2 style=\"margin:0;font-size:15px;font-weight:700;color:var(--text)\">Institution Mappings</h2><p style=\"margin:4px 0 0;font-size:12px;color:var(--text3)\">CSV column mappings for each financial institution</p></div><button id=\"new-inst-btn\" style=\"background:none;border:none;cursor:pointer;color:var(--accent);font-size:13px;font-family:inherit;padding:4px 0;display:flex;align-items:center;gap:4px\">+ New mapping</button></div><div id=\"inst-list\" style=\"border:1px solid var(--border);border-radius:4px;overflow:hidden\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if len(institutions) == 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "<div id=\"inst-empty\" style=\"padding:24px;color:var(--text3);font-size:13px\">No institution mappings yet. Create one to enable CSV imports.</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "<div id=\"inst-empty\" style=\"padding:24px;color:var(--text3);font-size:13px\">No institution mappings yet. Create one to enable CSV imports.</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -362,7 +688,7 @@ func cfgInstitutionsSection(institutions []store.Institution) templ.Component {
 				}
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "</div></section>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "</div></section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -386,95 +712,95 @@ func cfgInstRow(inst store.Institution, isLast bool) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var19 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var19 == nil {
-			templ_7745c5c3_Var19 = templ.NopComponent
+		templ_7745c5c3_Var40 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var40 == nil {
+			templ_7745c5c3_Var40 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "<details data-inst-id=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "<details data-inst-id=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var20 string
-		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.ResolveAttributeValue(inst.ID)
+		var templ_7745c5c3_Var41 string
+		templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.ResolveAttributeValue(inst.ID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 456, Col: 24}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 1017, Col: 24}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var20)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "\" style=\"")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var41)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var21 string
-		templ_7745c5c3_Var21, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(func() string {
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, "\" style=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var42 string
+		templ_7745c5c3_Var42, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(func() string {
 			if isLast {
 				return "background:var(--surface)"
 			}
 			return "background:var(--surface);border-bottom:1px solid var(--border)"
 		}())
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 460, Col: 5}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 1021, Col: 5}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "\"><summary style=\"display:flex;align-items:center;gap:8px;padding:10px 12px;cursor:pointer;list-style:none;user-select:none\"><span style=\"color:var(--text3);font-size:10px;flex-shrink:0\">▶</span> <span style=\"flex:1;font-size:13px;font-weight:500;color:var(--text)\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "\"><summary style=\"display:flex;align-items:center;gap:8px;padding:10px 12px;cursor:pointer;list-style:none;user-select:none\"><span style=\"color:var(--text3);font-size:10px;flex-shrink:0\">▶</span> <span style=\"flex:1;font-size:13px;font-weight:500;color:var(--text)\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var22 string
-		templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(inst.InstitutionName)
+		var templ_7745c5c3_Var43 string
+		templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(inst.InstitutionName)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 464, Col: 95}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 1025, Col: 95}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "</span> <span style=\"font-size:11px;color:var(--text3);background:var(--surface2);padding:2px 6px;border-radius:4px;flex-shrink:0\">")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var23 string
-		templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(inst.SourceType)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 465, Col: 143}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "</span> <span style=\"font-size:11px;color:var(--text3);background:var(--surface2);padding:2px 6px;border-radius:4px;flex-shrink:0\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "</span><div style=\"display:flex;gap:4px;flex-shrink:0\" onclick=\"event.stopPropagation()\"><div class=\"js-inst-actions-normal\" style=\"display:flex;gap:4px\"><button class=\"js-inst-edit\" data-institution=\"")
+		var templ_7745c5c3_Var44 string
+		templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinStringErrs(inst.SourceType)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 1026, Col: 143}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var44))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var24 string
-		templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.ResolveAttributeValue(instJSON(inst))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 470, Col: 39}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var24)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "</span><div style=\"display:flex;gap:4px;flex-shrink:0\" onclick=\"event.stopPropagation()\"><div class=\"js-inst-actions-normal\" style=\"display:flex;gap:4px\"><button class=\"js-inst-edit\" data-institution=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "\" style=\"background:none;border:none;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:2px 6px\">Edit</button> <button class=\"js-inst-delete\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit;padding:2px 6px\">Delete</button></div><div class=\"js-inst-delete-confirm\" style=\"display:none;align-items:center;gap:4px\"><span style=\"font-size:11px;color:var(--commit)\">Delete?</span> <button class=\"js-inst-delete-yes\" data-inst-id=\"")
+		var templ_7745c5c3_Var45 string
+		templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.ResolveAttributeValue(instJSON(inst))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 1031, Col: 39}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var45)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var25 string
-		templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.ResolveAttributeValue(inst.ID)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 482, Col: 28}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var25)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 57, "\" style=\"background:none;border:none;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:2px 6px\">Edit</button> <button class=\"js-inst-delete\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit;padding:2px 6px\">Delete</button></div><div class=\"js-inst-delete-confirm\" style=\"display:none;align-items:center;gap:4px\"><span style=\"font-size:11px;color:var(--commit)\">Delete?</span> <button class=\"js-inst-delete-yes\" data-inst-id=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "\" style=\"background:none;border:none;cursor:pointer;color:var(--commit);font-size:11px;font-family:inherit;padding:2px 4px\">Yes</button> <button class=\"js-inst-delete-no\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:11px;font-family:inherit;padding:2px 4px\">No</button></div></div></summary><div style=\"border-top:1px solid var(--border);background:var(--bg);padding:12px 16px;display:grid;grid-template-columns:1fr 1fr;gap:8px 20px\">")
+		var templ_7745c5c3_Var46 string
+		templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.ResolveAttributeValue(inst.ID)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 1043, Col: 28}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var46)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "\" style=\"background:none;border:none;cursor:pointer;color:var(--commit);font-size:11px;font-family:inherit;padding:2px 4px\">Yes</button> <button class=\"js-inst-delete-no\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:11px;font-family:inherit;padding:2px 4px\">No</button></div></div></summary><div style=\"border-top:1px solid var(--border);background:var(--bg);padding:12px 16px;display:grid;grid-template-columns:1fr 1fr;gap:8px 20px\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -518,7 +844,7 @@ func cfgInstRow(inst store.Institution, isLast bool) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "</div></details>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "</div></details>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -542,38 +868,38 @@ func cfgInstField(label, value string) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var26 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var26 == nil {
-			templ_7745c5c3_Var26 = templ.NopComponent
+		templ_7745c5c3_Var47 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var47 == nil {
+			templ_7745c5c3_Var47 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "<div><div style=\"font-size:11px;color:var(--text3);margin-bottom:1px\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 60, "<div><div style=\"font-size:11px;color:var(--text3);margin-bottom:1px\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var27 string
-		templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(label)
+		var templ_7745c5c3_Var48 string
+		templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 509, Col: 74}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 1070, Col: 74}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "</div><div style=\"font-size:13px;color:var(--text);font-family:monospace\">")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var48))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var28 string
-		templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(value)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 510, Col: 77}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 61, "</div><div style=\"font-size:13px;color:var(--text);font-family:monospace\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "</div></div>")
+		var templ_7745c5c3_Var49 string
+		templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.JoinStringErrs(value)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 1071, Col: 77}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var49))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 62, "</div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -597,9 +923,9 @@ func cfgInstOptField(label string, value *string) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var29 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var29 == nil {
-			templ_7745c5c3_Var29 = templ.NopComponent
+		templ_7745c5c3_Var50 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var50 == nil {
+			templ_7745c5c3_Var50 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		if value != nil && *value != "" {
@@ -628,12 +954,12 @@ func cfgInstDialog() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var30 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var30 == nil {
-			templ_7745c5c3_Var30 = templ.NopComponent
+		templ_7745c5c3_Var51 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var51 == nil {
+			templ_7745c5c3_Var51 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "<dialog id=\"inst-dialog\" style=\"background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0;color:var(--text);width:520px;max-width:95vw;max-height:90vh;overflow:hidden;display:flex;flex-direction:column\"><div style=\"padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0\"><span id=\"inst-dialog-title\" style=\"font-size:15px;font-weight:700\">New Institution Mapping</span> <button id=\"inst-dialog-close\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:18px;line-height:1;padding:0 4px\">✕</button></div><div style=\"overflow:auto;flex:1;padding:20px;display:flex;flex-direction:column;gap:12px\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 63, "<dialog id=\"inst-dialog\" style=\"background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0;color:var(--text);width:520px;max-width:95vw;max-height:90vh;overflow:hidden;display:flex;flex-direction:column\"><div style=\"padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0\"><span id=\"inst-dialog-title\" style=\"font-size:15px;font-weight:700\">New Institution Mapping</span> <button id=\"inst-dialog-close\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:18px;line-height:1;padding:0 4px\">✕</button></div><div style=\"overflow:auto;flex:1;padding:20px;display:flex;flex-direction:column;gap:12px\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -641,7 +967,7 @@ func cfgInstDialog() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "<div style=\"display:grid;grid-template-columns:1fr 1fr;gap:12px\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 64, "<div style=\"display:grid;grid-template-columns:1fr 1fr;gap:12px\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -653,7 +979,7 @@ func cfgInstDialog() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 65, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -661,7 +987,7 @@ func cfgInstDialog() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "<div style=\"display:grid;grid-template-columns:1fr 1fr;gap:12px\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 66, "<div style=\"display:grid;grid-template-columns:1fr 1fr;gap:12px\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -673,7 +999,7 @@ func cfgInstDialog() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 67, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -681,7 +1007,7 @@ func cfgInstDialog() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "<div><label style=\"display:block;font-size:12px;color:var(--text3);margin-bottom:4px\">Amount sign convention</label> <select id=\"inst-sign\" style=\"background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 28px 6px 8px;font-size:13px;color:var(--text);outline:none;width:100%\"><option value=\"positive_is_credit\">Positive = credit (money in)</option> <option value=\"positive_is_debit\">Positive = debit (money out)</option></select></div><div style=\"display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 68, "<div><label style=\"display:block;font-size:12px;color:var(--text3);margin-bottom:4px\">Amount sign convention</label> <select id=\"inst-sign\" style=\"background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 28px 6px 8px;font-size:13px;color:var(--text);outline:none;width:100%\"><option value=\"positive_is_credit\">Positive = credit (money in)</option> <option value=\"positive_is_debit\">Positive = debit (money out)</option></select></div><div style=\"display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -697,7 +1023,7 @@ func cfgInstDialog() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "</div><div id=\"inst-dialog-error\" style=\"color:var(--commit);font-size:12px;display:none\"></div></div><div style=\"padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0\"><button id=\"inst-dialog-cancel\" style=\"background:transparent;border:1px solid var(--border);border-radius:6px;padding:6px 16px;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit\">Cancel</button> <button id=\"inst-dialog-save\" style=\"background:var(--accent);border:none;border-radius:6px;padding:6px 16px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit\">Save mapping</button></div></dialog>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 69, "</div><div id=\"inst-dialog-error\" style=\"color:var(--commit);font-size:12px;display:none\"></div></div><div style=\"padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0\"><button id=\"inst-dialog-cancel\" style=\"background:transparent;border:1px solid var(--border);border-radius:6px;padding:6px 16px;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit\">Cancel</button> <button id=\"inst-dialog-save\" style=\"background:var(--accent);border:none;border-radius:6px;padding:6px 16px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit\">Save mapping</button></div></dialog>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -721,74 +1047,74 @@ func cfgFormField(label, id, inputType, placeholder string, required bool) templ
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var31 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var31 == nil {
-			templ_7745c5c3_Var31 = templ.NopComponent
+		templ_7745c5c3_Var52 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var52 == nil {
+			templ_7745c5c3_Var52 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "<div><label style=\"display:block;font-size:12px;color:var(--text3);margin-bottom:4px\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 70, "<div><label style=\"display:block;font-size:12px;color:var(--text3);margin-bottom:4px\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var32 string
-		templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(label)
+		var templ_7745c5c3_Var53 string
+		templ_7745c5c3_Var53, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 574, Col: 10}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 1135, Col: 10}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var53))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, " ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 71, " ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if required {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "<span style=\"color:var(--commit)\">*</span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 72, "<span style=\"color:var(--commit)\">*</span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "</label> <input id=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 73, "</label> <input id=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var33 string
-		templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.ResolveAttributeValue(id)
+		var templ_7745c5c3_Var54 string
+		templ_7745c5c3_Var54, templ_7745c5c3_Err = templ.ResolveAttributeValue(id)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 580, Col: 10}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 1141, Col: 10}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var33)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "\" type=\"")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var54)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var34 string
-		templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.ResolveAttributeValue(inputType)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 581, Col: 19}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var34)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 74, "\" type=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "\" placeholder=\"")
+		var templ_7745c5c3_Var55 string
+		templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.ResolveAttributeValue(inputType)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 1142, Col: 19}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var55)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var35 string
-		templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.ResolveAttributeValue(placeholder)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 582, Col: 28}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var35)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 75, "\" placeholder=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "\" style=\"background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;color:var(--text);outline:none;width:100%\"></div>")
+		var templ_7745c5c3_Var56 string
+		templ_7745c5c3_Var56, templ_7745c5c3_Err = templ.ResolveAttributeValue(placeholder)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `services/web/page/configuration.templ`, Line: 1143, Col: 28}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var56)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 76, "\" style=\"background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;color:var(--text);outline:none;width:100%\"></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -801,6 +1127,20 @@ func cfgTabStyle(active bool) string {
 		return "display:inline-block;padding:6px 14px;border-radius:6px 6px 0 0;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;background:var(--bg);color:var(--text);border:1px solid var(--border);border-bottom:1px solid var(--bg)"
 	}
 	return "display:inline-block;padding:6px 14px;border-radius:6px 6px 0 0;font-size:13px;font-weight:400;cursor:pointer;text-decoration:none;background:transparent;color:var(--text2)"
+}
+
+func merchantAliasCountText(n int) string {
+	if n == 1 {
+		return "1 alias"
+	}
+	return fmt.Sprintf("%d aliases", n)
+}
+
+func merchantSourceBadge(source string) string {
+	if source == "user" {
+		return "font-size:11px;color:var(--accent);background:var(--surface2);padding:2px 6px;border-radius:4px"
+	}
+	return "font-size:11px;color:var(--text3);background:var(--surface2);padding:2px 6px;border-radius:4px"
 }
 
 func instJSON(inst store.Institution) string {
