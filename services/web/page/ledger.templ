@@ -10,11 +10,13 @@ import (
 templ LedgerPage(shell ShellData, data LedgerData) {
 	@Shell(shell) {
 		<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
-			<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
+			<div style="display:flex;align-items:center;padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
 				<h1 style="margin:0;font-size:18px;font-weight:700;color:var(--text);letter-spacing:-0.02em">Ledger</h1>
+			</div>
+			<div style="display:flex;align-items:center;justify-content:flex-end;padding:0 20px;height:36px;border-bottom:1px solid var(--border);flex-shrink:0">
 				<button
 					id="run-engine-btn"
-					style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit"
+					style="background:none;border:1px solid var(--border);border-radius:4px;padding:3px 10px;cursor:pointer;font-size:12px;color:var(--text2);font-family:inherit"
 				>Run Engine</button>
 			</div>
 			<div style="display:flex;gap:6px;padding:10px 20px;border-bottom:1px solid var(--border);flex-shrink:0;align-items:center">
@@ -22,6 +24,15 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 				@ledgerPill("pending_review", "Review", data.Filter, data.Counts.PendingReview)
 				@ledgerPill("active", "Active", data.Filter, data.Counts.Active)
 				@ledgerPill("inactive", "Inactive", data.Filter, data.Counts.Inactive)
+			</div>
+			<div style="display:grid;grid-template-columns:28px 1fr 80px 70px 90px 110px 140px;padding:5px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
+				<div></div>
+				<div style="font-size:11px;font-weight:600;color:var(--text3)">Entry</div>
+				<div style="font-size:11px;font-weight:600;color:var(--text3)">Type</div>
+				<div style="font-size:11px;font-weight:600;color:var(--text3)">Dir</div>
+				<div style="font-size:11px;font-weight:600;color:var(--text3);text-align:right">Rate/mo</div>
+				<div style="font-size:11px;font-weight:600;color:var(--text3);text-align:center">Status</div>
+				<div style="font-size:11px;font-weight:600;color:var(--text3);text-align:right">Confidence</div>
 			</div>
 			<div style="flex:1;overflow:auto">
 				if len(data.Entries) == 0 {
@@ -41,7 +52,7 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 					runBtn.addEventListener('click', function() {
 						runBtn.disabled = true;
 						runBtn.textContent = 'Running…';
-						fetch('/jobs/reprocess', {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})
+						fetch('/api/jobs/reprocess', {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})
 							.then(function(r) {
 								runBtn.textContent = r.ok ? 'Engine started' : 'Failed';
 								setTimeout(function(){ runBtn.disabled=false; runBtn.textContent='Run Engine'; }, 3000);
@@ -50,7 +61,7 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 					});
 				}
 
-				// Chevron rotation for open entries
+				// Chevron rotation
 				document.addEventListener('toggle', function(e) {
 					var det = e.target;
 					if (!det.classList.contains('js-entry-details')) return;
@@ -67,7 +78,7 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 					if (!txPanel || txPanel.dataset.loaded) return;
 					txPanel.dataset.loaded = '1';
 					txPanel.innerHTML = '<p style="color:var(--text3);font-size:12px">Loading…</p>';
-					fetch('/transactions?entry_id=' + entryId + '&limit=50')
+					fetch('/api/transactions?entry_id=' + entryId + '&limit=50')
 						.then(function(r){ return r.json(); })
 						.then(function(env) {
 							var txns = env.data || [];
@@ -100,7 +111,7 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 						});
 				}, true);
 
-				// Conditions save on blur (capture phase)
+				// Conditions save on blur
 				document.addEventListener('blur', function(e) {
 					var ta = e.target;
 					if (!ta.classList.contains('js-conditions-ta')) return;
@@ -112,7 +123,7 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 						return;
 					}
 					ta.style.borderColor = '';
-					fetch('/entries/' + entryId + '/conditions', {
+					fetch('/api/entries/' + entryId + '/conditions', {
 						method:'PATCH',
 						headers:{'Content-Type':'application/json'},
 						body: JSON.stringify({conditions: parsed})
@@ -138,12 +149,12 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 					function resolveLabel(cb) {
 						var name = labelInput ? labelInput.value.trim() : '';
 						if (!name) { cb(entry.label_id); return; }
-						fetch('/labels?limit=500')
+						fetch('/api/labels?limit=500')
 							.then(function(r){ return r.json(); })
 							.then(function(env) {
 								var found = (env.data||[]).find(function(l){ return l.name.toLowerCase()===name.toLowerCase(); });
 								if (found) { cb(found.id); return; }
-								fetch('/labels',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})
+								fetch('/api/labels',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})
 									.then(function(r){ return r.json(); })
 									.then(function(c){ cb(c.data ? c.data.id : null); });
 							});
@@ -159,7 +170,7 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 							entry_type: typeSel ? typeSel.value : entry.entry_type,
 							conditions: conds
 						});
-						fetch('/entries/' + entryId, {
+						fetch('/api/entries/' + entryId, {
 							method:'PUT',
 							headers:{'Content-Type':'application/json'},
 							body: JSON.stringify(body)
@@ -167,8 +178,8 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 						.then(function(r) {
 							if (!r.ok) throw new Error('put-failed');
 							var ep = action==='approve'
-								? '/entries/'+entryId+'/approve'
-								: '/entries/'+entryId+'/reject';
+								? '/api/entries/'+entryId+'/approve'
+								: '/api/entries/'+entryId+'/reject';
 							return fetch(ep, {method:'POST'});
 						})
 						.then(function(r) {
@@ -182,6 +193,21 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 						});
 					});
 				});
+
+				// Confidence panel collapse toggle
+				document.addEventListener('click', function(e) {
+					var btn = e.target.closest('.js-conf-toggle');
+					if (!btn) return;
+					var panel = btn.closest('.js-conf-panel');
+					if (!panel) return;
+					var expanded = panel.dataset.expanded === 'true';
+					panel.dataset.expanded = expanded ? 'false' : 'true';
+					panel.style.width = expanded ? '120px' : '230px';
+					panel.querySelectorAll('.js-conf-bar').forEach(function(b) {
+						b.style.display = expanded ? 'none' : '';
+					});
+					btn.textContent = expanded ? '▶' : '◀';
+				});
 			})();
 		</script>
 	}
@@ -190,7 +216,7 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 templ ledgerPill(value, label, current string, count int) {
 	<a
 		href={ templ.SafeURL("?filter=" + value) }
-		style={ ledgerPillStyle(value == current) }
+		style={ ledgerPillStyle(value, value == current) }
 	>
 		{ label }
 		<span style={ ledgerPillCountStyle(value == current) }>{ fmt.Sprintf("%d", count) }</span>
@@ -203,43 +229,32 @@ templ ledgerEntryRow(e store.EntryRow) {
 		data-entry-id={ e.ID }
 		style="border-bottom:1px solid var(--border)"
 	>
-		<summary style="display:flex;align-items:center;gap:10px;padding:10px 20px;cursor:pointer;list-style:none;user-select:none">
-			<span style={ "width:8px;height:8px;border-radius:50%;flex-shrink:0;background:" + entryStatusColor(e.Status) }></span>
-			<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:500;color:var(--text)">
+		<summary style="display:grid;grid-template-columns:28px 1fr 80px 70px 90px 110px 140px;align-items:center;padding:10px 20px;cursor:pointer;list-style:none;user-select:none">
+			<span class="entry-chevron" style="color:var(--text3);font-size:10px;transition:transform 0.15s">▶</span>
+			<span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:500;color:var(--text)">
 				if e.LabelName != nil && *e.LabelName != "" {
 					{ *e.LabelName }
 				} else {
 					<span style="color:var(--text3);font-style:italic">Unlabeled</span>
 				}
+				if e.AlertType != nil {
+					<span style="margin-left:6px;font-size:10px;font-weight:700;padding:1px 5px;border-radius:10px;background:var(--accent);color:#fff">{ alertTypeLabel(e.AlertType) }</span>
+				}
 			</span>
-			if e.AlertType != nil {
-				<span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;background:var(--accent);color:#fff;flex-shrink:0">
-					{ alertTypeLabel(e.AlertType) }
-				</span>
-			}
-			<span style={ "font-size:11px;font-weight:600;padding:2px 7px;border-radius:4px;flex-shrink:0;" + ledgerDirectionBadgeStyle(e.Direction) }>
-				{ directionLabel(e.Direction) }
-			</span>
-			<span style="font-size:12px;color:var(--text3);flex-shrink:0;width:62px">
-				{ entryTypeLabel(e.EntryType) }
-			</span>
-			<span style="font-size:12px;color:var(--text2);flex-shrink:0;width:68px;text-align:right;font-variant-numeric:tabular-nums">
-				{ ratePerMo(e) }
-			</span>
-			<span style="font-size:11px;color:var(--text3);flex-shrink:0;width:72px;text-align:right">
-				{ e.StartDate.Format("Jan 2006") }
-			</span>
-			<span class="entry-chevron" style="color:var(--text3);flex-shrink:0;font-size:10px;transition:transform 0.15s">▶</span>
+			<span style="font-size:12px;color:var(--text3)">{ entryTypeLabel(e.EntryType) }</span>
+			<span style={ "font-size:11px;font-weight:600;padding:2px 6px;border-radius:4px;display:inline-block;" + ledgerDirectionBadgeStyle(e.Direction) }>{ directionLabel(e.Direction) }</span>
+			<span style="font-size:12px;color:var(--text2);text-align:right;font-variant-numeric:tabular-nums">{ fmtRateMo(e.ProjectedRatePerDay) }</span>
+			<span style={ ledgerStatusBadgeStyle(e.Status) }>{ ledgerStatusLabel(e.Status) }</span>
+			<span style={ "font-size:12px;text-align:right;font-variant-numeric:tabular-nums;color:" + confColor(e.Confidence) }>{ confPct(e.Confidence) }</span>
 		</summary>
-		<div style="border-top:1px solid var(--border);background:var(--surface);padding:12px 20px;display:flex;flex-direction:column;gap:14px">
-			<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+		<div>
+			if e.Status == "pending_review" {
 				<div
 					class="js-review-panel"
 					data-entry-id={ e.ID }
 					data-entry={ entryDataJSON(e) }
-					style="display:flex;flex-direction:column;gap:8px"
+					style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 20px;border-top:1px solid var(--border);background:var(--surface2)"
 				>
-					<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em">Review</div>
 					<input
 						class="js-label-input"
 						type="text"
@@ -250,62 +265,66 @@ templ ledgerEntryRow(e store.EntryRow) {
 							}
 							return ""
 						}() }
-						style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;color:var(--text);outline:none;width:100%"
+						style="flex:1;min-width:120px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:5px 8px;font-size:13px;color:var(--text);outline:none"
 					/>
-					<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-						<select
-							class="js-direction-sel"
-							style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;color:var(--text);outline:none"
-						>
-							<option value="debit" selected?={ e.Direction == "debit" }>Debit</option>
-							<option value="credit" selected?={ e.Direction == "credit" }>Credit</option>
-						</select>
-						<select
-							class="js-type-sel"
-							style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;color:var(--text);outline:none"
-						>
-							<option value="fixed" selected?={ e.EntryType == "fixed" }>Fixed</option>
-							<option value="variable" selected?={ e.EntryType == "variable" }>Variable</option>
-							<option value="one_time" selected?={ e.EntryType == "one_time" }>One-time</option>
-						</select>
-					</div>
-					<div style="display:flex;gap:6px">
-						<button
-							class="js-review-btn"
-							data-action="approve"
-							style="flex:1;padding:7px;border-radius:5px;border:none;cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;background:var(--income);color:#fff"
-						>Approve</button>
+					<select
+						class="js-direction-sel"
+						style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:5px 8px;font-size:13px;color:var(--text);outline:none"
+					>
+						<option value="income" selected?={ e.Direction == "income" }>Income</option>
+						<option value="expense" selected?={ e.Direction == "expense" }>Expense</option>
+					</select>
+					<select
+						class="js-type-sel"
+						style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:5px 8px;font-size:13px;color:var(--text);outline:none"
+					>
+						<option value="standing" selected?={ e.EntryType == "standing" }>Standing</option>
+						<option value="variable" selected?={ e.EntryType == "variable" }>Variable</option>
+						<option value="irregular" selected?={ e.EntryType == "irregular" }>Irregular</option>
+					</select>
+					<div style="display:flex;gap:6px;margin-left:auto">
 						<button
 							class="js-review-btn"
 							data-action="reject"
-							style="flex:1;padding:7px;border-radius:5px;border:1px solid var(--border);cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;background:transparent;color:var(--text2)"
+							style="padding:5px 14px;border-radius:5px;border:1px solid var(--border);cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;background:transparent;color:var(--text2)"
 						>Reject</button>
+						<button
+							class="js-review-btn"
+							data-action="approve"
+							style="padding:5px 14px;border-radius:5px;border:none;cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;background:var(--income);color:#fff"
+						>Approve</button>
 					</div>
+				</div>
+			}
+			<div style="display:flex;border-top:1px solid var(--border);background:var(--surface)">
+				<div style="flex:1;padding:12px 20px;display:flex;flex-direction:column;gap:6px;min-width:0">
+					<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em">Matching Rule</div>
+					<textarea
+						class="js-conditions-ta"
+						data-entry-id={ e.ID }
+						style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:12px;font-family:monospace;color:var(--text);outline:none;resize:vertical;min-height:80px;width:100%;box-sizing:border-box"
+						spellcheck="false"
+					>{ conditionsFormatted(e.Conditions) }</textarea>
 					if len(e.SampleMerchants) > 0 {
 						<div style="font-size:11px;color:var(--text3);line-height:1.5">
 							{ strings.Join(e.SampleMerchants[:min(3, len(e.SampleMerchants))], " · ") }
 						</div>
 					}
 				</div>
-				<div style="display:flex;flex-direction:column;gap:8px">
-					<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em">Conditions</div>
-					<textarea
-						class="js-conditions-ta"
-						data-entry-id={ e.ID }
-						style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:12px;font-family:monospace;color:var(--text);outline:none;resize:vertical;min-height:80px;width:100%"
-						spellcheck="false"
-					>{ conditionsFormatted(e.Conditions) }</textarea>
-					if e.Confidence != nil {
-						<div style="display:flex;flex-direction:column;gap:5px">
-							@ledgerConfBar("Overall", e.Confidence)
-							@ledgerConfBar("Merchant", e.MerchantConfidence)
-							@ledgerConfBar("Timing", e.TimingConfidence)
-							@ledgerConfBar("Amount", e.AmountConfidence)
+				if e.Confidence != nil {
+					<div class="js-conf-panel" data-expanded="true" style="width:230px;transition:width 0.2s;border-left:1px solid var(--border);padding:12px 16px;display:flex;flex-direction:column;gap:8px;overflow:hidden;flex-shrink:0">
+						<div style="display:flex;align-items:center;justify-content:space-between">
+							<span style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em">Confidence</span>
+							<button class="js-conf-toggle" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:11px;padding:0">◀</button>
 						</div>
-					}
-				</div>
+						@ledgerConfBar("Overall", e.Confidence)
+						@ledgerConfBar("Merchant", e.MerchantConfidence)
+						@ledgerConfBar("Timing", e.TimingConfidence)
+						@ledgerConfBar("Amount", e.AmountConfidence)
+					</div>
+				}
 			</div>
-			<div>
+			<div style="border-top:1px solid var(--border);background:var(--surface);padding:10px 20px 12px">
 				<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Transactions</div>
 				<div class="js-tx-panel" data-entry-id={ e.ID }>
 					<p style="color:var(--text3);font-size:12px">Open to load matched transactions.</p>
@@ -317,17 +336,30 @@ templ ledgerEntryRow(e store.EntryRow) {
 
 templ ledgerConfBar(label string, f *float64) {
 	<div style="display:flex;align-items:center;gap:8px">
-		<span style="font-size:11px;color:var(--text3);min-width:52px">{ label }</span>
-		<div style="flex:1;background:var(--surface2);border-radius:3px;height:5px;overflow:hidden">
+		<span style="font-size:11px;color:var(--text3);min-width:52px;white-space:nowrap">{ label }</span>
+		<div class="js-conf-bar" style="flex:1;background:var(--surface2);border-radius:3px;height:5px;overflow:hidden">
 			<div style={ ledgerConfBarFill(f) }></div>
 		</div>
 		<span style={ "font-size:11px;min-width:28px;text-align:right;color:" + confColor(f) }>{ confPct(f) }</span>
 	</div>
 }
 
-func ledgerPillStyle(active bool) string {
+func ledgerPillColor(value string) string {
+	switch value {
+	case "pending_review":
+		return "var(--accent)"
+	case "active":
+		return "var(--income)"
+	case "inactive":
+		return "var(--text3)"
+	default:
+		return "var(--text2)"
+	}
+}
+
+func ledgerPillStyle(value string, active bool) string {
 	if active {
-		return "display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:16px;font-size:12px;font-weight:500;cursor:pointer;text-decoration:none;background:var(--accent);color:#fff;border:1px solid transparent"
+		return "display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:16px;font-size:12px;font-weight:500;cursor:pointer;text-decoration:none;background:" + ledgerPillColor(value) + ";color:#fff;border:1px solid transparent"
 	}
 	return "display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:16px;font-size:12px;font-weight:500;cursor:pointer;text-decoration:none;background:transparent;color:var(--text2);border:1px solid var(--border)"
 }
@@ -340,10 +372,33 @@ func ledgerPillCountStyle(active bool) string {
 }
 
 func ledgerDirectionBadgeStyle(d string) string {
-	if d == "credit" {
+	if d == "income" {
 		return "background:color-mix(in srgb,var(--surface2) 80%,var(--income) 20%);color:var(--income)"
 	}
 	return "background:color-mix(in srgb,var(--surface2) 80%,var(--commit) 20%);color:var(--commit)"
+}
+
+func ledgerStatusBadgeStyle(status string) string {
+	base := "font-size:11px;font-weight:600;padding:2px 7px;border-radius:4px;white-space:nowrap;justify-self:center"
+	switch status {
+	case "pending_review":
+		return base + ";background:var(--accent);color:#fff"
+	case "active":
+		return base + ";background:color-mix(in srgb,var(--surface2) 70%,var(--income) 30%);color:var(--income)"
+	default:
+		return base + ";background:var(--surface2);color:var(--text3)"
+	}
+}
+
+func ledgerStatusLabel(status string) string {
+	switch status {
+	case "pending_review":
+		return "Review"
+	case "active":
+		return "Active"
+	default:
+		return "Inactive"
+	}
 }
 
 func ledgerConfBarFill(f *float64) string {

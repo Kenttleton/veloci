@@ -48,7 +48,7 @@ func LedgerPage(shell ShellData, data LedgerData) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div style=\"display:flex;flex-direction:column;height:100%;overflow:hidden\"><div style=\"display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0\"><h1 style=\"margin:0;font-size:18px;font-weight:700;color:var(--text);letter-spacing:-0.02em\">Ledger</h1><button id=\"run-engine-btn\" style=\"background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit\">Run Engine</button></div><div style=\"display:flex;gap:6px;padding:10px 20px;border-bottom:1px solid var(--border);flex-shrink:0;align-items:center\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div style=\"display:flex;flex-direction:column;height:100%;overflow:hidden\"><div style=\"display:flex;align-items:center;padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0\"><h1 style=\"margin:0;font-size:18px;font-weight:700;color:var(--text);letter-spacing:-0.02em\">Ledger</h1></div><div style=\"display:flex;align-items:center;justify-content:flex-end;padding:0 20px;height:36px;border-bottom:1px solid var(--border);flex-shrink:0\"><button id=\"run-engine-btn\" style=\"background:none;border:1px solid var(--border);border-radius:4px;padding:3px 10px;cursor:pointer;font-size:12px;color:var(--text2);font-family:inherit\">Run Engine</button></div><div style=\"display:flex;gap:6px;padding:10px 20px;border-bottom:1px solid var(--border);flex-shrink:0;align-items:center\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -68,7 +68,7 @@ func LedgerPage(shell ShellData, data LedgerData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</div><div style=\"flex:1;overflow:auto\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</div><div style=\"display:grid;grid-template-columns:28px 1fr 80px 70px 90px 110px 140px;padding:5px 20px;border-bottom:1px solid var(--border);flex-shrink:0\"><div></div><div style=\"font-size:11px;font-weight:600;color:var(--text3)\">Entry</div><div style=\"font-size:11px;font-weight:600;color:var(--text3)\">Type</div><div style=\"font-size:11px;font-weight:600;color:var(--text3)\">Dir</div><div style=\"font-size:11px;font-weight:600;color:var(--text3);text-align:right\">Rate/mo</div><div style=\"font-size:11px;font-weight:600;color:var(--text3);text-align:center\">Status</div><div style=\"font-size:11px;font-weight:600;color:var(--text3);text-align:right\">Confidence</div></div><div style=\"flex:1;overflow:auto\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -85,7 +85,7 @@ func LedgerPage(shell ShellData, data LedgerData) templ.Component {
 					}
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</div></div><script>\n\t\t\t(function() {\n\t\t\t\t// Run Engine\n\t\t\t\tvar runBtn = document.getElementById('run-engine-btn');\n\t\t\t\tif (runBtn) {\n\t\t\t\t\trunBtn.addEventListener('click', function() {\n\t\t\t\t\t\trunBtn.disabled = true;\n\t\t\t\t\t\trunBtn.textContent = 'Running…';\n\t\t\t\t\t\tfetch('/jobs/reprocess', {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})\n\t\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\t\trunBtn.textContent = r.ok ? 'Engine started' : 'Failed';\n\t\t\t\t\t\t\t\tsetTimeout(function(){ runBtn.disabled=false; runBtn.textContent='Run Engine'; }, 3000);\n\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t.catch(function(){ runBtn.disabled=false; runBtn.textContent='Run Engine'; });\n\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\t// Chevron rotation for open entries\n\t\t\t\tdocument.addEventListener('toggle', function(e) {\n\t\t\t\t\tvar det = e.target;\n\t\t\t\t\tif (!det.classList.contains('js-entry-details')) return;\n\t\t\t\t\tvar chev = det.querySelector('.entry-chevron');\n\t\t\t\t\tif (chev) chev.style.transform = det.open ? 'rotate(90deg)' : '';\n\t\t\t\t}, true);\n\n\t\t\t\t// Lazy-load transactions when entry opened\n\t\t\t\tdocument.addEventListener('toggle', function(e) {\n\t\t\t\t\tvar det = e.target;\n\t\t\t\t\tif (!det.classList.contains('js-entry-details') || !det.open) return;\n\t\t\t\t\tvar entryId = det.dataset.entryId;\n\t\t\t\t\tvar txPanel = det.querySelector('.js-tx-panel');\n\t\t\t\t\tif (!txPanel || txPanel.dataset.loaded) return;\n\t\t\t\t\ttxPanel.dataset.loaded = '1';\n\t\t\t\t\ttxPanel.innerHTML = '<p style=\"color:var(--text3);font-size:12px\">Loading…</p>';\n\t\t\t\t\tfetch('/transactions?entry_id=' + entryId + '&limit=50')\n\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t.then(function(env) {\n\t\t\t\t\t\t\tvar txns = env.data || [];\n\t\t\t\t\t\t\tif (!txns.length) {\n\t\t\t\t\t\t\t\ttxPanel.innerHTML = '<p style=\"color:var(--text3);font-size:12px\">No matched transactions.</p>';\n\t\t\t\t\t\t\t\treturn;\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\tvar rows = txns.map(function(t) {\n\t\t\t\t\t\t\t\tvar abs = Math.abs(t.amount_cents);\n\t\t\t\t\t\t\t\tvar s = (t.amount_cents < 0 ? '-' : '') + '$' + (abs/100).toFixed(2);\n\t\t\t\t\t\t\t\tvar col = t.amount_cents >= 0 ? 'var(--income)' : 'var(--commit)';\n\t\t\t\t\t\t\t\tvar merch = t.merchant_normalized || t.imported_payee || '';\n\t\t\t\t\t\t\t\treturn '<tr style=\"border-top:1px solid var(--border)\">' +\n\t\t\t\t\t\t\t\t\t'<td style=\"padding:5px 8px;font-size:12px;color:var(--text2)\">' + t.date + '</td>' +\n\t\t\t\t\t\t\t\t\t'<td style=\"padding:5px 8px;font-size:12px;color:var(--text)\">' + merch + '</td>' +\n\t\t\t\t\t\t\t\t\t'<td style=\"padding:5px 8px;font-size:12px;color:' + col + ';text-align:right;font-variant-numeric:tabular-nums\">' + s + '</td>' +\n\t\t\t\t\t\t\t\t\t'<td style=\"padding:5px 8px;font-size:12px;color:var(--text3)\">' + t.settlement_status + '</td>' +\n\t\t\t\t\t\t\t\t\t'</tr>';\n\t\t\t\t\t\t\t}).join('');\n\t\t\t\t\t\t\ttxPanel.innerHTML = '<table style=\"width:100%;border-collapse:collapse\">' +\n\t\t\t\t\t\t\t\t'<thead><tr>' +\n\t\t\t\t\t\t\t\t'<th style=\"padding:5px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:600\">Date</th>' +\n\t\t\t\t\t\t\t\t'<th style=\"padding:5px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:600\">Merchant</th>' +\n\t\t\t\t\t\t\t\t'<th style=\"padding:5px 8px;text-align:right;font-size:11px;color:var(--text3);font-weight:600\">Amount</th>' +\n\t\t\t\t\t\t\t\t'<th style=\"padding:5px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:600\">Status</th>' +\n\t\t\t\t\t\t\t\t'</tr></thead><tbody>' + rows + '</tbody></table>';\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function() {\n\t\t\t\t\t\t\ttxPanel.innerHTML = '<p style=\"color:var(--commit);font-size:12px\">Failed to load.</p>';\n\t\t\t\t\t\t});\n\t\t\t\t}, true);\n\n\t\t\t\t// Conditions save on blur (capture phase)\n\t\t\t\tdocument.addEventListener('blur', function(e) {\n\t\t\t\t\tvar ta = e.target;\n\t\t\t\t\tif (!ta.classList.contains('js-conditions-ta')) return;\n\t\t\t\t\tvar entryId = ta.dataset.entryId;\n\t\t\t\t\tvar val = ta.value.trim();\n\t\t\t\t\tvar parsed;\n\t\t\t\t\ttry { parsed = JSON.parse(val); } catch(ex) {\n\t\t\t\t\t\tta.style.borderColor = 'var(--commit)';\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tta.style.borderColor = '';\n\t\t\t\t\tfetch('/entries/' + entryId + '/conditions', {\n\t\t\t\t\t\tmethod:'PATCH',\n\t\t\t\t\t\theaders:{'Content-Type':'application/json'},\n\t\t\t\t\t\tbody: JSON.stringify({conditions: parsed})\n\t\t\t\t\t});\n\t\t\t\t}, true);\n\n\t\t\t\t// Approve / Reject\n\t\t\t\tdocument.addEventListener('click', function(e) {\n\t\t\t\t\tvar btn = e.target.closest('.js-review-btn');\n\t\t\t\t\tif (!btn) return;\n\t\t\t\t\tvar panel = btn.closest('.js-review-panel');\n\t\t\t\t\tif (!panel) return;\n\t\t\t\t\tvar entryId = panel.dataset.entryId;\n\t\t\t\t\tvar entry = JSON.parse(panel.dataset.entry);\n\t\t\t\t\tvar action = btn.dataset.action;\n\t\t\t\t\tvar labelInput = panel.querySelector('.js-label-input');\n\t\t\t\t\tvar dirSel = panel.querySelector('.js-direction-sel');\n\t\t\t\t\tvar typeSel = panel.querySelector('.js-type-sel');\n\t\t\t\t\tvar ta = document.querySelector('.js-conditions-ta[data-entry-id=\"' + entryId + '\"]');\n\t\t\t\t\tvar conds = entry.conditions || {};\n\t\t\t\t\ttry { if (ta) conds = JSON.parse(ta.value); } catch(ex) {}\n\n\t\t\t\t\tfunction resolveLabel(cb) {\n\t\t\t\t\t\tvar name = labelInput ? labelInput.value.trim() : '';\n\t\t\t\t\t\tif (!name) { cb(entry.label_id); return; }\n\t\t\t\t\t\tfetch('/labels?limit=500')\n\t\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t\t.then(function(env) {\n\t\t\t\t\t\t\t\tvar found = (env.data||[]).find(function(l){ return l.name.toLowerCase()===name.toLowerCase(); });\n\t\t\t\t\t\t\t\tif (found) { cb(found.id); return; }\n\t\t\t\t\t\t\t\tfetch('/labels',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})\n\t\t\t\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t\t\t\t.then(function(c){ cb(c.data ? c.data.id : null); });\n\t\t\t\t\t\t\t});\n\t\t\t\t\t}\n\n\t\t\t\t\tbtn.disabled = true;\n\t\t\t\t\tbtn.textContent = '…';\n\n\t\t\t\t\tresolveLabel(function(labelId) {\n\t\t\t\t\t\tvar body = Object.assign({}, entry, {\n\t\t\t\t\t\t\tlabel_id: labelId,\n\t\t\t\t\t\t\tdirection: dirSel ? dirSel.value : entry.direction,\n\t\t\t\t\t\t\tentry_type: typeSel ? typeSel.value : entry.entry_type,\n\t\t\t\t\t\t\tconditions: conds\n\t\t\t\t\t\t});\n\t\t\t\t\t\tfetch('/entries/' + entryId, {\n\t\t\t\t\t\t\tmethod:'PUT',\n\t\t\t\t\t\t\theaders:{'Content-Type':'application/json'},\n\t\t\t\t\t\t\tbody: JSON.stringify(body)\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\tif (!r.ok) throw new Error('put-failed');\n\t\t\t\t\t\t\tvar ep = action==='approve'\n\t\t\t\t\t\t\t\t? '/entries/'+entryId+'/approve'\n\t\t\t\t\t\t\t\t: '/entries/'+entryId+'/reject';\n\t\t\t\t\t\t\treturn fetch(ep, {method:'POST'});\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\tif (!r || !r.ok) throw new Error('action-failed');\n\t\t\t\t\t\t\tvar row = document.querySelector('.js-entry-details[data-entry-id=\"'+entryId+'\"]');\n\t\t\t\t\t\t\tif (row) row.remove();\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function() {\n\t\t\t\t\t\t\tbtn.disabled = false;\n\t\t\t\t\t\t\tbtn.textContent = action==='approve' ? 'Approve' : 'Reject';\n\t\t\t\t\t\t});\n\t\t\t\t\t});\n\t\t\t\t});\n\t\t\t})();\n\t\t</script>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</div></div><script>\n\t\t\t(function() {\n\t\t\t\t// Run Engine\n\t\t\t\tvar runBtn = document.getElementById('run-engine-btn');\n\t\t\t\tif (runBtn) {\n\t\t\t\t\trunBtn.addEventListener('click', function() {\n\t\t\t\t\t\trunBtn.disabled = true;\n\t\t\t\t\t\trunBtn.textContent = 'Running…';\n\t\t\t\t\t\tfetch('/api/jobs/reprocess', {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})\n\t\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\t\trunBtn.textContent = r.ok ? 'Engine started' : 'Failed';\n\t\t\t\t\t\t\t\tsetTimeout(function(){ runBtn.disabled=false; runBtn.textContent='Run Engine'; }, 3000);\n\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t.catch(function(){ runBtn.disabled=false; runBtn.textContent='Run Engine'; });\n\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\t// Chevron rotation\n\t\t\t\tdocument.addEventListener('toggle', function(e) {\n\t\t\t\t\tvar det = e.target;\n\t\t\t\t\tif (!det.classList.contains('js-entry-details')) return;\n\t\t\t\t\tvar chev = det.querySelector('.entry-chevron');\n\t\t\t\t\tif (chev) chev.style.transform = det.open ? 'rotate(90deg)' : '';\n\t\t\t\t}, true);\n\n\t\t\t\t// Lazy-load transactions when entry opened\n\t\t\t\tdocument.addEventListener('toggle', function(e) {\n\t\t\t\t\tvar det = e.target;\n\t\t\t\t\tif (!det.classList.contains('js-entry-details') || !det.open) return;\n\t\t\t\t\tvar entryId = det.dataset.entryId;\n\t\t\t\t\tvar txPanel = det.querySelector('.js-tx-panel');\n\t\t\t\t\tif (!txPanel || txPanel.dataset.loaded) return;\n\t\t\t\t\ttxPanel.dataset.loaded = '1';\n\t\t\t\t\ttxPanel.innerHTML = '<p style=\"color:var(--text3);font-size:12px\">Loading…</p>';\n\t\t\t\t\tfetch('/api/transactions?entry_id=' + entryId + '&limit=50')\n\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t.then(function(env) {\n\t\t\t\t\t\t\tvar txns = env.data || [];\n\t\t\t\t\t\t\tif (!txns.length) {\n\t\t\t\t\t\t\t\ttxPanel.innerHTML = '<p style=\"color:var(--text3);font-size:12px\">No matched transactions.</p>';\n\t\t\t\t\t\t\t\treturn;\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\tvar rows = txns.map(function(t) {\n\t\t\t\t\t\t\t\tvar abs = Math.abs(t.amount_cents);\n\t\t\t\t\t\t\t\tvar s = (t.amount_cents < 0 ? '-' : '') + '$' + (abs/100).toFixed(2);\n\t\t\t\t\t\t\t\tvar col = t.amount_cents >= 0 ? 'var(--income)' : 'var(--commit)';\n\t\t\t\t\t\t\t\tvar merch = t.merchant_normalized || t.imported_payee || '';\n\t\t\t\t\t\t\t\treturn '<tr style=\"border-top:1px solid var(--border)\">' +\n\t\t\t\t\t\t\t\t\t'<td style=\"padding:5px 8px;font-size:12px;color:var(--text2)\">' + t.date + '</td>' +\n\t\t\t\t\t\t\t\t\t'<td style=\"padding:5px 8px;font-size:12px;color:var(--text)\">' + merch + '</td>' +\n\t\t\t\t\t\t\t\t\t'<td style=\"padding:5px 8px;font-size:12px;color:' + col + ';text-align:right;font-variant-numeric:tabular-nums\">' + s + '</td>' +\n\t\t\t\t\t\t\t\t\t'<td style=\"padding:5px 8px;font-size:12px;color:var(--text3)\">' + t.settlement_status + '</td>' +\n\t\t\t\t\t\t\t\t\t'</tr>';\n\t\t\t\t\t\t\t}).join('');\n\t\t\t\t\t\t\ttxPanel.innerHTML = '<table style=\"width:100%;border-collapse:collapse\">' +\n\t\t\t\t\t\t\t\t'<thead><tr>' +\n\t\t\t\t\t\t\t\t'<th style=\"padding:5px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:600\">Date</th>' +\n\t\t\t\t\t\t\t\t'<th style=\"padding:5px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:600\">Merchant</th>' +\n\t\t\t\t\t\t\t\t'<th style=\"padding:5px 8px;text-align:right;font-size:11px;color:var(--text3);font-weight:600\">Amount</th>' +\n\t\t\t\t\t\t\t\t'<th style=\"padding:5px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:600\">Status</th>' +\n\t\t\t\t\t\t\t\t'</tr></thead><tbody>' + rows + '</tbody></table>';\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function() {\n\t\t\t\t\t\t\ttxPanel.innerHTML = '<p style=\"color:var(--commit);font-size:12px\">Failed to load.</p>';\n\t\t\t\t\t\t});\n\t\t\t\t}, true);\n\n\t\t\t\t// Conditions save on blur\n\t\t\t\tdocument.addEventListener('blur', function(e) {\n\t\t\t\t\tvar ta = e.target;\n\t\t\t\t\tif (!ta.classList.contains('js-conditions-ta')) return;\n\t\t\t\t\tvar entryId = ta.dataset.entryId;\n\t\t\t\t\tvar val = ta.value.trim();\n\t\t\t\t\tvar parsed;\n\t\t\t\t\ttry { parsed = JSON.parse(val); } catch(ex) {\n\t\t\t\t\t\tta.style.borderColor = 'var(--commit)';\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tta.style.borderColor = '';\n\t\t\t\t\tfetch('/api/entries/' + entryId + '/conditions', {\n\t\t\t\t\t\tmethod:'PATCH',\n\t\t\t\t\t\theaders:{'Content-Type':'application/json'},\n\t\t\t\t\t\tbody: JSON.stringify({conditions: parsed})\n\t\t\t\t\t});\n\t\t\t\t}, true);\n\n\t\t\t\t// Approve / Reject\n\t\t\t\tdocument.addEventListener('click', function(e) {\n\t\t\t\t\tvar btn = e.target.closest('.js-review-btn');\n\t\t\t\t\tif (!btn) return;\n\t\t\t\t\tvar panel = btn.closest('.js-review-panel');\n\t\t\t\t\tif (!panel) return;\n\t\t\t\t\tvar entryId = panel.dataset.entryId;\n\t\t\t\t\tvar entry = JSON.parse(panel.dataset.entry);\n\t\t\t\t\tvar action = btn.dataset.action;\n\t\t\t\t\tvar labelInput = panel.querySelector('.js-label-input');\n\t\t\t\t\tvar dirSel = panel.querySelector('.js-direction-sel');\n\t\t\t\t\tvar typeSel = panel.querySelector('.js-type-sel');\n\t\t\t\t\tvar ta = document.querySelector('.js-conditions-ta[data-entry-id=\"' + entryId + '\"]');\n\t\t\t\t\tvar conds = entry.conditions || {};\n\t\t\t\t\ttry { if (ta) conds = JSON.parse(ta.value); } catch(ex) {}\n\n\t\t\t\t\tfunction resolveLabel(cb) {\n\t\t\t\t\t\tvar name = labelInput ? labelInput.value.trim() : '';\n\t\t\t\t\t\tif (!name) { cb(entry.label_id); return; }\n\t\t\t\t\t\tfetch('/api/labels?limit=500')\n\t\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t\t.then(function(env) {\n\t\t\t\t\t\t\t\tvar found = (env.data||[]).find(function(l){ return l.name.toLowerCase()===name.toLowerCase(); });\n\t\t\t\t\t\t\t\tif (found) { cb(found.id); return; }\n\t\t\t\t\t\t\t\tfetch('/api/labels',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})\n\t\t\t\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t\t\t\t.then(function(c){ cb(c.data ? c.data.id : null); });\n\t\t\t\t\t\t\t});\n\t\t\t\t\t}\n\n\t\t\t\t\tbtn.disabled = true;\n\t\t\t\t\tbtn.textContent = '…';\n\n\t\t\t\t\tresolveLabel(function(labelId) {\n\t\t\t\t\t\tvar body = Object.assign({}, entry, {\n\t\t\t\t\t\t\tlabel_id: labelId,\n\t\t\t\t\t\t\tdirection: dirSel ? dirSel.value : entry.direction,\n\t\t\t\t\t\t\tentry_type: typeSel ? typeSel.value : entry.entry_type,\n\t\t\t\t\t\t\tconditions: conds\n\t\t\t\t\t\t});\n\t\t\t\t\t\tfetch('/api/entries/' + entryId, {\n\t\t\t\t\t\t\tmethod:'PUT',\n\t\t\t\t\t\t\theaders:{'Content-Type':'application/json'},\n\t\t\t\t\t\t\tbody: JSON.stringify(body)\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\tif (!r.ok) throw new Error('put-failed');\n\t\t\t\t\t\t\tvar ep = action==='approve'\n\t\t\t\t\t\t\t\t? '/api/entries/'+entryId+'/approve'\n\t\t\t\t\t\t\t\t: '/api/entries/'+entryId+'/reject';\n\t\t\t\t\t\t\treturn fetch(ep, {method:'POST'});\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\tif (!r || !r.ok) throw new Error('action-failed');\n\t\t\t\t\t\t\tvar row = document.querySelector('.js-entry-details[data-entry-id=\"'+entryId+'\"]');\n\t\t\t\t\t\t\tif (row) row.remove();\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function() {\n\t\t\t\t\t\t\tbtn.disabled = false;\n\t\t\t\t\t\t\tbtn.textContent = action==='approve' ? 'Approve' : 'Reject';\n\t\t\t\t\t\t});\n\t\t\t\t\t});\n\t\t\t\t});\n\n\t\t\t\t// Confidence panel collapse toggle\n\t\t\t\tdocument.addEventListener('click', function(e) {\n\t\t\t\t\tvar btn = e.target.closest('.js-conf-toggle');\n\t\t\t\t\tif (!btn) return;\n\t\t\t\t\tvar panel = btn.closest('.js-conf-panel');\n\t\t\t\t\tif (!panel) return;\n\t\t\t\t\tvar expanded = panel.dataset.expanded === 'true';\n\t\t\t\t\tpanel.dataset.expanded = expanded ? 'false' : 'true';\n\t\t\t\t\tpanel.style.width = expanded ? '120px' : '230px';\n\t\t\t\t\tpanel.querySelectorAll('.js-conf-bar').forEach(function(b) {\n\t\t\t\t\t\tb.style.display = expanded ? 'none' : '';\n\t\t\t\t\t});\n\t\t\t\t\tbtn.textContent = expanded ? '▶' : '◀';\n\t\t\t\t});\n\t\t\t})();\n\t\t</script>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -127,7 +127,7 @@ func ledgerPill(value, label, current string, count int) templ.Component {
 		var templ_7745c5c3_Var4 templ.SafeURL
 		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("?filter=" + value))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 192, Col: 42}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 218, Col: 42}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 		if templ_7745c5c3_Err != nil {
@@ -138,9 +138,9 @@ func ledgerPill(value, label, current string, count int) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var5 string
-		templ_7745c5c3_Var5, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(ledgerPillStyle(value == current))
+		templ_7745c5c3_Var5, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(ledgerPillStyle(value, value == current))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 193, Col: 43}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 219, Col: 50}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 		if templ_7745c5c3_Err != nil {
@@ -153,7 +153,7 @@ func ledgerPill(value, label, current string, count int) templ.Component {
 		var templ_7745c5c3_Var6 string
 		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 195, Col: 9}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 221, Col: 9}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 		if templ_7745c5c3_Err != nil {
@@ -166,7 +166,7 @@ func ledgerPill(value, label, current string, count int) templ.Component {
 		var templ_7745c5c3_Var7 string
 		templ_7745c5c3_Var7, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(ledgerPillCountStyle(value == current))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 196, Col: 54}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 222, Col: 54}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 		if templ_7745c5c3_Err != nil {
@@ -179,7 +179,7 @@ func ledgerPill(value, label, current string, count int) templ.Component {
 		var templ_7745c5c3_Var8 string
 		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", count))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 196, Col: 83}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 222, Col: 83}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 		if templ_7745c5c3_Err != nil {
@@ -221,76 +221,76 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 		var templ_7745c5c3_Var10 string
 		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(e.ID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 203, Col: 22}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 229, Col: 22}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "\" style=\"border-bottom:1px solid var(--border)\"><summary style=\"display:flex;align-items:center;gap:10px;padding:10px 20px;cursor:pointer;list-style:none;user-select:none\"><span style=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var11 string
-		templ_7745c5c3_Var11, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("width:8px;height:8px;border-radius:50%;flex-shrink:0;background:" + entryStatusColor(e.Status))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 207, Col: 112}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "\"></span> <span style=\"flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:500;color:var(--text)\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "\" style=\"border-bottom:1px solid var(--border)\"><summary style=\"display:grid;grid-template-columns:28px 1fr 80px 70px 90px 110px 140px;align-items:center;padding:10px 20px;cursor:pointer;list-style:none;user-select:none\"><span class=\"entry-chevron\" style=\"color:var(--text3);font-size:10px;transition:transform 0.15s\">▶</span> <span style=\"min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:500;color:var(--text)\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if e.LabelName != nil && *e.LabelName != "" {
-			var templ_7745c5c3_Var12 string
-			templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(*e.LabelName)
+			var templ_7745c5c3_Var11 string
+			templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(*e.LabelName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 210, Col: 19}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 236, Col: 19}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, " ")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		} else {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "<span style=\"color:var(--text3);font-style:italic\">Unlabeled</span> ")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		if e.AlertType != nil {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "<span style=\"margin-left:6px;font-size:10px;font-weight:700;padding:1px 5px;border-radius:10px;background:var(--accent);color:#fff\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var12 string
+			templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(alertTypeLabel(e.AlertType))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 241, Col: 166}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "<span style=\"color:var(--text3);font-style:italic\">Unlabeled</span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "</span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</span> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "</span> <span style=\"font-size:12px;color:var(--text3)\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		if e.AlertType != nil {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<span style=\"font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;background:var(--accent);color:#fff;flex-shrink:0\">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var13 string
-			templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(alertTypeLabel(e.AlertType))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 217, Col: 34}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "</span> ")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
+		var templ_7745c5c3_Var13 string
+		templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(entryTypeLabel(e.EntryType))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 244, Col: 80}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<span style=\"")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "</span> <span style=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var14 string
-		templ_7745c5c3_Var14, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("font-size:11px;font-weight:600;padding:2px 7px;border-radius:4px;flex-shrink:0;" + ledgerDirectionBadgeStyle(e.Direction))
+		templ_7745c5c3_Var14, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("font-size:11px;font-weight:600;padding:2px 6px;border-radius:4px;display:inline-block;" + ledgerDirectionBadgeStyle(e.Direction))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 220, Col: 139}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 245, Col: 146}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 		if templ_7745c5c3_Err != nil {
@@ -303,200 +303,236 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 		var templ_7745c5c3_Var15 string
 		templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(directionLabel(e.Direction))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 221, Col: 33}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 245, Col: 178}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "</span> <span style=\"font-size:12px;color:var(--text3);flex-shrink:0;width:62px\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "</span> <span style=\"font-size:12px;color:var(--text2);text-align:right;font-variant-numeric:tabular-nums\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var16 string
-		templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(entryTypeLabel(e.EntryType))
+		templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(fmtRateMo(e.ProjectedRatePerDay))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 224, Col: 33}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 246, Col: 136}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "</span> <span style=\"font-size:12px;color:var(--text2);flex-shrink:0;width:68px;text-align:right;font-variant-numeric:tabular-nums\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "</span> <span style=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var17 string
-		templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(ratePerMo(e))
+		templ_7745c5c3_Var17, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(ledgerStatusBadgeStyle(e.Status))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 227, Col: 18}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 247, Col: 49}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "</span> <span style=\"font-size:11px;color:var(--text3);flex-shrink:0;width:72px;text-align:right\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var18 string
-		templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(e.StartDate.Format("Jan 2006"))
+		templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(ledgerStatusLabel(e.Status))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 230, Col: 36}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 247, Col: 81}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "</span> <span class=\"entry-chevron\" style=\"color:var(--text3);flex-shrink:0;font-size:10px;transition:transform 0.15s\">▶</span></summary><div style=\"border-top:1px solid var(--border);background:var(--surface);padding:12px 20px;display:flex;flex-direction:column;gap:14px\"><div style=\"display:grid;grid-template-columns:1fr 1fr;gap:16px\"><div class=\"js-review-panel\" data-entry-id=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "</span> <span style=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var19 string
-		templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.ResolveAttributeValue(e.ID)
+		templ_7745c5c3_Var19, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("font-size:12px;text-align:right;font-variant-numeric:tabular-nums;color:" + confColor(e.Confidence))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 238, Col: 25}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 248, Col: 117}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var19)
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "\" data-entry=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var20 string
-		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.ResolveAttributeValue(entryDataJSON(e))
+		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(confPct(e.Confidence))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 239, Col: 34}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 248, Col: 143}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var20)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "\" style=\"display:flex;flex-direction:column;gap:8px\"><div style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em\">Review</div><input class=\"js-label-input\" type=\"text\" placeholder=\"Label name\" value=\"")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var21 string
-		templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.ResolveAttributeValue(func() string {
-			if e.LabelName != nil {
-				return *e.LabelName
-			}
-			return ""
-		}())
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 252, Col: 9}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var21)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "</span></summary><div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "\" style=\"background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;color:var(--text);outline:none;width:100%\"><div style=\"display:grid;grid-template-columns:1fr 1fr;gap:6px\"><select class=\"js-direction-sel\" style=\"background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;color:var(--text);outline:none\"><option value=\"debit\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if e.Direction == "debit" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, " selected")
+		if e.Status == "pending_review" {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "<div class=\"js-review-panel\" data-entry-id=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, ">Debit</option> <option value=\"credit\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if e.Direction == "credit" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, " selected")
+			var templ_7745c5c3_Var21 string
+			templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.ResolveAttributeValue(e.ID)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 254, Col: 25}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var21)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, ">Credit</option></select> <select class=\"js-type-sel\" style=\"background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;color:var(--text);outline:none\"><option value=\"fixed\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if e.EntryType == "fixed" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, " selected")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, ">Fixed</option> <option value=\"variable\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if e.EntryType == "variable" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, " selected")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, ">Variable</option> <option value=\"one_time\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if e.EntryType == "one_time" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, " selected")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, ">One-time</option></select></div><div style=\"display:flex;gap:6px\"><button class=\"js-review-btn\" data-action=\"approve\" style=\"flex:1;padding:7px;border-radius:5px;border:none;cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;background:var(--income);color:#fff\">Approve</button> <button class=\"js-review-btn\" data-action=\"reject\" style=\"flex:1;padding:7px;border-radius:5px;border:1px solid var(--border);cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;background:transparent;color:var(--text2)\">Reject</button></div>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if len(e.SampleMerchants) > 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "<div style=\"font-size:11px;color:var(--text3);line-height:1.5\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "\" data-entry=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var22 string
-			templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(strings.Join(e.SampleMerchants[:min(3, len(e.SampleMerchants))], " · "))
+			templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.ResolveAttributeValue(entryDataJSON(e))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 286, Col: 81}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 255, Col: 34}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "</div>")
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var22)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "\" style=\"display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 20px;border-top:1px solid var(--border);background:var(--surface2)\"><input class=\"js-label-input\" type=\"text\" placeholder=\"Label name\" value=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var23 string
+			templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.ResolveAttributeValue(func() string {
+				if e.LabelName != nil {
+					return *e.LabelName
+				}
+				return ""
+			}())
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 267, Col: 9}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var23)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "\" style=\"flex:1;min-width:120px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:5px 8px;font-size:13px;color:var(--text);outline:none\"> <select class=\"js-direction-sel\" style=\"background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:5px 8px;font-size:13px;color:var(--text);outline:none\"><option value=\"income\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if e.Direction == "income" {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, " selected")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, ">Income</option> <option value=\"expense\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if e.Direction == "expense" {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, " selected")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, ">Expense</option></select> <select class=\"js-type-sel\" style=\"background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:5px 8px;font-size:13px;color:var(--text);outline:none\"><option value=\"standing\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if e.EntryType == "standing" {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, " selected")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, ">Standing</option> <option value=\"variable\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if e.EntryType == "variable" {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, " selected")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, ">Variable</option> <option value=\"irregular\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if e.EntryType == "irregular" {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, " selected")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, ">Irregular</option></select><div style=\"display:flex;gap:6px;margin-left:auto\"><button class=\"js-review-btn\" data-action=\"reject\" style=\"padding:5px 14px;border-radius:5px;border:1px solid var(--border);cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;background:transparent;color:var(--text2)\">Reject</button> <button class=\"js-review-btn\" data-action=\"approve\" style=\"padding:5px 14px;border-radius:5px;border:none;cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;background:var(--income);color:#fff\">Approve</button></div></div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "</div><div style=\"display:flex;flex-direction:column;gap:8px\"><div style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em\">Conditions</div><textarea class=\"js-conditions-ta\" data-entry-id=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var23 string
-		templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.ResolveAttributeValue(e.ID)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 294, Col: 26}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var23)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "\" style=\"background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:12px;font-family:monospace;color:var(--text);outline:none;resize:vertical;min-height:80px;width:100%\" spellcheck=\"false\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "<div style=\"display:flex;border-top:1px solid var(--border);background:var(--surface)\"><div style=\"flex:1;padding:12px 20px;display:flex;flex-direction:column;gap:6px;min-width:0\"><div style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em\">Matching Rule</div><textarea class=\"js-conditions-ta\" data-entry-id=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var24 string
-		templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(conditionsFormatted(e.Conditions))
+		templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.ResolveAttributeValue(e.ID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 297, Col: 41}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 304, Col: 26}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var24)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "</textarea> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "\" style=\"background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:12px;font-family:monospace;color:var(--text);outline:none;resize:vertical;min-height:80px;width:100%;box-sizing:border-box\" spellcheck=\"false\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var25 string
+		templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(conditionsFormatted(e.Conditions))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 307, Col: 41}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "</textarea> ")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if len(e.SampleMerchants) > 0 {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "<div style=\"font-size:11px;color:var(--text3);line-height:1.5\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var26 string
+			templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(strings.Join(e.SampleMerchants[:min(3, len(e.SampleMerchants))], " · "))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 310, Col: 81}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "</div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if e.Confidence != nil {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "<div style=\"display:flex;flex-direction:column;gap:5px\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "<div class=\"js-conf-panel\" data-expanded=\"true\" style=\"width:230px;transition:width 0.2s;border-left:1px solid var(--border);padding:12px 16px;display:flex;flex-direction:column;gap:8px;overflow:hidden;flex-shrink:0\"><div style=\"display:flex;align-items:center;justify-content:space-between\"><span style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em\">Confidence</span> <button class=\"js-conf-toggle\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:11px;padding:0\">◀</button></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -516,25 +552,25 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "</div></div><div><div style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px\">Transactions</div><div class=\"js-tx-panel\" data-entry-id=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "</div><div style=\"border-top:1px solid var(--border);background:var(--surface);padding:10px 20px 12px\"><div style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px\">Transactions</div><div class=\"js-tx-panel\" data-entry-id=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var25 string
-		templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.ResolveAttributeValue(e.ID)
+		var templ_7745c5c3_Var27 string
+		templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.ResolveAttributeValue(e.ID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 310, Col: 49}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 329, Col: 49}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var25)
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var27)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "\"><p style=\"color:var(--text3);font-size:12px\">Open to load matched transactions.</p></div></div></div></details>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "\"><p style=\"color:var(--text3);font-size:12px\">Open to load matched transactions.</p></div></div></div></details>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -558,64 +594,64 @@ func ledgerConfBar(label string, f *float64) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var26 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var26 == nil {
-			templ_7745c5c3_Var26 = templ.NopComponent
+		templ_7745c5c3_Var28 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var28 == nil {
+			templ_7745c5c3_Var28 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "<div style=\"display:flex;align-items:center;gap:8px\"><span style=\"font-size:11px;color:var(--text3);min-width:52px\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var27 string
-		templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(label)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 320, Col: 72}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "</span><div style=\"flex:1;background:var(--surface2);border-radius:3px;height:5px;overflow:hidden\"><div style=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var28 string
-		templ_7745c5c3_Var28, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(ledgerConfBarFill(f))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 322, Col: 36}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "\"></div></div><span style=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "<div style=\"display:flex;align-items:center;gap:8px\"><span style=\"font-size:11px;color:var(--text3);min-width:52px;white-space:nowrap\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var29 string
-		templ_7745c5c3_Var29, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("font-size:11px;min-width:28px;text-align:right;color:" + confColor(f))
+		templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 324, Col: 86}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 339, Col: 91}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "</span><div class=\"js-conf-bar\" style=\"flex:1;background:var(--surface2);border-radius:3px;height:5px;overflow:hidden\"><div style=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var30 string
-		templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(confPct(f))
+		templ_7745c5c3_Var30, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(ledgerConfBarFill(f))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 324, Col: 101}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 341, Col: 36}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "</span></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "\"></div></div><span style=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var31 string
+		templ_7745c5c3_Var31, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("font-size:11px;min-width:28px;text-align:right;color:" + confColor(f))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 343, Col: 86}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, "\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var32 string
+		templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(confPct(f))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 343, Col: 101}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "</span></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -623,9 +659,22 @@ func ledgerConfBar(label string, f *float64) templ.Component {
 	})
 }
 
-func ledgerPillStyle(active bool) string {
+func ledgerPillColor(value string) string {
+	switch value {
+	case "pending_review":
+		return "var(--accent)"
+	case "active":
+		return "var(--income)"
+	case "inactive":
+		return "var(--text3)"
+	default:
+		return "var(--text2)"
+	}
+}
+
+func ledgerPillStyle(value string, active bool) string {
 	if active {
-		return "display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:16px;font-size:12px;font-weight:500;cursor:pointer;text-decoration:none;background:var(--accent);color:#fff;border:1px solid transparent"
+		return "display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:16px;font-size:12px;font-weight:500;cursor:pointer;text-decoration:none;background:" + ledgerPillColor(value) + ";color:#fff;border:1px solid transparent"
 	}
 	return "display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:16px;font-size:12px;font-weight:500;cursor:pointer;text-decoration:none;background:transparent;color:var(--text2);border:1px solid var(--border)"
 }
@@ -638,10 +687,33 @@ func ledgerPillCountStyle(active bool) string {
 }
 
 func ledgerDirectionBadgeStyle(d string) string {
-	if d == "credit" {
+	if d == "income" {
 		return "background:color-mix(in srgb,var(--surface2) 80%,var(--income) 20%);color:var(--income)"
 	}
 	return "background:color-mix(in srgb,var(--surface2) 80%,var(--commit) 20%);color:var(--commit)"
+}
+
+func ledgerStatusBadgeStyle(status string) string {
+	base := "font-size:11px;font-weight:600;padding:2px 7px;border-radius:4px;white-space:nowrap;justify-self:center"
+	switch status {
+	case "pending_review":
+		return base + ";background:var(--accent);color:#fff"
+	case "active":
+		return base + ";background:color-mix(in srgb,var(--surface2) 70%,var(--income) 30%);color:var(--income)"
+	default:
+		return base + ";background:var(--surface2);color:var(--text3)"
+	}
+}
+
+func ledgerStatusLabel(status string) string {
+	switch status {
+	case "pending_review":
+		return "Review"
+	case "active":
+		return "Active"
+	default:
+		return "Inactive"
+	}
 }
 
 func ledgerConfBarFill(f *float64) string {

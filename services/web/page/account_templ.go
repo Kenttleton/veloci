@@ -9,7 +9,7 @@ import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
 import (
-	"fmt"
+	"encoding/json"
 
 	"github.com/veloci/veloci/store"
 )
@@ -47,7 +47,7 @@ func AccountPage(shell ShellData, data AccountData) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div style=\"display:flex;flex-direction:column;height:100%;overflow:hidden\"><div style=\"display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0;gap:12px\"><div style=\"display:flex;align-items:center;gap:10px;min-width:0\"><h1 style=\"margin:0;font-size:18px;font-weight:700;color:var(--text);letter-spacing:-0.02em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div style=\"display:flex;flex-direction:column;height:100%;overflow:hidden\"><div style=\"display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0\"><div style=\"display:flex;align-items:center;gap:12px\"><h1 style=\"margin:0;font-size:18px;font-weight:700;color:var(--text);letter-spacing:-0.02em\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -60,7 +60,7 @@ func AccountPage(shell ShellData, data AccountData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</h1><span style=\"font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);flex-shrink:0\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</h1><span style=\"font-size:11px;font-weight:500;padding:2px 8px;border-radius:4px;background:var(--surface2);color:var(--text2)\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -73,14 +73,14 @@ func AccountPage(shell ShellData, data AccountData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</span></div><div style=\"display:flex;align-items:center;gap:16px;flex-shrink:0\"><span style=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</span></div><span style=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var5 string
-			templ_7745c5c3_Var5, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-0.02em;" + accountBalanceColor(data.Account))
+			templ_7745c5c3_Var5, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;" + accountBalanceColor(data.Account))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/account.templ`, Line: 22, Col: 145}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/account.templ`, Line: 21, Col: 121}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 			if templ_7745c5c3_Err != nil {
@@ -93,38 +93,64 @@ func AccountPage(shell ShellData, data AccountData) templ.Component {
 			var templ_7745c5c3_Var6 string
 			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(FormatBalance(data.Account.BalanceCents))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/account.templ`, Line: 23, Col: 48}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/account.templ`, Line: 22, Col: 47}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</span><div style=\"display:flex;gap:6px\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</span></div><div style=\"display:flex;align-items:center;justify-content:space-between;padding:0 20px;height:36px;border-bottom:1px solid var(--border);flex-shrink:0\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if data.Account.InstitutionID != nil {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<button id=\"upload-csv-btn\" style=\"background:var(--accent);border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit\">Upload CSV</button> ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<button id=\"upload-csv-btn\" style=\"background:none;border:1px solid var(--border);border-radius:4px;padding:3px 10px;cursor:pointer;font-size:12px;color:var(--text2);font-family:inherit\">Upload CSV</button> ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<button disabled title=\"Set an institution for this account before uploading\" style=\"background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 14px;cursor:not-allowed;font-size:13px;color:var(--text3);font-family:inherit;opacity:0.6\">Upload CSV</button> ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<button disabled title=\"Set an institution for this account before uploading\" style=\"background:none;border:1px solid var(--border);border-radius:4px;padding:3px 10px;cursor:not-allowed;font-size:12px;color:var(--text3);font-family:inherit;opacity:0.6\">Upload CSV</button> ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<button id=\"delete-account-btn\" style=\"background:transparent;border:1px solid var(--border);border-radius:6px;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit\">Delete</button></div></div></div><div style=\"padding:8px 20px;border-bottom:1px solid var(--border);flex-shrink:0\"><input id=\"merchant-filter\" type=\"text\" placeholder=\"Filter by merchant…\" style=\"background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);outline:none;width:260px\"></div><div style=\"flex:1;overflow:auto\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<button id=\"delete-account-btn\" style=\"background:none;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:12px;color:var(--text3);font-family:inherit\">Delete Account</button></div><div style=\"padding:8px 20px;border-bottom:1px solid var(--border);flex-shrink:0\"><input id=\"merchant-filter\" type=\"text\" placeholder=\"Filter by merchant…\" style=\"background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);outline:none;width:260px\"></div><div id=\"tx-section\" data-account-id=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var7 string
+			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.Account.ID)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/account.templ`, Line: 53, Col: 37}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "\" data-next-cursor=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var8 string
+			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.NextCursor)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/account.templ`, Line: 54, Col: 38}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\" style=\"flex:1;overflow:auto\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if len(data.Transactions) == 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<div style=\"padding:48px 20px;text-align:center;color:var(--text3);font-size:13px\">No transactions yet. Upload a CSV to get started.</div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<div style=\"padding:48px 20px;text-align:center;color:var(--text3);font-size:13px\">No transactions yet. Upload a CSV to get started.</div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<table style=\"width:100%;border-collapse:collapse\"><thead><tr style=\"position:sticky;top:0;background:var(--surface);z-index:1;border-bottom:1px solid var(--border)\"><th style=\"padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);width:90px\">Date</th><th style=\"padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3)\">Merchant</th><th style=\"padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3)\">Raw Payee</th><th style=\"padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:var(--text3);width:100px\">Amount</th><th style=\"padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);width:80px\">Status</th></tr></thead> <tbody id=\"tx-tbody\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<table style=\"width:100%;border-collapse:collapse\"><thead><tr style=\"position:sticky;top:0;background:var(--surface);z-index:1;border-bottom:1px solid var(--border)\"><th style=\"padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);width:90px\">Date</th><th style=\"padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3)\">Merchant</th><th style=\"padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3)\">Raw Payee</th><th style=\"padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:var(--text3);width:100px\">Amount</th><th style=\"padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);width:80px\">Status</th></tr></thead> <tbody id=\"tx-tbody\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -134,93 +160,64 @@ func AccountPage(shell ShellData, data AccountData) templ.Component {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</tbody></table>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</tbody></table><div id=\"tx-sentinel\" style=\"height:1px\"></div><div id=\"tx-loading-more\" style=\"display:none;text-align:center;padding:12px;font-size:12px;color:var(--text3)\">Loading…</div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				if data.NextCursor != "" {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<div style=\"text-align:center;padding:16px\"><a href=\"")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					var templ_7745c5c3_Var7 templ.SafeURL
-					templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("?cursor=" + data.NextCursor))
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/account.templ`, Line: 78, Col: 58}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "\" style=\"display:inline-block;border:1px solid var(--border);border-radius:4px;padding:6px 16px;color:var(--text2);font-size:13px;text-decoration:none\">Load older</a></div>")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</div></div><dialog id=\"upload-csv-dialog\" data-account-id=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</div></div><dialog id=\"upload-csv-dialog\" data-account=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var8 string
-			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.Account.ID)
+			var templ_7745c5c3_Var9 string
+			templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.ResolveAttributeValue(uploadAccountJSON(data.Account))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/account.templ`, Line: 88, Col: 36}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/account.templ`, Line: 85, Col: 49}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "\" style=\"background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0;color:var(--text);width:440px;max-width:90vw\"><div style=\"padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between\"><span style=\"font-size:15px;font-weight:700\">Upload CSV</span> <button id=\"upload-dialog-close\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:18px;line-height:1;padding:0 4px\">✕</button></div><div style=\"padding:20px\">")
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var9)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			if data.Institution != nil {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<div style=\"display:flex;align-items:center;gap:8px;margin-bottom:16px;padding:8px 10px;background:var(--surface2);border-radius:6px;border:1px solid var(--border)\"><span style=\"font-size:12px;color:var(--text3)\">Institution</span> <span style=\"font-size:13px;color:var(--text);font-weight:500\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var9 string
-				templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(data.Institution.InstitutionName)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/account.templ`, Line: 102, Col: 103}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "</span></div>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<div style=\"display:flex;flex-direction:column;gap:10px\"><label style=\"display:block\"><span style=\"display:block;font-size:12px;color:var(--text3);margin-bottom:4px\">CSV file</span> <input id=\"csv-file-input\" type=\"file\" accept=\".csv,text/csv\" style=\"font-size:13px;color:var(--text);width:100%\"></label><div id=\"upload-error\" style=\"color:var(--commit);font-size:12px;display:none\"></div><button id=\"upload-submit-btn\" style=\"background:var(--accent);border:none;border-radius:6px;padding:8px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit;width:100%\">Upload</button></div></div></dialog> <dialog id=\"delete-account-dialog\" style=\"background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0;color:var(--text);width:380px;max-width:90vw\"><div style=\"padding:16px 20px;border-bottom:1px solid var(--border)\"><span style=\"font-size:15px;font-weight:700\">Delete account?</span></div><div style=\"padding:16px 20px;display:flex;flex-direction:column;gap:16px\"><p style=\"margin:0;font-size:13px;color:var(--text2)\">This will permanently delete <strong>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "\" data-institution=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var10 string
-			templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(data.Account.Name)
+			templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(uploadInstitutionJSON(data.Institution))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/account.templ`, Line: 132, Col: 61}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/account.templ`, Line: 86, Col: 61}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "</strong> and all associated transactions. This cannot be undone.</p><div style=\"display:flex;gap:8px;justify-content:flex-end\"><button id=\"delete-cancel-btn\" style=\"background:transparent;border:1px solid var(--border);border-radius:6px;padding:6px 16px;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit\">Cancel</button> <button id=\"delete-confirm-btn\" data-account-id=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "\" style=\"background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0;color:var(--text);width:560px;max-width:90vw\"><div style=\"padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between\"><span style=\"font-size:15px;font-weight:700\">Upload CSV</span> <button id=\"upload-dialog-close\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:18px;line-height:1;padding:0 4px\">✕</button></div><div style=\"padding:20px;overflow-y:auto;max-height:80vh\"><!-- Step 1: pick file --><div id=\"upload-step-1\"><div style=\"margin-bottom:12px\"><label style=\"display:block;font-size:12px;color:var(--text3);margin-bottom:4px\" for=\"csv-file-input\">CSV file</label> <input id=\"csv-file-input\" type=\"file\" accept=\".csv,text/csv\" style=\"font-size:13px;color:var(--text);width:100%;box-sizing:border-box\"></div><div id=\"upload-error-1\" style=\"color:var(--commit);font-size:12px;display:none\"></div></div><!-- Step 2: choose mode --><div id=\"upload-step-2\" style=\"display:none\"><div id=\"upload-file-info\" style=\"font-size:13px;color:var(--text2);margin-bottom:14px\"></div><div id=\"upload-mapping-preview\"></div><div id=\"upload-error-2\" style=\"color:var(--commit);font-size:12px;display:none;margin-top:12px\"></div><div style=\"display:flex;gap:8px;justify-content:flex-end;margin-top:16px\"><button id=\"upload-edit-mapping-btn\" style=\"background:none;border:1px solid var(--border);border-radius:4px;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit\">Edit mapping</button> <button id=\"upload-use-existing-btn\" style=\"background:var(--accent);border:none;border-radius:4px;padding:6px 14px;cursor:pointer;font-size:13px;font-weight:600;color:#fff;font-family:inherit;display:none\">Use existing mapping</button></div></div><!-- Step 3: edit mapping --><div id=\"upload-step-3\" style=\"display:none\"><div id=\"upload-shared-warning\" style=\"display:none;font-size:12px;color:var(--text2);margin-bottom:12px\"></div><div style=\"margin-bottom:10px\"><label style=\"display:block;font-size:12px;color:var(--text3);margin-bottom:4px\" for=\"upload-inst-name\">Institution name</label> <input id=\"upload-inst-name\" type=\"text\" placeholder=\"e.g. Chase\" style=\"width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:7px 10px;font-size:13px;color:var(--text);outline:none;font-family:inherit\"></div><details id=\"upload-advanced\" open><summary style=\"display:flex;align-items:center;gap:4px;cursor:pointer;list-style:none;-webkit-appearance:none;color:var(--text2);font-size:12px;padding:4px 0;margin-bottom:8px\"><span id=\"upload-adv-chevron\" style=\"display:inline-block;font-size:10px;transition:transform 0.1s\">▶</span> Column mapping</summary><div style=\"padding:12px;background:var(--surface2);border-radius:4px;border:1px solid var(--border);margin-bottom:8px\"><div style=\"display:flex;gap:8px;margin-bottom:10px\"><div style=\"flex:1\"><label style=\"display:block;font-size:12px;color:var(--text3);margin-bottom:4px\" for=\"upload-date-col\">Date column</label> <select id=\"upload-date-col\" style=\"width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:6px 8px;font-size:12px;color:var(--text);outline:none;font-family:inherit;cursor:pointer\"></select></div><div style=\"flex:1\"><label style=\"display:block;font-size:12px;color:var(--text3);margin-bottom:4px\" for=\"upload-amount-col\">Amount column</label> <select id=\"upload-amount-col\" style=\"width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:6px 8px;font-size:12px;color:var(--text);outline:none;font-family:inherit;cursor:pointer\"></select></div><div style=\"flex:1\"><label style=\"display:block;font-size:12px;color:var(--text3);margin-bottom:4px\" for=\"upload-merchant-col\">Merchant column</label> <select id=\"upload-merchant-col\" style=\"width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:6px 8px;font-size:12px;color:var(--text);outline:none;font-family:inherit;cursor:pointer\"></select></div></div><div style=\"display:flex;gap:8px;margin-bottom:10px\"><div style=\"flex:1\"><label style=\"display:block;font-size:12px;color:var(--text3);margin-bottom:4px\" for=\"upload-balance-col\">Balance col (optional)</label> <select id=\"upload-balance-col\" style=\"width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:6px 8px;font-size:12px;color:var(--text);outline:none;font-family:inherit;cursor:pointer\"></select></div><div style=\"flex:1\"><label style=\"display:block;font-size:12px;color:var(--text3);margin-bottom:4px\" for=\"upload-dc-col\">Debit/credit col (optional)</label> <select id=\"upload-dc-col\" style=\"width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:6px 8px;font-size:12px;color:var(--text);outline:none;font-family:inherit;cursor:pointer\"></select></div><div style=\"flex:1\"><label style=\"display:block;font-size:12px;color:var(--text3);margin-bottom:4px\" for=\"upload-id-col\">Imported ID col (optional)</label> <select id=\"upload-id-col\" style=\"width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:6px 8px;font-size:12px;color:var(--text);outline:none;font-family:inherit;cursor:pointer\"></select></div></div><div style=\"margin-bottom:10px\"><label style=\"display:block;font-size:12px;color:var(--text3);margin-bottom:4px\" for=\"upload-sign-conv\">Amount sign convention</label> <select id=\"upload-sign-conv\" style=\"width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:6px 8px;font-size:12px;color:var(--text);outline:none;font-family:inherit;cursor:pointer\"><option value=\"positive_is_credit\">Positive is credit</option> <option value=\"positive_is_debit\">Positive is debit</option></select></div><div style=\"display:flex;gap:12px;margin-bottom:10px\"><div style=\"flex:1\"><label style=\"display:block;font-size:12px;color:var(--text3);margin-bottom:4px\" for=\"upload-dedup-days\">Dedup window (days)</label> <input id=\"upload-dedup-days\" type=\"number\" value=\"3\" style=\"width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:6px 8px;font-size:12px;color:var(--text);outline:none;font-family:inherit\"></div><div style=\"flex:1\"><label style=\"display:block;font-size:12px;color:var(--text3);margin-bottom:4px\" for=\"upload-settle-days\">Settlement window (days)</label> <input id=\"upload-settle-days\" type=\"number\" value=\"14\" style=\"width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:6px 8px;font-size:12px;color:var(--text);outline:none;font-family:inherit\"></div></div><div><label style=\"display:block;font-size:12px;color:var(--text3);margin-bottom:4px\" for=\"upload-tolerance\">Amount tolerance (%)</label> <input id=\"upload-tolerance\" type=\"number\" step=\"0.1\" value=\"0.5\" style=\"width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:6px 8px;font-size:12px;color:var(--text);outline:none;font-family:inherit\"></div></div></details><div id=\"upload-preview-wrap\" style=\"display:none;margin-top:8px\"><div style=\"font-size:12px;color:var(--text3);margin-bottom:4px\">Preview</div><div style=\"overflow-x:auto;border:1px solid var(--border);border-radius:4px\"><table id=\"upload-preview-table\" style=\"border-collapse:collapse;width:100%;font-size:12px\"></table></div></div><div id=\"upload-error-3\" style=\"color:var(--commit);font-size:12px;display:none;margin-top:12px\"></div><div style=\"display:flex;gap:8px;justify-content:flex-end;margin-top:16px\"><button id=\"upload-back-btn\" style=\"background:none;border:1px solid var(--border);border-radius:4px;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit\">Back</button> <button id=\"upload-save-btn\" style=\"background:var(--accent);border:none;border-radius:4px;padding:6px 14px;cursor:pointer;font-size:13px;font-weight:600;color:#fff;font-family:inherit\">Save mapping &amp; upload</button></div></div></div></dialog> <dialog id=\"delete-account-dialog\" style=\"background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0;color:var(--text);width:380px;max-width:90vw\"><div style=\"padding:16px 20px;border-bottom:1px solid var(--border)\"><span style=\"font-size:15px;font-weight:700\">Delete account?</span></div><div style=\"padding:16px 20px;display:flex;flex-direction:column;gap:16px\"><p style=\"margin:0;font-size:13px;color:var(--text2)\">This will permanently delete <strong>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var11 string
-			templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.Account.ID)
+			templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(data.Account.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/account.templ`, Line: 141, Col: 39}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/account.templ`, Line: 224, Col: 61}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var11)
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "\" style=\"background:var(--commit);border:none;border-radius:6px;padding:6px 16px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit\">Delete</button></div></div></dialog><script>\n\t\t\t(function() {\n\t\t\t\tvar uploadBtn = document.getElementById('upload-csv-btn');\n\t\t\t\tvar uploadDialog = document.getElementById('upload-csv-dialog');\n\t\t\t\tvar uploadClose = document.getElementById('upload-dialog-close');\n\t\t\t\tvar uploadSubmit = document.getElementById('upload-submit-btn');\n\t\t\t\tvar uploadError = document.getElementById('upload-error');\n\t\t\t\tvar csvInput = document.getElementById('csv-file-input');\n\t\t\t\tvar accountId = (uploadDialog || {dataset:{}}).dataset.accountId;\n\n\t\t\t\tif (uploadBtn && uploadDialog) {\n\t\t\t\t\tuploadBtn.addEventListener('click', function() { uploadDialog.showModal(); });\n\t\t\t\t\tuploadClose.addEventListener('click', function() { uploadDialog.close(); });\n\t\t\t\t\tuploadDialog.addEventListener('click', function(e) {\n\t\t\t\t\t\tif (e.target === uploadDialog) uploadDialog.close();\n\t\t\t\t\t});\n\t\t\t\t\tuploadSubmit.addEventListener('click', function() {\n\t\t\t\t\t\tvar file = csvInput ? csvInput.files[0] : null;\n\t\t\t\t\t\tif (!file) {\n\t\t\t\t\t\t\tuploadError.textContent = 'Please choose a CSV file.';\n\t\t\t\t\t\t\tuploadError.style.display = '';\n\t\t\t\t\t\t\treturn;\n\t\t\t\t\t\t}\n\t\t\t\t\t\tuploadSubmit.disabled = true;\n\t\t\t\t\t\tuploadSubmit.textContent = 'Uploading…';\n\t\t\t\t\t\tuploadError.style.display = 'none';\n\t\t\t\t\t\tvar form = new FormData();\n\t\t\t\t\t\tform.append('csv', file);\n\t\t\t\t\t\tform.append('account_id', accountId);\n\t\t\t\t\t\tfetch('/imports', {method:'POST', body: form})\n\t\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\t\tif (!r.ok) return r.json().then(function(e){ throw new Error(e.detail||'Upload failed'); });\n\t\t\t\t\t\t\t\tuploadDialog.close();\n\t\t\t\t\t\t\t\tlocation.reload();\n\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t.catch(function(err) {\n\t\t\t\t\t\t\t\tuploadError.textContent = err.message || 'Upload failed.';\n\t\t\t\t\t\t\t\tuploadError.style.display = '';\n\t\t\t\t\t\t\t\tuploadSubmit.disabled = false;\n\t\t\t\t\t\t\t\tuploadSubmit.textContent = 'Upload';\n\t\t\t\t\t\t\t});\n\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\tvar deleteBtn = document.getElementById('delete-account-btn');\n\t\t\t\tvar deleteDialog = document.getElementById('delete-account-dialog');\n\t\t\t\tvar deleteCancelBtn = document.getElementById('delete-cancel-btn');\n\t\t\t\tvar deleteConfirmBtn = document.getElementById('delete-confirm-btn');\n\n\t\t\t\tif (deleteBtn && deleteDialog) {\n\t\t\t\t\tdeleteBtn.addEventListener('click', function() { deleteDialog.showModal(); });\n\t\t\t\t\tdeleteCancelBtn.addEventListener('click', function() { deleteDialog.close(); });\n\t\t\t\t\tdeleteDialog.addEventListener('click', function(e) {\n\t\t\t\t\t\tif (e.target === deleteDialog) deleteDialog.close();\n\t\t\t\t\t});\n\t\t\t\t\tdeleteConfirmBtn.addEventListener('click', function() {\n\t\t\t\t\t\tvar aid = deleteConfirmBtn.dataset.accountId;\n\t\t\t\t\t\tdeleteConfirmBtn.disabled = true;\n\t\t\t\t\t\tdeleteConfirmBtn.textContent = 'Deleting…';\n\t\t\t\t\t\tfetch('/accounts/' + aid, {method:'DELETE'})\n\t\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\t\tif (r.ok || r.status === 404) {\n\t\t\t\t\t\t\t\t\twindow.location.href = '/';\n\t\t\t\t\t\t\t\t} else {\n\t\t\t\t\t\t\t\t\tdeleteConfirmBtn.disabled = false;\n\t\t\t\t\t\t\t\t\tdeleteConfirmBtn.textContent = 'Delete';\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t});\n\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\t// Merchant filter\n\t\t\t\tvar merchantInput = document.getElementById('merchant-filter');\n\t\t\t\tvar txTbody = document.getElementById('tx-tbody');\n\t\t\t\tif (merchantInput && txTbody) {\n\t\t\t\t\tmerchantInput.addEventListener('input', function() {\n\t\t\t\t\t\tvar q = merchantInput.value.toLowerCase();\n\t\t\t\t\t\tvar rows = txTbody.querySelectorAll('tr');\n\t\t\t\t\t\trows.forEach(function(row) {\n\t\t\t\t\t\t\tvar merch = (row.dataset.merchant || '').toLowerCase();\n\t\t\t\t\t\t\trow.style.display = (!q || merch.includes(q)) ? '' : 'none';\n\t\t\t\t\t\t});\n\t\t\t\t\t});\n\t\t\t\t}\n\t\t\t})();\n\t\t</script>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "</strong> and all associated transactions. This cannot be undone.</p><div style=\"display:flex;gap:8px;justify-content:flex-end\"><button id=\"delete-cancel-btn\" style=\"background:transparent;border:1px solid var(--border);border-radius:6px;padding:6px 16px;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit\">Cancel</button> <button id=\"delete-confirm-btn\" data-account-id=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var12 string
+			templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.Account.ID)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/account.templ`, Line: 233, Col: 39}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var12)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "\" style=\"background:var(--commit);border:none;border-radius:6px;padding:6px 16px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit\">Delete</button></div></div></dialog><script>\n\t\t\t(function() {\n\t\t\t\t// ─── CSV parser ───────────────────────────────────────────────────────────\n\t\t\t\tfunction parseCsvLine(line) {\n\t\t\t\t\tvar result = [], inQ = false, field = '';\n\t\t\t\t\tfor (var i = 0; i < line.length; i++) {\n\t\t\t\t\t\tvar c = line[i];\n\t\t\t\t\t\tif (inQ) {\n\t\t\t\t\t\t\tif (c === '\"' && line[i+1] === '\"') { field += '\"'; i++; }\n\t\t\t\t\t\t\telse if (c === '\"') { inQ = false; }\n\t\t\t\t\t\t\telse { field += c; }\n\t\t\t\t\t\t} else {\n\t\t\t\t\t\t\tif (c === '\"') { inQ = true; }\n\t\t\t\t\t\t\telse if (c === ',') { result.push(field); field = ''; }\n\t\t\t\t\t\t\telse { field += c; }\n\t\t\t\t\t\t}\n\t\t\t\t\t}\n\t\t\t\t\tresult.push(field);\n\t\t\t\t\treturn result;\n\t\t\t\t}\n\t\t\t\tfunction parseCsv(text) {\n\t\t\t\t\tvar lines = text.split(/\\r?\\n/).filter(function(l) { return l.trim(); });\n\t\t\t\t\tif (!lines.length) return { headers: [], rows: [] };\n\t\t\t\t\tvar headers = parseCsvLine(lines[0]);\n\t\t\t\t\tvar rows = [];\n\t\t\t\t\tfor (var i = 1; i < Math.min(6, lines.length); i++) {\n\t\t\t\t\t\tvar vals = parseCsvLine(lines[i]);\n\t\t\t\t\t\tvar row = {};\n\t\t\t\t\t\theaders.forEach(function(h, idx) { row[h] = vals[idx] !== undefined ? vals[idx] : ''; });\n\t\t\t\t\t\trows.push(row);\n\t\t\t\t\t}\n\t\t\t\t\treturn { headers: headers, rows: rows };\n\t\t\t\t}\n\n\t\t\t\t// ─── DOM refs ─────────────────────────────────────────────────────────────\n\t\t\t\tvar uploadBtn    = document.getElementById('upload-csv-btn');\n\t\t\t\tvar uploadDialog = document.getElementById('upload-csv-dialog');\n\t\t\t\tvar uploadClose  = document.getElementById('upload-dialog-close');\n\t\t\t\tvar csvInput     = document.getElementById('csv-file-input');\n\n\t\t\t\tvar step1 = document.getElementById('upload-step-1');\n\t\t\t\tvar step2 = document.getElementById('upload-step-2');\n\t\t\t\tvar step3 = document.getElementById('upload-step-3');\n\t\t\t\tvar err1  = document.getElementById('upload-error-1');\n\t\t\t\tvar err2  = document.getElementById('upload-error-2');\n\t\t\t\tvar err3  = document.getElementById('upload-error-3');\n\n\t\t\t\tvar fileInfoEl       = document.getElementById('upload-file-info');\n\t\t\t\tvar mappingPreviewEl = document.getElementById('upload-mapping-preview');\n\t\t\t\tvar editMappingBtn   = document.getElementById('upload-edit-mapping-btn');\n\t\t\t\tvar useExistingBtn   = document.getElementById('upload-use-existing-btn');\n\n\t\t\t\tvar sharedWarningEl  = document.getElementById('upload-shared-warning');\n\t\t\t\tvar instNameInput    = document.getElementById('upload-inst-name');\n\t\t\t\tvar advDetails       = document.getElementById('upload-advanced');\n\t\t\t\tvar advChevron       = document.getElementById('upload-adv-chevron');\n\t\t\t\tvar dateColSel       = document.getElementById('upload-date-col');\n\t\t\t\tvar amountColSel     = document.getElementById('upload-amount-col');\n\t\t\t\tvar merchantColSel   = document.getElementById('upload-merchant-col');\n\t\t\t\tvar balanceColSel    = document.getElementById('upload-balance-col');\n\t\t\t\tvar dcColSel         = document.getElementById('upload-dc-col');\n\t\t\t\tvar idColSel         = document.getElementById('upload-id-col');\n\t\t\t\tvar signConvSel      = document.getElementById('upload-sign-conv');\n\t\t\t\tvar dedupInput       = document.getElementById('upload-dedup-days');\n\t\t\t\tvar settleInput      = document.getElementById('upload-settle-days');\n\t\t\t\tvar toleranceInput   = document.getElementById('upload-tolerance');\n\t\t\t\tvar previewWrap      = document.getElementById('upload-preview-wrap');\n\t\t\t\tvar previewTable     = document.getElementById('upload-preview-table');\n\t\t\t\tvar backBtn          = document.getElementById('upload-back-btn');\n\t\t\t\tvar saveBtn          = document.getElementById('upload-save-btn');\n\n\t\t\t\t// Page data embedded from Go\n\t\t\t\tvar account     = JSON.parse(uploadDialog.dataset.account || 'null');\n\t\t\t\tvar institution = JSON.parse(uploadDialog.dataset.institution || 'null');\n\n\t\t\t\tvar parsedCsv = null;\n\n\t\t\t\tadvDetails.addEventListener('toggle', function() {\n\t\t\t\t\tadvChevron.style.transform = advDetails.open ? 'rotate(90deg)' : '';\n\t\t\t\t});\n\n\t\t\t\t// ─── Step helpers ─────────────────────────────────────────────────────────\n\t\t\t\tfunction showStep(n) {\n\t\t\t\t\tstep1.style.display = n === 1 ? '' : 'none';\n\t\t\t\t\tstep2.style.display = n === 2 ? '' : 'none';\n\t\t\t\t\tstep3.style.display = n === 3 ? '' : 'none';\n\t\t\t\t\t[err1, err2, err3].forEach(function(e) { e.style.display = 'none'; e.textContent = ''; });\n\t\t\t\t}\n\n\t\t\t\tfunction showError(n, msg) {\n\t\t\t\t\tvar el = n === 1 ? err1 : n === 2 ? err2 : err3;\n\t\t\t\t\tel.textContent = msg;\n\t\t\t\t\tel.style.display = '';\n\t\t\t\t}\n\n\t\t\t\t// ─── Mapping preview (read-only rows) ────────────────────────────────────\n\t\t\t\tfunction renderMappingPreview(inst) {\n\t\t\t\t\tfunction row(label, value) {\n\t\t\t\t\t\treturn '<div style=\"display:flex;justify-content:space-between;padding:4px 0;font-size:12px\">'\n\t\t\t\t\t\t\t+ '<span style=\"color:var(--text3)\">' + label + '</span>'\n\t\t\t\t\t\t\t+ '<span style=\"color:var(--text);font-weight:500\">' + value + '</span></div>';\n\t\t\t\t\t}\n\t\t\t\t\tvar html = '';\n\t\t\t\t\thtml += row('Date column', inst.date_col);\n\t\t\t\t\thtml += row('Amount column', inst.amount_col);\n\t\t\t\t\thtml += row('Merchant column', inst.merchant_col);\n\t\t\t\t\tif (inst.balance_col)      html += row('Balance column', inst.balance_col);\n\t\t\t\t\tif (inst.debit_credit_col) html += row('Debit/credit column', inst.debit_credit_col);\n\t\t\t\t\tif (inst.imported_id_col)  html += row('Imported ID column', inst.imported_id_col);\n\t\t\t\t\thtml += row('Sign convention', inst.amount_sign_convention === 'positive_is_credit' ? 'Positive is credit' : 'Positive is debit');\n\t\t\t\t\thtml += row('Dedup window', inst.dedup_window_days + ' days');\n\t\t\t\t\thtml += row('Settlement window', inst.settlement_window_days + ' days');\n\t\t\t\t\thtml += row('Amount tolerance', inst.amount_tolerance_pct + '%');\n\t\t\t\t\treturn '<div style=\"padding:12px;background:var(--surface2);border-radius:4px;border:1px solid var(--border)\">' + html + '</div>';\n\t\t\t\t}\n\n\t\t\t\t// ─── Column select helpers ────────────────────────────────────────────────\n\t\t\t\tfunction populateColSelect(sel, headers, currentVal, required) {\n\t\t\t\t\tsel.innerHTML = '';\n\t\t\t\t\tvar none = document.createElement('option');\n\t\t\t\t\tnone.value = '';\n\t\t\t\t\tnone.textContent = required ? 'Select a column' : 'None';\n\t\t\t\t\tsel.appendChild(none);\n\t\t\t\t\theaders.forEach(function(h) {\n\t\t\t\t\t\tvar opt = document.createElement('option');\n\t\t\t\t\t\topt.value = h;\n\t\t\t\t\t\topt.textContent = h;\n\t\t\t\t\t\tif (h === currentVal) opt.selected = true;\n\t\t\t\t\t\tsel.appendChild(opt);\n\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\tfunction populateAllColSelects(headers, inst) {\n\t\t\t\t\tvar i = inst || {};\n\t\t\t\t\tpopulateColSelect(dateColSel,     headers, i.date_col       || 'date',        true);\n\t\t\t\t\tpopulateColSelect(amountColSel,   headers, i.amount_col     || 'amount',      true);\n\t\t\t\t\tpopulateColSelect(merchantColSel, headers, i.merchant_col   || 'description', true);\n\t\t\t\t\tpopulateColSelect(balanceColSel,  headers, i.balance_col    || '',            false);\n\t\t\t\t\tpopulateColSelect(dcColSel,       headers, i.debit_credit_col || '',          false);\n\t\t\t\t\tpopulateColSelect(idColSel,       headers, i.imported_id_col  || '',          false);\n\t\t\t\t\tsignConvSel.value   = i.amount_sign_convention  || 'positive_is_credit';\n\t\t\t\t\tdedupInput.value    = i.dedup_window_days    != null ? String(i.dedup_window_days)    : '3';\n\t\t\t\t\tsettleInput.value   = i.settlement_window_days != null ? String(i.settlement_window_days) : '14';\n\t\t\t\t\ttoleranceInput.value = i.amount_tolerance_pct != null ? String(i.amount_tolerance_pct)  : '0.5';\n\t\t\t\t}\n\n\t\t\t\t// ─── Preview table ────────────────────────────────────────────────────────\n\t\t\t\tfunction refreshPreview() {\n\t\t\t\t\tif (!parsedCsv || !parsedCsv.rows.length) { previewWrap.style.display = 'none'; return; }\n\t\t\t\t\tvar cols = [\n\t\t\t\t\t\t{ label: 'Date',         col: dateColSel.value },\n\t\t\t\t\t\t{ label: 'Amount',       col: amountColSel.value },\n\t\t\t\t\t\t{ label: 'Merchant',     col: merchantColSel.value },\n\t\t\t\t\t\t{ label: 'Balance',      col: balanceColSel.value },\n\t\t\t\t\t\t{ label: 'Debit/Credit', col: dcColSel.value },\n\t\t\t\t\t\t{ label: 'ID',           col: idColSel.value },\n\t\t\t\t\t].filter(function(c) { return c.col; });\n\t\t\t\t\tif (!cols.length) { previewWrap.style.display = 'none'; return; }\n\n\t\t\t\t\tvar thead = '<thead><tr>' + cols.map(function(c) {\n\t\t\t\t\t\treturn '<th style=\"text-align:left;padding:4px 8px;border-bottom:1px solid var(--border)\">'\n\t\t\t\t\t\t\t+ '<div style=\"color:var(--text);font-weight:600\">' + c.label + '</div>'\n\t\t\t\t\t\t\t+ '<div style=\"color:var(--text3);font-weight:400;font-size:10px\">' + c.col + '</div></th>';\n\t\t\t\t\t}).join('') + '</tr></thead>';\n\n\t\t\t\t\tvar tbody = '<tbody>' + parsedCsv.rows.map(function(row) {\n\t\t\t\t\t\treturn '<tr>' + cols.map(function(c) {\n\t\t\t\t\t\t\tvar val = row[c.col];\n\t\t\t\t\t\t\treturn '<td style=\"padding:4px 8px;color:var(--text2);border-bottom:1px solid var(--border)\">'\n\t\t\t\t\t\t\t\t+ (val !== undefined && val !== '' ? val : '<span style=\"color:var(--text3);font-style:italic\">—</span>')\n\t\t\t\t\t\t\t\t+ '</td>';\n\t\t\t\t\t\t}).join('') + '</tr>';\n\t\t\t\t\t}).join('') + '</tbody>';\n\n\t\t\t\t\tpreviewTable.innerHTML = thead + tbody;\n\t\t\t\t\tpreviewWrap.style.display = '';\n\t\t\t\t}\n\n\t\t\t\t[dateColSel, amountColSel, merchantColSel, balanceColSel, dcColSel, idColSel].forEach(function(sel) {\n\t\t\t\t\tsel.addEventListener('change', refreshPreview);\n\t\t\t\t});\n\n\t\t\t\t// ─── Step 2: choose mode ──────────────────────────────────────────────────\n\t\t\t\tfunction goToStep2(csv) {\n\t\t\t\t\tparsedCsv = csv;\n\t\t\t\t\tfileInfoEl.textContent = csv.file.name + ' — ' + csv.headers.length + ' columns detected';\n\t\t\t\t\tif (institution) {\n\t\t\t\t\t\tmappingPreviewEl.innerHTML = '<div style=\"font-size:12px;color:var(--text3);margin-bottom:8px\">Current mapping for '\n\t\t\t\t\t\t\t+ institution.institution_name + ':</div>' + renderMappingPreview(institution);\n\t\t\t\t\t\tuseExistingBtn.style.display = '';\n\t\t\t\t\t} else {\n\t\t\t\t\t\tmappingPreviewEl.innerHTML = '<div style=\"font-size:12px;color:var(--text3);margin-bottom:8px\">'\n\t\t\t\t\t\t\t+ 'This account has no mapping yet — choose \"Edit mapping\" to set one up.</div>';\n\t\t\t\t\t\tuseExistingBtn.style.display = 'none';\n\t\t\t\t\t}\n\t\t\t\t\tshowStep(2);\n\t\t\t\t}\n\n\t\t\t\t// ─── Step 3: edit mapping ─────────────────────────────────────────────────\n\t\t\t\tfunction goToStep3() {\n\t\t\t\t\tinstNameInput.value = institution ? institution.institution_name : (account ? account.name : '');\n\t\t\t\t\tpopulateAllColSelects(parsedCsv.headers, institution);\n\t\t\t\t\tif (!advDetails.open) advDetails.setAttribute('open', '');\n\t\t\t\t\tadvChevron.style.transform = 'rotate(90deg)';\n\n\t\t\t\t\t// Shared accounts warning\n\t\t\t\t\tif (institution) {\n\t\t\t\t\t\tfetch('/api/accounts?limit=200')\n\t\t\t\t\t\t\t.then(function(r) { return r.json(); })\n\t\t\t\t\t\t\t.then(function(body) {\n\t\t\t\t\t\t\t\tvar all = (body && body.data && body.data.data) || [];\n\t\t\t\t\t\t\t\tvar shared = all.filter(function(a) { return a.id !== account.id && a.institution_id === institution.id; });\n\t\t\t\t\t\t\t\tif (shared.length) {\n\t\t\t\t\t\t\t\t\tvar names = shared.map(function(a) { return a.name; }).join(', ');\n\t\t\t\t\t\t\t\t\tvar count = shared.length === 1 ? '1 other account' : shared.length + ' other accounts';\n\t\t\t\t\t\t\t\t\tsharedWarningEl.textContent = 'This mapping is shared with ' + count + ' at '\n\t\t\t\t\t\t\t\t\t\t+ institution.institution_name + ' (' + names + '). '\n\t\t\t\t\t\t\t\t\t\t+ 'Keeping the same name updates it for all of them; changing the name creates a separate mapping just for this account.';\n\t\t\t\t\t\t\t\t\tsharedWarningEl.style.display = '';\n\t\t\t\t\t\t\t\t} else {\n\t\t\t\t\t\t\t\t\tsharedWarningEl.style.display = 'none';\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t.catch(function() { sharedWarningEl.style.display = 'none'; });\n\t\t\t\t\t} else {\n\t\t\t\t\t\tsharedWarningEl.style.display = 'none';\n\t\t\t\t\t}\n\n\t\t\t\t\trefreshPreview();\n\t\t\t\t\tshowStep(3);\n\t\t\t\t}\n\n\t\t\t\t// ─── File pick ────────────────────────────────────────────────────────────\n\t\t\t\tcsvInput.addEventListener('change', function() {\n\t\t\t\t\tvar file = csvInput.files[0];\n\t\t\t\t\tif (!file) return;\n\t\t\t\t\terr1.style.display = 'none';\n\t\t\t\t\tvar reader = new FileReader();\n\t\t\t\t\treader.onload = function(e) {\n\t\t\t\t\t\tvar result = parseCsv(e.target.result);\n\t\t\t\t\t\tresult.file = file;\n\t\t\t\t\t\tgoToStep2(result);\n\t\t\t\t\t};\n\t\t\t\t\treader.onerror = function() { showError(1, 'Could not read that file as CSV.'); };\n\t\t\t\t\treader.readAsText(file);\n\t\t\t\t});\n\n\t\t\t\teditMappingBtn.addEventListener('click', goToStep3);\n\t\t\t\tbackBtn.addEventListener('click', function() { showStep(2); });\n\n\t\t\t\t// ─── Upload helpers ───────────────────────────────────────────────────────\n\t\t\t\tfunction doUpload(file) {\n\t\t\t\t\tvar form = new FormData();\n\t\t\t\t\tform.append('csv', file);\n\t\t\t\t\tform.append('account_id', account.id);\n\t\t\t\t\treturn fetch('/api/imports', { method: 'POST', body: form }).then(function(r) {\n\t\t\t\t\t\tif (!r.ok) return r.json().then(function(e) { throw new Error(e.detail || 'Upload failed'); });\n\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\t// ─── Use existing mapping ────────────────────────────────────────────────\n\t\t\t\tuseExistingBtn.addEventListener('click', function() {\n\t\t\t\t\tuseExistingBtn.disabled = true;\n\t\t\t\t\tuseExistingBtn.textContent = 'Uploading…';\n\t\t\t\t\terr2.style.display = 'none';\n\t\t\t\t\tdoUpload(parsedCsv.file)\n\t\t\t\t\t\t.then(function() { uploadDialog.close(); })\n\t\t\t\t\t\t.catch(function(err) {\n\t\t\t\t\t\t\tshowError(2, err.message || 'Something went wrong uploading the file. Please try again.');\n\t\t\t\t\t\t\tuseExistingBtn.disabled = false;\n\t\t\t\t\t\t\tuseExistingBtn.textContent = 'Use existing mapping';\n\t\t\t\t\t\t});\n\t\t\t\t});\n\n\t\t\t\t// ─── Save mapping & upload ────────────────────────────────────────────────\n\t\t\t\tsaveBtn.addEventListener('click', function() {\n\t\t\t\t\tvar instName = instNameInput.value.trim();\n\t\t\t\t\tif (!instName) { showError(3, 'Institution name is required.'); return; }\n\n\t\t\t\t\tsaveBtn.disabled = true;\n\t\t\t\t\tbackBtn.disabled = true;\n\t\t\t\t\tsaveBtn.textContent = 'Saving…';\n\t\t\t\t\terr3.style.display = 'none';\n\n\t\t\t\t\tvar mappingBody = {\n\t\t\t\t\t\tinstitution_name:       instName,\n\t\t\t\t\t\tsource_type:            'csv',\n\t\t\t\t\t\tdate_col:               dateColSel.value     || 'date',\n\t\t\t\t\t\tamount_col:             amountColSel.value   || 'amount',\n\t\t\t\t\t\tmerchant_col:           merchantColSel.value || 'description',\n\t\t\t\t\t\tbalance_col:            balanceColSel.value  || null,\n\t\t\t\t\t\tdebit_credit_col:       dcColSel.value       || null,\n\t\t\t\t\t\timported_id_col:        idColSel.value       || null,\n\t\t\t\t\t\tamount_sign_convention: signConvSel.value,\n\t\t\t\t\t\tdedup_window_days:      parseInt(dedupInput.value)     || 3,\n\t\t\t\t\t\tsettlement_window_days: parseInt(settleInput.value)    || 14,\n\t\t\t\t\t\tamount_tolerance_pct:   parseFloat(toleranceInput.value) || 0.5,\n\t\t\t\t\t};\n\n\t\t\t\t\t// Fork-or-update: same name as current institution → PUT, otherwise → POST\n\t\t\t\t\tvar isUpdate = institution && institution.institution_name === instName;\n\t\t\t\t\tvar instPromise = isUpdate\n\t\t\t\t\t\t? fetch('/api/institutions/' + institution.id, {\n\t\t\t\t\t\t\tmethod: 'PUT',\n\t\t\t\t\t\t\theaders: {'Content-Type': 'application/json'},\n\t\t\t\t\t\t\tbody: JSON.stringify(mappingBody),\n\t\t\t\t\t\t  })\n\t\t\t\t\t\t: fetch('/api/institutions', {\n\t\t\t\t\t\t\tmethod: 'POST',\n\t\t\t\t\t\t\theaders: {'Content-Type': 'application/json'},\n\t\t\t\t\t\t\tbody: JSON.stringify(mappingBody),\n\t\t\t\t\t\t  });\n\n\t\t\t\t\tinstPromise\n\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\tif (!r.ok) return r.json().then(function(e) { throw new Error(e.detail || e.title || 'Failed to save institution'); });\n\t\t\t\t\t\t\treturn r.json();\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.then(function(body) {\n\t\t\t\t\t\t\tvar newInstId = body.data.id;\n\t\t\t\t\t\t\t// If forked (new institution), relink account\n\t\t\t\t\t\t\tif (!isUpdate && account) {\n\t\t\t\t\t\t\t\treturn fetch('/api/accounts/' + account.id, {\n\t\t\t\t\t\t\t\t\tmethod: 'PUT',\n\t\t\t\t\t\t\t\t\theaders: {'Content-Type': 'application/json'},\n\t\t\t\t\t\t\t\t\tbody: JSON.stringify({\n\t\t\t\t\t\t\t\t\t\tname:               account.name,\n\t\t\t\t\t\t\t\t\t\taccount_type:       account.account_type,\n\t\t\t\t\t\t\t\t\t\tstatus:             account.status,\n\t\t\t\t\t\t\t\t\t\tinterest_rate:      account.interest_rate,\n\t\t\t\t\t\t\t\t\t\tbalance_cents:      account.balance_cents,\n\t\t\t\t\t\t\t\t\t\tcredit_limit_cents: account.credit_limit_cents,\n\t\t\t\t\t\t\t\t\t\tinstitution_id:     newInstId,\n\t\t\t\t\t\t\t\t\t}),\n\t\t\t\t\t\t\t\t}).then(function(r) {\n\t\t\t\t\t\t\t\t\tif (!r.ok) return r.json().then(function(e) { throw new Error(e.detail || 'Failed to update account'); });\n\t\t\t\t\t\t\t\t});\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.then(function() { return doUpload(parsedCsv.file); })\n\t\t\t\t\t\t.then(function() { uploadDialog.close(); resetUpload(); })\n\t\t\t\t\t\t.catch(function(err) {\n\t\t\t\t\t\t\tshowError(3, err.message || 'Something went wrong saving the mapping. Please try again.');\n\t\t\t\t\t\t\tsaveBtn.disabled = false;\n\t\t\t\t\t\t\tbackBtn.disabled = false;\n\t\t\t\t\t\t\tsaveBtn.textContent = 'Save mapping & upload';\n\t\t\t\t\t\t});\n\t\t\t\t});\n\n\t\t\t\t// ─── Dialog open/close ────────────────────────────────────────────────────\n\t\t\t\tfunction resetUpload() {\n\t\t\t\t\tcsvInput.value = '';\n\t\t\t\t\tparsedCsv = null;\n\t\t\t\t\tshowStep(1);\n\t\t\t\t\tuseExistingBtn.disabled = false;\n\t\t\t\t\tuseExistingBtn.textContent = 'Use existing mapping';\n\t\t\t\t\tsaveBtn.disabled = false;\n\t\t\t\t\tsaveBtn.textContent = 'Save mapping & upload';\n\t\t\t\t\tbackBtn.disabled = false;\n\t\t\t\t}\n\n\t\t\t\tif (uploadBtn) {\n\t\t\t\t\tuploadBtn.addEventListener('click', function() { resetUpload(); uploadDialog.showModal(); });\n\t\t\t\t}\n\t\t\t\tuploadClose.addEventListener('click', function() { uploadDialog.close(); });\n\t\t\t\tuploadDialog.addEventListener('click', function(e) { if (e.target === uploadDialog) uploadDialog.close(); });\n\n\t\t\t\t// ─── Delete dialog ────────────────────────────────────────────────────────\n\t\t\t\tvar deleteBtn       = document.getElementById('delete-account-btn');\n\t\t\t\tvar deleteDialog    = document.getElementById('delete-account-dialog');\n\t\t\t\tvar deleteCancelBtn = document.getElementById('delete-cancel-btn');\n\t\t\t\tvar deleteConfirmBtn = document.getElementById('delete-confirm-btn');\n\n\t\t\t\tif (deleteBtn && deleteDialog) {\n\t\t\t\t\tdeleteBtn.addEventListener('click', function() { deleteDialog.showModal(); });\n\t\t\t\t\tdeleteCancelBtn.addEventListener('click', function() { deleteDialog.close(); });\n\t\t\t\t\tdeleteDialog.addEventListener('click', function(e) { if (e.target === deleteDialog) deleteDialog.close(); });\n\t\t\t\t\tdeleteConfirmBtn.addEventListener('click', function() {\n\t\t\t\t\t\tvar aid = deleteConfirmBtn.dataset.accountId;\n\t\t\t\t\t\tdeleteConfirmBtn.disabled = true;\n\t\t\t\t\t\tdeleteConfirmBtn.textContent = 'Deleting…';\n\t\t\t\t\t\tfetch('/api/accounts/' + aid, {method:'DELETE'})\n\t\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\t\tif (r.ok || r.status === 404) { window.location.href = '/'; }\n\t\t\t\t\t\t\t\telse { deleteConfirmBtn.disabled = false; deleteConfirmBtn.textContent = 'Delete'; }\n\t\t\t\t\t\t\t});\n\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\t// ─── Merchant filter ─────────────────────────────────────────────────────\n\t\t\t\tvar merchantInput = document.getElementById('merchant-filter');\n\t\t\t\tif (merchantInput) {\n\t\t\t\t\tmerchantInput.addEventListener('input', function() {\n\t\t\t\t\t\tvar tbody = document.getElementById('tx-tbody');\n\t\t\t\t\t\tif (!tbody) return;\n\t\t\t\t\t\tvar q = merchantInput.value.toLowerCase();\n\t\t\t\t\t\ttbody.querySelectorAll('tr').forEach(function(row) {\n\t\t\t\t\t\t\tvar merch = (row.dataset.merchant || '').toLowerCase();\n\t\t\t\t\t\t\trow.style.display = (!q || merch.indexOf(q) !== -1) ? '' : 'none';\n\t\t\t\t\t\t});\n\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\t// ─── Infinite scroll ──────────────────────────────────────────────────\n\t\t\t\t(function() {\n\t\t\t\t\tvar section   = document.getElementById('tx-section');\n\t\t\t\t\tvar sentinel  = document.getElementById('tx-sentinel');\n\t\t\t\t\tvar tbody     = document.getElementById('tx-tbody');\n\t\t\t\t\tvar loadingEl = document.getElementById('tx-loading-more');\n\t\t\t\t\tif (!section || !sentinel || !tbody) return;\n\n\t\t\t\t\tvar accountId  = section.dataset.accountId;\n\t\t\t\t\tvar nextCursor = section.dataset.nextCursor || null;\n\t\t\t\t\tvar loading    = false;\n\t\t\t\t\tvar LIMIT      = 100;\n\n\t\t\t\t\tvar MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];\n\t\t\t\t\tfunction fmtDate(iso) {\n\t\t\t\t\t\tvar p = iso.split('-');\n\t\t\t\t\t\treturn MONTHS[parseInt(p[1],10)-1] + ' ' + parseInt(p[2],10) + ', ' + p[0];\n\t\t\t\t\t}\n\t\t\t\t\tfunction fmtCents(c) {\n\t\t\t\t\t\tvar neg = c < 0, abs = Math.abs(c);\n\t\t\t\t\t\treturn (neg?'-$':'$') + Math.floor(abs/100).toLocaleString('en-US') + '.' + String(abs%100).padStart(2,'0');\n\t\t\t\t\t}\n\t\t\t\t\tfunction esc(s) {\n\t\t\t\t\t\treturn String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;');\n\t\t\t\t\t}\n\n\t\t\t\t\tfunction makeRow(t) {\n\t\t\t\t\t\tvar tr = document.createElement('tr');\n\t\t\t\t\t\ttr.dataset.merchant = t.merchant_normalized || '';\n\t\t\t\t\t\ttr.style.borderBottom = '1px solid var(--border)';\n\t\t\t\t\t\tvar amtColor = t.amount_cents >= 0 ? 'var(--income)' : 'var(--commit)';\n\t\t\t\t\t\tvar stBg = t.settlement_status === 'settled'\n\t\t\t\t\t\t\t? 'color-mix(in srgb,var(--surface2) 80%,var(--income) 20%)' : 'var(--surface2)';\n\t\t\t\t\t\tvar stColor = t.settlement_status === 'settled' ? 'var(--income)' : 'var(--text3)';\n\t\t\t\t\t\tvar merch = t.merchant_normalized\n\t\t\t\t\t\t\t? esc(t.merchant_normalized)\n\t\t\t\t\t\t\t: '<span style=\"color:var(--text3)\">—</span>';\n\t\t\t\t\t\ttr.innerHTML =\n\t\t\t\t\t\t\t'<td style=\"padding:8px 12px;font-size:13px;color:var(--text2);white-space:nowrap\">'+esc(fmtDate(t.date))+'</td>'\n\t\t\t\t\t\t\t+'<td style=\"padding:8px 12px;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:0\">'+merch+'</td>'\n\t\t\t\t\t\t\t+'<td style=\"padding:8px 12px;font-size:12px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:0\">'+esc(t.imported_payee||'')+'</td>'\n\t\t\t\t\t\t\t+'<td style=\"padding:8px 12px;text-align:right\"><span style=\"color:'+amtColor+';font-variant-numeric:tabular-nums\">'+esc(fmtCents(t.amount_cents))+'</span></td>'\n\t\t\t\t\t\t\t+'<td style=\"padding:8px 12px\"><span style=\"font-size:11px;padding:2px 6px;border-radius:4px;background:'+stBg+';color:'+stColor+'\">'+esc(t.settlement_status)+'</span></td>';\n\t\t\t\t\t\treturn tr;\n\t\t\t\t\t}\n\n\t\t\t\t\tfunction loadMore() {\n\t\t\t\t\t\tif (loading || !nextCursor) return;\n\t\t\t\t\t\tloading = true;\n\t\t\t\t\t\tif (loadingEl) loadingEl.style.display = '';\n\t\t\t\t\t\tfetch('/api/transactions?account_id='+encodeURIComponent(accountId)+'&cursor='+encodeURIComponent(nextCursor)+'&limit='+LIMIT)\n\t\t\t\t\t\t\t.then(function(r) { return r.json(); })\n\t\t\t\t\t\t\t.then(function(body) {\n\t\t\t\t\t\t\t\t(body.data || []).forEach(function(t) { tbody.appendChild(makeRow(t)); });\n\t\t\t\t\t\t\t\tnextCursor = (body.meta && body.meta.next_cursor) || null;\n\t\t\t\t\t\t\t\tloading = false;\n\t\t\t\t\t\t\t\tif (loadingEl) loadingEl.style.display = 'none';\n\t\t\t\t\t\t\t\tif (!nextCursor) observer.disconnect();\n\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t.catch(function() {\n\t\t\t\t\t\t\t\tloading = false;\n\t\t\t\t\t\t\t\tif (loadingEl) loadingEl.style.display = 'none';\n\t\t\t\t\t\t\t});\n\t\t\t\t\t}\n\n\t\t\t\t\t// SSE refresh: re-fetch first page and replace tbody\n\t\t\t\t\twindow.__velociTxRefresh = function() {\n\t\t\t\t\t\tfetch('/api/transactions?account_id='+encodeURIComponent(accountId)+'&limit=200')\n\t\t\t\t\t\t\t.then(function(r) { return r.json(); })\n\t\t\t\t\t\t\t.then(function(body) {\n\t\t\t\t\t\t\t\ttbody.innerHTML = '';\n\t\t\t\t\t\t\t\t(body.data || []).forEach(function(t) { tbody.appendChild(makeRow(t)); });\n\t\t\t\t\t\t\t\tnextCursor = (body.meta && body.meta.next_cursor) || null;\n\t\t\t\t\t\t\t\tif (nextCursor) observer.observe(sentinel);\n\t\t\t\t\t\t\t\telse observer.disconnect();\n\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t.catch(function() {});\n\t\t\t\t\t};\n\n\t\t\t\t\tif (!nextCursor) return;\n\n\t\t\t\t\tvar observer = new IntersectionObserver(function(entries) {\n\t\t\t\t\t\tif (entries[0].isIntersecting) loadMore();\n\t\t\t\t\t}, { rootMargin: '200px' });\n\n\t\t\t\t\tobserver.observe(sentinel);\n\t\t\t\t})();\n\t\t\t})();\n\t\t</script>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -250,80 +247,106 @@ func txRow(t store.Transaction) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var12 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var12 == nil {
-			templ_7745c5c3_Var12 = templ.NopComponent
+		templ_7745c5c3_Var13 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var13 == nil {
+			templ_7745c5c3_Var13 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<tr data-merchant=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var13 string
-		templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.ResolveAttributeValue(t.MerchantNormalized)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/account.templ`, Line: 238, Col: 38}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var13)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "\" style=\"border-bottom:1px solid var(--border)\"><td style=\"padding:8px 12px;font-size:13px;color:var(--text2);white-space:nowrap\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "<tr data-merchant=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var14 string
-		templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(t.Date.Format("Jan 2, 2006"))
+		templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.ResolveAttributeValue(t.MerchantNormalized)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/account.templ`, Line: 242, Col: 33}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/account.templ`, Line: 735, Col: 41}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var14)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "</td><td style=\"padding:8px 12px;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:0\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "\" style=\"border-bottom:1px solid var(--border)\"><td style=\"padding:8px 12px;font-size:13px;color:var(--text2);white-space:nowrap\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var15 string
+		templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(t.Date.Format("Jan 2, 2006"))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/account.templ`, Line: 737, Col: 33}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "</td><td style=\"padding:8px 12px;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:0\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if t.MerchantNormalized != "" {
-			var templ_7745c5c3_Var15 string
-			templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(t.MerchantNormalized)
+			var templ_7745c5c3_Var16 string
+			templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(t.MerchantNormalized)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/account.templ`, Line: 246, Col: 26}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/account.templ`, Line: 741, Col: 26}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "<span style=\"color:var(--text3)\">—</span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "<span style=\"color:var(--text3)\">—</span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "</td><td style=\"padding:8px 12px;font-size:12px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:0\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var16 string
-		templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(t.ImportedPayee)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/account.templ`, Line: 252, Col: 20}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "</td><td style=\"padding:8px 12px;text-align:right\"><span style=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "</td><td style=\"padding:8px 12px;font-size:12px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:0\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var17 string
-		templ_7745c5c3_Var17, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(txnAmountStyle(t.AmountCents))
+		templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(t.ImportedPayee)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/account.templ`, Line: 255, Col: 46}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/account.templ`, Line: 747, Col: 20}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "</td><td style=\"padding:8px 12px;text-align:right\"><span style=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var18 string
+		templ_7745c5c3_Var18, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(txnAmountStyle(t.AmountCents))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/account.templ`, Line: 750, Col: 46}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var19 string
+		templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(formatCents(t.AmountCents))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/account.templ`, Line: 750, Col: 77}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "</span></td><td style=\"padding:8px 12px\"><span style=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var20 string
+		templ_7745c5c3_Var20, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(txSettlementStyle(t.SettlementStatus))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/account.templ`, Line: 753, Col: 54}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -331,42 +354,16 @@ func txRow(t store.Transaction) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var18 string
-		templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(formatCents(t.AmountCents))
+		var templ_7745c5c3_Var21 string
+		templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(t.SettlementStatus)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/account.templ`, Line: 255, Col: 77}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/account.templ`, Line: 753, Col: 77}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "</span></td><td style=\"padding:8px 12px\"><span style=\"")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var19 string
-		templ_7745c5c3_Var19, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(txSettlementStyle(t.SettlementStatus))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/account.templ`, Line: 258, Col: 54}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var20 string
-		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(t.SettlementStatus)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/account.templ`, Line: 259, Col: 24}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "</span></td></tr>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "</span></td></tr>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -385,7 +382,53 @@ func txSettlementStyle(status string) string {
 	if status == "settled" {
 		return "font-size:11px;padding:2px 6px;border-radius:4px;background:color-mix(in srgb,var(--surface2) 80%,var(--income) 20%);color:var(--income)"
 	}
-	return fmt.Sprintf("font-size:11px;padding:2px 6px;border-radius:4px;background:var(--surface2);color:var(--text3)")
+	return "font-size:11px;padding:2px 6px;border-radius:4px;background:var(--surface2);color:var(--text3)"
+}
+
+func uploadAccountJSON(a store.Account) string {
+	type acc struct {
+		ID               string   `json:"id"`
+		Name             string   `json:"name"`
+		AccountType      string   `json:"account_type"`
+		Status           string   `json:"status"`
+		InterestRate     *float64 `json:"interest_rate"`
+		BalanceCents     *int64   `json:"balance_cents"`
+		CreditLimitCents *int64   `json:"credit_limit_cents"`
+	}
+	b, _ := json.Marshal(acc{
+		ID: a.ID, Name: a.Name, AccountType: a.AccountType, Status: a.Status,
+		InterestRate: a.InterestRate, BalanceCents: a.BalanceCents, CreditLimitCents: a.CreditLimitCents,
+	})
+	return string(b)
+}
+
+func uploadInstitutionJSON(inst *store.Institution) string {
+	if inst == nil {
+		return "null"
+	}
+	type instJSON struct {
+		ID                   string  `json:"id"`
+		InstitutionName      string  `json:"institution_name"`
+		SourceType           string  `json:"source_type"`
+		SettlementWindowDays int     `json:"settlement_window_days"`
+		DedupWindowDays      int     `json:"dedup_window_days"`
+		AmountTolerancePct   float64 `json:"amount_tolerance_pct"`
+		DateCol              string  `json:"date_col"`
+		AmountCol            string  `json:"amount_col"`
+		MerchantCol          string  `json:"merchant_col"`
+		ImportedIDCol        *string `json:"imported_id_col"`
+		BalanceCol           *string `json:"balance_col"`
+		DebitCreditCol       *string `json:"debit_credit_col"`
+		AmountSignConvention string  `json:"amount_sign_convention"`
+	}
+	b, _ := json.Marshal(instJSON{
+		ID: inst.ID, InstitutionName: inst.InstitutionName, SourceType: inst.SourceType,
+		SettlementWindowDays: inst.SettlementWindowDays, DedupWindowDays: inst.DedupWindowDays,
+		AmountTolerancePct: inst.AmountTolerancePct, DateCol: inst.DateCol, AmountCol: inst.AmountCol,
+		MerchantCol: inst.MerchantCol, ImportedIDCol: inst.ImportedIDCol, BalanceCol: inst.BalanceCol,
+		DebitCreditCol: inst.DebitCreditCol, AmountSignConvention: inst.AmountSignConvention,
+	})
+	return string(b)
 }
 
 var _ = templruntime.GeneratedTemplate

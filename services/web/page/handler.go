@@ -423,23 +423,23 @@ func isAccountNegativeBalance(a store.Account) bool {
 	return a.AccountType == "credit" || a.AccountType == "loan" || a.AccountType == "mortgage"
 }
 
-// directionLabel returns "Debit" or "Credit".
+// directionLabel returns "Income" or "Expense".
 func directionLabel(d string) string {
-	if d == "credit" {
-		return "Credit"
+	if d == "income" {
+		return "Income"
 	}
-	return "Debit"
+	return "Expense"
 }
 
 // entryTypeLabel returns a readable label for entry type.
 func entryTypeLabel(t string) string {
 	switch t {
-	case "fixed":
-		return "Fixed"
+	case "standing":
+		return "Standing"
 	case "variable":
 		return "Variable"
-	case "one_time":
-		return "One-time"
+	case "irregular":
+		return "Irregular"
 	default:
 		return t
 	}
@@ -462,16 +462,40 @@ func alertTypeLabel(t *string) string {
 	}
 }
 
-// ratePerMo returns a formatted monthly rate estimate from projected_rate_per_day.
-func ratePerMo(e store.EntryRow) string {
-	if e.ProjectedRatePerDay == nil {
+// fmtRateDay formats a cents/day rate as $/day.
+func fmtRateDay(r *float64) string {
+	if r == nil {
 		return "—"
 	}
-	monthly := *e.ProjectedRatePerDay * 30.44
-	if monthly < 0 {
-		monthly = -monthly
+	v := *r / 100.0
+	if v < 0 {
+		v = -v
 	}
-	return "$" + fmt.Sprintf("%.0f", monthly) + "/mo"
+	return fmt.Sprintf("$%.2f/day", v)
+}
+
+// fmtRateMo formats a cents/day rate as $/mo (× 30.44).
+func fmtRateMo(r *float64) string {
+	if r == nil {
+		return "—"
+	}
+	v := *r / 100.0 * 30.44
+	if v < 0 {
+		v = -v
+	}
+	return fmt.Sprintf("$%.2f/mo", v)
+}
+
+// fmtRateYr formats a cents/day rate as $/yr (× 365).
+func fmtRateYr(r *float64) string {
+	if r == nil {
+		return "—"
+	}
+	v := *r / 100.0 * 365
+	if v < 0 {
+		v = -v
+	}
+	return fmt.Sprintf("$%.2f/yr", v)
 }
 
 // confPct formats a confidence float as a percentage string.

@@ -178,10 +178,11 @@ func runServe(_ *cobra.Command, _ []string) error {
 	})
 
 	// ─── Internal API routes (cookie or Bearer, same-origin JS islands) ───────
+	// All data endpoints are mounted under /api/ to avoid conflicts with page routes.
 	internalAPI := humachi.New(r, huma.DefaultConfig("Veloci", "1.0.0"))
 	handler.RegisterHealthRoutes(internalAPI)
 
-	r.Group(func(r chi.Router) {
+	r.Route("/api", func(r chi.Router) {
 		r.Use(middleware.AuthenticateBearerOrCookie(authClient))
 		subAPI := humachi.New(r, huma.DefaultConfig("Veloci", "1.0.0"))
 
@@ -202,7 +203,7 @@ func runServe(_ *cobra.Command, _ []string) error {
 	})
 
 	// SSE uses cookie auth (same-origin; EventSource sends cookies automatically).
-	r.With(middleware.AuthenticateCookieOrRedirect(authClient)).Get("/jobs/stream", jobsHandler.StreamJobs)
+	r.With(middleware.AuthenticateCookieOrRedirect(authClient)).Get("/api/jobs/stream", jobsHandler.StreamJobs)
 
 	_ = internalAPI // suppress unused warning; routes registered via side-effect
 

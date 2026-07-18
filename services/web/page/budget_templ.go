@@ -15,6 +15,12 @@ import (
 	"github.com/veloci/veloci/store"
 )
 
+type budgetLabelGroup struct {
+	LabelID   *string
+	LabelName *string
+	Entries   []store.EntryRow
+}
+
 func BudgetPage(shell ShellData, data BudgetData) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -48,49 +54,27 @@ func BudgetPage(shell ShellData, data BudgetData) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div style=\"display:flex;flex-direction:column;height:100%;overflow:hidden\"><!-- Header --><div style=\"display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0\"><h1 style=\"margin:0;font-size:18px;font-weight:700;color:var(--text);letter-spacing:-0.02em\">Budget</h1><div style=\"display:flex;gap:4px\" id=\"gran-toggle\"><button class=\"js-gran active-gran\" data-gran=\"day\" style=\"background:var(--accent);color:#fff;border:none;border-radius:5px;padding:4px 12px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit\">Day</button> <button class=\"js-gran\" data-gran=\"month\" style=\"background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:5px;padding:4px 12px;cursor:pointer;font-size:12px;font-weight:500;font-family:inherit\">Month</button></div></div><!-- Summary strip --><div style=\"display:flex;align-items:center;gap:20px;padding:10px 20px;border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div style=\"display:flex;flex-direction:column;height:100%;overflow:hidden\"><!-- Title row --><div style=\"display:flex;align-items:center;padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0\"><h1 style=\"margin:0;font-size:18px;font-weight:700;color:var(--text);letter-spacing:-0.02em\">Budget</h1></div><!-- Granularity toggle row --><div style=\"display:flex;align-items:center;padding:0 20px;height:36px;border-bottom:1px solid var(--border);flex-shrink:0\"><div style=\"display:flex;gap:4px\"><button class=\"js-gran active-gran\" data-gran=\"day\" style=\"background:var(--accent);color:#fff;border:none;border-radius:5px;padding:3px 10px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit\">/day</button> <button class=\"js-gran\" data-gran=\"month\" style=\"background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:5px;padding:3px 10px;cursor:pointer;font-size:12px;font-weight:500;font-family:inherit\">/mo</button> <button class=\"js-gran\" data-gran=\"year\" style=\"background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:5px;padding:3px 10px;cursor:pointer;font-size:12px;font-weight:500;font-family:inherit\">/yr</button></div></div><!-- Summary strip -->")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = budgetSummaryChip("Income", data.Summary.IncomeRate, "var(--income)").Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = budgetSummaryStrip(data.Summary).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = budgetSummaryChip("Commitments", data.Summary.CommitmentsRate, "var(--commit)").Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<!-- Scrollable body: horizon chart + stack panel --><div style=\"flex:1;overflow-y:auto;display:flex;flex-direction:column;min-height:0\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = budgetSummaryChipMargin(data.Summary.IncomeRate-data.Summary.CommitmentsRate).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = budgetHorizonGraph().Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = budgetSummaryChipDrift(data.Summary.DriftRate).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = budgetStackPanel(data).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</div><!-- Main: entry list + chart --><div style=\"display:flex;flex:1;overflow:hidden\"><!-- Entry list --><div style=\"width:264px;flex-shrink:0;overflow-y:auto;border-right:1px solid var(--border)\">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			if len(data.Income) > 0 {
-				templ_7745c5c3_Err = budgetEntryGroup("Income", data.Income).Render(ctx, templ_7745c5c3_Buffer)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			if len(data.Commits) > 0 {
-				templ_7745c5c3_Err = budgetEntryGroup("Commitments", data.Commits).Render(ctx, templ_7745c5c3_Buffer)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			if len(data.Income) == 0 && len(data.Commits) == 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<div style=\"padding:32px 16px;color:var(--text3);font-size:13px;text-align:center\">No active entries. Run the engine on the Ledger page to generate budget data.</div>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</div><!-- Chart area --><div style=\"flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0\"><div style=\"display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--border);flex-shrink:0\"><div style=\"display:flex;align-items:center;gap:8px\"><span id=\"chart-entry-name\" style=\"font-size:14px;font-weight:600;color:var(--text3)\">Select an entry</span></div><div id=\"chart-legend\" style=\"display:none;align-items:center;gap:14px;font-size:11px;color:var(--text3)\"><span style=\"display:flex;align-items:center;gap:4px\"><span style=\"width:10px;height:10px;border-radius:2px;background:var(--income);display:inline-block\"></span> Ahead of target</span> <span style=\"display:flex;align-items:center;gap:4px\"><span style=\"width:10px;height:10px;border-radius:2px;background:var(--commit);display:inline-block\"></span> Behind target</span> <span style=\"display:flex;align-items:center;gap:4px\"><span style=\"width:24px;height:2px;border-top:2px dashed var(--accent);display:inline-block\"></span> Projection</span></div></div><div style=\"flex:1;position:relative;overflow:hidden\"><canvas id=\"budget-canvas\" style=\"display:block\"></canvas></div></div></div></div><script src=\"/static/js/veloci-chart.js\"></script> <script>\n\t\t\t(function () {\n\t\t\t\tvar canvas = document.getElementById('budget-canvas');\n\t\t\t\tvar chart  = new VelociChart(canvas);\n\t\t\t\tvar activeEntryId = null;\n\t\t\t\tvar activeGran    = 'day';\n\n\t\t\t\t// ── Granularity toggle ────────────────────────────────────────────────\n\t\t\t\tdocument.addEventListener('click', function (e) {\n\t\t\t\t\tvar btn = e.target.closest('.js-gran');\n\t\t\t\t\tif (!btn) return;\n\t\t\t\t\tactiveGran = btn.dataset.gran;\n\t\t\t\t\tdocument.querySelectorAll('.js-gran').forEach(function (b) {\n\t\t\t\t\t\tvar on = b.dataset.gran === activeGran;\n\t\t\t\t\t\tb.style.background = on ? 'var(--accent)' : 'var(--surface2)';\n\t\t\t\t\t\tb.style.color      = on ? '#fff'          : 'var(--text2)';\n\t\t\t\t\t\tb.style.border     = on ? 'none'          : '1px solid var(--border)';\n\t\t\t\t\t\tif (on) b.classList.add('active-gran');\n\t\t\t\t\t\telse    b.classList.remove('active-gran');\n\t\t\t\t\t});\n\t\t\t\t\tchart.setGranularity(activeGran);\n\t\t\t\t\tif (activeEntryId) loadHistory(activeEntryId, null);\n\t\t\t\t});\n\n\t\t\t\t// ── Entry selection ───────────────────────────────────────────────────\n\t\t\t\tdocument.addEventListener('click', function (e) {\n\t\t\t\t\tvar row = e.target.closest('.js-budget-entry');\n\t\t\t\t\tif (!row) return;\n\n\t\t\t\t\tdocument.querySelectorAll('.js-budget-entry').forEach(function (r) {\n\t\t\t\t\t\tr.style.background = '';\n\t\t\t\t\t\tr.style.borderLeft = '3px solid transparent';\n\t\t\t\t\t});\n\t\t\t\t\trow.style.background  = 'var(--surface2)';\n\t\t\t\t\trow.style.borderLeft  = '3px solid var(--accent)';\n\n\t\t\t\t\tvar entryId = row.dataset.entryId;\n\t\t\t\t\tvar name    = row.dataset.name;\n\t\t\t\t\tvar rate    = row.dataset.rate ? parseFloat(row.dataset.rate) : null;\n\n\t\t\t\t\tdocument.getElementById('chart-entry-name').textContent = name;\n\t\t\t\t\tdocument.getElementById('chart-entry-name').style.color = 'var(--text)';\n\t\t\t\t\tdocument.getElementById('chart-legend').style.display   = 'flex';\n\n\t\t\t\t\tchart.setProjection(rate);\n\n\t\t\t\t\tif (entryId !== activeEntryId) {\n\t\t\t\t\t\tactiveEntryId = entryId;\n\t\t\t\t\t\tloadHistory(entryId, null);\n\t\t\t\t\t}\n\t\t\t\t});\n\n\t\t\t\t// ── History fetch ─────────────────────────────────────────────────────\n\t\t\t\tfunction loadHistory(entryId, cursor) {\n\t\t\t\t\tvar url = '/snapshots/' + entryId + '/history?limit=90&granularity=' + activeGran;\n\t\t\t\t\tif (cursor) url += '&cursor=' + cursor;\n\t\t\t\t\tfetch(url)\n\t\t\t\t\t\t.then(function (r) {\n\t\t\t\t\t\t\tif (!r.ok) throw new Error('fetch failed');\n\t\t\t\t\t\t\treturn r.json();\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.then(function (env) {\n\t\t\t\t\t\t\tvar points = Array.isArray(env.data) ? env.data : [];\n\t\t\t\t\t\t\tif (!cursor) {\n\t\t\t\t\t\t\t\tchart.load(points);\n\t\t\t\t\t\t\t} else {\n\t\t\t\t\t\t\t\tchart.prepend(points);\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function () { /* no-op: chart shows stale data */ });\n\t\t\t\t}\n\n\t\t\t\t// ── Lazy-load older pages ─────────────────────────────────────────────\n\t\t\t\tchart.onNeedMore = function (oldest) {\n\t\t\t\t\tif (!activeEntryId || !oldest) return;\n\t\t\t\t\tloadHistory(activeEntryId, oldest);\n\t\t\t\t};\n\t\t\t})();\n\t\t</script>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</div></div><script src=\"/static/js/veloci-chart.js\"></script> <script>\n\t\t\t(function () {\n\t\t\t\tvar activeGran    = 'day';\n\t\t\t\tvar activeEntryId = null;\n\t\t\t\tvar chart         = null;\n\n\t\t\t\t// ── Rate formatting ───────────────────────────────────────────────\n\t\t\t\tfunction fmtRate(ratePerDay, gran) {\n\t\t\t\t\tvar mult   = gran === 'day' ? 1 : gran === 'year' ? 365 : 30.44;\n\t\t\t\t\tvar suffix = gran === 'day' ? '/day' : gran === 'year' ? '/yr' : '/mo';\n\t\t\t\t\tvar v      = ratePerDay * mult;\n\t\t\t\t\tif (v < 0) return '-$' + Math.abs(v).toFixed(0) + suffix;\n\t\t\t\t\treturn '$' + v.toFixed(0) + suffix;\n\t\t\t\t}\n\n\t\t\t\tfunction fmtDrift(driftPerDay, gran) {\n\t\t\t\t\tif (!driftPerDay || driftPerDay === 0) return '$0';\n\t\t\t\t\tvar mult   = gran === 'day' ? 1 : gran === 'year' ? 365 : 30.44;\n\t\t\t\t\tvar suffix = gran === 'day' ? '/day' : gran === 'year' ? '/yr' : '/mo';\n\t\t\t\t\tvar v      = driftPerDay * mult;\n\t\t\t\t\tvar sign   = v > 0 ? '+' : '−';\n\t\t\t\t\treturn sign + '$' + Math.abs(v).toFixed(0) + suffix;\n\t\t\t\t}\n\n\t\t\t\tfunction updateRateDisplays() {\n\t\t\t\t\tdocument.querySelectorAll('[data-rate-per-day]').forEach(function (el) {\n\t\t\t\t\t\tvar rate = parseFloat(el.dataset.ratePerDay);\n\t\t\t\t\t\tif (isNaN(rate)) { el.textContent = '—'; return; }\n\t\t\t\t\t\tel.textContent = fmtRate(rate, activeGran);\n\t\t\t\t\t\tif (el.hasAttribute('data-color-by-sign')) {\n\t\t\t\t\t\t\tel.style.color = rate < 0 ? 'var(--margin-neg)' : 'var(--margin-pos)';\n\t\t\t\t\t\t}\n\t\t\t\t\t});\n\t\t\t\t\tdocument.querySelectorAll('[data-drift-per-day]').forEach(function (el) {\n\t\t\t\t\t\tvar drift = parseFloat(el.dataset.driftPerDay);\n\t\t\t\t\t\tif (isNaN(drift)) { el.textContent = '—'; return; }\n\t\t\t\t\t\tel.textContent = fmtDrift(drift, activeGran);\n\t\t\t\t\t\tel.style.color = drift > 0 ? 'var(--margin-pos)' : drift < 0 ? 'var(--commit)' : 'var(--text3)';\n\t\t\t\t\t});\n\t\t\t\t\t// Update format labels (/day, /mo, /yr)\n\t\t\t\t\tvar label = activeGran === 'day' ? '/day' : activeGran === 'year' ? '/yr' : '/mo';\n\t\t\t\t\tdocument.querySelectorAll('.js-gran-label').forEach(function (el) {\n\t\t\t\t\t\tel.textContent = label;\n\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\t// ── Granularity toggle ────────────────────────────────────────────\n\t\t\t\tdocument.addEventListener('click', function (e) {\n\t\t\t\t\tvar btn = e.target.closest('.js-gran');\n\t\t\t\t\tif (!btn) return;\n\t\t\t\t\tactiveGran = btn.dataset.gran;\n\t\t\t\t\tdocument.querySelectorAll('.js-gran').forEach(function (b) {\n\t\t\t\t\t\tvar on   = b.dataset.gran === activeGran;\n\t\t\t\t\t\tb.style.background = on ? 'var(--accent)' : 'var(--surface2)';\n\t\t\t\t\t\tb.style.color      = on ? '#fff' : 'var(--text2)';\n\t\t\t\t\t\tb.style.border     = on ? 'none' : '1px solid var(--border)';\n\t\t\t\t\t});\n\t\t\t\t\tif (chart) chart.setGranularity(activeGran);\n\t\t\t\t\tif (activeEntryId) loadHistory(activeEntryId, null);\n\t\t\t\t\tupdateRateDisplays();\n\t\t\t\t});\n\n\t\t\t\t// ── Stack panel: collapse/expand ──────────────────────────────────\n\t\t\t\tvar stackCollapsed = false;\n\t\t\t\tdocument.addEventListener('click', function (e) {\n\t\t\t\t\tvar hdr = e.target.closest('#stack-panel-header');\n\t\t\t\t\tif (!hdr) return;\n\t\t\t\t\tstackCollapsed = !stackCollapsed;\n\t\t\t\t\tvar body    = document.getElementById('stack-panel-body');\n\t\t\t\t\tvar chevron = document.getElementById('stack-chevron');\n\t\t\t\t\tif (body)    body.style.display    = stackCollapsed ? 'none' : '';\n\t\t\t\t\tif (chevron) chevron.textContent   = stackCollapsed ? '▶' : '▼';\n\t\t\t\t});\n\n\t\t\t\t// ── Label group expand/collapse ───────────────────────────────────\n\t\t\t\tdocument.addEventListener('click', function (e) {\n\t\t\t\t\tvar header = e.target.closest('.js-label-group-header');\n\t\t\t\t\tif (!header) return;\n\t\t\t\t\tvar key        = header.dataset.labelKey;\n\t\t\t\t\tvar isExpanded = header.dataset.expanded === 'true';\n\t\t\t\t\theader.dataset.expanded = isExpanded ? 'false' : 'true';\n\t\t\t\t\tvar chevron = header.querySelector('.js-chevron');\n\t\t\t\t\tif (chevron) chevron.textContent = isExpanded ? '▶' : '▼';\n\t\t\t\t\tdocument.querySelectorAll('.js-entry-row[data-label-key=\"' + key + '\"]').forEach(function (r) {\n\t\t\t\t\t\tr.style.display = isExpanded ? 'none' : 'flex';\n\t\t\t\t\t});\n\t\t\t\t});\n\n\t\t\t\t// ── Entry selection ───────────────────────────────────────────────\n\t\t\t\tdocument.addEventListener('click', function (e) {\n\t\t\t\t\tvar row = e.target.closest('.js-selectable-entry');\n\t\t\t\t\tif (!row) return;\n\t\t\t\t\tdocument.querySelectorAll('.js-selectable-entry').forEach(function (r) {\n\t\t\t\t\t\tr.style.borderLeft = '3px solid transparent';\n\t\t\t\t\t\tr.style.background = '';\n\t\t\t\t\t});\n\t\t\t\t\trow.style.borderLeft = '3px solid var(--accent)';\n\t\t\t\t\trow.style.background = 'var(--surface2)';\n\n\t\t\t\t\tvar entryId = row.dataset.entryId;\n\t\t\t\t\tvar rate    = row.dataset.ratePerDay ? parseFloat(row.dataset.ratePerDay) : null;\n\t\t\t\t\tif (chart) chart.setProjection(rate);\n\n\t\t\t\t\tvar empty = document.getElementById('chart-empty');\n\t\t\t\t\tif (empty) empty.style.display = 'none';\n\n\t\t\t\t\tif (entryId && entryId !== activeEntryId) {\n\t\t\t\t\t\tactiveEntryId = entryId;\n\t\t\t\t\t\tloadHistory(entryId, null);\n\t\t\t\t\t}\n\t\t\t\t});\n\n\t\t\t\t// ── Chart init ────────────────────────────────────────────────────\n\t\t\t\tvar canvas = document.getElementById('budget-canvas');\n\t\t\t\tif (canvas) {\n\t\t\t\t\tchart = new VelociChart(canvas);\n\t\t\t\t\tchart.onNeedMore = function (oldest) {\n\t\t\t\t\t\tif (!activeEntryId || !oldest) return;\n\t\t\t\t\t\tloadHistory(activeEntryId, oldest);\n\t\t\t\t\t};\n\t\t\t\t}\n\n\t\t\t\t// ── History fetch ─────────────────────────────────────────────────\n\t\t\t\tfunction loadHistory(entryId, cursor) {\n\t\t\t\t\tvar url = '/api/snapshots/' + entryId + '/history?limit=90&granularity=' + activeGran;\n\t\t\t\t\tif (cursor) url += '&cursor=' + cursor;\n\t\t\t\t\tfetch(url)\n\t\t\t\t\t\t.then(function (r) { if (!r.ok) throw new Error(); return r.json(); })\n\t\t\t\t\t\t.then(function (env) {\n\t\t\t\t\t\t\tvar pts = Array.isArray(env.data) ? env.data : [];\n\t\t\t\t\t\t\tif (!cursor) chart.load(pts);\n\t\t\t\t\t\t\telse         chart.prepend(pts);\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function () {});\n\t\t\t\t}\n\n\t\t\t\t// Initial display update (server renders /day values by default)\n\t\t\t\tupdateRateDisplays();\n\t\t\t})();\n\t\t</script>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -104,7 +88,7 @@ func BudgetPage(shell ShellData, data BudgetData) templ.Component {
 	})
 }
 
-func budgetSummaryChip(label string, ratePerDay float64, color string) templ.Component {
+func budgetSummaryStrip(s store.SnapshotSummary) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -125,29 +109,42 @@ func budgetSummaryChip(label string, ratePerDay float64, color string) templ.Com
 			templ_7745c5c3_Var3 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<div style=\"flex-shrink:0\"><div style=\"font-size:10px;font-weight:600;color:var(--text3);letter-spacing:0.04em;text-transform:uppercase;margin-bottom:2px\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<div style=\"padding:12px 20px 8px;border-bottom:1px solid var(--border);flex-shrink:0\"><!-- Equation row --><div style=\"display:flex;gap:8px;align-items:stretch\"><!-- Income cell --><div style=\"flex:1;padding:12px 16px;background:var(--surface);border-radius:6px;min-width:0\"><div style=\"font-size:11px;color:var(--text3);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em\">Income</div><div style=\"font-size:22px;font-weight:600;color:var(--text);line-height:1.2\"><span data-rate-per-day=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var4 string
-		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(label)
+		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(budgetRateAttr(s.IncomeRate))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 165, Col: 10}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 203, Col: 59}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</div><div style=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var5 string
-		templ_7745c5c3_Var5, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;color:" + color)
+		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(budgetFmtDay(s.IncomeRate))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 167, Col: 96}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 203, Col: 90}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</span></div><div style=\"font-size:11px;color:var(--text3);margin-top:2px\"><span class=\"js-gran-label\">/day</span> <span style=\"margin-left:4px;background:var(--surface2);border-radius:3px;padding:0 5px;font-size:10px;color:var(--text3)\">actual</span></div></div><!-- Minus operator --><div style=\"display:flex;align-items:center;color:var(--text3);font-size:18px;flex-shrink:0\">−</div><!-- Commitments cell --><div style=\"flex:1;padding:12px 16px;background:var(--surface);border-radius:6px;min-width:0\"><div style=\"font-size:11px;color:var(--text3);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em\">Commitments</div><div style=\"font-size:22px;font-weight:600;color:var(--text);line-height:1.2\"><span data-rate-per-day=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var6 string
+		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(budgetRateAttr(s.CommitmentsRate))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 216, Col: 64}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -155,194 +152,148 @@ func budgetSummaryChip(label string, ratePerDay float64, color string) templ.Com
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var6 string
-		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(budgetFmtMo(ratePerDay))
+		var templ_7745c5c3_Var7 string
+		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(budgetFmtDay(s.CommitmentsRate))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 168, Col: 28}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 216, Col: 100}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</div></div>")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		return nil
-	})
-}
-
-func budgetSummaryChipMargin(marginPerDay float64) templ.Component {
-	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
-			return templ_7745c5c3_CtxErr
-		}
-		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-		if !templ_7745c5c3_IsBuffer {
-			defer func() {
-				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-				if templ_7745c5c3_Err == nil {
-					templ_7745c5c3_Err = templ_7745c5c3_BufErr
-				}
-			}()
-		}
-		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var7 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var7 == nil {
-			templ_7745c5c3_Var7 = templ.NopComponent
-		}
-		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<div style=\"flex-shrink:0\"><div style=\"font-size:10px;font-weight:600;color:var(--text3);letter-spacing:0.04em;text-transform:uppercase;margin-bottom:2px\">Margin</div><div style=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</span></div><div style=\"font-size:11px;color:var(--text3);margin-top:2px\"><span class=\"js-gran-label\">/day</span> <span style=\"margin-left:4px;background:var(--surface2);border-radius:3px;padding:0 5px;font-size:10px;color:var(--text3)\">actual</span></div></div><!-- Equals operator --><div style=\"display:flex;align-items:center;color:var(--text3);font-size:18px;flex-shrink:0\">=</div><!-- Margin cell --><div style=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var8 string
-		templ_7745c5c3_Var8, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;" + budgetMarginColor(marginPerDay))
+		templ_7745c5c3_Var8, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("flex:1;padding:12px 16px;border-radius:6px;min-width:0;" + budgetMarginCellBg(s))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 178, Col: 116}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 226, Col: 97}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "\"><div style=\"font-size:11px;color:var(--text3);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em\">Margin</div><div style=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var9 string
-		templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(budgetFmtMo(marginPerDay))
+		templ_7745c5c3_Var9, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("font-size:22px;font-weight:600;line-height:1.2;" + budgetMarginTextColor(s))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 179, Col: 30}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 228, Col: 93}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\"><span data-rate-per-day=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		return nil
-	})
-}
-
-func budgetSummaryChipDrift(driftPerDay float64) templ.Component {
-	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
-			return templ_7745c5c3_CtxErr
+		var templ_7745c5c3_Var10 string
+		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(budgetRateAttr(budgetMarginRate(s)))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 229, Col: 66}
 		}
-		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-		if !templ_7745c5c3_IsBuffer {
-			defer func() {
-				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-				if templ_7745c5c3_Err == nil {
-					templ_7745c5c3_Err = templ_7745c5c3_BufErr
-				}
-			}()
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
 		}
-		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var10 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var10 == nil {
-			templ_7745c5c3_Var10 = templ.NopComponent
-		}
-		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<div style=\"flex-shrink:0\"><div style=\"font-size:10px;font-weight:600;color:var(--text3);letter-spacing:0.04em;text-transform:uppercase;margin-bottom:2px\">Drift</div><div style=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "\" data-color-by-sign=\"\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var11 string
-		templ_7745c5c3_Var11, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;" + budgetDriftColor(driftPerDay))
+		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(budgetFmtDay(budgetMarginRate(s)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 189, Col: 114}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 229, Col: 126}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</span></div><div style=\"font-size:11px;color:var(--text3);margin-top:2px\"><span class=\"js-gran-label\">/day</span> · <span style=\"font-size:10px\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		if driftPerDay >= 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "+")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var12 string
-			templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(budgetFmtMo(driftPerDay))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 191, Col: 31}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
+		var templ_7745c5c3_Var12 string
+		templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(budgetMarginPct(s)))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 233, Col: 71}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "%</span> <span style=\"margin-left:4px;background:var(--surface2);border-radius:3px;padding:0 5px;font-size:10px;color:var(--text3)\">actual</span></div></div></div><!-- Proportion bar --><div style=\"height:3px;border-radius:2px;overflow:hidden;margin-top:8px;background:var(--surface)\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if budgetIsNegativeMargin(s) {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "<div style=\"width:100%;height:100%;background:var(--margin-neg)\"></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			var templ_7745c5c3_Var13 string
-			templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(budgetFmtMo(driftPerDay))
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "<div style=\"display:flex;height:100%\"><div style=\"")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 193, Col: 30}
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var13 string
+			templ_7745c5c3_Var13, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("width:" + strconv.Itoa(budgetCommitPct(s)) + "%;background:var(--commit);transition:width 0.3s")
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 244, Col: 114}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "\"></div><div style=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var14 string
+			templ_7745c5c3_Var14, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("width:" + strconv.Itoa(budgetMarginPct(s)) + "%;background:var(--margin-pos);transition:width 0.3s")
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 245, Col: 118}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "\"></div></div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</div></div>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		return nil
-	})
-}
-
-func budgetEntryGroup(title string, entries []store.EntryRow) templ.Component {
-	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
-			return templ_7745c5c3_CtxErr
-		}
-		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-		if !templ_7745c5c3_IsBuffer {
-			defer func() {
-				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-				if templ_7745c5c3_Err == nil {
-					templ_7745c5c3_Err = templ_7745c5c3_BufErr
-				}
-			}()
-		}
-		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var14 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var14 == nil {
-			templ_7745c5c3_Var14 = templ.NopComponent
-		}
-		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<div><div style=\"padding:8px 14px 4px;font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--text3);position:sticky;top:0;background:var(--surface);z-index:1\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "</div><!-- Proportion labels --><div style=\"display:flex;justify-content:space-between;margin-top:3px\"><span style=\"font-size:11px;color:var(--text3)\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var15 string
-		templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(title)
+		templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(budgetCommitPct(s)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 202, Col: 10}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 251, Col: 85}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "% commitments</span> <span style=\"font-size:11px;color:var(--text3)\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		for _, e := range entries {
-			templ_7745c5c3_Err = budgetEntryRow(e).Render(ctx, templ_7745c5c3_Buffer)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
+		var templ_7745c5c3_Var16 string
+		templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(budgetMarginPct(s)))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 252, Col: 85}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "</div>")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "% margin</span></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -350,7 +301,7 @@ func budgetEntryGroup(title string, entries []store.EntryRow) templ.Component {
 	})
 }
 
-func budgetEntryRow(e store.EntryRow) templ.Component {
+func budgetHorizonGraph() templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -366,100 +317,12 @@ func budgetEntryRow(e store.EntryRow) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var16 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var16 == nil {
-			templ_7745c5c3_Var16 = templ.NopComponent
+		templ_7745c5c3_Var17 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var17 == nil {
+			templ_7745c5c3_Var17 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "<div class=\"js-budget-entry\" data-entry-id=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var17 string
-		templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.ResolveAttributeValue(e.ID)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 213, Col: 22}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var17)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "\" data-rate=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var18 string
-		templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.ResolveAttributeValue(budgetRateStr(e))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 214, Col: 30}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var18)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "\" data-name=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var19 string
-		templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.ResolveAttributeValue(budgetEntryName(e))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 215, Col: 32}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var19)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "\" style=\"padding:8px 14px 8px 17px;border-left:3px solid transparent;cursor:pointer;border-bottom:1px solid var(--border)\"><div style=\"display:flex;align-items:center;justify-content:space-between;gap:8px\"><span style=\"font-size:13px;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var20 string
-		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(budgetEntryName(e))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 220, Col: 24}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "</span> <span style=\"font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--text2);flex-shrink:0\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var21 string
-		templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(budgetEntryRate(e))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 223, Col: 24}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "</span></div>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if e.AlertType != nil {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "<div style=\"font-size:11px;color:var(--commit);margin-top:2px\">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var22 string
-			templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(*e.AlertType)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 227, Col: 80}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "</div>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<div style=\"padding:8px 20px;display:flex;flex-direction:column;min-height:280px\"><!-- Legend --><div style=\"display:flex;gap:16px;align-items:center;margin-bottom:6px;font-size:11px;color:var(--text3);flex-shrink:0\"><span style=\"display:flex;align-items:center;gap:4px\"><span style=\"width:10px;height:10px;background:var(--margin-pos);display:inline-block;border-radius:1px\"></span> Ahead</span> <span style=\"display:flex;align-items:center;gap:4px\"><span style=\"width:10px;height:10px;background:var(--commit);display:inline-block;border-radius:1px\"></span> Behind</span> <span style=\"display:flex;align-items:center;gap:4px\"><span style=\"width:16px;height:0;display:inline-block;border-top:2px dashed var(--accent)\"></span> Projection</span> <span>body = drift · drag to scroll</span></div><!-- Chart container --><div style=\"position:relative;flex:1;min-height:220px\"><canvas id=\"budget-canvas\" style=\"display:block\"></canvas><div id=\"chart-empty\" style=\"position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:13px;pointer-events:none\">Select an entry to view horizon</div></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -467,54 +330,688 @@ func budgetEntryRow(e store.EntryRow) templ.Component {
 	})
 }
 
-func budgetEntryName(e store.EntryRow) string {
-	if e.LabelName != nil && *e.LabelName != "" {
-		return *e.LabelName
-	}
-	return "Unlabeled"
+func budgetStackPanel(data BudgetData) templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var18 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var18 == nil {
+			templ_7745c5c3_Var18 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "<div style=\"background:var(--bg);border-top:1px solid var(--border);flex-shrink:0\"><!-- Panel header --><div id=\"stack-panel-header\" style=\"display:flex;align-items:center;gap:8px;padding:10px 20px;border-bottom:1px solid var(--border);cursor:pointer;user-select:none\"><span style=\"font-weight:600;font-size:13px;color:var(--text)\">Stack</span><div style=\"flex:1\"></div><span style=\"font-size:11px;color:var(--text3)\">entry · type · actual <span class=\"js-gran-label\">/day</span> · drift <span class=\"js-gran-label\">/day</span></span> <span id=\"stack-chevron\" style=\"color:var(--text3);font-size:12px\">▼</span></div><div id=\"stack-panel-body\"><!-- Column headers --><div style=\"display:flex;align-items:center;padding:6px 20px;border-bottom:1px solid var(--border);gap:8px\"><div style=\"font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;width:148px\">Entry / type</div><div style=\"font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;flex:1\">Track</div><div style=\"font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;width:80px;text-align:right\">Actual</div><div style=\"font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;width:72px;text-align:right\">Drift</div></div><!-- Income anchor -->")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if len(data.Income) > 0 {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "<div style=\"display:flex;align-items:center;padding:8px 20px;border-bottom:1px solid var(--border);gap:8px;background:var(--surface)\"><div style=\"width:148px\"><div style=\"font-size:13px;font-weight:600;color:var(--income)\">Income</div><div style=\"font-size:11px;color:var(--text3)\">anchor</div></div><div style=\"flex:1\"><div style=\"height:4px;border-radius:2px;background:var(--income);width:100%\"></div></div><div style=\"width:80px;text-align:right;color:var(--income);font-weight:600;font-size:13px\"><span data-rate-per-day=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var19 string
+			templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.ResolveAttributeValue(budgetRateAttr(budgetTotalActualRate(data.Income)))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 317, Col: 82}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var19)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var20 string
+			templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(budgetFmtDay(budgetTotalActualRate(data.Income)))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 317, Col: 135}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "</span></div><div style=\"width:72px;text-align:right;color:var(--text3);font-size:12px\">—</div></div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "<!-- Expense label groups -->")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		for _, group := range budgetGroupByLabel(data.Commits) {
+			templ_7745c5c3_Err = budgetLabelGroupRow(group, budgetTotalActualRate(data.Income)).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "<!-- Margin anchor --><div style=\"display:flex;align-items:center;padding:8px 20px;gap:8px;background:var(--surface)\"><div style=\"width:148px\"><div style=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var21 string
+		templ_7745c5c3_Var21, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("font-size:13px;font-weight:600;" + budgetMarginColor(budgetMarginRate(data.Summary)))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 329, Col: 103}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "\">Margin</div><div style=\"font-size:11px;color:var(--text3)\">anchor</div></div><div style=\"flex:1\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if budgetTotalActualRate(data.Income) > 0 && budgetMarginRate(data.Summary) > 0 {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<div style=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var22 string
+			templ_7745c5c3_Var22, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("height:4px;border-radius:2px;background:var(--margin-pos);width:" + strconv.Itoa(budgetMarginPct(data.Summary)) + "%")
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 334, Col: 137}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "\"></div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "</div><div style=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var23 string
+		templ_7745c5c3_Var23, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("width:80px;text-align:right;font-weight:600;font-size:13px;" + budgetMarginColor(budgetMarginRate(data.Summary)))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 337, Col: 130}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "\"><span data-rate-per-day=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var24 string
+		templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.ResolveAttributeValue(budgetRateAttr(budgetMarginRate(data.Summary)))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 338, Col: 77}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var24)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "\" data-color-by-sign=\"\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var25 string
+		templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(budgetFmtDay(budgetMarginRate(data.Summary)))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 338, Col: 148}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "</span></div><div style=\"width:72px;text-align:right;font-size:12px\"><span data-drift-per-day=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var26 string
+		templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.ResolveAttributeValue(budgetRateAttr(data.Summary.DriftRate))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 341, Col: 70}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var26)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var27 string
+		templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(budgetFmtDay(data.Summary.DriftRate))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 341, Col: 111}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "</span></div></div>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if len(data.Income) == 0 && len(data.Commits) == 0 {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "<div style=\"padding:32px 20px;color:var(--text3);font-size:13px;text-align:center\">No active entries. Run the engine on the Ledger page to generate budget data.</div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "</div></div>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		return nil
+	})
 }
 
-func budgetRateStr(e store.EntryRow) string {
-	if e.ProjectedRatePerDay == nil {
-		return ""
-	}
-	return strconv.FormatFloat(*e.ProjectedRatePerDay, 'f', 6, 64)
+func budgetLabelGroupRow(group budgetLabelGroup, totalIncomePerDay float64) templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var28 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var28 == nil {
+			templ_7745c5c3_Var28 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "<!-- Group header --><div class=\"js-label-group-header\" data-label-key=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var29 string
+		templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.ResolveAttributeValue(budgetGroupKey(group))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 357, Col: 40}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var29)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "\" data-expanded=\"false\" style=\"display:flex;align-items:center;padding:7px 20px;border-bottom:1px solid var(--border);gap:8px;cursor:pointer;background:var(--bg);user-select:none\"><div style=\"width:148px;display:flex;align-items:center;gap:6px\"><span class=\"js-chevron\" style=\"color:var(--text3);font-size:11px\">▶</span> <span style=\"font-size:13px;color:var(--text2);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var30 string
+		templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(budgetGroupName(group))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 363, Col: 149}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "</span></div><div style=\"flex:1\"><div style=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var31 string
+		templ_7745c5c3_Var31, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("height:4px;border-radius:2px;background:var(--commit);width:" + strconv.Itoa(budgetGroupPct(group, totalIncomePerDay)) + "%;opacity:0.6")
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 366, Col: 153}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "\"></div></div><div style=\"width:80px;text-align:right;color:var(--text2);font-size:12px\"><span data-rate-per-day=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var32 string
+		templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.ResolveAttributeValue(budgetRateAttr(budgetGroupActualRate(group)))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 369, Col: 73}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var32)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var33 string
+		templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(budgetFmtDay(budgetGroupActualRate(group)))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 369, Col: 120}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "</span></div><div style=\"width:72px;text-align:right;font-size:12px\"><span data-drift-per-day=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var34 string
+		templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.ResolveAttributeValue(budgetRateAttr(budgetGroupDrift(group)))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 372, Col: 69}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var34)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var35 string
+		templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.JoinStringErrs(budgetFmtDriftDay(budgetGroupDrift(group)))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 372, Col: 116}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var35))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "</span></div></div><!-- Entry detail rows (hidden by default) -->")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		for _, e := range group.Entries {
+			templ_7745c5c3_Err = budgetEntryDetailRow(e, budgetGroupKey(group), totalIncomePerDay).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		return nil
+	})
 }
 
-func budgetEntryRate(e store.EntryRow) string {
-	if e.ProjectedRatePerDay == nil {
-		return "—"
-	}
-	mo := *e.ProjectedRatePerDay * 30.44
-	return fmt.Sprintf("$%.0f/mo", mo)
+func budgetEntryDetailRow(e store.EntryRow, labelKey string, totalIncomePerDay float64) templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var36 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var36 == nil {
+			templ_7745c5c3_Var36 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "<div class=\"js-entry-row js-selectable-entry\" data-label-key=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var37 string
+		templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.ResolveAttributeValue(labelKey)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 384, Col: 27}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var37)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "\" data-entry-id=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var38 string
+		templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.ResolveAttributeValue(e.ID)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 385, Col: 22}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var38)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "\" data-rate-per-day=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var39 string
+		templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.ResolveAttributeValue(budgetEntryRateAttr(e))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 386, Col: 44}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var39)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "\" style=\"display:none;align-items:center;padding:6px 20px 6px 32px;border-bottom:1px solid var(--border);gap:8px;background:var(--surface);border-left:3px solid transparent;cursor:pointer\"><div style=\"width:136px;display:flex;align-items:center;gap:4px\"><span style=\"font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var40 string
+		templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.JoinStringErrs(budgetEntryTypeName(e))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 390, Col: 132}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var40))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "</span></div><div style=\"flex:1\"><div style=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var41 string
+		templ_7745c5c3_Var41, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("height:4px;border-radius:2px;background:var(--commit);width:" + strconv.Itoa(budgetEntryPct(e, totalIncomePerDay)) + "%")
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 393, Col: 137}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "\"></div></div><div style=\"width:80px;text-align:right;font-size:13px;color:var(--text)\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if e.ActualRatePerDay != nil {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, "<span data-rate-per-day=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var42 string
+			templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.ResolveAttributeValue(budgetRateAttr(*e.ActualRatePerDay))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 397, Col: 65}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var42)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var43 string
+			templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(budgetFmtDay(*e.ActualRatePerDay))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 397, Col: 103}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "</span>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		} else {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "<span style=\"color:var(--text3)\">—</span>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 57, "</div><div style=\"width:72px;text-align:right;font-size:12px\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if e.SnapshotDriftPerDay != nil {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "<span data-drift-per-day=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var44 string
+			templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.ResolveAttributeValue(budgetRateAttr(*e.SnapshotDriftPerDay))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 404, Col: 69}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var44)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var45 string
+			templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.JoinStringErrs(budgetFmtDriftDay(*e.SnapshotDriftPerDay))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 404, Col: 115}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var45))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 60, "</span>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		} else {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 61, "<span style=\"color:var(--text3)\">—</span>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 62, "</div></div>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		return nil
+	})
 }
 
-func budgetFmtMo(ratePerDay float64) string {
-	mo := ratePerDay * 30.44
-	if mo < 0 {
-		return fmt.Sprintf("-$%.0f/mo", -mo)
+// ── Go helpers ────────────────────────────────────────────────────────────────
+
+func budgetMarginRate(s store.SnapshotSummary) float64 {
+	return s.IncomeRate - s.CommitmentsRate
+}
+
+func budgetCommitPct(s store.SnapshotSummary) int {
+	if s.IncomeRate <= 0 {
+		return 0
 	}
-	return fmt.Sprintf("$%.0f/mo", mo)
+	pct := (s.CommitmentsRate / s.IncomeRate) * 100
+	if pct > 100 {
+		return 100
+	}
+	if pct < 0 {
+		return 0
+	}
+	return int(pct)
+}
+
+func budgetMarginPct(s store.SnapshotSummary) int {
+	mp := 100 - budgetCommitPct(s)
+	if mp < 0 {
+		return 0
+	}
+	return mp
+}
+
+func budgetIsNegativeMargin(s store.SnapshotSummary) bool {
+	return s.IncomeRate < s.CommitmentsRate
+}
+
+func budgetMarginCellBg(s store.SnapshotSummary) string {
+	if budgetIsNegativeMargin(s) {
+		return "background:color-mix(in srgb, var(--surface) 85%, var(--margin-neg) 15%)"
+	}
+	return "background:var(--surface)"
+}
+
+func budgetMarginTextColor(s store.SnapshotSummary) string {
+	if budgetIsNegativeMargin(s) {
+		return "color:var(--margin-neg)"
+	}
+	return "color:var(--text)"
 }
 
 func budgetMarginColor(marginPerDay float64) string {
 	if marginPerDay > 0 {
-		return "color:var(--income)"
+		return "color:var(--margin-pos)"
 	}
 	if marginPerDay < 0 {
-		return "color:var(--commit)"
+		return "color:var(--margin-neg)"
 	}
 	return "color:var(--text2)"
 }
 
-func budgetDriftColor(driftPerDay float64) string {
-	if driftPerDay > 0 {
-		return "color:var(--income)"
+func budgetRateAttr(ratePerDay float64) string {
+	return strconv.FormatFloat(ratePerDay, 'f', 6, 64)
+}
+
+func budgetFmtDay(ratePerDay float64) string {
+	if ratePerDay < 0 {
+		return fmt.Sprintf("-$%.2f/day", -ratePerDay)
 	}
-	if driftPerDay < 0 {
-		return "color:var(--commit)"
+	return fmt.Sprintf("$%.2f/day", ratePerDay)
+}
+
+func budgetFmtDriftDay(d float64) string {
+	if d == 0 {
+		return "$0"
 	}
-	return "color:var(--text2)"
+	if d > 0 {
+		return fmt.Sprintf("+$%.2f/day", d)
+	}
+	return fmt.Sprintf("−$%.2f/day", -d)
+}
+
+func budgetTotalActualRate(entries []store.EntryRow) float64 {
+	var total float64
+	for _, e := range entries {
+		if e.ActualRatePerDay != nil {
+			total += *e.ActualRatePerDay
+		}
+	}
+	return total
+}
+
+func budgetGroupByLabel(entries []store.EntryRow) []budgetLabelGroup {
+	seen := make(map[string]int)
+	var groups []budgetLabelGroup
+	for _, e := range entries {
+		key := "__null__"
+		if e.LabelID != nil {
+			key = *e.LabelID
+		}
+		if idx, ok := seen[key]; ok {
+			groups[idx].Entries = append(groups[idx].Entries, e)
+		} else {
+			seen[key] = len(groups)
+			g := budgetLabelGroup{Entries: []store.EntryRow{e}}
+			if e.LabelID != nil {
+				lid := *e.LabelID
+				g.LabelID = &lid
+			}
+			if e.LabelName != nil {
+				lname := *e.LabelName
+				g.LabelName = &lname
+			}
+			groups = append(groups, g)
+		}
+	}
+	return groups
+}
+
+func budgetGroupName(g budgetLabelGroup) string {
+	if g.LabelName != nil && *g.LabelName != "" {
+		return *g.LabelName
+	}
+	return "Unlabeled"
+}
+
+func budgetGroupKey(g budgetLabelGroup) string {
+	if g.LabelID != nil {
+		return *g.LabelID
+	}
+	return "__null__"
+}
+
+func budgetGroupActualRate(g budgetLabelGroup) float64 {
+	var total float64
+	for _, e := range g.Entries {
+		if e.ActualRatePerDay != nil {
+			total += *e.ActualRatePerDay
+		}
+	}
+	return total
+}
+
+func budgetGroupDrift(g budgetLabelGroup) float64 {
+	var total float64
+	for _, e := range g.Entries {
+		if e.SnapshotDriftPerDay != nil {
+			total += *e.SnapshotDriftPerDay
+		}
+	}
+	return total
+}
+
+func budgetGroupPct(g budgetLabelGroup, totalIncomePerDay float64) int {
+	if totalIncomePerDay <= 0 {
+		return 0
+	}
+	total := budgetGroupActualRate(g)
+	pct := int((total / totalIncomePerDay) * 100)
+	if pct > 100 {
+		return 100
+	}
+	if pct < 0 {
+		return 0
+	}
+	return pct
+}
+
+func budgetEntryTypeName(e store.EntryRow) string {
+	switch e.EntryType {
+	case "standing":
+		return "Standing"
+	case "variable":
+		return "Variable"
+	case "irregular":
+		return "Irregular"
+	}
+	return e.EntryType
+}
+
+func budgetEntryRateAttr(e store.EntryRow) string {
+	if e.ActualRatePerDay == nil {
+		return ""
+	}
+	return budgetRateAttr(*e.ActualRatePerDay)
+}
+
+func budgetEntryPct(e store.EntryRow, totalIncomePerDay float64) int {
+	if e.ActualRatePerDay == nil || totalIncomePerDay <= 0 {
+		return 0
+	}
+	pct := int((*e.ActualRatePerDay / totalIncomePerDay) * 100)
+	if pct > 100 {
+		return 100
+	}
+	if pct < 0 {
+		return 0
+	}
+	return pct
 }
 
 var _ = templruntime.GeneratedTemplate

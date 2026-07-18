@@ -11,8 +11,60 @@ templ Shell(data ShellData) {
 				{ children... }
 			</main>
 			@userMenu(data.User, data.CurrentPath)
+			@addAccountDialog()
 		</div>
+		@jobStream()
 	}
+}
+
+// jobStream is a persistent SSE listener: drives the activity dot and
+// refreshes the transactions table in-place when a transaction job completes.
+templ jobStream() {
+	<script>
+		(function() {
+			var TX_JOBS = { 'import.process': true, 'account.analyze': true, 'rules.reprocess': true };
+			var running = {};
+			var backoff = 1000;
+
+			function syncDot() {
+				var el = document.getElementById('activity-dot');
+				if (el) el.style.display = Object.keys(running).length > 0 ? '' : 'none';
+			}
+
+			function refreshTransactions() {
+				if (window.__velociTxRefresh) {
+					window.__velociTxRefresh();
+				}
+			}
+
+			// ─── SSE ─────────────────────────────────────────────────────────────
+			function onEvent(evt) {
+				if (evt.status === 'queued' || evt.status === 'processing') {
+					running[evt.job_id] = true;
+				} else {
+					delete running[evt.job_id];
+				}
+				syncDot();
+				if (evt.status === 'complete' && TX_JOBS[evt.job_type]) {
+					refreshTransactions();
+				}
+			}
+
+			function connect() {
+				var es = new EventSource('/api/jobs/stream');
+				es.onmessage = function(e) {
+					try { onEvent(JSON.parse(e.data)); backoff = 1000; } catch(_) {}
+				};
+				es.onerror = function() {
+					es.close();
+					setTimeout(connect, backoff);
+					backoff = Math.min(backoff * 2, 30000);
+				};
+			}
+
+			connect();
+		})();
+	</script>
 }
 
 templ sidebar(data ShellData) {
@@ -77,10 +129,15 @@ templ navLinkActivity(href string, hasRunning bool, currentPath string) {
 	>
 		@iconActivity()
 		Activity
-		if hasRunning {
-			<span class="activity-dot"></span>
-		}
+		<span id="activity-dot" class="activity-dot" style={ activityDotStyle(hasRunning) }></span>
 	</a>
+}
+
+func activityDotStyle(hasRunning bool) string {
+	if hasRunning {
+		return ""
+	}
+	return "display:none"
 }
 
 templ accountSection(title string, accounts []ShellAccount, status, currentPath string) {
@@ -110,6 +167,500 @@ templ accountSection(title string, accounts []ShellAccount, status, currentPath 
 			</a>
 		}
 	</div>
+}
+
+templ addAccountDialog() {
+	<dialog
+		id="add-account-dialog"
+		style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0;color:var(--text);width:480px;max-width:90vw"
+	>
+		<div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+			<span id="add-account-title" style="font-size:15px;font-weight:700">Add account</span>
+			<button
+				id="add-account-close"
+				style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:18px;line-height:1;padding:0 4px"
+			>✕</button>
+		</div>
+		<div style="padding:20px;overflow-y:auto;max-height:80vh;display:flex;flex-direction:column;gap:14px">
+			<!-- Account fields -->
+			<div>
+				<label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px" for="aa-name">Name</label>
+				<input
+					id="aa-name"
+					type="text"
+					placeholder="e.g. Chase Checking"
+					style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:7px 10px;font-size:13px;color:var(--text);outline:none;font-family:inherit"
+				/>
+			</div>
+			<div style="display:flex;gap:12px">
+				<div style="flex:1">
+					<label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px" for="aa-type">Account type</label>
+					<select
+						id="aa-type"
+						style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:7px 10px;font-size:13px;color:var(--text);outline:none;font-family:inherit;cursor:pointer"
+					>
+						<option value="checking">Checking</option>
+						<option value="savings">Savings</option>
+						<option value="credit">Credit</option>
+						<option value="loan">Loan</option>
+						<option value="mortgage">Mortgage</option>
+						<option value="investment">Investment</option>
+					</select>
+				</div>
+				<div style="flex:1">
+					<label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px" for="aa-status">Status</label>
+					<select
+						id="aa-status"
+						style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:7px 10px;font-size:13px;color:var(--text);outline:none;font-family:inherit;cursor:pointer"
+					>
+						<option value="active">Active</option>
+						<option value="passive">Passive</option>
+					</select>
+				</div>
+			</div>
+			<div>
+				<label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px" for="aa-balance">Balance (optional)</label>
+				<div style="position:relative">
+					<span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:13px;pointer-events:none">$</span>
+					<input
+						id="aa-balance"
+						type="text"
+						inputmode="decimal"
+						placeholder="0.00"
+						style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:7px 10px 7px 18px;font-size:13px;color:var(--text);outline:none;font-family:inherit"
+					/>
+				</div>
+			</div>
+			<div id="aa-rate-wrap" style="display:none">
+				<label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px" for="aa-rate">Interest rate % (optional)</label>
+				<input
+					id="aa-rate"
+					type="text"
+					inputmode="decimal"
+					placeholder="e.g. 19.99"
+					style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:7px 10px;font-size:13px;color:var(--text);outline:none;font-family:inherit"
+				/>
+			</div>
+			<div id="aa-limit-wrap" style="display:none">
+				<label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px" for="aa-limit">Credit limit (optional)</label>
+				<div style="position:relative">
+					<span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:13px;pointer-events:none">$</span>
+					<input
+						id="aa-limit"
+						type="text"
+						inputmode="decimal"
+						placeholder="0.00"
+						style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:7px 10px 7px 18px;font-size:13px;color:var(--text);outline:none;font-family:inherit"
+					/>
+				</div>
+			</div>
+			<!-- Institution section -->
+			<div style="border-top:1px solid var(--border);padding-top:14px">
+				<div style="font-size:12px;color:var(--text3);margin-bottom:8px">Institution</div>
+				<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px">
+					<label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);cursor:pointer">
+						<input type="radio" name="aa-inst-choice" value="existing" id="aa-inst-existing"/>
+						Link to existing institution
+					</label>
+					<label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);cursor:pointer">
+						<input type="radio" name="aa-inst-choice" value="new" id="aa-inst-new"/>
+						Create new institution
+					</label>
+					<label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);cursor:pointer">
+						<input type="radio" name="aa-inst-choice" value="skip" id="aa-inst-skip" checked/>
+						Skip for now
+					</label>
+				</div>
+				<!-- Existing institution section -->
+				<div id="aa-existing-section" style="display:none">
+					<label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px" for="aa-existing-select">Institution</label>
+					<select
+						id="aa-existing-select"
+						style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:7px 10px;font-size:13px;color:var(--text);outline:none;font-family:inherit;cursor:pointer;margin-bottom:8px"
+					>
+						<option value="">Select an institution</option>
+					</select>
+					<div id="aa-existing-empty" style="font-size:12px;color:var(--text3);display:none">
+						No institutions yet — choose "Create new institution" instead.
+					</div>
+					<div id="aa-existing-preview" style="display:none;padding:12px;background:var(--surface2);border-radius:4px;border:1px solid var(--border)"></div>
+				</div>
+				<!-- New / skip mapping section -->
+				<div id="aa-mapping-section">
+					<div style="margin-bottom:10px">
+						<label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px" for="aa-inst-name">Institution name</label>
+						<input
+							id="aa-inst-name"
+							type="text"
+							placeholder="e.g. Chase"
+							style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:7px 10px;font-size:13px;color:var(--text);outline:none;font-family:inherit"
+						/>
+					</div>
+					<details id="aa-advanced">
+						<summary style="display:flex;align-items:center;gap:4px;cursor:pointer;background:none;border:none;color:var(--text2);font-size:12px;padding:4px 0;margin-bottom:8px;list-style:none;-webkit-appearance:none">
+							<span id="aa-adv-chevron" style="display:inline-block;transition:transform 0.1s;font-size:10px">▶</span>
+							Advanced settings (optional)
+						</summary>
+						<div style="padding:12px;background:var(--surface2);border-radius:4px;border:1px solid var(--border);margin-bottom:8px">
+							<div style="font-size:12px;color:var(--text2);margin-bottom:12px" id="aa-adv-hint">
+								You can refine these when you upload your first CSV.
+							</div>
+							<div style="display:flex;gap:8px;margin-bottom:10px">
+								<div style="flex:1">
+									<label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px" for="aa-date-col">Date column</label>
+									<input id="aa-date-col" type="text" value="date" style="width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:6px 8px;font-size:12px;color:var(--text);outline:none;font-family:inherit"/>
+								</div>
+								<div style="flex:1">
+									<label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px" for="aa-amount-col">Amount column</label>
+									<input id="aa-amount-col" type="text" value="amount" style="width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:6px 8px;font-size:12px;color:var(--text);outline:none;font-family:inherit"/>
+								</div>
+								<div style="flex:1">
+									<label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px" for="aa-merchant-col">Merchant column</label>
+									<input id="aa-merchant-col" type="text" value="description" style="width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:6px 8px;font-size:12px;color:var(--text);outline:none;font-family:inherit"/>
+								</div>
+							</div>
+							<div style="display:flex;gap:8px;margin-bottom:10px">
+								<div style="flex:1">
+									<label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px" for="aa-balance-col">Balance column (optional)</label>
+									<input id="aa-balance-col" type="text" style="width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:6px 8px;font-size:12px;color:var(--text);outline:none;font-family:inherit"/>
+								</div>
+								<div style="flex:1">
+									<label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px" for="aa-dc-col">Debit/credit col (optional)</label>
+									<input id="aa-dc-col" type="text" style="width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:6px 8px;font-size:12px;color:var(--text);outline:none;font-family:inherit"/>
+								</div>
+								<div style="flex:1">
+									<label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px" for="aa-id-col">Imported ID col (optional)</label>
+									<input id="aa-id-col" type="text" style="width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:6px 8px;font-size:12px;color:var(--text);outline:none;font-family:inherit"/>
+								</div>
+							</div>
+							<div style="margin-bottom:10px">
+								<label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px" for="aa-sign-conv">Amount sign convention</label>
+								<select id="aa-sign-conv" style="width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:6px 8px;font-size:12px;color:var(--text);outline:none;font-family:inherit;cursor:pointer">
+									<option value="positive_is_credit">Positive is credit</option>
+									<option value="positive_is_debit">Positive is debit</option>
+								</select>
+							</div>
+							<div style="display:flex;gap:12px;margin-bottom:10px">
+								<div style="flex:1">
+									<label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px" for="aa-dedup-days">Dedup window (days)</label>
+									<input id="aa-dedup-days" type="number" value="3" style="width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:6px 8px;font-size:12px;color:var(--text);outline:none;font-family:inherit"/>
+								</div>
+								<div style="flex:1">
+									<label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px" for="aa-settle-days">Settlement window (days)</label>
+									<input id="aa-settle-days" type="number" value="14" style="width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:6px 8px;font-size:12px;color:var(--text);outline:none;font-family:inherit"/>
+								</div>
+							</div>
+							<div>
+								<label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px" for="aa-tolerance">Amount tolerance (%)</label>
+								<input id="aa-tolerance" type="number" step="0.1" value="0.5" style="width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:6px 8px;font-size:12px;color:var(--text);outline:none;font-family:inherit"/>
+							</div>
+						</div>
+					</details>
+				</div>
+			</div>
+			<div id="aa-error" style="font-size:12px;color:var(--commit);display:none"></div>
+			<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+				<button
+					id="aa-cancel"
+					style="background:transparent;border:1px solid var(--border);border-radius:4px;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit"
+				>Cancel</button>
+				<button
+					id="aa-submit"
+					style="background:var(--accent);border:none;border-radius:4px;padding:6px 14px;cursor:pointer;font-size:13px;font-weight:600;color:#fff;font-family:inherit"
+				>Create account</button>
+			</div>
+		</div>
+	</dialog>
+	<script>
+		(function() {
+			var dialog   = document.getElementById('add-account-dialog');
+			var titleEl  = document.getElementById('add-account-title');
+			var nameInput  = document.getElementById('aa-name');
+			var typeSelect = document.getElementById('aa-type');
+			var statusSelect = document.getElementById('aa-status');
+			var balanceInput = document.getElementById('aa-balance');
+			var rateInput  = document.getElementById('aa-rate');
+			var limitInput = document.getElementById('aa-limit');
+			var rateWrap   = document.getElementById('aa-rate-wrap');
+			var limitWrap  = document.getElementById('aa-limit-wrap');
+			var errorEl    = document.getElementById('aa-error');
+			var submitBtn  = document.getElementById('aa-submit');
+			var cancelBtn  = document.getElementById('aa-cancel');
+			var closeBtn   = document.getElementById('add-account-close');
+
+			var existingSection = document.getElementById('aa-existing-section');
+			var existingSelect  = document.getElementById('aa-existing-select');
+			var existingEmpty   = document.getElementById('aa-existing-empty');
+			var existingPreview = document.getElementById('aa-existing-preview');
+			var mappingSection  = document.getElementById('aa-mapping-section');
+			var instNameInput   = document.getElementById('aa-inst-name');
+			var advDetails      = document.getElementById('aa-advanced');
+			var advChevron      = document.getElementById('aa-adv-chevron');
+
+			var dateColInput    = document.getElementById('aa-date-col');
+			var amountColInput  = document.getElementById('aa-amount-col');
+			var merchantColInput = document.getElementById('aa-merchant-col');
+			var balanceColInput = document.getElementById('aa-balance-col');
+			var dcColInput      = document.getElementById('aa-dc-col');
+			var idColInput      = document.getElementById('aa-id-col');
+			var signConvSelect  = document.getElementById('aa-sign-conv');
+			var dedupInput      = document.getElementById('aa-dedup-days');
+			var settleInput     = document.getElementById('aa-settle-days');
+			var toleranceInput  = document.getElementById('aa-tolerance');
+
+			var allInstitutions = [];
+			var choice = 'skip';
+
+			advDetails.addEventListener('toggle', function() {
+				advChevron.style.transform = advDetails.open ? 'rotate(90deg)' : '';
+			});
+
+			function dollarsToCents(s) {
+				var t = (s || '').trim().replace(/,/g, '');
+				if (!t) return null;
+				var n = parseFloat(t);
+				return isNaN(n) ? null : Math.round(n * 100);
+			}
+
+			function updateTypeFields() {
+				var t = typeSelect.value;
+				var showRate  = t === 'credit' || t === 'loan' || t === 'mortgage';
+				var showLimit = t === 'credit';
+				rateWrap.style.display  = showRate  ? '' : 'none';
+				limitWrap.style.display = showLimit ? '' : 'none';
+			}
+
+			typeSelect.addEventListener('change', updateTypeFields);
+
+			function setChoice(c) {
+				choice = c;
+				var isExisting = c === 'existing';
+				var isNew      = c === 'new';
+				existingSection.style.display = isExisting ? '' : 'none';
+				mappingSection.style.display  = isExisting ? 'none' : '';
+				instNameInput.disabled = !isNew;
+				instNameInput.style.opacity = isNew ? '1' : '0.6';
+				instNameInput.style.cursor  = isNew ? 'text' : 'not-allowed';
+				if (isNew) {
+					resetMappingDefaults();
+				} else if (c === 'skip') {
+					instNameInput.value = nameInput.value.trim();
+				}
+			}
+
+			function resetMappingDefaults() {
+				instNameInput.value    = '';
+				dateColInput.value     = 'date';
+				amountColInput.value   = 'amount';
+				merchantColInput.value = 'description';
+				balanceColInput.value  = '';
+				dcColInput.value       = '';
+				idColInput.value       = '';
+				signConvSelect.value   = 'positive_is_credit';
+				dedupInput.value       = '3';
+				settleInput.value      = '14';
+				toleranceInput.value   = '0.5';
+			}
+
+			nameInput.addEventListener('input', function() {
+				if (choice === 'skip') {
+					instNameInput.value = nameInput.value.trim();
+				}
+			});
+
+			document.querySelectorAll('input[name="aa-inst-choice"]').forEach(function(radio) {
+				radio.addEventListener('change', function() {
+					if (radio.checked) setChoice(radio.value);
+				});
+			});
+
+			function renderPreview(inst) {
+				function row(label, value) {
+					return '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px">'
+						+ '<span style="color:var(--text3)">' + label + '</span>'
+						+ '<span style="color:var(--text);font-weight:500">' + value + '</span>'
+						+ '</div>';
+				}
+				var html = '';
+				html += row('Date column', inst.date_col);
+				html += row('Amount column', inst.amount_col);
+				html += row('Merchant column', inst.merchant_col);
+				if (inst.balance_col)     html += row('Balance column', inst.balance_col);
+				if (inst.debit_credit_col) html += row('Debit/credit column', inst.debit_credit_col);
+				if (inst.imported_id_col) html += row('Imported ID column', inst.imported_id_col);
+				html += row('Sign convention', inst.amount_sign_convention === 'positive_is_credit' ? 'Positive is credit' : 'Positive is debit');
+				html += row('Dedup window', inst.dedup_window_days + ' days');
+				html += row('Settlement window', inst.settlement_window_days + ' days');
+				html += row('Amount tolerance', inst.amount_tolerance_pct + '%');
+				existingPreview.innerHTML = html;
+				existingPreview.style.display = '';
+			}
+
+			existingSelect.addEventListener('change', function() {
+				var id = existingSelect.value;
+				var inst = allInstitutions.find(function(i) { return i.id === id; });
+				if (inst) {
+					renderPreview(inst);
+				} else {
+					existingPreview.style.display = 'none';
+					existingPreview.innerHTML = '';
+				}
+			});
+
+			function loadInstitutions() {
+				fetch('/api/institutions')
+					.then(function(r) { return r.json(); })
+					.then(function(body) {
+						allInstitutions = (body && body.data && body.data.data) || [];
+						while (existingSelect.options.length > 1) existingSelect.remove(1);
+						allInstitutions.forEach(function(inst) {
+							var opt = document.createElement('option');
+							opt.value = inst.id;
+							opt.textContent = inst.institution_name;
+							existingSelect.appendChild(opt);
+						});
+						existingEmpty.style.display = allInstitutions.length === 0 ? '' : 'none';
+					})
+					.catch(function() {});
+			}
+
+			function resetForm(defaultStatus) {
+				nameInput.value    = '';
+				typeSelect.value   = 'checking';
+				statusSelect.value = defaultStatus || 'active';
+				balanceInput.value = '';
+				rateInput.value    = '';
+				limitInput.value   = '';
+				errorEl.style.display = 'none';
+				existingSelect.value = '';
+				existingPreview.style.display = 'none';
+				existingPreview.innerHTML = '';
+				if (advDetails.open) advDetails.removeAttribute('open');
+				advChevron.style.transform = '';
+				document.getElementById('aa-inst-skip').checked = true;
+				resetMappingDefaults();
+				setChoice('skip');
+				updateTypeFields();
+			}
+
+			function openDialog(status) {
+				resetForm(status);
+				titleEl.textContent = 'Add ' + status + ' account';
+				submitBtn.disabled = false;
+				submitBtn.textContent = 'Create account';
+				loadInstitutions();
+				dialog.showModal();
+				nameInput.focus();
+			}
+
+			function closeDialog() { dialog.close(); }
+
+			closeBtn.addEventListener('click', closeDialog);
+			cancelBtn.addEventListener('click', closeDialog);
+			dialog.addEventListener('click', function(e) {
+				if (e.target === dialog) closeDialog();
+			});
+
+			document.querySelectorAll('[data-add-account]').forEach(function(btn) {
+				btn.addEventListener('click', function() {
+					openDialog(btn.dataset.addAccount);
+				});
+			});
+
+			function mappingBody() {
+				return {
+					institution_name:       instNameInput.value.trim(),
+					source_type:            'csv',
+					date_col:               dateColInput.value.trim()     || 'date',
+					amount_col:             amountColInput.value.trim()   || 'amount',
+					merchant_col:           merchantColInput.value.trim() || 'description',
+					balance_col:            balanceColInput.value.trim()  || null,
+					debit_credit_col:       dcColInput.value.trim()       || null,
+					imported_id_col:        idColInput.value.trim()       || null,
+					amount_sign_convention: signConvSelect.value,
+					dedup_window_days:      parseInt(dedupInput.value)    || 3,
+					settlement_window_days: parseInt(settleInput.value)   || 14,
+					amount_tolerance_pct:   parseFloat(toleranceInput.value) || 0.5,
+				};
+			}
+
+			submitBtn.addEventListener('click', function() {
+				var name = nameInput.value.trim();
+				if (!name) {
+					errorEl.textContent = 'Account name is required.';
+					errorEl.style.display = '';
+					nameInput.focus();
+					return;
+				}
+				if (choice === 'existing' && !existingSelect.value) {
+					errorEl.textContent = 'Select an institution, or choose a different institution option.';
+					errorEl.style.display = '';
+					return;
+				}
+				if (choice !== 'existing' && !instNameInput.value.trim()) {
+					errorEl.textContent = 'Institution name is required.';
+					errorEl.style.display = '';
+					return;
+				}
+
+				submitBtn.disabled = true;
+				submitBtn.textContent = 'Creating…';
+				errorEl.style.display = 'none';
+
+				var accountBody = {
+					name:               name,
+					account_type:       typeSelect.value,
+					status:             statusSelect.value,
+					balance_cents:      dollarsToCents(balanceInput.value),
+					interest_rate:      rateWrap.style.display !== 'none' && rateInput.value.trim() ? parseFloat(rateInput.value) : null,
+					credit_limit_cents: limitWrap.style.display !== 'none' ? dollarsToCents(limitInput.value) : null,
+				};
+
+				function createAccount(institutionId) {
+					accountBody.institution_id = institutionId || null;
+					return fetch('/api/accounts', {
+						method:  'POST',
+						headers: {'Content-Type': 'application/json'},
+						body:    JSON.stringify(accountBody),
+					}).then(function(r) {
+						if (!r.ok) return r.json().then(function(e) { throw new Error(e.detail || e.title || 'Failed to create account'); });
+						closeDialog();
+						location.reload();
+					});
+				}
+
+				function getOrCreateInstitution() {
+					var mb = mappingBody();
+					var nameMatch = allInstitutions.find(function(i) { return i.institution_name === mb.institution_name; });
+					if (nameMatch) return Promise.resolve(nameMatch.id);
+					return fetch('/api/institutions', {
+						method:  'POST',
+						headers: {'Content-Type': 'application/json'},
+						body:    JSON.stringify(mb),
+					}).then(function(r) {
+						if (!r.ok) return r.json().then(function(e) { throw new Error(e.detail || e.title || 'Failed to create institution'); });
+						return r.json();
+					}).then(function(body) {
+						return body.data.id;
+					});
+				}
+
+				var p;
+				if (choice === 'existing') {
+					p = createAccount(existingSelect.value);
+				} else {
+					p = getOrCreateInstitution().then(createAccount);
+				}
+
+				p.catch(function(err) {
+					errorEl.textContent = err.message || 'Something went wrong. Please try again.';
+					errorEl.style.display = '';
+					submitBtn.disabled = false;
+					submitBtn.textContent = 'Create account';
+				});
+			});
+		})();
+	</script>
 }
 
 templ userMenu(user ShellUser, currentPath string) {

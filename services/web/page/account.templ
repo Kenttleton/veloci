@@ -1,7 +1,7 @@
 package page
 
 import (
-	"fmt"
+	"encoding/json"
 
 	"github.com/veloci/veloci/store"
 )
@@ -9,38 +9,36 @@ import (
 templ AccountPage(shell ShellData, data AccountData) {
 	@Shell(shell) {
 		<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
-			<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0;gap:12px">
-				<div style="display:flex;align-items:center;gap:10px;min-width:0">
-					<h1 style="margin:0;font-size:18px;font-weight:700;color:var(--text);letter-spacing:-0.02em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+			<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
+				<div style="display:flex;align-items:center;gap:12px">
+					<h1 style="margin:0;font-size:18px;font-weight:700;color:var(--text);letter-spacing:-0.02em">
 						{ data.Account.Name }
 					</h1>
-					<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);flex-shrink:0">
+					<span style="font-size:11px;font-weight:500;padding:2px 8px;border-radius:4px;background:var(--surface2);color:var(--text2)">
 						{ accountTypeLabel(data.Account.AccountType) }
 					</span>
 				</div>
-				<div style="display:flex;align-items:center;gap:16px;flex-shrink:0">
-					<span style={ "font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-0.02em;" + accountBalanceColor(data.Account) }>
-						{ FormatBalance(data.Account.BalanceCents) }
-					</span>
-					<div style="display:flex;gap:6px">
-						if data.Account.InstitutionID != nil {
-							<button
-								id="upload-csv-btn"
-								style="background:var(--accent);border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit"
-							>Upload CSV</button>
-						} else {
-							<button
-								disabled
-								title="Set an institution for this account before uploading"
-								style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 14px;cursor:not-allowed;font-size:13px;color:var(--text3);font-family:inherit;opacity:0.6"
-							>Upload CSV</button>
-						}
-						<button
-							id="delete-account-btn"
-							style="background:transparent;border:1px solid var(--border);border-radius:6px;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit"
-						>Delete</button>
-					</div>
-				</div>
+				<span style={ "font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;" + accountBalanceColor(data.Account) }>
+					{ FormatBalance(data.Account.BalanceCents) }
+				</span>
+			</div>
+			<div style="display:flex;align-items:center;justify-content:space-between;padding:0 20px;height:36px;border-bottom:1px solid var(--border);flex-shrink:0">
+				if data.Account.InstitutionID != nil {
+					<button
+						id="upload-csv-btn"
+						style="background:none;border:1px solid var(--border);border-radius:4px;padding:3px 10px;cursor:pointer;font-size:12px;color:var(--text2);font-family:inherit"
+					>Upload CSV</button>
+				} else {
+					<button
+						disabled
+						title="Set an institution for this account before uploading"
+						style="background:none;border:1px solid var(--border);border-radius:4px;padding:3px 10px;cursor:not-allowed;font-size:12px;color:var(--text3);font-family:inherit;opacity:0.6"
+					>Upload CSV</button>
+				}
+				<button
+					id="delete-account-btn"
+					style="background:none;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:12px;color:var(--text3);font-family:inherit"
+				>Delete Account</button>
 			</div>
 			<div style="padding:8px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
 				<input
@@ -50,7 +48,12 @@ templ AccountPage(shell ShellData, data AccountData) {
 					style="background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);outline:none;width:260px"
 				/>
 			</div>
-			<div style="flex:1;overflow:auto">
+			<div
+				id="tx-section"
+				data-account-id={ data.Account.ID }
+				data-next-cursor={ data.NextCursor }
+				style="flex:1;overflow:auto"
+			>
 				if len(data.Transactions) == 0 {
 					<div style="padding:48px 20px;text-align:center;color:var(--text3);font-size:13px">
 						No transactions yet. Upload a CSV to get started.
@@ -72,21 +75,16 @@ templ AccountPage(shell ShellData, data AccountData) {
 							}
 						</tbody>
 					</table>
-					if data.NextCursor != "" {
-						<div style="text-align:center;padding:16px">
-							<a
-								href={ templ.SafeURL("?cursor=" + data.NextCursor) }
-								style="display:inline-block;border:1px solid var(--border);border-radius:4px;padding:6px 16px;color:var(--text2);font-size:13px;text-decoration:none"
-							>Load older</a>
-						</div>
-					}
+					<div id="tx-sentinel" style="height:1px"></div>
+					<div id="tx-loading-more" style="display:none;text-align:center;padding:12px;font-size:12px;color:var(--text3)">Loading…</div>
 				}
 			</div>
 		</div>
 		<dialog
 			id="upload-csv-dialog"
-			data-account-id={ data.Account.ID }
-			style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0;color:var(--text);width:440px;max-width:90vw"
+			data-account={ uploadAccountJSON(data.Account) }
+			data-institution={ uploadInstitutionJSON(data.Institution) }
+			style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0;color:var(--text);width:560px;max-width:90vw"
 		>
 			<div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
 				<span style="font-size:15px;font-weight:700">Upload CSV</span>
@@ -95,28 +93,122 @@ templ AccountPage(shell ShellData, data AccountData) {
 					style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:18px;line-height:1;padding:0 4px"
 				>✕</button>
 			</div>
-			<div style="padding:20px">
-				if data.Institution != nil {
-					<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;padding:8px 10px;background:var(--surface2);border-radius:6px;border:1px solid var(--border)">
-						<span style="font-size:12px;color:var(--text3)">Institution</span>
-						<span style="font-size:13px;color:var(--text);font-weight:500">{ data.Institution.InstitutionName }</span>
-					</div>
-				}
-				<div style="display:flex;flex-direction:column;gap:10px">
-					<label style="display:block">
-						<span style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px">CSV file</span>
+			<div style="padding:20px;overflow-y:auto;max-height:80vh">
+				<!-- Step 1: pick file -->
+				<div id="upload-step-1">
+					<div style="margin-bottom:12px">
+						<label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px" for="csv-file-input">CSV file</label>
 						<input
 							id="csv-file-input"
 							type="file"
 							accept=".csv,text/csv"
-							style="font-size:13px;color:var(--text);width:100%"
+							style="font-size:13px;color:var(--text);width:100%;box-sizing:border-box"
 						/>
-					</label>
-					<div id="upload-error" style="color:var(--commit);font-size:12px;display:none"></div>
-					<button
-						id="upload-submit-btn"
-						style="background:var(--accent);border:none;border-radius:6px;padding:8px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit;width:100%"
-					>Upload</button>
+					</div>
+					<div id="upload-error-1" style="color:var(--commit);font-size:12px;display:none"></div>
+				</div>
+				<!-- Step 2: choose mode -->
+				<div id="upload-step-2" style="display:none">
+					<div id="upload-file-info" style="font-size:13px;color:var(--text2);margin-bottom:14px"></div>
+					<div id="upload-mapping-preview"></div>
+					<div id="upload-error-2" style="color:var(--commit);font-size:12px;display:none;margin-top:12px"></div>
+					<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+						<button
+							id="upload-edit-mapping-btn"
+							style="background:none;border:1px solid var(--border);border-radius:4px;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit"
+						>Edit mapping</button>
+						<button
+							id="upload-use-existing-btn"
+							style="background:var(--accent);border:none;border-radius:4px;padding:6px 14px;cursor:pointer;font-size:13px;font-weight:600;color:#fff;font-family:inherit;display:none"
+						>Use existing mapping</button>
+					</div>
+				</div>
+				<!-- Step 3: edit mapping -->
+				<div id="upload-step-3" style="display:none">
+					<div id="upload-shared-warning" style="display:none;font-size:12px;color:var(--text2);margin-bottom:12px"></div>
+					<div style="margin-bottom:10px">
+						<label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px" for="upload-inst-name">Institution name</label>
+						<input
+							id="upload-inst-name"
+							type="text"
+							placeholder="e.g. Chase"
+							style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:7px 10px;font-size:13px;color:var(--text);outline:none;font-family:inherit"
+						/>
+					</div>
+					<details id="upload-advanced" open>
+						<summary style="display:flex;align-items:center;gap:4px;cursor:pointer;list-style:none;-webkit-appearance:none;color:var(--text2);font-size:12px;padding:4px 0;margin-bottom:8px">
+							<span id="upload-adv-chevron" style="display:inline-block;font-size:10px;transition:transform 0.1s">▶</span>
+							Column mapping
+						</summary>
+						<div style="padding:12px;background:var(--surface2);border-radius:4px;border:1px solid var(--border);margin-bottom:8px">
+							<div style="display:flex;gap:8px;margin-bottom:10px">
+								<div style="flex:1">
+									<label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px" for="upload-date-col">Date column</label>
+									<select id="upload-date-col" style="width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:6px 8px;font-size:12px;color:var(--text);outline:none;font-family:inherit;cursor:pointer"></select>
+								</div>
+								<div style="flex:1">
+									<label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px" for="upload-amount-col">Amount column</label>
+									<select id="upload-amount-col" style="width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:6px 8px;font-size:12px;color:var(--text);outline:none;font-family:inherit;cursor:pointer"></select>
+								</div>
+								<div style="flex:1">
+									<label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px" for="upload-merchant-col">Merchant column</label>
+									<select id="upload-merchant-col" style="width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:6px 8px;font-size:12px;color:var(--text);outline:none;font-family:inherit;cursor:pointer"></select>
+								</div>
+							</div>
+							<div style="display:flex;gap:8px;margin-bottom:10px">
+								<div style="flex:1">
+									<label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px" for="upload-balance-col">Balance col (optional)</label>
+									<select id="upload-balance-col" style="width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:6px 8px;font-size:12px;color:var(--text);outline:none;font-family:inherit;cursor:pointer"></select>
+								</div>
+								<div style="flex:1">
+									<label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px" for="upload-dc-col">Debit/credit col (optional)</label>
+									<select id="upload-dc-col" style="width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:6px 8px;font-size:12px;color:var(--text);outline:none;font-family:inherit;cursor:pointer"></select>
+								</div>
+								<div style="flex:1">
+									<label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px" for="upload-id-col">Imported ID col (optional)</label>
+									<select id="upload-id-col" style="width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:6px 8px;font-size:12px;color:var(--text);outline:none;font-family:inherit;cursor:pointer"></select>
+								</div>
+							</div>
+							<div style="margin-bottom:10px">
+								<label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px" for="upload-sign-conv">Amount sign convention</label>
+								<select id="upload-sign-conv" style="width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:6px 8px;font-size:12px;color:var(--text);outline:none;font-family:inherit;cursor:pointer">
+									<option value="positive_is_credit">Positive is credit</option>
+									<option value="positive_is_debit">Positive is debit</option>
+								</select>
+							</div>
+							<div style="display:flex;gap:12px;margin-bottom:10px">
+								<div style="flex:1">
+									<label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px" for="upload-dedup-days">Dedup window (days)</label>
+									<input id="upload-dedup-days" type="number" value="3" style="width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:6px 8px;font-size:12px;color:var(--text);outline:none;font-family:inherit"/>
+								</div>
+								<div style="flex:1">
+									<label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px" for="upload-settle-days">Settlement window (days)</label>
+									<input id="upload-settle-days" type="number" value="14" style="width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:6px 8px;font-size:12px;color:var(--text);outline:none;font-family:inherit"/>
+								</div>
+							</div>
+							<div>
+								<label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px" for="upload-tolerance">Amount tolerance (%)</label>
+								<input id="upload-tolerance" type="number" step="0.1" value="0.5" style="width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:6px 8px;font-size:12px;color:var(--text);outline:none;font-family:inherit"/>
+							</div>
+						</div>
+					</details>
+					<div id="upload-preview-wrap" style="display:none;margin-top:8px">
+						<div style="font-size:12px;color:var(--text3);margin-bottom:4px">Preview</div>
+						<div style="overflow-x:auto;border:1px solid var(--border);border-radius:4px">
+							<table id="upload-preview-table" style="border-collapse:collapse;width:100%;font-size:12px"></table>
+						</div>
+					</div>
+					<div id="upload-error-3" style="color:var(--commit);font-size:12px;display:none;margin-top:12px"></div>
+					<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+						<button
+							id="upload-back-btn"
+							style="background:none;border:1px solid var(--border);border-radius:4px;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit"
+						>Back</button>
+						<button
+							id="upload-save-btn"
+							style="background:var(--accent);border:none;border-radius:4px;padding:6px 14px;cursor:pointer;font-size:13px;font-weight:600;color:#fff;font-family:inherit"
+						>Save mapping &amp; upload</button>
+					</div>
 				</div>
 			</div>
 		</dialog>
@@ -146,98 +238,501 @@ templ AccountPage(shell ShellData, data AccountData) {
 		</dialog>
 		<script>
 			(function() {
-				var uploadBtn = document.getElementById('upload-csv-btn');
-				var uploadDialog = document.getElementById('upload-csv-dialog');
-				var uploadClose = document.getElementById('upload-dialog-close');
-				var uploadSubmit = document.getElementById('upload-submit-btn');
-				var uploadError = document.getElementById('upload-error');
-				var csvInput = document.getElementById('csv-file-input');
-				var accountId = (uploadDialog || {dataset:{}}).dataset.accountId;
-
-				if (uploadBtn && uploadDialog) {
-					uploadBtn.addEventListener('click', function() { uploadDialog.showModal(); });
-					uploadClose.addEventListener('click', function() { uploadDialog.close(); });
-					uploadDialog.addEventListener('click', function(e) {
-						if (e.target === uploadDialog) uploadDialog.close();
-					});
-					uploadSubmit.addEventListener('click', function() {
-						var file = csvInput ? csvInput.files[0] : null;
-						if (!file) {
-							uploadError.textContent = 'Please choose a CSV file.';
-							uploadError.style.display = '';
-							return;
+				// ─── CSV parser ───────────────────────────────────────────────────────────
+				function parseCsvLine(line) {
+					var result = [], inQ = false, field = '';
+					for (var i = 0; i < line.length; i++) {
+						var c = line[i];
+						if (inQ) {
+							if (c === '"' && line[i+1] === '"') { field += '"'; i++; }
+							else if (c === '"') { inQ = false; }
+							else { field += c; }
+						} else {
+							if (c === '"') { inQ = true; }
+							else if (c === ',') { result.push(field); field = ''; }
+							else { field += c; }
 						}
-						uploadSubmit.disabled = true;
-						uploadSubmit.textContent = 'Uploading…';
-						uploadError.style.display = 'none';
-						var form = new FormData();
-						form.append('csv', file);
-						form.append('account_id', accountId);
-						fetch('/imports', {method:'POST', body: form})
-							.then(function(r) {
-								if (!r.ok) return r.json().then(function(e){ throw new Error(e.detail||'Upload failed'); });
-								uploadDialog.close();
-								location.reload();
-							})
-							.catch(function(err) {
-								uploadError.textContent = err.message || 'Upload failed.';
-								uploadError.style.display = '';
-								uploadSubmit.disabled = false;
-								uploadSubmit.textContent = 'Upload';
-							});
+					}
+					result.push(field);
+					return result;
+				}
+				function parseCsv(text) {
+					var lines = text.split(/\r?\n/).filter(function(l) { return l.trim(); });
+					if (!lines.length) return { headers: [], rows: [] };
+					var headers = parseCsvLine(lines[0]);
+					var rows = [];
+					for (var i = 1; i < Math.min(6, lines.length); i++) {
+						var vals = parseCsvLine(lines[i]);
+						var row = {};
+						headers.forEach(function(h, idx) { row[h] = vals[idx] !== undefined ? vals[idx] : ''; });
+						rows.push(row);
+					}
+					return { headers: headers, rows: rows };
+				}
+
+				// ─── DOM refs ─────────────────────────────────────────────────────────────
+				var uploadBtn    = document.getElementById('upload-csv-btn');
+				var uploadDialog = document.getElementById('upload-csv-dialog');
+				var uploadClose  = document.getElementById('upload-dialog-close');
+				var csvInput     = document.getElementById('csv-file-input');
+
+				var step1 = document.getElementById('upload-step-1');
+				var step2 = document.getElementById('upload-step-2');
+				var step3 = document.getElementById('upload-step-3');
+				var err1  = document.getElementById('upload-error-1');
+				var err2  = document.getElementById('upload-error-2');
+				var err3  = document.getElementById('upload-error-3');
+
+				var fileInfoEl       = document.getElementById('upload-file-info');
+				var mappingPreviewEl = document.getElementById('upload-mapping-preview');
+				var editMappingBtn   = document.getElementById('upload-edit-mapping-btn');
+				var useExistingBtn   = document.getElementById('upload-use-existing-btn');
+
+				var sharedWarningEl  = document.getElementById('upload-shared-warning');
+				var instNameInput    = document.getElementById('upload-inst-name');
+				var advDetails       = document.getElementById('upload-advanced');
+				var advChevron       = document.getElementById('upload-adv-chevron');
+				var dateColSel       = document.getElementById('upload-date-col');
+				var amountColSel     = document.getElementById('upload-amount-col');
+				var merchantColSel   = document.getElementById('upload-merchant-col');
+				var balanceColSel    = document.getElementById('upload-balance-col');
+				var dcColSel         = document.getElementById('upload-dc-col');
+				var idColSel         = document.getElementById('upload-id-col');
+				var signConvSel      = document.getElementById('upload-sign-conv');
+				var dedupInput       = document.getElementById('upload-dedup-days');
+				var settleInput      = document.getElementById('upload-settle-days');
+				var toleranceInput   = document.getElementById('upload-tolerance');
+				var previewWrap      = document.getElementById('upload-preview-wrap');
+				var previewTable     = document.getElementById('upload-preview-table');
+				var backBtn          = document.getElementById('upload-back-btn');
+				var saveBtn          = document.getElementById('upload-save-btn');
+
+				// Page data embedded from Go
+				var account     = JSON.parse(uploadDialog.dataset.account || 'null');
+				var institution = JSON.parse(uploadDialog.dataset.institution || 'null');
+
+				var parsedCsv = null;
+
+				advDetails.addEventListener('toggle', function() {
+					advChevron.style.transform = advDetails.open ? 'rotate(90deg)' : '';
+				});
+
+				// ─── Step helpers ─────────────────────────────────────────────────────────
+				function showStep(n) {
+					step1.style.display = n === 1 ? '' : 'none';
+					step2.style.display = n === 2 ? '' : 'none';
+					step3.style.display = n === 3 ? '' : 'none';
+					[err1, err2, err3].forEach(function(e) { e.style.display = 'none'; e.textContent = ''; });
+				}
+
+				function showError(n, msg) {
+					var el = n === 1 ? err1 : n === 2 ? err2 : err3;
+					el.textContent = msg;
+					el.style.display = '';
+				}
+
+				// ─── Mapping preview (read-only rows) ────────────────────────────────────
+				function renderMappingPreview(inst) {
+					function row(label, value) {
+						return '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px">'
+							+ '<span style="color:var(--text3)">' + label + '</span>'
+							+ '<span style="color:var(--text);font-weight:500">' + value + '</span></div>';
+					}
+					var html = '';
+					html += row('Date column', inst.date_col);
+					html += row('Amount column', inst.amount_col);
+					html += row('Merchant column', inst.merchant_col);
+					if (inst.balance_col)      html += row('Balance column', inst.balance_col);
+					if (inst.debit_credit_col) html += row('Debit/credit column', inst.debit_credit_col);
+					if (inst.imported_id_col)  html += row('Imported ID column', inst.imported_id_col);
+					html += row('Sign convention', inst.amount_sign_convention === 'positive_is_credit' ? 'Positive is credit' : 'Positive is debit');
+					html += row('Dedup window', inst.dedup_window_days + ' days');
+					html += row('Settlement window', inst.settlement_window_days + ' days');
+					html += row('Amount tolerance', inst.amount_tolerance_pct + '%');
+					return '<div style="padding:12px;background:var(--surface2);border-radius:4px;border:1px solid var(--border)">' + html + '</div>';
+				}
+
+				// ─── Column select helpers ────────────────────────────────────────────────
+				function populateColSelect(sel, headers, currentVal, required) {
+					sel.innerHTML = '';
+					var none = document.createElement('option');
+					none.value = '';
+					none.textContent = required ? 'Select a column' : 'None';
+					sel.appendChild(none);
+					headers.forEach(function(h) {
+						var opt = document.createElement('option');
+						opt.value = h;
+						opt.textContent = h;
+						if (h === currentVal) opt.selected = true;
+						sel.appendChild(opt);
 					});
 				}
 
-				var deleteBtn = document.getElementById('delete-account-btn');
-				var deleteDialog = document.getElementById('delete-account-dialog');
+				function populateAllColSelects(headers, inst) {
+					var i = inst || {};
+					populateColSelect(dateColSel,     headers, i.date_col       || 'date',        true);
+					populateColSelect(amountColSel,   headers, i.amount_col     || 'amount',      true);
+					populateColSelect(merchantColSel, headers, i.merchant_col   || 'description', true);
+					populateColSelect(balanceColSel,  headers, i.balance_col    || '',            false);
+					populateColSelect(dcColSel,       headers, i.debit_credit_col || '',          false);
+					populateColSelect(idColSel,       headers, i.imported_id_col  || '',          false);
+					signConvSel.value   = i.amount_sign_convention  || 'positive_is_credit';
+					dedupInput.value    = i.dedup_window_days    != null ? String(i.dedup_window_days)    : '3';
+					settleInput.value   = i.settlement_window_days != null ? String(i.settlement_window_days) : '14';
+					toleranceInput.value = i.amount_tolerance_pct != null ? String(i.amount_tolerance_pct)  : '0.5';
+				}
+
+				// ─── Preview table ────────────────────────────────────────────────────────
+				function refreshPreview() {
+					if (!parsedCsv || !parsedCsv.rows.length) { previewWrap.style.display = 'none'; return; }
+					var cols = [
+						{ label: 'Date',         col: dateColSel.value },
+						{ label: 'Amount',       col: amountColSel.value },
+						{ label: 'Merchant',     col: merchantColSel.value },
+						{ label: 'Balance',      col: balanceColSel.value },
+						{ label: 'Debit/Credit', col: dcColSel.value },
+						{ label: 'ID',           col: idColSel.value },
+					].filter(function(c) { return c.col; });
+					if (!cols.length) { previewWrap.style.display = 'none'; return; }
+
+					var thead = '<thead><tr>' + cols.map(function(c) {
+						return '<th style="text-align:left;padding:4px 8px;border-bottom:1px solid var(--border)">'
+							+ '<div style="color:var(--text);font-weight:600">' + c.label + '</div>'
+							+ '<div style="color:var(--text3);font-weight:400;font-size:10px">' + c.col + '</div></th>';
+					}).join('') + '</tr></thead>';
+
+					var tbody = '<tbody>' + parsedCsv.rows.map(function(row) {
+						return '<tr>' + cols.map(function(c) {
+							var val = row[c.col];
+							return '<td style="padding:4px 8px;color:var(--text2);border-bottom:1px solid var(--border)">'
+								+ (val !== undefined && val !== '' ? val : '<span style="color:var(--text3);font-style:italic">—</span>')
+								+ '</td>';
+						}).join('') + '</tr>';
+					}).join('') + '</tbody>';
+
+					previewTable.innerHTML = thead + tbody;
+					previewWrap.style.display = '';
+				}
+
+				[dateColSel, amountColSel, merchantColSel, balanceColSel, dcColSel, idColSel].forEach(function(sel) {
+					sel.addEventListener('change', refreshPreview);
+				});
+
+				// ─── Step 2: choose mode ──────────────────────────────────────────────────
+				function goToStep2(csv) {
+					parsedCsv = csv;
+					fileInfoEl.textContent = csv.file.name + ' — ' + csv.headers.length + ' columns detected';
+					if (institution) {
+						mappingPreviewEl.innerHTML = '<div style="font-size:12px;color:var(--text3);margin-bottom:8px">Current mapping for '
+							+ institution.institution_name + ':</div>' + renderMappingPreview(institution);
+						useExistingBtn.style.display = '';
+					} else {
+						mappingPreviewEl.innerHTML = '<div style="font-size:12px;color:var(--text3);margin-bottom:8px">'
+							+ 'This account has no mapping yet — choose "Edit mapping" to set one up.</div>';
+						useExistingBtn.style.display = 'none';
+					}
+					showStep(2);
+				}
+
+				// ─── Step 3: edit mapping ─────────────────────────────────────────────────
+				function goToStep3() {
+					instNameInput.value = institution ? institution.institution_name : (account ? account.name : '');
+					populateAllColSelects(parsedCsv.headers, institution);
+					if (!advDetails.open) advDetails.setAttribute('open', '');
+					advChevron.style.transform = 'rotate(90deg)';
+
+					// Shared accounts warning
+					if (institution) {
+						fetch('/api/accounts?limit=200')
+							.then(function(r) { return r.json(); })
+							.then(function(body) {
+								var all = (body && body.data && body.data.data) || [];
+								var shared = all.filter(function(a) { return a.id !== account.id && a.institution_id === institution.id; });
+								if (shared.length) {
+									var names = shared.map(function(a) { return a.name; }).join(', ');
+									var count = shared.length === 1 ? '1 other account' : shared.length + ' other accounts';
+									sharedWarningEl.textContent = 'This mapping is shared with ' + count + ' at '
+										+ institution.institution_name + ' (' + names + '). '
+										+ 'Keeping the same name updates it for all of them; changing the name creates a separate mapping just for this account.';
+									sharedWarningEl.style.display = '';
+								} else {
+									sharedWarningEl.style.display = 'none';
+								}
+							})
+							.catch(function() { sharedWarningEl.style.display = 'none'; });
+					} else {
+						sharedWarningEl.style.display = 'none';
+					}
+
+					refreshPreview();
+					showStep(3);
+				}
+
+				// ─── File pick ────────────────────────────────────────────────────────────
+				csvInput.addEventListener('change', function() {
+					var file = csvInput.files[0];
+					if (!file) return;
+					err1.style.display = 'none';
+					var reader = new FileReader();
+					reader.onload = function(e) {
+						var result = parseCsv(e.target.result);
+						result.file = file;
+						goToStep2(result);
+					};
+					reader.onerror = function() { showError(1, 'Could not read that file as CSV.'); };
+					reader.readAsText(file);
+				});
+
+				editMappingBtn.addEventListener('click', goToStep3);
+				backBtn.addEventListener('click', function() { showStep(2); });
+
+				// ─── Upload helpers ───────────────────────────────────────────────────────
+				function doUpload(file) {
+					var form = new FormData();
+					form.append('csv', file);
+					form.append('account_id', account.id);
+					return fetch('/api/imports', { method: 'POST', body: form }).then(function(r) {
+						if (!r.ok) return r.json().then(function(e) { throw new Error(e.detail || 'Upload failed'); });
+					});
+				}
+
+				// ─── Use existing mapping ────────────────────────────────────────────────
+				useExistingBtn.addEventListener('click', function() {
+					useExistingBtn.disabled = true;
+					useExistingBtn.textContent = 'Uploading…';
+					err2.style.display = 'none';
+					doUpload(parsedCsv.file)
+						.then(function() { uploadDialog.close(); })
+						.catch(function(err) {
+							showError(2, err.message || 'Something went wrong uploading the file. Please try again.');
+							useExistingBtn.disabled = false;
+							useExistingBtn.textContent = 'Use existing mapping';
+						});
+				});
+
+				// ─── Save mapping & upload ────────────────────────────────────────────────
+				saveBtn.addEventListener('click', function() {
+					var instName = instNameInput.value.trim();
+					if (!instName) { showError(3, 'Institution name is required.'); return; }
+
+					saveBtn.disabled = true;
+					backBtn.disabled = true;
+					saveBtn.textContent = 'Saving…';
+					err3.style.display = 'none';
+
+					var mappingBody = {
+						institution_name:       instName,
+						source_type:            'csv',
+						date_col:               dateColSel.value     || 'date',
+						amount_col:             amountColSel.value   || 'amount',
+						merchant_col:           merchantColSel.value || 'description',
+						balance_col:            balanceColSel.value  || null,
+						debit_credit_col:       dcColSel.value       || null,
+						imported_id_col:        idColSel.value       || null,
+						amount_sign_convention: signConvSel.value,
+						dedup_window_days:      parseInt(dedupInput.value)     || 3,
+						settlement_window_days: parseInt(settleInput.value)    || 14,
+						amount_tolerance_pct:   parseFloat(toleranceInput.value) || 0.5,
+					};
+
+					// Fork-or-update: same name as current institution → PUT, otherwise → POST
+					var isUpdate = institution && institution.institution_name === instName;
+					var instPromise = isUpdate
+						? fetch('/api/institutions/' + institution.id, {
+							method: 'PUT',
+							headers: {'Content-Type': 'application/json'},
+							body: JSON.stringify(mappingBody),
+						  })
+						: fetch('/api/institutions', {
+							method: 'POST',
+							headers: {'Content-Type': 'application/json'},
+							body: JSON.stringify(mappingBody),
+						  });
+
+					instPromise
+						.then(function(r) {
+							if (!r.ok) return r.json().then(function(e) { throw new Error(e.detail || e.title || 'Failed to save institution'); });
+							return r.json();
+						})
+						.then(function(body) {
+							var newInstId = body.data.id;
+							// If forked (new institution), relink account
+							if (!isUpdate && account) {
+								return fetch('/api/accounts/' + account.id, {
+									method: 'PUT',
+									headers: {'Content-Type': 'application/json'},
+									body: JSON.stringify({
+										name:               account.name,
+										account_type:       account.account_type,
+										status:             account.status,
+										interest_rate:      account.interest_rate,
+										balance_cents:      account.balance_cents,
+										credit_limit_cents: account.credit_limit_cents,
+										institution_id:     newInstId,
+									}),
+								}).then(function(r) {
+									if (!r.ok) return r.json().then(function(e) { throw new Error(e.detail || 'Failed to update account'); });
+								});
+							}
+						})
+						.then(function() { return doUpload(parsedCsv.file); })
+						.then(function() { uploadDialog.close(); resetUpload(); })
+						.catch(function(err) {
+							showError(3, err.message || 'Something went wrong saving the mapping. Please try again.');
+							saveBtn.disabled = false;
+							backBtn.disabled = false;
+							saveBtn.textContent = 'Save mapping & upload';
+						});
+				});
+
+				// ─── Dialog open/close ────────────────────────────────────────────────────
+				function resetUpload() {
+					csvInput.value = '';
+					parsedCsv = null;
+					showStep(1);
+					useExistingBtn.disabled = false;
+					useExistingBtn.textContent = 'Use existing mapping';
+					saveBtn.disabled = false;
+					saveBtn.textContent = 'Save mapping & upload';
+					backBtn.disabled = false;
+				}
+
+				if (uploadBtn) {
+					uploadBtn.addEventListener('click', function() { resetUpload(); uploadDialog.showModal(); });
+				}
+				uploadClose.addEventListener('click', function() { uploadDialog.close(); });
+				uploadDialog.addEventListener('click', function(e) { if (e.target === uploadDialog) uploadDialog.close(); });
+
+				// ─── Delete dialog ────────────────────────────────────────────────────────
+				var deleteBtn       = document.getElementById('delete-account-btn');
+				var deleteDialog    = document.getElementById('delete-account-dialog');
 				var deleteCancelBtn = document.getElementById('delete-cancel-btn');
 				var deleteConfirmBtn = document.getElementById('delete-confirm-btn');
 
 				if (deleteBtn && deleteDialog) {
 					deleteBtn.addEventListener('click', function() { deleteDialog.showModal(); });
 					deleteCancelBtn.addEventListener('click', function() { deleteDialog.close(); });
-					deleteDialog.addEventListener('click', function(e) {
-						if (e.target === deleteDialog) deleteDialog.close();
-					});
+					deleteDialog.addEventListener('click', function(e) { if (e.target === deleteDialog) deleteDialog.close(); });
 					deleteConfirmBtn.addEventListener('click', function() {
 						var aid = deleteConfirmBtn.dataset.accountId;
 						deleteConfirmBtn.disabled = true;
 						deleteConfirmBtn.textContent = 'Deleting…';
-						fetch('/accounts/' + aid, {method:'DELETE'})
+						fetch('/api/accounts/' + aid, {method:'DELETE'})
 							.then(function(r) {
-								if (r.ok || r.status === 404) {
-									window.location.href = '/';
-								} else {
-									deleteConfirmBtn.disabled = false;
-									deleteConfirmBtn.textContent = 'Delete';
-								}
+								if (r.ok || r.status === 404) { window.location.href = '/'; }
+								else { deleteConfirmBtn.disabled = false; deleteConfirmBtn.textContent = 'Delete'; }
 							});
 					});
 				}
 
-				// Merchant filter
+				// ─── Merchant filter ─────────────────────────────────────────────────────
 				var merchantInput = document.getElementById('merchant-filter');
-				var txTbody = document.getElementById('tx-tbody');
-				if (merchantInput && txTbody) {
+				if (merchantInput) {
 					merchantInput.addEventListener('input', function() {
+						var tbody = document.getElementById('tx-tbody');
+						if (!tbody) return;
 						var q = merchantInput.value.toLowerCase();
-						var rows = txTbody.querySelectorAll('tr');
-						rows.forEach(function(row) {
+						tbody.querySelectorAll('tr').forEach(function(row) {
 							var merch = (row.dataset.merchant || '').toLowerCase();
-							row.style.display = (!q || merch.includes(q)) ? '' : 'none';
+							row.style.display = (!q || merch.indexOf(q) !== -1) ? '' : 'none';
 						});
 					});
 				}
+
+				// ─── Infinite scroll ──────────────────────────────────────────────────
+				(function() {
+					var section   = document.getElementById('tx-section');
+					var sentinel  = document.getElementById('tx-sentinel');
+					var tbody     = document.getElementById('tx-tbody');
+					var loadingEl = document.getElementById('tx-loading-more');
+					if (!section || !sentinel || !tbody) return;
+
+					var accountId  = section.dataset.accountId;
+					var nextCursor = section.dataset.nextCursor || null;
+					var loading    = false;
+					var LIMIT      = 100;
+
+					var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+					function fmtDate(iso) {
+						var p = iso.split('-');
+						return MONTHS[parseInt(p[1],10)-1] + ' ' + parseInt(p[2],10) + ', ' + p[0];
+					}
+					function fmtCents(c) {
+						var neg = c < 0, abs = Math.abs(c);
+						return (neg?'-$':'$') + Math.floor(abs/100).toLocaleString('en-US') + '.' + String(abs%100).padStart(2,'0');
+					}
+					function esc(s) {
+						return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+					}
+
+					function makeRow(t) {
+						var tr = document.createElement('tr');
+						tr.dataset.merchant = t.merchant_normalized || '';
+						tr.style.borderBottom = '1px solid var(--border)';
+						var amtColor = t.amount_cents >= 0 ? 'var(--income)' : 'var(--commit)';
+						var stBg = t.settlement_status === 'settled'
+							? 'color-mix(in srgb,var(--surface2) 80%,var(--income) 20%)' : 'var(--surface2)';
+						var stColor = t.settlement_status === 'settled' ? 'var(--income)' : 'var(--text3)';
+						var merch = t.merchant_normalized
+							? esc(t.merchant_normalized)
+							: '<span style="color:var(--text3)">—</span>';
+						tr.innerHTML =
+							'<td style="padding:8px 12px;font-size:13px;color:var(--text2);white-space:nowrap">'+esc(fmtDate(t.date))+'</td>'
+							+'<td style="padding:8px 12px;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:0">'+merch+'</td>'
+							+'<td style="padding:8px 12px;font-size:12px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:0">'+esc(t.imported_payee||'')+'</td>'
+							+'<td style="padding:8px 12px;text-align:right"><span style="color:'+amtColor+';font-variant-numeric:tabular-nums">'+esc(fmtCents(t.amount_cents))+'</span></td>'
+							+'<td style="padding:8px 12px"><span style="font-size:11px;padding:2px 6px;border-radius:4px;background:'+stBg+';color:'+stColor+'">'+esc(t.settlement_status)+'</span></td>';
+						return tr;
+					}
+
+					function loadMore() {
+						if (loading || !nextCursor) return;
+						loading = true;
+						if (loadingEl) loadingEl.style.display = '';
+						fetch('/api/transactions?account_id='+encodeURIComponent(accountId)+'&cursor='+encodeURIComponent(nextCursor)+'&limit='+LIMIT)
+							.then(function(r) { return r.json(); })
+							.then(function(body) {
+								(body.data || []).forEach(function(t) { tbody.appendChild(makeRow(t)); });
+								nextCursor = (body.meta && body.meta.next_cursor) || null;
+								loading = false;
+								if (loadingEl) loadingEl.style.display = 'none';
+								if (!nextCursor) observer.disconnect();
+							})
+							.catch(function() {
+								loading = false;
+								if (loadingEl) loadingEl.style.display = 'none';
+							});
+					}
+
+					// SSE refresh: re-fetch first page and replace tbody
+					window.__velociTxRefresh = function() {
+						fetch('/api/transactions?account_id='+encodeURIComponent(accountId)+'&limit=200')
+							.then(function(r) { return r.json(); })
+							.then(function(body) {
+								tbody.innerHTML = '';
+								(body.data || []).forEach(function(t) { tbody.appendChild(makeRow(t)); });
+								nextCursor = (body.meta && body.meta.next_cursor) || null;
+								if (nextCursor) observer.observe(sentinel);
+								else observer.disconnect();
+							})
+							.catch(function() {});
+					};
+
+					if (!nextCursor) return;
+
+					var observer = new IntersectionObserver(function(entries) {
+						if (entries[0].isIntersecting) loadMore();
+					}, { rootMargin: '200px' });
+
+					observer.observe(sentinel);
+				})();
 			})();
 		</script>
 	}
 }
 
 templ txRow(t store.Transaction) {
-	<tr
-		data-merchant={ t.MerchantNormalized }
-		style="border-bottom:1px solid var(--border)"
-	>
+	<tr data-merchant={ t.MerchantNormalized } style="border-bottom:1px solid var(--border)">
 		<td style="padding:8px 12px;font-size:13px;color:var(--text2);white-space:nowrap">
 			{ t.Date.Format("Jan 2, 2006") }
 		</td>
@@ -255,9 +750,7 @@ templ txRow(t store.Transaction) {
 			<span style={ txnAmountStyle(t.AmountCents) }>{ formatCents(t.AmountCents) }</span>
 		</td>
 		<td style="padding:8px 12px">
-			<span style={ txSettlementStyle(t.SettlementStatus) }>
-				{ t.SettlementStatus }
-			</span>
+			<span style={ txSettlementStyle(t.SettlementStatus) }>{ t.SettlementStatus }</span>
 		</td>
 	</tr>
 }
@@ -273,5 +766,51 @@ func txSettlementStyle(status string) string {
 	if status == "settled" {
 		return "font-size:11px;padding:2px 6px;border-radius:4px;background:color-mix(in srgb,var(--surface2) 80%,var(--income) 20%);color:var(--income)"
 	}
-	return fmt.Sprintf("font-size:11px;padding:2px 6px;border-radius:4px;background:var(--surface2);color:var(--text3)")
+	return "font-size:11px;padding:2px 6px;border-radius:4px;background:var(--surface2);color:var(--text3)"
+}
+
+func uploadAccountJSON(a store.Account) string {
+	type acc struct {
+		ID               string   `json:"id"`
+		Name             string   `json:"name"`
+		AccountType      string   `json:"account_type"`
+		Status           string   `json:"status"`
+		InterestRate     *float64 `json:"interest_rate"`
+		BalanceCents     *int64   `json:"balance_cents"`
+		CreditLimitCents *int64   `json:"credit_limit_cents"`
+	}
+	b, _ := json.Marshal(acc{
+		ID: a.ID, Name: a.Name, AccountType: a.AccountType, Status: a.Status,
+		InterestRate: a.InterestRate, BalanceCents: a.BalanceCents, CreditLimitCents: a.CreditLimitCents,
+	})
+	return string(b)
+}
+
+func uploadInstitutionJSON(inst *store.Institution) string {
+	if inst == nil {
+		return "null"
+	}
+	type instJSON struct {
+		ID                   string   `json:"id"`
+		InstitutionName      string   `json:"institution_name"`
+		SourceType           string   `json:"source_type"`
+		SettlementWindowDays int      `json:"settlement_window_days"`
+		DedupWindowDays      int      `json:"dedup_window_days"`
+		AmountTolerancePct   float64  `json:"amount_tolerance_pct"`
+		DateCol              string   `json:"date_col"`
+		AmountCol            string   `json:"amount_col"`
+		MerchantCol          string   `json:"merchant_col"`
+		ImportedIDCol        *string  `json:"imported_id_col"`
+		BalanceCol           *string  `json:"balance_col"`
+		DebitCreditCol       *string  `json:"debit_credit_col"`
+		AmountSignConvention string   `json:"amount_sign_convention"`
+	}
+	b, _ := json.Marshal(instJSON{
+		ID: inst.ID, InstitutionName: inst.InstitutionName, SourceType: inst.SourceType,
+		SettlementWindowDays: inst.SettlementWindowDays, DedupWindowDays: inst.DedupWindowDays,
+		AmountTolerancePct: inst.AmountTolerancePct, DateCol: inst.DateCol, AmountCol: inst.AmountCol,
+		MerchantCol: inst.MerchantCol, ImportedIDCol: inst.ImportedIDCol, BalanceCol: inst.BalanceCol,
+		DebitCreditCol: inst.DebitCreditCol, AmountSignConvention: inst.AmountSignConvention,
+	})
+	return string(b)
 }
