@@ -25,28 +25,30 @@ func NewAccountsHandler(s *store.Store) *AccountsHandler {
 
 // accountView is the API representation of an account.
 type accountView struct {
-	ID               string   `json:"id"`
-	InstitutionID    *string  `json:"institution_id"`
-	Name             string   `json:"name"`
-	AccountType      string   `json:"account_type"`
-	Status           string   `json:"status"`
-	InterestRate     *float64 `json:"interest_rate"`
-	BalanceCents     *int64   `json:"balance_cents"`
-	CreditLimitCents *int64   `json:"credit_limit_cents"`
-	CreatedAt        string   `json:"created_at"`
+	ID                   string   `json:"id"`
+	InstitutionID        *string  `json:"institution_id"`
+	Name                 string   `json:"name"`
+	AccountType          string   `json:"account_type"`
+	Status               string   `json:"status"`
+	InterestRate         *float64 `json:"interest_rate"`
+	StartingBalanceCents int64    `json:"starting_balance_cents"`
+	BalanceCents         *int64   `json:"balance_cents"`
+	CreditLimitCents     *int64   `json:"credit_limit_cents"`
+	CreatedAt            string   `json:"created_at"`
 }
 
 func toAccountView(a store.Account) accountView {
 	return accountView{
-		ID:               a.ID,
-		InstitutionID:    a.InstitutionID,
-		Name:             a.Name,
-		AccountType:      a.AccountType,
-		Status:           a.Status,
-		InterestRate:     a.InterestRate,
-		BalanceCents:     a.BalanceCents,
-		CreditLimitCents: a.CreditLimitCents,
-		CreatedAt:        a.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		ID:                   a.ID,
+		InstitutionID:        a.InstitutionID,
+		Name:                 a.Name,
+		AccountType:          a.AccountType,
+		Status:               a.Status,
+		InterestRate:         a.InterestRate,
+		StartingBalanceCents: a.StartingBalanceCents,
+		BalanceCents:         a.BalanceCents,
+		CreditLimitCents:     a.CreditLimitCents,
+		CreatedAt:            a.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
 }
 
@@ -61,13 +63,13 @@ type listAccountsOutput struct {
 
 type createAccountInput struct {
 	Body struct {
-		Name             string   `json:"name"          required:"true"`
-		AccountType      string   `json:"account_type"  required:"true"`
-		Status           string   `json:"status"        required:"true"`
-		InstitutionID    *string  `json:"institution_id"`
-		InterestRate     *float64 `json:"interest_rate"`
-		BalanceCents     *int64   `json:"balance_cents"`
-		CreditLimitCents *int64   `json:"credit_limit_cents"`
+		Name                 string   `json:"name"          required:"true"`
+		AccountType          string   `json:"account_type"  required:"true"`
+		Status               string   `json:"status"        required:"true"`
+		InstitutionID        *string  `json:"institution_id"`
+		InterestRate         *float64 `json:"interest_rate"`
+		StartingBalanceCents int64    `json:"starting_balance_cents"`
+		CreditLimitCents     *int64   `json:"credit_limit_cents"`
 	}
 }
 
@@ -86,13 +88,13 @@ type getAccountOutput struct {
 type updateAccountInput struct {
 	PathID string `path:"id"`
 	Body   struct {
-		Name             string   `json:"name"          required:"true"`
-		AccountType      string   `json:"account_type"  required:"true"`
-		Status           string   `json:"status"        required:"true"`
-		InstitutionID    *string  `json:"institution_id"`
-		InterestRate     *float64 `json:"interest_rate"`
-		BalanceCents     *int64   `json:"balance_cents"`
-		CreditLimitCents *int64   `json:"credit_limit_cents"`
+		Name                 string   `json:"name"          required:"true"`
+		AccountType          string   `json:"account_type"  required:"true"`
+		Status               string   `json:"status"        required:"true"`
+		InstitutionID        *string  `json:"institution_id"`
+		InterestRate         *float64 `json:"interest_rate"`
+		StartingBalanceCents int64    `json:"starting_balance_cents"`
+		CreditLimitCents     *int64   `json:"credit_limit_cents"`
 	}
 }
 
@@ -141,13 +143,13 @@ func (h *AccountsHandler) CreateAccount(ctx context.Context, input *createAccoun
 	entityID := middleware.EntityID(ctx)
 
 	item, err := h.s.CreateAccount(ctx, entityID, store.Account{
-		InstitutionID:    input.Body.InstitutionID,
-		Name:             input.Body.Name,
-		AccountType:      input.Body.AccountType,
-		Status:           input.Body.Status,
-		InterestRate:     input.Body.InterestRate,
-		BalanceCents:     input.Body.BalanceCents,
-		CreditLimitCents: input.Body.CreditLimitCents,
+		InstitutionID:        input.Body.InstitutionID,
+		Name:                 input.Body.Name,
+		AccountType:          input.Body.AccountType,
+		Status:               input.Body.Status,
+		InterestRate:         input.Body.InterestRate,
+		StartingBalanceCents: input.Body.StartingBalanceCents,
+		CreditLimitCents:     input.Body.CreditLimitCents,
 	})
 	if err != nil {
 		return nil, huma.Error500InternalServerError("internal error")
@@ -176,13 +178,13 @@ func (h *AccountsHandler) UpdateAccount(ctx context.Context, input *updateAccoun
 	entityID := middleware.EntityID(ctx)
 
 	item, err := h.s.UpdateAccount(ctx, entityID, input.PathID, store.Account{
-		Name:             input.Body.Name,
-		AccountType:      input.Body.AccountType,
-		Status:           input.Body.Status,
-		InstitutionID:    input.Body.InstitutionID,
-		InterestRate:     input.Body.InterestRate,
-		BalanceCents:     input.Body.BalanceCents,
-		CreditLimitCents: input.Body.CreditLimitCents,
+		Name:                 input.Body.Name,
+		AccountType:          input.Body.AccountType,
+		Status:               input.Body.Status,
+		InstitutionID:        input.Body.InstitutionID,
+		InterestRate:         input.Body.InterestRate,
+		StartingBalanceCents: input.Body.StartingBalanceCents,
+		CreditLimitCents:     input.Body.CreditLimitCents,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, huma.Error404NotFound("not found")

@@ -43,9 +43,11 @@ CREATE TABLE accounts (
                      CHECK (account_type IN ('checking', 'savings', 'credit', 'loan', 'mortgage', 'investment')),
   status             TEXT        NOT NULL DEFAULT 'active'
                      CHECK (status IN ('active', 'passive')),
-  interest_rate      NUMERIC(8,4),
-  balance_cents      BIGINT,
-  credit_limit_cents BIGINT,
+  interest_rate           NUMERIC(8,4),
+  -- User-provided anchor; balance_cents is always computed = starting_balance_cents + SUM(transactions)
+  starting_balance_cents  BIGINT       NOT NULL DEFAULT 0,
+  balance_cents           BIGINT,
+  credit_limit_cents      BIGINT,
   created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (entity_id, name)
 );

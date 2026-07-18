@@ -10,22 +10,25 @@ import (
 
 // Account represents a row from the accounts table.
 type Account struct {
-	ID               string    `db:"id"`
-	EntityID         string    `db:"entity_id"`
-	InstitutionID    *string   `db:"institution_id"`
-	Name             string    `db:"name"`
-	AccountType      string    `db:"account_type"`
-	Status           string    `db:"status"`
-	InterestRate     *float64  `db:"interest_rate"`
-	BalanceCents     *int64    `db:"balance_cents"`
-	CreditLimitCents *int64    `db:"credit_limit_cents"`
-	CreatedAt        time.Time `db:"created_at"`
+	ID                   string    `db:"id"`
+	EntityID             string    `db:"entity_id"`
+	InstitutionID        *string   `db:"institution_id"`
+	Name                 string    `db:"name"`
+	AccountType          string    `db:"account_type"`
+	Status               string    `db:"status"`
+	InterestRate         *float64  `db:"interest_rate"`
+	StartingBalanceCents int64     `db:"starting_balance_cents"`
+	BalanceCents         *int64    `db:"balance_cents"`
+	CreditLimitCents     *int64    `db:"credit_limit_cents"`
+	CreatedAt            time.Time `db:"created_at"`
 }
 
 const accountCols = `
 	id::text, entity_id::text, institution_id::text,
 	name, account_type, status,
-	interest_rate, balance_cents, credit_limit_cents, created_at
+	interest_rate, starting_balance_cents,
+	(starting_balance_cents + COALESCE((SELECT SUM(t.amount_cents) FROM transactions t WHERE t.account_id = accounts.id), 0)) AS balance_cents,
+	credit_limit_cents, created_at
 `
 
 // GetAccount fetches a single account by id for an entity.
@@ -109,7 +112,7 @@ func (s *Store) CreateAccount(ctx context.Context, entityID string, in Account) 
 	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
 		INSERT INTO accounts (
 			id, entity_id, institution_id, name, account_type, status,
-			interest_rate, balance_cents, credit_limit_cents, created_at
+			interest_rate, starting_balance_cents, credit_limit_cents, created_at
 		) VALUES (
 			gen_random_uuid(), $1, $2::uuid, $3, $4, $5,
 			$6, $7, $8, NOW()
@@ -117,7 +120,7 @@ func (s *Store) CreateAccount(ctx context.Context, entityID string, in Account) 
 		RETURNING %s
 	`, accountCols),
 		entityID, in.InstitutionID, in.Name, in.AccountType, in.Status,
-		in.InterestRate, in.BalanceCents, in.CreditLimitCents,
+		in.InterestRate, in.StartingBalanceCents, in.CreditLimitCents,
 	)
 	if err != nil {
 		return Account{}, err
@@ -134,7 +137,7 @@ func (s *Store) UpdateAccount(ctx context.Context, entityID, id string, in Accou
 			account_type = $4,
 			status = $5,
 			interest_rate = $6,
-			balance_cents = $7,
+			starting_balance_cents = $7,
 			credit_limit_cents = $8,
 			institution_id = COALESCE($9::uuid, institution_id)
 		WHERE entity_id = $1 AND id = $2
@@ -142,7 +145,7 @@ func (s *Store) UpdateAccount(ctx context.Context, entityID, id string, in Accou
 	`, accountCols),
 		entityID, id,
 		in.Name, in.AccountType, in.Status,
-		in.InterestRate, in.BalanceCents, in.CreditLimitCents,
+		in.InterestRate, in.StartingBalanceCents, in.CreditLimitCents,
 		in.InstitutionID,
 	)
 	if err != nil {

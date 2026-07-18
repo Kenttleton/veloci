@@ -9,7 +9,7 @@ import (
 templ AccountPage(shell ShellData, data AccountData) {
 	@Shell(shell) {
 		<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
-			<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
+			<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;padding-right:64px;border-bottom:1px solid var(--border);flex-shrink:0">
 				<div style="display:flex;align-items:center;gap:12px">
 					<h1 style="margin:0;font-size:18px;font-weight:700;color:var(--text);letter-spacing:-0.02em">
 						{ data.Account.Name }
@@ -18,9 +18,18 @@ templ AccountPage(shell ShellData, data AccountData) {
 						{ accountTypeLabel(data.Account.AccountType) }
 					</span>
 				</div>
-				<span style={ "font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;" + accountBalanceColor(data.Account) }>
-					{ FormatBalance(data.Account.BalanceCents) }
-				</span>
+				<div style="display:flex;align-items:center;gap:8px">
+					<span
+						id="account-balance"
+						data-account-id={ data.Account.ID }
+						data-balance-cents={ balanceCentsStr(data.Account.BalanceCents) }
+						data-starting-balance-cents={ startingBalanceCentsStr(data.Account.StartingBalanceCents) }
+						style={ "font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;cursor:pointer;" + accountBalanceColor(data.Account) }
+						title="Click to edit balance"
+					>
+						{ FormatBalance(data.Account.BalanceCents) }
+					</span>
+				</div>
 			</div>
 			<div style="display:flex;align-items:center;justify-content:space-between;padding:0 20px;height:36px;border-bottom:1px solid var(--border);flex-shrink:0">
 				if data.Account.InstitutionID != nil {
@@ -311,6 +320,14 @@ templ AccountPage(shell ShellData, data AccountData) {
 				var account     = JSON.parse(uploadDialog.dataset.account || 'null');
 				var institution = JSON.parse(uploadDialog.dataset.institution || 'null');
 
+				// Hide balance column mapping for account types that don't use it
+				var BALANCE_COL_TYPES = { credit: true, loan: true, mortgage: true, investment: true };
+				var showBalanceCol = account && BALANCE_COL_TYPES[account.account_type];
+				if (!showBalanceCol) {
+					var balanceColGroup = balanceColSel && balanceColSel.parentNode;
+					if (balanceColGroup) balanceColGroup.style.display = 'none';
+				}
+
 				var parsedCsv = null;
 
 				advDetails.addEventListener('toggle', function() {
@@ -562,13 +579,13 @@ templ AccountPage(shell ShellData, data AccountData) {
 									method: 'PUT',
 									headers: {'Content-Type': 'application/json'},
 									body: JSON.stringify({
-										name:               account.name,
-										account_type:       account.account_type,
-										status:             account.status,
-										interest_rate:      account.interest_rate,
-										balance_cents:      account.balance_cents,
-										credit_limit_cents: account.credit_limit_cents,
-										institution_id:     newInstId,
+										name:                   account.name,
+										account_type:           account.account_type,
+										status:                 account.status,
+										interest_rate:          account.interest_rate,
+										starting_balance_cents: account.starting_balance_cents || 0,
+										credit_limit_cents:     account.credit_limit_cents,
+										institution_id:         newInstId,
 									}),
 								}).then(function(r) {
 									if (!r.ok) return r.json().then(function(e) { throw new Error(e.detail || 'Failed to update account'); });
@@ -639,18 +656,16 @@ templ AccountPage(shell ShellData, data AccountData) {
 					});
 				}
 
-				// ─── Infinite scroll ──────────────────────────────────────────────────
+				// ─── Infinite scroll + SSE refresh ───────────────────────────────────
 				(function() {
-					var section   = document.getElementById('tx-section');
-					var sentinel  = document.getElementById('tx-sentinel');
-					var tbody     = document.getElementById('tx-tbody');
-					var loadingEl = document.getElementById('tx-loading-more');
-					if (!section || !sentinel || !tbody) return;
+					var section = document.getElementById('tx-section');
+					if (!section) return;
 
 					var accountId  = section.dataset.accountId;
 					var nextCursor = section.dataset.nextCursor || null;
 					var loading    = false;
 					var LIMIT      = 100;
+					var observer   = null; // created only when needed
 
 					var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 					function fmtDate(iso) {
@@ -685,6 +700,57 @@ templ AccountPage(shell ShellData, data AccountData) {
 						return tr;
 					}
 
+					// SSE refresh: re-fetch the account balance display then transactions.
+					// Defined BEFORE any early-return so the SSE handler can always call it.
+					window.__velociTxRefresh = function() {
+						// Refresh balance display from API
+						fetch('/api/accounts/' + encodeURIComponent(accountId))
+							.then(function(r) { return r.json(); })
+							.then(function(body) {
+								var a = body && body.data;
+								if (!a) return;
+								var el = document.getElementById('account-balance');
+								if (!el) return;
+								var cents = a.balance_cents;
+								el.dataset.balanceCents = cents != null ? String(cents) : '';
+								if (cents == null) {
+									el.textContent = '—';
+									el.style.color = '';
+								} else {
+									el.textContent = fmtCents(cents);
+									var isNeg = cents < 0 && (a.account_type === 'credit' || a.account_type === 'loan' || a.account_type === 'mortgage');
+									el.style.color = isNeg ? 'var(--commit)' : '';
+								}
+							})
+							.catch(function() {});
+
+						var tbody = document.getElementById('tx-tbody');
+						if (!tbody) {
+							// First-ever import: no table rendered yet — reload to show it.
+							location.reload();
+							return;
+						}
+						fetch('/api/transactions?account_id='+encodeURIComponent(accountId)+'&limit=200')
+							.then(function(r) { return r.json(); })
+							.then(function(body) {
+								tbody.innerHTML = '';
+								(body.data || []).forEach(function(t) { tbody.appendChild(makeRow(t)); });
+								nextCursor = (body.meta && body.meta.next_cursor) || null;
+								var sentinel = document.getElementById('tx-sentinel');
+								if (observer && sentinel) {
+									if (nextCursor) observer.observe(sentinel);
+									else observer.disconnect();
+								}
+							})
+							.catch(function() {});
+					};
+
+					var sentinel  = document.getElementById('tx-sentinel');
+					var tbody     = document.getElementById('tx-tbody');
+					var loadingEl = document.getElementById('tx-loading-more');
+
+					if (!sentinel || !tbody || !nextCursor) return;
+
 					function loadMore() {
 						if (loading || !nextCursor) return;
 						loading = true;
@@ -696,7 +762,7 @@ templ AccountPage(shell ShellData, data AccountData) {
 								nextCursor = (body.meta && body.meta.next_cursor) || null;
 								loading = false;
 								if (loadingEl) loadingEl.style.display = 'none';
-								if (!nextCursor) observer.disconnect();
+								if (!nextCursor && observer) observer.disconnect();
 							})
 							.catch(function() {
 								loading = false;
@@ -704,27 +770,122 @@ templ AccountPage(shell ShellData, data AccountData) {
 							});
 					}
 
-					// SSE refresh: re-fetch first page and replace tbody
-					window.__velociTxRefresh = function() {
-						fetch('/api/transactions?account_id='+encodeURIComponent(accountId)+'&limit=200')
-							.then(function(r) { return r.json(); })
-							.then(function(body) {
-								tbody.innerHTML = '';
-								(body.data || []).forEach(function(t) { tbody.appendChild(makeRow(t)); });
-								nextCursor = (body.meta && body.meta.next_cursor) || null;
-								if (nextCursor) observer.observe(sentinel);
-								else observer.disconnect();
-							})
-							.catch(function() {});
-					};
-
-					if (!nextCursor) return;
-
-					var observer = new IntersectionObserver(function(entries) {
+					observer = new IntersectionObserver(function(entries) {
 						if (entries[0].isIntersecting) loadMore();
 					}, { rootMargin: '200px' });
 
 					observer.observe(sentinel);
+				})();
+
+				// ─── Inline balance edit ──────────────────────────────────────────────
+				(function() {
+					var balanceEl = document.getElementById('account-balance');
+					if (!balanceEl) return;
+					var accountId = balanceEl.dataset.accountId;
+
+					balanceEl.addEventListener('click', function() {
+						if (balanceEl.dataset.editing === 'true') return;
+						balanceEl.dataset.editing = 'true';
+
+						var currentCents = balanceEl.dataset.balanceCents ? parseInt(balanceEl.dataset.balanceCents, 10) : 0;
+						var currentDollars = currentCents / 100;
+
+						var input = document.createElement('input');
+						input.type = 'text';
+						input.inputMode = 'decimal';
+						input.value = currentCents !== 0 ? currentDollars.toFixed(2) : '';
+						input.placeholder = '0.00';
+						input.style.cssText = 'width:120px;background:var(--surface2);border:1px solid var(--accent);border-radius:4px;padding:2px 6px;font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--text);font-family:inherit;outline:none';
+
+						var saveEl = document.createElement('span');
+						saveEl.textContent = '✓';
+						saveEl.title = 'Save';
+						saveEl.style.cssText = 'cursor:pointer;color:var(--income);font-size:18px;margin-left:4px';
+
+						var cancelEl = document.createElement('span');
+						cancelEl.textContent = '✕';
+						cancelEl.title = 'Cancel';
+						cancelEl.style.cssText = 'cursor:pointer;color:var(--text3);font-size:14px;margin-left:4px';
+
+						var wrap = document.createElement('span');
+						wrap.style.display = 'inline-flex';
+						wrap.style.alignItems = 'center';
+						wrap.appendChild(input);
+						wrap.appendChild(saveEl);
+						wrap.appendChild(cancelEl);
+
+						balanceEl.style.display = 'none';
+						balanceEl.parentNode.insertBefore(wrap, balanceEl.nextSibling);
+						input.focus();
+						input.select();
+
+						function restore() {
+							wrap.remove();
+							balanceEl.style.display = '';
+							delete balanceEl.dataset.editing;
+						}
+
+						function save() {
+							var raw = input.value.trim().replace(/,/g, '');
+							if (raw === '') raw = '0';
+							var n = parseFloat(raw);
+							if (isNaN(n)) { input.focus(); return; }
+							var desiredCents = Math.round(n * 100);
+
+							// Back-calculate starting_balance_cents:
+							//   balance = starting + txn_sum  →  txn_sum = balance - starting
+							//   new_starting = desired - txn_sum
+							var currentBalance  = parseInt(balanceEl.dataset.balanceCents       || '0', 10);
+							var currentStarting = parseInt(balanceEl.dataset.startingBalanceCents || '0', 10);
+							var txnSum          = currentBalance - currentStarting;
+							var newStarting     = desiredCents - txnSum;
+
+							// Need full account to PUT (all fields required)
+							fetch('/api/accounts/' + encodeURIComponent(accountId))
+								.then(function(r) { return r.json(); })
+								.then(function(body) {
+									var a = body && body.data;
+									if (!a) throw new Error('not found');
+									return fetch('/api/accounts/' + encodeURIComponent(accountId), {
+										method: 'PUT',
+										headers: {'Content-Type': 'application/json'},
+										body: JSON.stringify({
+											name:                   a.name,
+											account_type:           a.account_type,
+											status:                 a.status,
+											institution_id:         a.institution_id,
+											interest_rate:          a.interest_rate,
+											credit_limit_cents:     a.credit_limit_cents,
+											starting_balance_cents: newStarting,
+										}),
+									});
+								})
+								.then(function(r) { if (!r.ok) throw new Error('save failed'); return r.json(); })
+								.then(function(body) {
+									var a = body && body.data;
+									if (a) {
+										var c = a.balance_cents;
+										balanceEl.dataset.balanceCents = c != null ? String(c) : '';
+										balanceEl.dataset.startingBalanceCents = String(a.starting_balance_cents || 0);
+										if (c == null) {
+											balanceEl.textContent = '—';
+										} else {
+											var neg = c < 0, abs = Math.abs(c);
+											balanceEl.textContent = (neg?'-$':'$') + Math.floor(abs/100).toLocaleString('en-US') + '.' + String(abs%100).padStart(2,'0');
+										}
+									}
+									restore();
+								})
+								.catch(function() { restore(); });
+						}
+
+						saveEl.addEventListener('click', save);
+						cancelEl.addEventListener('click', restore);
+						input.addEventListener('keydown', function(e) {
+							if (e.key === 'Enter') save();
+							if (e.key === 'Escape') restore();
+						});
+					});
 				})();
 			})();
 		</script>
@@ -771,17 +932,17 @@ func txSettlementStyle(status string) string {
 
 func uploadAccountJSON(a store.Account) string {
 	type acc struct {
-		ID               string   `json:"id"`
-		Name             string   `json:"name"`
-		AccountType      string   `json:"account_type"`
-		Status           string   `json:"status"`
-		InterestRate     *float64 `json:"interest_rate"`
-		BalanceCents     *int64   `json:"balance_cents"`
-		CreditLimitCents *int64   `json:"credit_limit_cents"`
+		ID                   string   `json:"id"`
+		Name                 string   `json:"name"`
+		AccountType          string   `json:"account_type"`
+		Status               string   `json:"status"`
+		InterestRate         *float64 `json:"interest_rate"`
+		StartingBalanceCents int64    `json:"starting_balance_cents"`
+		CreditLimitCents     *int64   `json:"credit_limit_cents"`
 	}
 	b, _ := json.Marshal(acc{
 		ID: a.ID, Name: a.Name, AccountType: a.AccountType, Status: a.Status,
-		InterestRate: a.InterestRate, BalanceCents: a.BalanceCents, CreditLimitCents: a.CreditLimitCents,
+		InterestRate: a.InterestRate, StartingBalanceCents: a.StartingBalanceCents, CreditLimitCents: a.CreditLimitCents,
 	})
 	return string(b)
 }

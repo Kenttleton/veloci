@@ -68,7 +68,7 @@ func LedgerPage(shell ShellData, data LedgerData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</div><div style=\"display:grid;grid-template-columns:28px 1fr 80px 70px 90px 110px 140px;padding:5px 20px;border-bottom:1px solid var(--border);flex-shrink:0\"><div></div><div style=\"font-size:11px;font-weight:600;color:var(--text3)\">Entry</div><div style=\"font-size:11px;font-weight:600;color:var(--text3)\">Type</div><div style=\"font-size:11px;font-weight:600;color:var(--text3)\">Dir</div><div style=\"font-size:11px;font-weight:600;color:var(--text3);text-align:right\">Rate/mo</div><div style=\"font-size:11px;font-weight:600;color:var(--text3);text-align:center\">Status</div><div style=\"font-size:11px;font-weight:600;color:var(--text3);text-align:right\">Confidence</div></div><div style=\"flex:1;overflow:auto\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</div><div style=\"display:grid;grid-template-columns:28px 1fr 80px 70px 90px 110px 140px;padding:5px 20px;border-bottom:1px solid var(--border);flex-shrink:0\"><div></div><div style=\"font-size:11px;font-weight:600;color:var(--text3)\">Entry</div><div style=\"font-size:11px;font-weight:600;color:var(--text3)\">Type</div><div style=\"font-size:11px;font-weight:600;color:var(--text3)\">Dir</div><div style=\"font-size:11px;font-weight:600;color:var(--text3);text-align:right\">Rate/day</div><div style=\"font-size:11px;font-weight:600;color:var(--text3);text-align:center\">Status</div><div style=\"font-size:11px;font-weight:600;color:var(--text3);text-align:right\">Confidence</div></div><div style=\"flex:1;overflow:auto\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -314,9 +314,9 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var16 string
-		templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(fmtRateMo(e.ProjectedRatePerDay))
+		templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(fmtRateDay(e.ProjectedRatePerDay))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 246, Col: 136}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 246, Col: 137}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 		if templ_7745c5c3_Err != nil {

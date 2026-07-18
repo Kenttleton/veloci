@@ -609,6 +609,20 @@ func formatCents(cents int64) string {
 	return "$" + s
 }
 
+// balanceCentsStr returns the balance cents as a string for data attributes,
+// or empty string when nil.
+func balanceCentsStr(cents *int64) string {
+	if cents == nil {
+		return ""
+	}
+	return strconv.FormatInt(*cents, 10)
+}
+
+// startingBalanceCentsStr returns starting_balance_cents as a string for data attributes.
+func startingBalanceCentsStr(cents int64) string {
+	return strconv.FormatInt(cents, 10)
+}
+
 // txnAmountStyle returns a CSS color for a transaction amount (debit vs credit).
 func txnAmountStyle(cents int64) string {
 	if cents >= 0 {
