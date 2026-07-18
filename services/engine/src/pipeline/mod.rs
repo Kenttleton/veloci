@@ -58,6 +58,11 @@ pub async fn run_import(
 
     tracing::info!(%entity_id, imported = stage0_out.imported_count, skipped = stage0_out.skipped_count, computed_as_of = %stage0_out.computed_as_of, "stage 0 complete");
 
+    if stage0_out.imported_count == 0 {
+        tracing::info!(%entity_id, "stage 0 imported nothing new — skipping stages 1–7");
+        return Ok(());
+    }
+
     // Stages 1–7 share the same computed_as_of horizon from Stage 0.
     run_from_stage1(entity_id, job_id, stage0_out.computed_as_of, pools).await
 }
