@@ -65,7 +65,7 @@ pub async fn run(
     let import_concurrency = 4usize; // TODO: thread through from config
 
     // Classify each candidate via the five dedup passes.
-    let classified: Vec<ClassifiedCandidate> = classify_candidates(
+    let mut classified: Vec<ClassifiedCandidate> = classify_candidates(
         candidates,
         entity_id,
         pending.account_id,
@@ -76,6 +76,17 @@ pub async fn run(
         pool,
     )
     .await?;
+
+    // Canonical merchant resolution: runs after dedup classification, before batch insert.
+    let mut canonical_snapshot = load_canonical_snapshot(pool).await?;
+    for c in classified.iter_mut() {
+        if matches!(c.action, DedupAction::Insert | DedupAction::Supersede(_)) {
+            let id =
+                resolve_canonical(&c.candidate.merchant_normalized, &mut canonical_snapshot, pool)
+                    .await?;
+            c.canonical_merchant_id = Some(id);
+        }
+    }
 
     let imported: Vec<_> = classified
         .iter()
@@ -375,9 +386,137 @@ enum DedupAction {
 
 #[derive(Debug)]
 struct ClassifiedCandidate {
-    candidate:         Candidate,
-    action:            DedupAction,
-    settlement_status: &'static str,
+    candidate:             Candidate,
+    action:                DedupAction,
+    settlement_status:     &'static str,
+    canonical_merchant_id: Option<Uuid>,
+}
+
+// ---------------------------------------------------------------------------
+// Canonical merchant resolution
+// ---------------------------------------------------------------------------
+
+const CANONICAL_LCS_THRESHOLD: f64 = 0.70;
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum CanonicalResolution {
+    ExactHit(Uuid),
+    FuzzyHit(Uuid),
+    Miss,
+}
+
+pub(crate) struct CanonicalSnapshot {
+    pub aliases: std::collections::HashMap<String, Uuid>,
+    pub names:   Vec<(Uuid, String)>,
+}
+
+impl CanonicalSnapshot {
+    pub fn resolve_in_memory(&self, normalized_name: &str) -> CanonicalResolution {
+        if let Some(&id) = self.aliases.get(normalized_name) {
+            return CanonicalResolution::ExactHit(id);
+        }
+        if let Some((id, _)) = self.names.iter().find(|(_, name)| {
+            lcs_ratio(name, normalized_name) >= CANONICAL_LCS_THRESHOLD
+        }) {
+            return CanonicalResolution::FuzzyHit(*id);
+        }
+        CanonicalResolution::Miss
+    }
+
+    pub fn add_alias(&mut self, normalized_name: String, canonical_id: Uuid) {
+        self.aliases.insert(normalized_name, canonical_id);
+    }
+
+    pub fn add_canonical(&mut self, id: Uuid, name: String) {
+        self.names.push((id, name));
+    }
+}
+
+async fn load_canonical_snapshot(pool: &PgPool) -> Result<CanonicalSnapshot> {
+    #[derive(sqlx::FromRow)]
+    struct AliasRow {
+        normalized_name:       String,
+        canonical_merchant_id: Uuid,
+    }
+    #[derive(sqlx::FromRow)]
+    struct NameRow {
+        id:   Uuid,
+        name: String,
+    }
+
+    let alias_rows: Vec<AliasRow> = sqlx::query_as(
+        "SELECT normalized_name, canonical_merchant_id FROM canonical_merchant_aliases",
+    )
+    .fetch_all(pool)
+    .await
+    .context("load canonical aliases")?;
+
+    let name_rows: Vec<NameRow> = sqlx::query_as("SELECT id, name FROM canonical_merchants")
+        .fetch_all(pool)
+        .await
+        .context("load canonical names")?;
+
+    Ok(CanonicalSnapshot {
+        aliases: alias_rows
+            .into_iter()
+            .map(|r| (r.normalized_name, r.canonical_merchant_id))
+            .collect(),
+        names: name_rows.into_iter().map(|r| (r.id, r.name)).collect(),
+    })
+}
+
+async fn persist_canonical_alias(
+    normalized_name: &str,
+    canonical_id: Uuid,
+    snapshot: &mut CanonicalSnapshot,
+    pool: &PgPool,
+) -> Result<()> {
+    sqlx::query(
+        "INSERT INTO canonical_merchant_aliases (normalized_name, canonical_merchant_id, source)
+         VALUES ($1, $2, 'engine') ON CONFLICT (normalized_name) DO NOTHING",
+    )
+    .bind(normalized_name)
+    .bind(canonical_id)
+    .execute(pool)
+    .await
+    .context("persist canonical alias")?;
+    snapshot.add_alias(normalized_name.to_string(), canonical_id);
+    Ok(())
+}
+
+async fn create_canonical_merchant(
+    normalized_name: &str,
+    snapshot: &mut CanonicalSnapshot,
+    pool: &PgPool,
+) -> Result<Uuid> {
+    let (id,): (Uuid,) = sqlx::query_as(
+        "INSERT INTO canonical_merchants (name, source) VALUES ($1, 'engine')
+         ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING id",
+    )
+    .bind(normalized_name)
+    .fetch_one(pool)
+    .await
+    .context("create canonical merchant")?;
+    snapshot.add_canonical(id, normalized_name.to_string());
+    persist_canonical_alias(normalized_name, id, snapshot, pool).await?;
+    Ok(id)
+}
+
+async fn resolve_canonical(
+    normalized_name: &str,
+    snapshot: &mut CanonicalSnapshot,
+    pool: &PgPool,
+) -> Result<Uuid> {
+    match snapshot.resolve_in_memory(normalized_name) {
+        CanonicalResolution::ExactHit(id) => Ok(id),
+        CanonicalResolution::FuzzyHit(id) => {
+            persist_canonical_alias(normalized_name, id, snapshot, pool).await?;
+            Ok(id)
+        }
+        CanonicalResolution::Miss => {
+            create_canonical_merchant(normalized_name, snapshot, pool).await
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -637,7 +776,7 @@ async fn classify_one(
             } else {
                 DedupAction::Skip
             };
-            return Ok(ClassifiedCandidate { candidate, action, settlement_status });
+            return Ok(ClassifiedCandidate { candidate, action, settlement_status, canonical_merchant_id: None });
         }
     }
 
@@ -648,6 +787,7 @@ async fn classify_one(
                 candidate,
                 action: DedupAction::Insert,
                 settlement_status,
+                canonical_merchant_id: None,
             });
         }
     } else {
@@ -655,6 +795,7 @@ async fn classify_one(
             candidate,
             action: DedupAction::Insert,
             settlement_status,
+            canonical_merchant_id: None,
         });
     }
 
@@ -692,7 +833,7 @@ async fn classify_one(
         } else {
             DedupAction::Skip
         };
-        return Ok(ClassifiedCandidate { candidate, action, settlement_status });
+        return Ok(ClassifiedCandidate { candidate, action, settlement_status, canonical_merchant_id: None });
     }
 
     // -- Pass 4: Volatility-aware fuzzy LCS merchant match --
@@ -727,7 +868,7 @@ async fn classify_one(
         } else {
             DedupAction::Skip
         };
-        return Ok(ClassifiedCandidate { candidate, action, settlement_status });
+        return Ok(ClassifiedCandidate { candidate, action, settlement_status, canonical_merchant_id: None });
     }
 
     // -- Pass 5: Fallback insert --
@@ -735,6 +876,7 @@ async fn classify_one(
         candidate,
         action: DedupAction::Insert,
         settlement_status,
+        canonical_merchant_id: None,
     })
 }
 
@@ -954,5 +1096,60 @@ mod tests {
 
         let as_debit = apply_sign_convention(raw, "positive_is_debit");
         assert!(as_debit < 0, "expense must be negative cents");
+    }
+
+    // CanonicalSnapshot resolution
+    #[test]
+    fn canonical_snapshot_exact_hit_returns_existing_id() {
+        use std::collections::HashMap;
+        let id = uuid::Uuid::new_v4();
+        let snapshot = CanonicalSnapshot {
+            aliases: HashMap::from([("Netflixcom".to_string(), id)]),
+            names: vec![(id, "Netflix".to_string())],
+        };
+        assert_eq!(snapshot.resolve_in_memory("Netflixcom"), CanonicalResolution::ExactHit(id));
+    }
+
+    #[test]
+    fn canonical_snapshot_lcs_hit_returns_fuzzy_match() {
+        use std::collections::HashMap;
+        let id = uuid::Uuid::new_v4();
+        let snapshot = CanonicalSnapshot {
+            aliases: HashMap::new(),
+            names: vec![(id, "Starbucks".to_string())],
+        };
+        // "Starbuckscom" vs "Starbucks": LCS=9, max(9,12)=12, ratio=0.75 >= 0.70
+        let result = snapshot.resolve_in_memory("Starbuckscom");
+        assert!(matches!(result, CanonicalResolution::FuzzyHit(_)));
+    }
+
+    #[test]
+    fn canonical_snapshot_miss_below_threshold() {
+        use std::collections::HashMap;
+        let id = uuid::Uuid::new_v4();
+        let snapshot = CanonicalSnapshot {
+            aliases: HashMap::new(),
+            names: vec![(id, "Walmart".to_string())],
+        };
+        // "Walgreens" vs "Walmart": LCS≈4, ratio≈0.44 < 0.70
+        assert_eq!(snapshot.resolve_in_memory("Walgreens"), CanonicalResolution::Miss);
+    }
+
+    #[test]
+    fn canonical_snapshot_exact_takes_priority_over_fuzzy() {
+        use std::collections::HashMap;
+        let exact_id = uuid::Uuid::new_v4();
+        let fuzzy_id = uuid::Uuid::new_v4();
+        let snapshot = CanonicalSnapshot {
+            aliases: HashMap::from([("Starbucks".to_string(), exact_id)]),
+            names: vec![
+                (exact_id, "Starbucks".to_string()),
+                (fuzzy_id, "Starbucks Corp".to_string()),
+            ],
+        };
+        assert_eq!(
+            snapshot.resolve_in_memory("Starbucks"),
+            CanonicalResolution::ExactHit(exact_id)
+        );
     }
 }
