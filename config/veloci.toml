@@ -11,6 +11,10 @@
 host = "postgres"
 port = 5432
 
+[database.superuser]
+user = "postgres"
+password = "changeme"
+
 [database.app]
 name = "veloci_app"
 user = "veloci_app_user"
@@ -24,6 +28,7 @@ password = "changeme"
 [rabbitmq]
 host = "rabbitmq"
 port = 5672
+management_port = 15672
 user = "veloci"
 password = "changeme"
 

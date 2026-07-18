@@ -1,16 +1,18 @@
-set dotenv-load := true
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
-# Load env vars from .env. All defaults match .env.example.
-pg_user   := env("POSTGRES_USER",          "postgres")
-app_db    := env("VELOCI_APP_DB",           "veloci_app")
-app_user  := env("VELOCI_APP_DB_USER",      "veloci_app_user")
-app_pass  := env("VELOCI_APP_DB_PASSWORD",  "changeme_app")
-auth_db   := env("VELOCI_AUTH_DB",          "veloci_auth")
-auth_user := env("VELOCI_AUTH_DB_USER",     "veloci_auth_user")
-auth_pass := env("VELOCI_AUTH_DB_PASSWORD", "changeme_auth")
-mq_user   := env("RABBITMQ_USER",           "veloci")
-mq_pass   := env("RABBITMQ_PASSWORD",       "changeme")
+config := "config/veloci.toml"
+
+# Read credentials directly from config — single source of truth.
+pg_user      := "sh scripts/toml-get.sh database.superuser user            {{config}}"
+app_db       := "sh scripts/toml-get.sh database.app       name            {{config}}"
+app_user     := "sh scripts/toml-get.sh database.app       user            {{config}}"
+app_pass     := "sh scripts/toml-get.sh database.app       password        {{config}}"
+auth_db      := "sh scripts/toml-get.sh database.auth      name            {{config}}"
+auth_user    := "sh scripts/toml-get.sh database.auth      user            {{config}}"
+auth_pass    := "sh scripts/toml-get.sh database.auth      password        {{config}}"
+mq_user      := "sh scripts/toml-get.sh rabbitmq           user            {{config}}"
+mq_pass      := "sh scripts/toml-get.sh rabbitmq           password        {{config}}"
+mq_mgmt_port := "sh scripts/toml-get.sh rabbitmq           management_port {{config}}"
 
 # ─── Help ─────────────────────────────────────────────────────────────────────
 
@@ -56,7 +58,7 @@ infra:
     @just _wait-postgres
     @just _wait-rabbitmq
     @just migrate
-    @echo "Infrastructure ready. Management UI: http://localhost:15672"
+    @echo "Infrastructure ready. Management UI: http://localhost:{{mq_mgmt_port}}"
 
 # Stop all running services (preserves volumes)
 down:
@@ -152,13 +154,17 @@ dev-seed:
 
 # Check RabbitMQ management API and veloci.jobs queue status
 queue-check:
-    @echo "Checking RabbitMQ management API..."
-    @curl -sf -u "{{ mq_user }}:{{ mq_pass }}" "http://localhost:15672/api/overview" -o /dev/null \
-        || (echo "ERROR: RabbitMQ unreachable — run: just rabbitmq"; exit 1)
-    @echo "Checking veloci.jobs queue..."
-    @curl -sf -u "{{ mq_user }}:{{ mq_pass }}" "http://localhost:15672/api/queues/%2F/veloci.jobs" -o /dev/null \
-        && echo "veloci.jobs: declared" \
-        || echo "veloci.jobs: not yet declared (start the engine or run enqueue-import)"
+    #!/usr/bin/env bash
+    base="http://localhost:{{mq_mgmt_port}}/api"
+    echo "Checking RabbitMQ management API..."
+    curl -sf -u "{{mq_user}}:{{mq_pass}}" "$base/overview" -o /dev/null \
+        || { echo "ERROR: RabbitMQ unreachable — run: just rabbitmq"; exit 1; }
+    echo "Checking veloci.jobs queue..."
+    if curl -sf -u "{{mq_user}}:{{mq_pass}}" "$base/queues/%2F/veloci.jobs" -o /dev/null; then
+        echo "veloci.jobs: declared"
+    else
+        echo "veloci.jobs: not yet declared (start the engine or run enqueue-import)"
+    fi
 
 # Insert a CSV into pending_imports and publish an import.process job.
 # Requires: postgres + rabbitmq running, an entity and user in the DB.
@@ -170,15 +176,19 @@ enqueue-import csv entity_id account_id:
 # ─── Internal health-wait helpers ────────────────────────────────────────────
 
 _wait-postgres:
-    @echo "Waiting for postgres..."
-    @until docker compose exec -T postgres pg_isready -U "{{ pg_user }}" -q 2>/dev/null; do \
-        printf '.'; sleep 1; \
+    #!/usr/bin/env bash
+    echo "Waiting for postgres..."
+    until docker compose exec -T postgres pg_isready -U "{{pg_user}}" -q 2>/dev/null; do
+        printf '.'
+        sleep 1
     done
-    @echo " ready."
+    echo " ready."
 
 _wait-rabbitmq:
-    @echo "Waiting for RabbitMQ..."
-    @until curl -sf -u "{{ mq_user }}:{{ mq_pass }}" "http://localhost:15672/api/overview" -o /dev/null 2>/dev/null; do \
-        printf '.'; sleep 2; \
+    #!/usr/bin/env bash
+    echo "Waiting for RabbitMQ..."
+    until curl -sf -u "{{mq_user}}:{{mq_pass}}" "http://localhost:{{mq_mgmt_port}}/api/overview" -o /dev/null 2>/dev/null; do
+        printf '.'
+        sleep 2
     done
-    @echo " ready."
+    echo " ready."
