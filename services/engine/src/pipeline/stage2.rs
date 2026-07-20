@@ -407,12 +407,13 @@ async fn persist_cluster(
     // human-readable display name in the ledger.
     let (label_id,): (Uuid,) = sqlx::query_as(
         r#"
-        INSERT INTO labels (name)
-        VALUES ($1)
-        ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+        INSERT INTO labels (entity_id, name)
+        VALUES ($1, $2)
+        ON CONFLICT (entity_id, name) DO UPDATE SET name = EXCLUDED.name
         RETURNING id
         "#,
     )
+    .bind(entity_id)
     .bind(&cluster.representative_merchant)
     .fetch_one(pool)
     .await
