@@ -357,11 +357,21 @@ struct PendingImport {
 }
 
 struct InstitutionMapping {
+    // which parsing strategy to use
+    layout:                 String,  // "signed" | "indicator" | "split"
+    // common to all layouts
     date_col:               String,
-    amount_col:             String,
     merchant_col:           String,
     imported_id_col:        Option<String>,
-    amount_sign_convention: String,
+    // layout = "signed"
+    amount_col:             Option<String>,
+    sign_convention:        Option<String>, // "positive_is_credit" | "positive_is_debit"
+    // layout = "indicator"
+    dc_indicator_col:       Option<String>,
+    // layout = "split"
+    debit_col:              Option<String>,
+    credit_col:             Option<String>,
+    // operational params (separate DB columns)
     settlement_window_days: i32,
     dedup_window_days:      i32,
     amount_tolerance_pct:   f64,
@@ -559,11 +569,10 @@ async fn load_pending_import(id: Uuid, entity_id: Uuid, pool: &PgPool) -> Result
 }
 
 async fn load_institution_mapping(id: Uuid, pool: &PgPool) -> Result<InstitutionMapping> {
-    let row: (String, String, String, Option<String>, String, Option<i32>, Option<i32>, Option<f64>) =
+    let row: (serde_json::Value, Option<i32>, Option<i32>, Option<f64>) =
         sqlx::query_as(
             r#"
-            SELECT date_col, amount_col, merchant_col, imported_id_col,
-                   amount_sign_convention,
+            SELECT mapping_config,
                    settlement_window_days,
                    dedup_window_days,
                    amount_tolerance_pct
@@ -576,15 +585,35 @@ async fn load_institution_mapping(id: Uuid, pool: &PgPool) -> Result<Institution
         .await
         .context("institution_mapping not found")?;
 
+    let (cfg, settlement, dedup, tolerance) = row;
+
+    let layout = cfg["layout"].as_str().unwrap_or("signed").to_string();
+
+    let get = |key: &str| -> Option<String> {
+        cfg["fields"][key]
+            .as_str()
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+    };
+
+    let date_col = get("date")
+        .ok_or_else(|| anyhow!("Mapping error: required field 'date' not configured in institution mapping"))?;
+    let merchant_col = get("merchant")
+        .ok_or_else(|| anyhow!("Mapping error: required field 'merchant' not configured in institution mapping"))?;
+
     Ok(InstitutionMapping {
-        date_col:               row.0,
-        amount_col:             row.1,
-        merchant_col:           row.2,
-        imported_id_col:        row.3,
-        amount_sign_convention: row.4,
-        settlement_window_days: row.5.unwrap_or(3),
-        dedup_window_days:      row.6.unwrap_or(5),
-        amount_tolerance_pct:   row.7.unwrap_or(0.02),
+        layout,
+        date_col,
+        merchant_col,
+        imported_id_col:        get("imported_id"),
+        amount_col:             get("amount"),
+        sign_convention:        get("sign_convention"),
+        dc_indicator_col:       get("dc_indicator"),
+        debit_col:              get("debit"),
+        credit_col:             get("credit"),
+        settlement_window_days: settlement.unwrap_or(14),
+        dedup_window_days:      dedup.unwrap_or(3),
+        amount_tolerance_pct:   tolerance.unwrap_or(0.005),
     })
 }
 
@@ -610,47 +639,63 @@ async fn query_existing_boundary(
 // ---------------------------------------------------------------------------
 
 fn parse_csv(bytes: &[u8], mapping: &InstitutionMapping) -> Result<Vec<Candidate>> {
-    let mut reader = csv::Reader::from_reader(bytes);
-    let headers = reader
-        .headers()
-        .context("failed to read CSV headers")?
-        .clone();
+    match mapping.layout.as_str() {
+        "indicator" => parse_csv_indicator(bytes, mapping),
+        "split"     => parse_csv_split(bytes, mapping),
+        _           => parse_csv_signed(bytes, mapping), // "signed" is the default
+    }
+}
 
-    let date_idx = headers
+fn col_idx(headers: &csv::StringRecord, col: &str, cols_list: &str, field_label: &str) -> Result<usize> {
+    headers
         .iter()
-        .position(|h| h.trim() == mapping.date_col.trim())
-        .ok_or_else(|| anyhow!("CSV missing date column '{}'", mapping.date_col))?;
-    let amount_idx = headers
-        .iter()
-        .position(|h| h.trim() == mapping.amount_col.trim())
-        .ok_or_else(|| anyhow!("CSV missing amount column '{}'", mapping.amount_col))?;
-    let merchant_idx = headers
-        .iter()
-        .position(|h| h.trim() == mapping.merchant_col.trim())
-        .ok_or_else(|| anyhow!("CSV missing merchant column '{}'", mapping.merchant_col))?;
+        .position(|h| h.trim() == col.trim())
+        .ok_or_else(|| anyhow!(
+            "Mapping error: {} column '{}' not found in your CSV. \
+             Columns found: {}. \
+             Update the institution mapping to match your CSV headers.",
+            field_label, col, cols_list
+        ))
+}
+
+fn common_idxs(
+    headers: &csv::StringRecord,
+    mapping: &InstitutionMapping,
+    cols_list: &str,
+) -> Result<(usize, usize, Option<usize>)> {
+    let date_idx     = col_idx(headers, &mapping.date_col, cols_list, "date")?;
+    let merchant_idx = col_idx(headers, &mapping.merchant_col, cols_list, "merchant")?;
     let id_idx = mapping
         .imported_id_col
         .as_deref()
         .and_then(|col| headers.iter().position(|h| h.trim() == col.trim()));
+    Ok((date_idx, merchant_idx, id_idx))
+}
+
+fn parse_csv_signed(bytes: &[u8], mapping: &InstitutionMapping) -> Result<Vec<Candidate>> {
+    let mut reader = csv::Reader::from_reader(bytes);
+    let headers    = reader.headers().context("failed to read CSV headers")?.clone();
+    let cols_list  = headers.iter().collect::<Vec<_>>().join(", ");
+
+    let (date_idx, merchant_idx, id_idx) = common_idxs(&headers, mapping, &cols_list)?;
+
+    let amount_col = mapping.amount_col.as_deref()
+        .ok_or_else(|| anyhow!("Mapping error: 'amount' field not configured for signed layout"))?;
+    let amount_idx = col_idx(&headers, amount_col, &cols_list, "amount")?;
+
+    let convention = mapping.sign_convention.as_deref().unwrap_or("positive_is_credit");
 
     let mut candidates = Vec::new();
     for result in reader.records() {
-        let record = result.context("CSV parse error")?;
-
+        let record     = result.context("CSV parse error")?;
         let date_str   = record.get(date_idx).unwrap_or("").trim().to_string();
         let amount_str = record.get(amount_idx).unwrap_or("").trim().to_string();
         let payee_raw  = record.get(merchant_idx).unwrap_or("").to_string();
 
-        let date = parse_date(&date_str)
-            .with_context(|| format!("unparseable date '{date_str}'"))?;
-
-        let raw_cents = parse_amount_cents(&amount_str)
-            .with_context(|| format!("unparseable amount '{amount_str}'"))?;
-        let amount_cents = apply_sign_convention(raw_cents, &mapping.amount_sign_convention);
-
-        let imported_id = id_idx.and_then(|i| {
-            record.get(i).filter(|s| !s.is_empty()).map(str::to_string)
-        });
+        let date       = parse_date(&date_str).with_context(|| format!("unparseable date '{date_str}'"))?;
+        let raw_cents  = parse_amount_cents(&amount_str).with_context(|| format!("unparseable amount '{amount_str}'"))?;
+        let amount_cents = apply_sign_convention(raw_cents, convention);
+        let imported_id  = id_idx.and_then(|i| record.get(i).filter(|s| !s.is_empty()).map(str::to_string));
 
         candidates.push(Candidate {
             date,
@@ -660,7 +705,101 @@ fn parse_csv(bytes: &[u8], mapping: &InstitutionMapping) -> Result<Vec<Candidate
             imported_id,
         });
     }
+    Ok(candidates)
+}
 
+fn parse_csv_indicator(bytes: &[u8], mapping: &InstitutionMapping) -> Result<Vec<Candidate>> {
+    let mut reader = csv::Reader::from_reader(bytes);
+    let headers    = reader.headers().context("failed to read CSV headers")?.clone();
+    let cols_list  = headers.iter().collect::<Vec<_>>().join(", ");
+
+    let (date_idx, merchant_idx, id_idx) = common_idxs(&headers, mapping, &cols_list)?;
+
+    let amount_col = mapping.amount_col.as_deref()
+        .ok_or_else(|| anyhow!("Mapping error: 'amount' field not configured for indicator layout"))?;
+    let amount_idx = col_idx(&headers, amount_col, &cols_list, "amount")?;
+
+    let dc_col = mapping.dc_indicator_col.as_deref()
+        .ok_or_else(|| anyhow!("Mapping error: 'dc_indicator' field not configured for indicator layout"))?;
+    let dc_idx = col_idx(&headers, dc_col, &cols_list, "debit/credit indicator")?;
+
+    let mut candidates = Vec::new();
+    for result in reader.records() {
+        let record     = result.context("CSV parse error")?;
+        let date_str   = record.get(date_idx).unwrap_or("").trim().to_string();
+        let amount_str = record.get(amount_idx).unwrap_or("").trim().to_string();
+        let payee_raw  = record.get(merchant_idx).unwrap_or("").to_string();
+        let indicator  = record.get(dc_idx).unwrap_or("").trim().to_uppercase();
+
+        let date      = parse_date(&date_str).with_context(|| format!("unparseable date '{date_str}'"))?;
+        let abs_cents = parse_amount_cents(&amount_str).with_context(|| format!("unparseable amount '{amount_str}'"))?.abs();
+
+        // DEBIT / DR / D → money out (negative); CREDIT / CR / C → money in (positive)
+        let amount_cents = match indicator.as_str() {
+            "DEBIT" | "DR" | "D" | "WITHDRAWAL" => -abs_cents,
+            _ => abs_cents,
+        };
+
+        let imported_id = id_idx.and_then(|i| record.get(i).filter(|s| !s.is_empty()).map(str::to_string));
+
+        candidates.push(Candidate {
+            date,
+            amount_cents,
+            merchant_normalized: normalize_merchant(&payee_raw),
+            imported_payee: payee_raw,
+            imported_id,
+        });
+    }
+    Ok(candidates)
+}
+
+fn parse_csv_split(bytes: &[u8], mapping: &InstitutionMapping) -> Result<Vec<Candidate>> {
+    let mut reader = csv::Reader::from_reader(bytes);
+    let headers    = reader.headers().context("failed to read CSV headers")?.clone();
+    let cols_list  = headers.iter().collect::<Vec<_>>().join(", ");
+
+    let (date_idx, merchant_idx, id_idx) = common_idxs(&headers, mapping, &cols_list)?;
+
+    let debit_col  = mapping.debit_col.as_deref()
+        .ok_or_else(|| anyhow!("Mapping error: 'debit' field not configured for split layout"))?;
+    let credit_col = mapping.credit_col.as_deref()
+        .ok_or_else(|| anyhow!("Mapping error: 'credit' field not configured for split layout"))?;
+    let debit_idx  = col_idx(&headers, debit_col, &cols_list, "debit")?;
+    let credit_idx = col_idx(&headers, credit_col, &cols_list, "credit")?;
+
+    let mut candidates = Vec::new();
+    for result in reader.records() {
+        let record    = result.context("CSV parse error")?;
+        let date_str  = record.get(date_idx).unwrap_or("").trim().to_string();
+        let payee_raw = record.get(merchant_idx).unwrap_or("").to_string();
+        let debit_str = record.get(debit_idx).unwrap_or("").trim().to_string();
+        let credit_str = record.get(credit_idx).unwrap_or("").trim().to_string();
+
+        let date = parse_date(&date_str).with_context(|| format!("unparseable date '{date_str}'"))?;
+
+        // whichever column has a value wins; debit → negative, credit → positive
+        let amount_cents = if !debit_str.is_empty() && debit_str != "0" && debit_str != "0.00" {
+            let c = parse_amount_cents(&debit_str)
+                .with_context(|| format!("unparseable debit amount '{debit_str}'"))?;
+            -c.abs()
+        } else if !credit_str.is_empty() && credit_str != "0" && credit_str != "0.00" {
+            let c = parse_amount_cents(&credit_str)
+                .with_context(|| format!("unparseable credit amount '{credit_str}'"))?;
+            c.abs()
+        } else {
+            continue; // blank row — skip
+        };
+
+        let imported_id = id_idx.and_then(|i| record.get(i).filter(|s| !s.is_empty()).map(str::to_string));
+
+        candidates.push(Candidate {
+            date,
+            amount_cents,
+            merchant_normalized: normalize_merchant(&payee_raw),
+            imported_payee: payee_raw,
+            imported_id,
+        });
+    }
     Ok(candidates)
 }
 

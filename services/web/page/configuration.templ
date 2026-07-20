@@ -724,23 +724,72 @@ templ ConfigurationPage(shell ShellData, data ConfigurationData) {
 				var instDialogError = document.getElementById('inst-dialog-error');
 				var instEditId = null;
 
+				var FIELD_REGISTRY = JSON.parse((instDialog && instDialog.dataset.fieldRegistry) || '[]');
+
+				var INST_INPUT_STYLE = 'background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;color:var(--text);outline:none;width:100%;box-sizing:border-box;font-family:inherit';
+
+				function buildInstFields(layoutKey, existingFields) {
+					var container = document.getElementById('inst-fields-container');
+					if (!container) return;
+					var src = FIELD_REGISTRY.find(function(s) { return s.key === 'csv'; });
+					if (!src) return;
+					var layout = src.layouts.find(function(l) { return l.key === layoutKey; });
+					if (!layout) return;
+					container.innerHTML = '';
+					layout.fields.forEach(function(field) {
+						var wrap = document.createElement('div');
+						var lbl = document.createElement('label');
+						lbl.style.cssText = 'display:block;font-size:12px;color:var(--text3);margin-bottom:4px';
+						lbl.textContent = field.label + (field.required ? ' *' : ' (optional)');
+						wrap.appendChild(lbl);
+						var input;
+						if (field.kind === 'enum') {
+							input = document.createElement('select');
+							input.style.cssText = INST_INPUT_STYLE + ';cursor:pointer';
+							(field.enum_values || []).forEach(function(v) {
+								var opt = document.createElement('option');
+								opt.value = v;
+								opt.textContent = v === 'positive_is_credit' ? 'Positive = credit (money in)' : 'Positive = debit (money out)';
+								opt.selected = existingFields && existingFields[field.key] === v;
+								input.appendChild(opt);
+							});
+						} else {
+							input = document.createElement('input');
+							input.type = 'text';
+							input.style.cssText = INST_INPUT_STYLE;
+							input.placeholder = (field.aliases && field.aliases[0]) || '';
+							input.value = (existingFields && existingFields[field.key]) || '';
+						}
+						input.dataset.fieldKey = field.key;
+						wrap.appendChild(input);
+						container.appendChild(wrap);
+					});
+				}
+
+				var instLayoutSel = document.getElementById('inst-layout');
+				if (instLayoutSel) {
+					instLayoutSel.addEventListener('change', function() {
+						buildInstFields(instLayoutSel.value, null);
+					});
+				}
+
 				function openInstDialog(inst) {
 					instEditId = inst ? inst.id : null;
 					if (instDialogTitle) instDialogTitle.textContent = inst ? 'Edit: ' + inst.institution_name : 'New Institution Mapping';
 					setField('inst-name', inst ? inst.institution_name : '');
-					setField('inst-date-col', inst ? inst.date_col : 'date');
-					setField('inst-amount-col', inst ? inst.amount_col : 'amount');
-					setField('inst-merchant-col', inst ? inst.merchant_col : 'description');
-					setField('inst-balance-col', inst ? (inst.balance_col||'') : '');
-					setField('inst-dc-col', inst ? (inst.debit_credit_col||'') : '');
-					setField('inst-id-col', inst ? (inst.imported_id_col||'') : '');
-					setField('inst-sign', inst ? inst.amount_sign_convention : 'positive_is_credit');
+					var cfg = (inst && inst.mapping_config) ? inst.mapping_config : {};
+					var layout = cfg.layout || 'signed';
+					if (instLayoutSel) instLayoutSel.value = layout;
+					buildInstFields(layout, cfg.fields || null);
 					setField('inst-settlement', inst ? inst.settlement_window_days : '14');
 					setField('inst-dedup', inst ? inst.dedup_window_days : '3');
-					setField('inst-tolerance', inst ? (inst.amount_tolerance_pct * 100).toFixed(3).replace(/\.?0+$/, '') : '0.5');
+					var tol = inst ? inst.amount_tolerance_pct * 100 : 0.5;
+					setField('inst-tolerance', String(tol ? parseFloat(tol.toFixed(3)) : 0.5));
 					if (instDialogError) { instDialogError.textContent = ''; instDialogError.style.display = 'none'; }
 					if (instDialog) instDialog.showModal();
 				}
+
+				buildInstFields('signed', null);
 
 				function setField(id, val) {
 					var el = document.getElementById(id);
@@ -767,19 +816,20 @@ templ ConfigurationPage(shell ShellData, data ConfigurationData) {
 						if (instDialogError) { instDialogError.textContent = 'Institution name is required.'; instDialogError.style.display = ''; }
 						return;
 					}
+					var instFields = {};
+					document.querySelectorAll('#inst-fields-container [data-field-key]').forEach(function(el) {
+						if (el.value) instFields[el.dataset.fieldKey] = el.value;
+					});
 					var body = {
 						institution_name: name,
 						source_type: 'csv',
-						date_col: getField('inst-date-col') || 'date',
-						amount_col: getField('inst-amount-col') || 'amount',
-						merchant_col: getField('inst-merchant-col') || 'description',
-						balance_col: getField('inst-balance-col') || null,
-						debit_credit_col: getField('inst-dc-col') || null,
-						imported_id_col: getField('inst-id-col') || null,
-						amount_sign_convention: getField('inst-sign') || 'positive_is_credit',
 						settlement_window_days: parseInt(getField('inst-settlement')) || 14,
 						dedup_window_days: parseInt(getField('inst-dedup')) || 3,
-						amount_tolerance_pct: (parseFloat(getField('inst-tolerance')) / 100) || 0.005
+						amount_tolerance_pct: (parseFloat(getField('inst-tolerance')) / 100) || 0.005,
+						mapping_config: {
+							layout: instLayoutSel ? instLayoutSel.value : 'signed',
+							fields: instFields,
+						},
 					};
 					instDialogSave.disabled = true;
 					instDialogSave.textContent = 'Saving…';
@@ -1135,16 +1185,12 @@ templ cfgInstRow(inst store.Institution, isLast bool) {
 			</div>
 		</summary>
 		<div style="border-top:1px solid var(--border);background:var(--bg);padding:12px 16px;display:grid;grid-template-columns:1fr 1fr;gap:8px 20px">
-			@cfgInstField("Date col", inst.DateCol)
-			@cfgInstField("Amount col", inst.AmountCol)
-			@cfgInstField("Merchant col", inst.MerchantCol)
-			@cfgInstOptField("Balance col", inst.BalanceCol)
-			@cfgInstOptField("Debit/Credit col", inst.DebitCreditCol)
-			@cfgInstOptField("Imported ID col", inst.ImportedIDCol)
-			@cfgInstField("Sign convention", inst.AmountSignConvention)
+			for _, field := range instMappingFields(inst) {
+				@cfgInstField(field.Label, field.Value)
+			}
 			@cfgInstField("Settlement window", fmt.Sprintf("%d days", inst.SettlementWindowDays))
 			@cfgInstField("Dedup window", fmt.Sprintf("%d days", inst.DedupWindowDays))
-			@cfgInstField("Amount tolerance", fmt.Sprintf("%.1f%%", inst.AmountTolerancePct))
+			@cfgInstField("Amount tolerance", fmt.Sprintf("%.3g%%", inst.AmountTolerancePct*100))
 		</div>
 	</details>
 }
@@ -1165,6 +1211,7 @@ templ cfgInstOptField(label string, value *string) {
 templ cfgInstDialog() {
 	<dialog
 		id="inst-dialog"
+		data-field-registry={ fieldRegistryJSON() }
 		style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0;color:var(--text);width:520px;max-width:95vw;max-height:90vh"
 	>
 		<div style="display:flex;flex-direction:column;max-height:90vh;overflow:hidden">
@@ -1174,26 +1221,18 @@ templ cfgInstDialog() {
 		</div>
 		<div style="overflow:auto;flex:1;padding:20px;display:flex;flex-direction:column;gap:12px">
 			@cfgFormField("Institution name", "inst-name", "text", "Chase Checking", true)
-			<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-				@cfgFormField("Date column", "inst-date-col", "text", "date", false)
-				@cfgFormField("Amount column", "inst-amount-col", "text", "amount", false)
-			</div>
-			@cfgFormField("Merchant / description column", "inst-merchant-col", "text", "description", false)
-			<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-				@cfgFormField("Balance column (optional)", "inst-balance-col", "text", "", false)
-				@cfgFormField("Debit/Credit column (optional)", "inst-dc-col", "text", "", false)
-			</div>
-			@cfgFormField("Imported ID column (optional)", "inst-id-col", "text", "", false)
 			<div>
-				<label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px">Amount sign convention</label>
+				<label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px">Amount layout</label>
 				<select
-					id="inst-sign"
-					style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 28px 6px 8px;font-size:13px;color:var(--text);outline:none;width:100%"
+					id="inst-layout"
+					style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;color:var(--text);outline:none;width:100%;box-sizing:border-box;cursor:pointer;font-family:inherit"
 				>
-					<option value="positive_is_credit">Positive = credit (money in)</option>
-					<option value="positive_is_debit">Positive = debit (money out)</option>
+					<option value="signed">Signed amount (single amount column)</option>
+					<option value="indicator">Amount + debit/credit indicator column</option>
+					<option value="split">Separate debit and credit columns</option>
 				</select>
 			</div>
+			<div id="inst-fields-container" style="display:grid;grid-template-columns:1fr 1fr;gap:12px"></div>
 			<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
 				@cfgFormField("Settlement window (days)", "inst-settlement", "number", "14", false)
 				@cfgFormField("Dedup window (days)", "inst-dedup", "number", "3", false)
@@ -1255,31 +1294,19 @@ func merchantSourceBadge(source string) string {
 
 func instJSON(inst store.Institution) string {
 	type instOut struct {
-		ID                   string  `json:"id"`
-		InstitutionName      string  `json:"institution_name"`
-		SourceType           string  `json:"source_type"`
-		DateCol              string  `json:"date_col"`
-		AmountCol            string  `json:"amount_col"`
-		MerchantCol          string  `json:"merchant_col"`
-		BalanceCol           *string `json:"balance_col"`
-		DebitCreditCol       *string `json:"debit_credit_col"`
-		ImportedIDCol        *string `json:"imported_id_col"`
-		AmountSignConvention string  `json:"amount_sign_convention"`
-		SettlementWindowDays int     `json:"settlement_window_days"`
-		DedupWindowDays      int     `json:"dedup_window_days"`
-		AmountTolerancePct   float64 `json:"amount_tolerance_pct"`
+		ID                   string          `json:"id"`
+		InstitutionName      string          `json:"institution_name"`
+		SourceType           string          `json:"source_type"`
+		MappingConfig        json.RawMessage `json:"mapping_config"`
+		SettlementWindowDays int             `json:"settlement_window_days"`
+		DedupWindowDays      int             `json:"dedup_window_days"`
+		AmountTolerancePct   float64         `json:"amount_tolerance_pct"`
 	}
 	b, _ := json.Marshal(instOut{
 		ID:                   inst.ID,
 		InstitutionName:      inst.InstitutionName,
 		SourceType:           inst.SourceType,
-		DateCol:              inst.DateCol,
-		AmountCol:            inst.AmountCol,
-		MerchantCol:          inst.MerchantCol,
-		BalanceCol:           inst.BalanceCol,
-		DebitCreditCol:       inst.DebitCreditCol,
-		ImportedIDCol:        inst.ImportedIDCol,
-		AmountSignConvention: inst.AmountSignConvention,
+		MappingConfig:        inst.MappingConfig,
 		SettlementWindowDays: inst.SettlementWindowDays,
 		DedupWindowDays:      inst.DedupWindowDays,
 		AmountTolerancePct:   inst.AmountTolerancePct,

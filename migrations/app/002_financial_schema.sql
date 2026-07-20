@@ -20,14 +20,8 @@ CREATE TABLE institution_mappings (
   -- amount tolerance for fuzzy matching (handles FX rounding across imports)
   -- csv default: 0.5%; integration default: 2%
   amount_tolerance_pct   FLOAT8       NOT NULL DEFAULT 0.005,
-  date_col               TEXT         NOT NULL,
-  amount_col             TEXT         NOT NULL,
-  merchant_col           TEXT         NOT NULL,
-  imported_id_col        TEXT,
-  balance_col            TEXT,
-  debit_credit_col       TEXT,
-  amount_sign_convention TEXT         NOT NULL
-                         CHECK (amount_sign_convention IN ('positive_is_credit', 'positive_is_debit')),
+  -- JSON config: { "layout": "signed"|"indicator"|"split", "fields": { field_key: col_name_or_enum } }
+  mapping_config         JSONB        NOT NULL,
   created_at             TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   UNIQUE (entity_id, institution_name)
 );

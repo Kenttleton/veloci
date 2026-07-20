@@ -2,12 +2,14 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/veloci/veloci/fieldregistry"
 	"github.com/veloci/veloci/middleware"
 	"github.com/veloci/veloci/queue"
 	"github.com/veloci/veloci/response"
@@ -26,20 +28,14 @@ func NewInstitutionsHandler(s *store.Store) *InstitutionsHandler {
 
 // institutionView is the API representation of an institution mapping.
 type institutionView struct {
-	ID                   string  `json:"id"`
-	InstitutionName      string  `json:"institution_name"`
-	SourceType           string  `json:"source_type"`
-	SettlementWindowDays int     `json:"settlement_window_days"`
-	DedupWindowDays      int     `json:"dedup_window_days"`
-	AmountTolerancePct   float64 `json:"amount_tolerance_pct"`
-	DateCol              string  `json:"date_col"`
-	AmountCol            string  `json:"amount_col"`
-	MerchantCol          string  `json:"merchant_col"`
-	ImportedIDCol        *string `json:"imported_id_col"`
-	BalanceCol           *string `json:"balance_col"`
-	DebitCreditCol       *string `json:"debit_credit_col"`
-	AmountSignConvention string  `json:"amount_sign_convention"`
-	CreatedAt            string  `json:"created_at"`
+	ID                   string          `json:"id"`
+	InstitutionName      string          `json:"institution_name"`
+	SourceType           string          `json:"source_type"`
+	SettlementWindowDays int             `json:"settlement_window_days"`
+	DedupWindowDays      int             `json:"dedup_window_days"`
+	AmountTolerancePct   float64         `json:"amount_tolerance_pct"`
+	MappingConfig        json.RawMessage `json:"mapping_config"`
+	CreatedAt            string          `json:"created_at"`
 }
 
 func toInstitutionView(i store.Institution) institutionView {
@@ -50,19 +46,11 @@ func toInstitutionView(i store.Institution) institutionView {
 		SettlementWindowDays: i.SettlementWindowDays,
 		DedupWindowDays:      i.DedupWindowDays,
 		AmountTolerancePct:   i.AmountTolerancePct,
-		DateCol:              i.DateCol,
-		AmountCol:            i.AmountCol,
-		MerchantCol:          i.MerchantCol,
-		ImportedIDCol:        i.ImportedIDCol,
-		BalanceCol:           i.BalanceCol,
-		DebitCreditCol:       i.DebitCreditCol,
-		AmountSignConvention: i.AmountSignConvention,
+		MappingConfig:        i.MappingConfig,
 		CreatedAt:            i.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
 }
 
-// listInstitutionsInput has no params — institutions are never paginated
-// (realistic cardinality is a handful, at most a few dozen).
 type listInstitutionsInput struct{}
 
 type listInstitutionsOutput struct {
@@ -77,20 +65,20 @@ type getInstitutionOutput struct {
 	Body response.Envelope[institutionView]
 }
 
+// mappingConfigBody is used in create/update request bodies.
+type mappingConfigBody struct {
+	Layout string            `json:"layout"`
+	Fields map[string]string `json:"fields"`
+}
+
 type createInstitutionInput struct {
 	Body struct {
-		InstitutionName      string   `json:"institution_name"      required:"true"`
-		SourceType           string   `json:"source_type"           required:"true"`
-		SettlementWindowDays int      `json:"settlement_window_days" required:"true"`
-		DedupWindowDays      int      `json:"dedup_window_days"      required:"true"`
-		AmountTolerancePct   float64  `json:"amount_tolerance_pct"   required:"true"`
-		DateCol              string   `json:"date_col"               required:"true"`
-		AmountCol            string   `json:"amount_col"             required:"true"`
-		MerchantCol          string   `json:"merchant_col"           required:"true"`
-		ImportedIDCol        *string  `json:"imported_id_col"`
-		BalanceCol           *string  `json:"balance_col"`
-		DebitCreditCol       *string  `json:"debit_credit_col"`
-		AmountSignConvention string   `json:"amount_sign_convention" required:"true"`
+		InstitutionName      string            `json:"institution_name"       required:"true"`
+		SourceType           string            `json:"source_type"            required:"true"`
+		SettlementWindowDays int               `json:"settlement_window_days"`
+		DedupWindowDays      int               `json:"dedup_window_days"`
+		AmountTolerancePct   float64           `json:"amount_tolerance_pct"`
+		MappingConfig        mappingConfigBody  `json:"mapping_config"`
 	}
 }
 
@@ -101,18 +89,12 @@ type createInstitutionOutput struct {
 type updateInstitutionInput struct {
 	PathID string `path:"id"`
 	Body   struct {
-		InstitutionName      string   `json:"institution_name"       required:"true"`
-		SourceType           string   `json:"source_type"            required:"true"`
-		SettlementWindowDays int      `json:"settlement_window_days"  required:"true"`
-		DedupWindowDays      int      `json:"dedup_window_days"       required:"true"`
-		AmountTolerancePct   float64  `json:"amount_tolerance_pct"    required:"true"`
-		DateCol              string   `json:"date_col"                required:"true"`
-		AmountCol            string   `json:"amount_col"              required:"true"`
-		MerchantCol          string   `json:"merchant_col"            required:"true"`
-		ImportedIDCol        *string  `json:"imported_id_col"`
-		BalanceCol           *string  `json:"balance_col"`
-		DebitCreditCol       *string  `json:"debit_credit_col"`
-		AmountSignConvention string   `json:"amount_sign_convention"  required:"true"`
+		InstitutionName      string            `json:"institution_name"       required:"true"`
+		SourceType           string            `json:"source_type"            required:"true"`
+		SettlementWindowDays int               `json:"settlement_window_days"`
+		DedupWindowDays      int               `json:"dedup_window_days"`
+		AmountTolerancePct   float64           `json:"amount_tolerance_pct"`
+		MappingConfig        mappingConfigBody  `json:"mapping_config"`
 	}
 }
 
@@ -150,6 +132,52 @@ type createInstitutionAccountOutput struct {
 	Body response.Envelope[accountView]
 }
 
+func institutionFromInput(entityID string, b struct {
+	InstitutionName      string
+	SourceType           string
+	SettlementWindowDays int
+	DedupWindowDays      int
+	AmountTolerancePct   float64
+	MappingConfig        mappingConfigBody
+}) (store.Institution, error) {
+	cfg := fieldregistry.MappingConfig{
+		Layout: b.MappingConfig.Layout,
+		Fields: b.MappingConfig.Fields,
+	}
+	if err := fieldregistry.ValidateConfig(b.SourceType, cfg); err != nil {
+		return store.Institution{}, err
+	}
+	cfgJSON, _ := json.Marshal(cfg)
+
+	settlement := b.SettlementWindowDays
+	if settlement == 0 {
+		settlement = 14
+	}
+	dedup := b.DedupWindowDays
+	if dedup == 0 {
+		dedup = 3
+	}
+	tolerance := b.AmountTolerancePct
+	if tolerance == 0 {
+		tolerance = 0.005
+	}
+
+	return store.Institution{
+		EntityID:             entityID,
+		InstitutionName:      b.InstitutionName,
+		SourceType:           b.SourceType,
+		SettlementWindowDays: settlement,
+		DedupWindowDays:      dedup,
+		AmountTolerancePct:   tolerance,
+		MappingConfig:        cfgJSON,
+	}, nil
+}
+
+// fieldRegistryOutput is the response type for GET /field-registry.
+type fieldRegistryOutput struct {
+	Body any
+}
+
 func (h *InstitutionsHandler) ListInstitutions(ctx context.Context, _ *listInstitutionsInput) (*listInstitutionsOutput, error) {
 	entityID := middleware.EntityID(ctx)
 
@@ -185,20 +213,23 @@ func (h *InstitutionsHandler) GetInstitution(ctx context.Context, input *getInst
 func (h *InstitutionsHandler) CreateInstitution(ctx context.Context, input *createInstitutionInput) (*createInstitutionOutput, error) {
 	entityID := middleware.EntityID(ctx)
 
-	item, err := h.s.CreateInstitution(ctx, entityID, store.Institution{
-		InstitutionName:      input.Body.InstitutionName,
-		SourceType:           input.Body.SourceType,
-		SettlementWindowDays: input.Body.SettlementWindowDays,
-		DedupWindowDays:      input.Body.DedupWindowDays,
-		AmountTolerancePct:   input.Body.AmountTolerancePct,
-		DateCol:              input.Body.DateCol,
-		AmountCol:            input.Body.AmountCol,
-		MerchantCol:          input.Body.MerchantCol,
-		ImportedIDCol:        input.Body.ImportedIDCol,
-		BalanceCol:           input.Body.BalanceCol,
-		DebitCreditCol:       input.Body.DebitCreditCol,
-		AmountSignConvention: input.Body.AmountSignConvention,
+	inst, err := institutionFromInput(entityID, struct {
+		InstitutionName      string
+		SourceType           string
+		SettlementWindowDays int
+		DedupWindowDays      int
+		AmountTolerancePct   float64
+		MappingConfig        mappingConfigBody
+	}{
+		input.Body.InstitutionName, input.Body.SourceType,
+		input.Body.SettlementWindowDays, input.Body.DedupWindowDays, input.Body.AmountTolerancePct,
+		input.Body.MappingConfig,
 	})
+	if err != nil {
+		return nil, huma.Error422UnprocessableEntity(err.Error())
+	}
+
+	item, err := h.s.CreateInstitution(ctx, entityID, inst)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
@@ -214,20 +245,23 @@ func (h *InstitutionsHandler) CreateInstitution(ctx context.Context, input *crea
 func (h *InstitutionsHandler) UpdateInstitution(ctx context.Context, input *updateInstitutionInput) (*updateInstitutionOutput, error) {
 	entityID := middleware.EntityID(ctx)
 
-	item, err := h.s.UpdateInstitution(ctx, entityID, input.PathID, store.Institution{
-		InstitutionName:      input.Body.InstitutionName,
-		SourceType:           input.Body.SourceType,
-		SettlementWindowDays: input.Body.SettlementWindowDays,
-		DedupWindowDays:      input.Body.DedupWindowDays,
-		AmountTolerancePct:   input.Body.AmountTolerancePct,
-		DateCol:              input.Body.DateCol,
-		AmountCol:            input.Body.AmountCol,
-		MerchantCol:          input.Body.MerchantCol,
-		ImportedIDCol:        input.Body.ImportedIDCol,
-		BalanceCol:           input.Body.BalanceCol,
-		DebitCreditCol:       input.Body.DebitCreditCol,
-		AmountSignConvention: input.Body.AmountSignConvention,
+	inst, err := institutionFromInput(entityID, struct {
+		InstitutionName      string
+		SourceType           string
+		SettlementWindowDays int
+		DedupWindowDays      int
+		AmountTolerancePct   float64
+		MappingConfig        mappingConfigBody
+	}{
+		input.Body.InstitutionName, input.Body.SourceType,
+		input.Body.SettlementWindowDays, input.Body.DedupWindowDays, input.Body.AmountTolerancePct,
+		input.Body.MappingConfig,
 	})
+	if err != nil {
+		return nil, huma.Error422UnprocessableEntity(err.Error())
+	}
+
+	item, err := h.s.UpdateInstitution(ctx, entityID, input.PathID, inst)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, huma.Error404NotFound("not found")
 	}
@@ -308,6 +342,17 @@ func (h *InstitutionsHandler) CreateInstitutionAccount(ctx context.Context, inpu
 // RegisterInstitutionsRoutes registers institution endpoints on the given Huma API.
 func RegisterInstitutionsRoutes(api huma.API, s *store.Store, _ *queue.Publisher, perms middleware.PermissionCache) {
 	h := NewInstitutionsHandler(s)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "get-field-registry",
+		Method:      http.MethodGet,
+		Path:        "/field-registry",
+		Summary:     "Get the static field registry for CSV layout schemas",
+		Tags:        []string{"institutions"},
+		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "accounts:read")},
+	}, func(ctx context.Context, _ *struct{}) (*fieldRegistryOutput, error) {
+		return &fieldRegistryOutput{Body: fieldregistry.Registry}, nil
+	})
 
 	huma.Register(api, huma.Operation{
 		OperationID: "list-institutions",

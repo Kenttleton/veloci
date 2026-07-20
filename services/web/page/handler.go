@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/veloci/veloci/authclient"
+	"github.com/veloci/veloci/fieldregistry"
 	"github.com/veloci/veloci/middleware"
 	"github.com/veloci/veloci/store"
 )
@@ -402,6 +403,35 @@ func (s *Server) Activity(w http.ResponseWriter, r *http.Request) {
 		TargetJobID: targetJobID,
 	}
 	s.render(w, r, ActivityPage(s.buildShellData(r), data))
+}
+
+// fieldRegistryJSON returns the static field registry serialised as a JSON string
+// for embedding in page templates.
+func fieldRegistryJSON() string {
+	b, _ := json.Marshal(fieldregistry.Registry)
+	return string(b)
+}
+
+// instMappingFields parses an Institution's MappingConfig and returns label/value
+// pairs suitable for display in the configuration page.
+func instMappingFields(inst store.Institution) []struct{ Label, Value string } {
+	var cfg fieldregistry.MappingConfig
+	if err := json.Unmarshal(inst.MappingConfig, &cfg); err != nil {
+		return nil
+	}
+	layout := fieldregistry.GetLayout(inst.SourceType, cfg.Layout)
+	if layout == nil {
+		return nil
+	}
+	var pairs []struct{ Label, Value string }
+	for _, f := range layout.Fields {
+		v := cfg.Fields[f.Key]
+		if v == "" && !f.Required {
+			continue
+		}
+		pairs = append(pairs, struct{ Label, Value string }{f.Label, v})
+	}
+	return pairs
 }
 
 // AccountData is passed to the Account page template.

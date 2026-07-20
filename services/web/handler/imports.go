@@ -13,6 +13,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/jackc/pgx/v5"
+	"github.com/veloci/veloci/fieldregistry"
 	"github.com/veloci/veloci/middleware"
 	"github.com/veloci/veloci/queue"
 	"github.com/veloci/veloci/response"
@@ -262,7 +263,12 @@ func (h *ImportsHandler) UploadImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	minDate, maxDate, rowCount, err := extractDateRange(csvBytes, institution.DateCol)
+	var mappingCfg fieldregistry.MappingConfig
+	if err := json.Unmarshal(institution.MappingConfig, &mappingCfg); err != nil || mappingCfg.Fields["date"] == "" {
+		http.Error(w, `{"title":"Bad Request","status":400,"detail":"institution mapping is missing date column configuration"}`, http.StatusBadRequest)
+		return
+	}
+	minDate, maxDate, rowCount, err := extractDateRange(csvBytes, mappingCfg.Fields["date"])
 	if err != nil {
 		http.Error(w, `{"title":"Bad Request","status":400,"detail":"could not parse dates from CSV using the current mapping"}`, http.StatusBadRequest)
 		return

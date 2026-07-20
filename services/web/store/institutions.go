@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -11,28 +12,21 @@ import (
 
 // Institution represents a row from the institution_mappings table.
 type Institution struct {
-	ID                   string    `db:"id"`
-	EntityID             string    `db:"entity_id"`
-	InstitutionName      string    `db:"institution_name"`
-	SourceType           string    `db:"source_type"`
-	SettlementWindowDays int       `db:"settlement_window_days"`
-	DedupWindowDays      int       `db:"dedup_window_days"`
-	AmountTolerancePct   float64   `db:"amount_tolerance_pct"`
-	DateCol              string    `db:"date_col"`
-	AmountCol            string    `db:"amount_col"`
-	MerchantCol          string    `db:"merchant_col"`
-	ImportedIDCol        *string   `db:"imported_id_col"`
-	BalanceCol           *string   `db:"balance_col"`
-	DebitCreditCol       *string   `db:"debit_credit_col"`
-	AmountSignConvention string    `db:"amount_sign_convention"`
-	CreatedAt            time.Time `db:"created_at"`
+	ID                   string          `db:"id"`
+	EntityID             string          `db:"entity_id"`
+	InstitutionName      string          `db:"institution_name"`
+	SourceType           string          `db:"source_type"`
+	SettlementWindowDays int             `db:"settlement_window_days"`
+	DedupWindowDays      int             `db:"dedup_window_days"`
+	AmountTolerancePct   float64         `db:"amount_tolerance_pct"`
+	MappingConfig        json.RawMessage `db:"mapping_config"`
+	CreatedAt            time.Time       `db:"created_at"`
 }
 
 const institutionCols = `
 	id::text, entity_id::text, institution_name, source_type,
 	settlement_window_days, dedup_window_days, amount_tolerance_pct,
-	date_col, amount_col, merchant_col, imported_id_col,
-	balance_col, debit_credit_col, amount_sign_convention, created_at
+	mapping_config, created_at
 `
 
 // GetInstitution fetches a single institution by id for an entity.
@@ -48,7 +42,6 @@ func (s *Store) GetInstitution(ctx context.Context, entityID, id string) (Instit
 }
 
 // ListInstitutions returns every institution for an entity, unpaginated.
-// Realistic cardinality is a handful, at most a few dozen — not worth pagination.
 func (s *Store) ListInstitutions(ctx context.Context, entityID string) ([]Institution, error) {
 	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
 		SELECT %s FROM institution_mappings
@@ -67,20 +60,17 @@ func (s *Store) CreateInstitution(ctx context.Context, entityID string, in Insti
 		INSERT INTO institution_mappings (
 			id, entity_id, institution_name, source_type,
 			settlement_window_days, dedup_window_days, amount_tolerance_pct,
-			date_col, amount_col, merchant_col, imported_id_col,
-			balance_col, debit_credit_col, amount_sign_convention, created_at
+			mapping_config, created_at
 		) VALUES (
 			gen_random_uuid(), $1, $2, $3,
 			$4, $5, $6,
-			$7, $8, $9, $10,
-			$11, $12, $13, NOW()
+			$7, NOW()
 		)
 		RETURNING %s
 	`, institutionCols),
 		entityID, in.InstitutionName, in.SourceType,
 		in.SettlementWindowDays, in.DedupWindowDays, in.AmountTolerancePct,
-		in.DateCol, in.AmountCol, in.MerchantCol, in.ImportedIDCol,
-		in.BalanceCol, in.DebitCreditCol, in.AmountSignConvention,
+		in.MappingConfig,
 	)
 	if err != nil {
 		return Institution{}, err
@@ -92,26 +82,19 @@ func (s *Store) CreateInstitution(ctx context.Context, entityID string, in Insti
 func (s *Store) UpdateInstitution(ctx context.Context, entityID, id string, in Institution) (Institution, error) {
 	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
 		UPDATE institution_mappings SET
-			institution_name = $3,
-			source_type = $4,
+			institution_name       = $3,
+			source_type            = $4,
 			settlement_window_days = $5,
-			dedup_window_days = $6,
-			amount_tolerance_pct = $7,
-			date_col = $8,
-			amount_col = $9,
-			merchant_col = $10,
-			imported_id_col = $11,
-			balance_col = $12,
-			debit_credit_col = $13,
-			amount_sign_convention = $14
+			dedup_window_days      = $6,
+			amount_tolerance_pct   = $7,
+			mapping_config         = $8
 		WHERE entity_id = $1 AND id = $2
 		RETURNING %s
 	`, institutionCols),
 		entityID, id,
 		in.InstitutionName, in.SourceType,
 		in.SettlementWindowDays, in.DedupWindowDays, in.AmountTolerancePct,
-		in.DateCol, in.AmountCol, in.MerchantCol, in.ImportedIDCol,
-		in.BalanceCol, in.DebitCreditCol, in.AmountSignConvention,
+		in.MappingConfig,
 	)
 	if err != nil {
 		return Institution{}, err

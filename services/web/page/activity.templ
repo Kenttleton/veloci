@@ -3,6 +3,7 @@ package page
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/veloci/veloci/store"
@@ -77,21 +78,37 @@ templ jobCard(job store.ProcessingJob, isTarget bool) {
 				</div>
 			</summary>
 			if job.Status == "failed" && job.Error != nil {
-				<div style="border-top:1px solid var(--border);padding:8px 14px 12px 32px;display:flex;flex-direction:column;gap:4px">
-					<div style="padding:8px 10px;background:var(--surface2);border-radius:4px;font-family:monospace;font-size:12px;color:var(--text2);line-height:1.5">
-						{ *job.Error }
+				if strings.HasPrefix(*job.Error, "Mapping error:") {
+					<div style="border-top:1px solid var(--border);padding:10px 14px 12px 32px;display:flex;flex-direction:column;gap:6px">
+						<div style="font-size:13px;font-weight:600;color:var(--text)">Column mapping mismatch</div>
+						<div style="font-size:12px;color:var(--text2);line-height:1.5">
+							{ mappingErrorSummary(*job.Error) }
+						</div>
+						<div style="font-size:12px;color:var(--text3)">
+							Open the account, click <strong>Upload CSV</strong>, then choose <strong>Edit mapping</strong> to correct the column names and re-upload.
+						</div>
+						<details style="margin-top:2px">
+							<summary style="font-size:11px;color:var(--text3);cursor:pointer;list-style:none">Show details</summary>
+							<div style="margin-top:6px;padding:8px 10px;background:var(--surface2);border-radius:4px;font-family:monospace;font-size:11px;color:var(--text2);line-height:1.5;white-space:pre-wrap">{ *job.Error }</div>
+						</details>
 					</div>
-					<div style="display:flex;gap:8px;margin-top:4px">
-						<button
-							class="js-copy-error"
-							data-job-id={ job.ID }
-							data-error={ *job.Error }
-							style="background:none;border:1px solid var(--border);border-radius:4px;padding:4px 10px;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit"
-						>
-							Copy error
-						</button>
+				} else {
+					<div style="border-top:1px solid var(--border);padding:8px 14px 12px 32px;display:flex;flex-direction:column;gap:4px">
+						<div style="padding:8px 10px;background:var(--surface2);border-radius:4px;font-family:monospace;font-size:12px;color:var(--text2);line-height:1.5">
+							{ *job.Error }
+						</div>
+						<div style="display:flex;gap:8px;margin-top:4px">
+							<button
+								class="js-copy-error"
+								data-job-id={ job.ID }
+								data-error={ *job.Error }
+								style="background:none;border:1px solid var(--border);border-radius:4px;padding:4px 10px;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit"
+							>
+								Copy error
+							</button>
+						</div>
 					</div>
-				</div>
+				}
 			}
 		</details>
 	</div>
@@ -157,6 +174,9 @@ func jobSummaryLine(job store.ProcessingJob) string {
 	case "processing":
 		return "Processing"
 	case "failed":
+		if job.Error != nil && strings.HasPrefix(*job.Error, "Mapping error:") {
+			return "Failed — mapping configuration error"
+		}
 		return "Failed"
 	case "complete":
 		var meta jobMeta
@@ -198,6 +218,16 @@ func jobSummaryLine(job store.ProcessingJob) string {
 		return result
 	}
 	return ""
+}
+
+// mappingErrorSummary extracts the first sentence from a "Mapping error: ..." string
+// so the UI can display a concise, non-technical description.
+func mappingErrorSummary(err string) string {
+	body := strings.TrimPrefix(err, "Mapping error: ")
+	if idx := strings.Index(body, "."); idx >= 0 {
+		return body[:idx+1]
+	}
+	return body
 }
 
 templ jobStatusIcon(status string) {
