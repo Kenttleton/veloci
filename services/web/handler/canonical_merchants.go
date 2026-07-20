@@ -104,12 +104,13 @@ type listCanonicalMerchantsOutput struct {
 }
 
 func (h *CanonicalMerchantsHandler) ListCanonicalMerchants(ctx context.Context, input *listCanonicalMerchantsInput) (*listCanonicalMerchantsOutput, error) {
+	entityID := middleware.EntityID(ctx)
 	limit := input.Limit
 	if limit == 0 {
 		limit = 50
 	}
 
-	items, err := h.s.ListCanonicalMerchants(ctx, limit+1, input.Cursor)
+	items, err := h.s.ListCanonicalMerchants(ctx, entityID, limit+1, input.Cursor)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("internal error")
 	}
@@ -147,7 +148,8 @@ type createCanonicalMerchantOutput struct {
 }
 
 func (h *CanonicalMerchantsHandler) CreateCanonicalMerchant(ctx context.Context, input *createCanonicalMerchantInput) (*createCanonicalMerchantOutput, error) {
-	item, err := h.s.CreateCanonicalMerchant(ctx, input.Body.Name)
+	entityID := middleware.EntityID(ctx)
+	item, err := h.s.CreateCanonicalMerchant(ctx, entityID, input.Body.Name)
 	if err != nil {
 		if strings.Contains(err.Error(), "unique") || strings.Contains(err.Error(), "duplicate") {
 			return nil, huma.Error409Conflict("canonical merchant name already exists")
@@ -170,7 +172,8 @@ type getCanonicalMerchantOutput struct {
 }
 
 func (h *CanonicalMerchantsHandler) GetCanonicalMerchant(ctx context.Context, input *getCanonicalMerchantInput) (*getCanonicalMerchantOutput, error) {
-	item, err := h.s.GetCanonicalMerchant(ctx, input.PathID)
+	entityID := middleware.EntityID(ctx)
+	item, err := h.s.GetCanonicalMerchant(ctx, entityID, input.PathID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, huma.Error404NotFound("not found")
 	}
@@ -196,7 +199,8 @@ type renameCanonicalMerchantOutput struct {
 }
 
 func (h *CanonicalMerchantsHandler) RenameCanonicalMerchant(ctx context.Context, input *renameCanonicalMerchantInput) (*renameCanonicalMerchantOutput, error) {
-	item, err := h.s.RenameCanonicalMerchant(ctx, input.PathID, input.Body.Name)
+	entityID := middleware.EntityID(ctx)
+	item, err := h.s.RenameCanonicalMerchant(ctx, entityID, input.PathID, input.Body.Name)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, huma.Error404NotFound("not found")
 	}
@@ -218,7 +222,8 @@ type deleteCanonicalMerchantInput struct {
 }
 
 func (h *CanonicalMerchantsHandler) DeleteCanonicalMerchant(ctx context.Context, input *deleteCanonicalMerchantInput) (*struct{}, error) {
-	err := h.s.DeleteCanonicalMerchant(ctx, input.PathID)
+	entityID := middleware.EntityID(ctx)
+	err := h.s.DeleteCanonicalMerchant(ctx, entityID, input.PathID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, huma.Error404NotFound("not found")
 	}
@@ -239,7 +244,8 @@ type listCanonicalMerchantAliasesOutput struct {
 }
 
 func (h *CanonicalMerchantsHandler) ListCanonicalMerchantAliases(ctx context.Context, input *listCanonicalMerchantAliasesInput) (*listCanonicalMerchantAliasesOutput, error) {
-	items, err := h.s.ListCanonicalMerchantAliases(ctx, input.PathID)
+	entityID := middleware.EntityID(ctx)
+	items, err := h.s.ListCanonicalMerchantAliases(ctx, entityID, input.PathID)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("internal error")
 	}
@@ -266,7 +272,8 @@ type addCanonicalMerchantAliasOutput struct {
 }
 
 func (h *CanonicalMerchantsHandler) AddCanonicalMerchantAlias(ctx context.Context, input *addCanonicalMerchantAliasInput) (*addCanonicalMerchantAliasOutput, error) {
-	item, err := h.s.AddCanonicalMerchantAlias(ctx, input.PathID, input.Body.NormalizedName)
+	entityID := middleware.EntityID(ctx)
+	item, err := h.s.AddCanonicalMerchantAlias(ctx, entityID, input.PathID, input.Body.NormalizedName)
 	if err != nil {
 		if strings.Contains(err.Error(), "unique") || strings.Contains(err.Error(), "duplicate") {
 			return nil, huma.Error409Conflict("alias already exists")
@@ -276,6 +283,7 @@ func (h *CanonicalMerchantsHandler) AddCanonicalMerchantAlias(ctx context.Contex
 		}
 		return nil, huma.Error500InternalServerError("internal error")
 	}
+	h.triggerReprocess(ctx, middleware.EntityID(ctx), middleware.UserID(ctx))
 	out := &addCanonicalMerchantAliasOutput{}
 	out.Body = response.Single(toCanonicalMerchantAliasView(item))
 	return out, nil
@@ -289,13 +297,15 @@ type deleteCanonicalMerchantAliasInput struct {
 }
 
 func (h *CanonicalMerchantsHandler) DeleteCanonicalMerchantAlias(ctx context.Context, input *deleteCanonicalMerchantAliasInput) (*struct{}, error) {
-	err := h.s.DeleteCanonicalMerchantAlias(ctx, input.NormalizedName)
+	entityID := middleware.EntityID(ctx)
+	err := h.s.DeleteCanonicalMerchantAlias(ctx, entityID, input.NormalizedName)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, huma.Error404NotFound("not found")
 	}
 	if err != nil {
 		return nil, huma.Error500InternalServerError("internal error")
 	}
+	h.triggerReprocess(ctx, middleware.EntityID(ctx), middleware.UserID(ctx))
 	return nil, nil
 }
 
@@ -322,7 +332,8 @@ func (h *CanonicalMerchantsHandler) MergeCanonicalMerchant(ctx context.Context, 
 		return nil, huma.Error422UnprocessableEntity("cannot merge a merchant into itself")
 	}
 
-	if err := h.s.MergeCanonicalMerchants(ctx, survivorID, absorbedID); err != nil {
+	entityID := middleware.EntityID(ctx)
+	if err := h.s.MergeCanonicalMerchants(ctx, entityID, survivorID, absorbedID); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, huma.Error404NotFound("not found")
 		}
@@ -330,11 +341,10 @@ func (h *CanonicalMerchantsHandler) MergeCanonicalMerchant(ctx context.Context, 
 	}
 
 	// Trigger reprocess so entry conditions referencing the absorbed UUID get reprocessed.
-	entityID := middleware.EntityID(ctx)
 	userID := middleware.UserID(ctx)
 	h.triggerReprocess(ctx, entityID, userID)
 
-	survivor, err := h.s.GetCanonicalMerchant(ctx, survivorID)
+	survivor, err := h.s.GetCanonicalMerchant(ctx, entityID, survivorID)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("internal error")
 	}
@@ -364,7 +374,8 @@ func (h *CanonicalMerchantsHandler) SplitCanonicalMerchant(ctx context.Context, 
 		return nil, huma.Error422UnprocessableEntity("aliases must not be empty")
 	}
 
-	newMerchant, err := h.s.SplitCanonicalMerchant(ctx, input.PathID, input.Body.Aliases, input.Body.NewName)
+	entityID := middleware.EntityID(ctx)
+	newMerchant, err := h.s.SplitCanonicalMerchant(ctx, entityID, input.PathID, input.Body.Aliases, input.Body.NewName)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, huma.Error404NotFound("not found")
 	}
@@ -376,7 +387,6 @@ func (h *CanonicalMerchantsHandler) SplitCanonicalMerchant(ctx context.Context, 
 	}
 
 	// Trigger reprocess so engine re-evaluates entries with the updated alias mapping.
-	entityID := middleware.EntityID(ctx)
 	userID := middleware.UserID(ctx)
 	h.triggerReprocess(ctx, entityID, userID)
 

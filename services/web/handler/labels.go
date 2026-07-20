@@ -92,12 +92,13 @@ type listLabelEntriesOutput struct {
 }
 
 func (h *LabelsHandler) ListLabels(ctx context.Context, input *listLabelsInput) (*listLabelsOutput, error) {
+	entityID := middleware.EntityID(ctx)
 	limit := input.Limit
 	if limit == 0 {
 		limit = 50
 	}
 
-	items, err := h.s.ListLabels(ctx, limit+1, input.Cursor)
+	items, err := h.s.ListLabels(ctx, entityID, limit+1, input.Cursor)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("internal error")
 	}
@@ -123,7 +124,8 @@ func (h *LabelsHandler) ListLabels(ctx context.Context, input *listLabelsInput) 
 }
 
 func (h *LabelsHandler) GetLabel(ctx context.Context, input *getLabelInput) (*getLabelOutput, error) {
-	item, err := h.s.GetLabel(ctx, input.PathID)
+	entityID := middleware.EntityID(ctx)
+	item, err := h.s.GetLabel(ctx, entityID, input.PathID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, huma.Error404NotFound("not found")
 	}
@@ -136,7 +138,8 @@ func (h *LabelsHandler) GetLabel(ctx context.Context, input *getLabelInput) (*ge
 }
 
 func (h *LabelsHandler) CreateLabel(ctx context.Context, input *createLabelInput) (*createLabelOutput, error) {
-	item, err := h.s.CreateLabel(ctx, input.Body.Name)
+	entityID := middleware.EntityID(ctx)
+	item, err := h.s.CreateLabel(ctx, entityID, input.Body.Name)
 	if err != nil {
 		// Unique constraint violation
 		if strings.Contains(err.Error(), "unique") || strings.Contains(err.Error(), "duplicate") {
@@ -150,7 +153,8 @@ func (h *LabelsHandler) CreateLabel(ctx context.Context, input *createLabelInput
 }
 
 func (h *LabelsHandler) UpdateLabel(ctx context.Context, input *updateLabelInput) (*updateLabelOutput, error) {
-	item, err := h.s.UpdateLabel(ctx, input.PathID, input.Body.Name)
+	entityID := middleware.EntityID(ctx)
+	item, err := h.s.UpdateLabel(ctx, entityID, input.PathID, input.Body.Name)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, huma.Error404NotFound("not found")
 	}
@@ -166,7 +170,8 @@ func (h *LabelsHandler) UpdateLabel(ctx context.Context, input *updateLabelInput
 }
 
 func (h *LabelsHandler) DeleteLabel(ctx context.Context, input *deleteLabelInput) (*struct{}, error) {
-	err := h.s.DeleteLabel(ctx, input.PathID)
+	entityID := middleware.EntityID(ctx)
+	err := h.s.DeleteLabel(ctx, entityID, input.PathID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, huma.Error404NotFound("not found")
 	}

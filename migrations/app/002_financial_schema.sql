@@ -181,36 +181,43 @@ CREATE INDEX ON transactions (entity_id, account_id, settlement_status, imported
 
 CREATE TABLE labels (
   id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  entity_id  UUID        NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
   name       TEXT        NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (name)
+  UNIQUE (entity_id, name)
 );
 
+CREATE INDEX ON labels (entity_id);
+
 -- ── CANONICAL MERCHANTS ─────────────────────────────────────────────────────
--- Global registry of canonical merchant identities resolved by the engine and
--- curated by users. No entity_id — like labels, these are shared reference data.
+-- Per-entity registry of canonical merchant identities resolved by the engine
+-- and curated by users. Scoped by entity_id for v2 multi-tenant isolation.
 
 CREATE TABLE canonical_merchants (
   id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  entity_id  UUID        NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
   name       TEXT        NOT NULL,
   source     TEXT        NOT NULL DEFAULT 'engine'
              CHECK (source IN ('engine', 'user')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (name)
+  UNIQUE (entity_id, name)
 );
 
+CREATE INDEX ON canonical_merchants (entity_id);
+
 CREATE TABLE canonical_merchant_aliases (
-  normalized_name       TEXT        PRIMARY KEY,
+  entity_id             UUID        NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+  normalized_name       TEXT        NOT NULL,
   canonical_merchant_id UUID        NOT NULL
                         REFERENCES canonical_merchants(id) ON DELETE CASCADE,
   source                TEXT        NOT NULL DEFAULT 'engine'
                         CHECK (source IN ('engine', 'user')),
-  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (entity_id, normalized_name)
 );
 
-CREATE INDEX idx_canonical_merchant_aliases_canonical_id
-    ON canonical_merchant_aliases (canonical_merchant_id);
+CREATE INDEX ON canonical_merchant_aliases (entity_id, canonical_merchant_id);
 
 -- ── ENTRIES ──────────────────────────────────────────────────────────────────
 -- One row per continuous rate signal instance (absorbs rules + rule_epochs).

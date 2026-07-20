@@ -706,7 +706,7 @@ func (s *Server) Configuration(w http.ResponseWriter, r *http.Request) {
 	data := ConfigurationData{Tab: tab}
 	switch tab {
 	case "merchants":
-		data.CanonicalMerchants, _ = s.store.ListCanonicalMerchants(ctx, 500, "")
+		data.CanonicalMerchants, _ = s.store.ListCanonicalMerchants(ctx, entityID, 500, "")
 	case "institutions":
 		data.Institutions, _ = s.store.ListInstitutions(ctx, entityID)
 	default:

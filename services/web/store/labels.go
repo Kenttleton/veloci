@@ -8,34 +8,36 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Label represents a row from the labels table. Labels are global (no entity_id).
+// Label represents a row from the labels table.
 type Label struct {
 	ID        string    `db:"id"`
+	EntityID  string    `db:"entity_id"`
 	Name      string    `db:"name"`
 	CreatedAt time.Time `db:"created_at"`
 }
 
-const labelCols = `id::text, name, created_at`
+const labelCols = `id::text, entity_id::text, name, created_at`
 
-// GetLabel fetches a single label by id.
-func (s *Store) GetLabel(ctx context.Context, id string) (Label, error) {
+// GetLabel fetches a single label by id scoped to the entity.
+func (s *Store) GetLabel(ctx context.Context, entityID, id string) (Label, error) {
 	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
-		SELECT %s FROM labels WHERE id = $1
-	`, labelCols), id)
+		SELECT %s FROM labels WHERE entity_id = $1 AND id = $2
+	`, labelCols), entityID, id)
 	if err != nil {
 		return Label{}, err
 	}
 	return pgx.CollectOneRow(rows, pgx.RowToStructByName[Label])
 }
 
-// ListLabels returns a paginated list of all labels.
-func (s *Store) ListLabels(ctx context.Context, limit int, cursor string) ([]Label, error) {
+// ListLabels returns a paginated list of labels for the entity.
+func (s *Store) ListLabels(ctx context.Context, entityID string, limit int, cursor string) ([]Label, error) {
 	if cursor == "" {
 		rows, err := s.pool.Query(ctx, fmt.Sprintf(`
 			SELECT %s FROM labels
+			WHERE entity_id = $1
 			ORDER BY created_at DESC, id DESC
-			LIMIT $1
-		`, labelCols), limit)
+			LIMIT $2
+		`, labelCols), entityID, limit)
 		if err != nil {
 			return nil, err
 		}
@@ -48,44 +50,47 @@ func (s *Store) ListLabels(ctx context.Context, limit int, cursor string) ([]Lab
 	}
 	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
 		SELECT %s FROM labels
-		WHERE (created_at, id::text) < ($1::timestamptz, $2)
+		WHERE entity_id = $1
+		  AND (created_at, id::text) < ($2::timestamptz, $3)
 		ORDER BY created_at DESC, id DESC
-		LIMIT $3
-	`, labelCols), cursorTS, cursorID, limit)
+		LIMIT $4
+	`, labelCols), entityID, cursorTS, cursorID, limit)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, pgx.RowToStructByName[Label])
 }
 
-// CreateLabel inserts a new label. Returns pgx.ErrNoRows wrapped if name conflicts.
-func (s *Store) CreateLabel(ctx context.Context, name string) (Label, error) {
+// CreateLabel inserts a new label for the entity.
+func (s *Store) CreateLabel(ctx context.Context, entityID, name string) (Label, error) {
 	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
-		INSERT INTO labels (id, name, created_at)
-		VALUES (gen_random_uuid(), $1, NOW())
+		INSERT INTO labels (id, entity_id, name, created_at)
+		VALUES (gen_random_uuid(), $1, $2, NOW())
 		RETURNING %s
-	`, labelCols), name)
+	`, labelCols), entityID, name)
 	if err != nil {
 		return Label{}, err
 	}
 	return pgx.CollectOneRow(rows, pgx.RowToStructByName[Label])
 }
 
-// UpdateLabel renames a label.
-func (s *Store) UpdateLabel(ctx context.Context, id, name string) (Label, error) {
+// UpdateLabel renames a label scoped to the entity.
+func (s *Store) UpdateLabel(ctx context.Context, entityID, id, name string) (Label, error) {
 	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
-		UPDATE labels SET name = $2 WHERE id = $1
+		UPDATE labels SET name = $3 WHERE entity_id = $1 AND id = $2
 		RETURNING %s
-	`, labelCols), id, name)
+	`, labelCols), entityID, id, name)
 	if err != nil {
 		return Label{}, err
 	}
 	return pgx.CollectOneRow(rows, pgx.RowToStructByName[Label])
 }
 
-// DeleteLabel removes a label row.
-func (s *Store) DeleteLabel(ctx context.Context, id string) error {
-	tag, err := s.pool.Exec(ctx, `DELETE FROM labels WHERE id = $1`, id)
+// DeleteLabel removes a label scoped to the entity.
+func (s *Store) DeleteLabel(ctx context.Context, entityID, id string) error {
+	tag, err := s.pool.Exec(ctx, `
+		DELETE FROM labels WHERE entity_id = $1 AND id = $2
+	`, entityID, id)
 	if err != nil {
 		return err
 	}
@@ -95,21 +100,22 @@ func (s *Store) DeleteLabel(ctx context.Context, id string) error {
 	return nil
 }
 
-// LabelWithCount extends Label with the entry count for a specific entity.
+// LabelWithCount extends Label with the entry count for the entity.
 type LabelWithCount struct {
 	Label
 	EntryCount int `db:"entry_count"`
 }
 
-// ListLabelsWithEntryCount returns all labels ordered by creation date, with the
-// count of entries in this entity that reference each label.
+// ListLabelsWithEntryCount returns all entity labels ordered by creation date,
+// with the count of entries that reference each label.
 func (s *Store) ListLabelsWithEntryCount(ctx context.Context, entityID string) ([]LabelWithCount, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT l.id::text, l.name, l.created_at,
+		SELECT l.id::text, l.entity_id::text, l.name, l.created_at,
 		       COUNT(e.id)::int AS entry_count
 		FROM labels l
-		LEFT JOIN entries e ON e.label_id = l.id AND e.entity_id = $1
-		GROUP BY l.id, l.name, l.created_at
+		LEFT JOIN entries e ON e.label_id = l.id AND e.entity_id = l.entity_id
+		WHERE l.entity_id = $1
+		GROUP BY l.id, l.entity_id, l.name, l.created_at
 		ORDER BY l.created_at DESC, l.id DESC
 	`, entityID)
 	if err != nil {
