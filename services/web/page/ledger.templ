@@ -111,25 +111,6 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 						});
 				}, true);
 
-				// Conditions save on blur
-				document.addEventListener('blur', function(e) {
-					var ta = e.target;
-					if (!ta.classList.contains('js-conditions-ta')) return;
-					var entryId = ta.dataset.entryId;
-					var val = ta.value.trim();
-					var parsed;
-					try { parsed = JSON.parse(val); } catch(ex) {
-						ta.style.borderColor = 'var(--commit)';
-						return;
-					}
-					ta.style.borderColor = '';
-					fetch('/api/entries/' + entryId + '/conditions', {
-						method:'PATCH',
-						headers:{'Content-Type':'application/json'},
-						body: JSON.stringify({conditions: parsed})
-					});
-				}, true);
-
 				// Approve / Reject
 				document.addEventListener('click', function(e) {
 					var btn = e.target.closest('.js-review-btn');
@@ -144,7 +125,14 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 					var typeSel = panel.querySelector('.js-type-sel');
 					var ta = document.querySelector('.js-conditions-ta[data-entry-id="' + entryId + '"]');
 					var conds = entry.conditions || {};
-					try { if (ta) conds = JSON.parse(ta.value); } catch(ex) {}
+					try {
+						if (ta) {
+							var src = (ta._cmView && ta._cmView.state)
+								? ta._cmView.state.doc.toString()
+								: ta.value;
+							conds = JSON.parse(src);
+						}
+					} catch(ex) {}
 
 					function resolveLabel(cb) {
 						var name = labelInput ? labelInput.value.trim() : '';
@@ -210,6 +198,7 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 				});
 			})();
 		</script>
+		<script type="module" src="/static/js/conditions-editor.js"></script>
 	}
 }
 
@@ -305,6 +294,7 @@ templ ledgerEntryRow(e store.EntryRow) {
 						style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:12px;font-family:monospace;color:var(--text);outline:none;resize:vertical;min-height:80px;width:100%;box-sizing:border-box"
 						spellcheck="false"
 					>{ conditionsFormatted(e.Conditions) }</textarea>
+					<span class="js-conditions-status" style="font-size:11px;color:var(--text3);margin-top:2px"></span>
 					if len(e.SampleMerchants) > 0 {
 						<div style="font-size:11px;color:var(--text3);line-height:1.5">
 							{ strings.Join(e.SampleMerchants[:min(3, len(e.SampleMerchants))], " · ") }

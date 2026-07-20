@@ -1,7 +1,2 @@
-tmp/*
-.*/
-
-.env
-
 # JS build sources — output is committed to static/js/
-services/web/js-src/node_modules/
+js-src/

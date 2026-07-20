@@ -25,8 +25,8 @@ func TestJobSerializesCorrectly(t *testing.T) {
 	if m["job_id"] != "job-123" {
 		t.Errorf("job_id: got %v", m["job_id"])
 	}
-	if m["type"] != "import.process" {
-		t.Errorf("type: got %v", m["type"])
+	if m["job_type"] != "import.process" {
+		t.Errorf("job_type: got %v", m["job_type"])
 	}
 	if m["entity_id"] != "ent-1" {
 		t.Errorf("entity_id: got %v", m["entity_id"])
@@ -43,7 +43,7 @@ func TestJobSerializesCorrectly(t *testing.T) {
 func TestJobRoundTrips(t *testing.T) {
 	original := queue.Job{
 		JobID:    "j",
-		Type:     "rules.reprocess",
+		Type:     "entries.reprocess",
 		EntityID: "e",
 		Metadata: json.RawMessage(`{}`),
 	}

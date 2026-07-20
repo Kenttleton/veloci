@@ -242,6 +242,7 @@ func (h *EntriesHandler) ListEntries(ctx context.Context, input *listEntriesInpu
 
 	views := make([]entryView, len(items))
 	for i, item := range items {
+		item.Conditions = h.s.EnrichConditions(ctx, entityID, item.Conditions)
 		views[i] = toEntryView(item)
 	}
 	out := &listEntriesOutput{}
@@ -259,6 +260,7 @@ func (h *EntriesHandler) GetEntry(ctx context.Context, input *getEntryInput) (*g
 	if err != nil {
 		return nil, huma.Error500InternalServerError("internal error")
 	}
+	item.Conditions = h.s.EnrichConditions(ctx, entityID, item.Conditions)
 	out := &getEntryOutput{}
 	out.Body = response.Single(toEntryView(item))
 	return out, nil
@@ -323,6 +325,15 @@ func (h *EntriesHandler) UpdateEntry(ctx context.Context, input *updateEntryInpu
 		endDate = &t
 	}
 
+	conditions := input.Body.Conditions
+	if len(conditions) > 0 {
+		resolved, resolveErr := h.s.ResolveConditions(ctx, entityID, conditions)
+		if resolveErr != nil {
+			return nil, huma.Error422UnprocessableEntity("could not resolve conditions: " + resolveErr.Error())
+		}
+		conditions = resolved
+	}
+
 	item, err := h.s.UpdateEntry(ctx, entityID, input.PathID, store.UpdateEntryInput{
 		LabelID:             input.Body.LabelID,
 		Direction:           input.Body.Direction,
@@ -330,7 +341,7 @@ func (h *EntriesHandler) UpdateEntry(ctx context.Context, input *updateEntryInpu
 		PeriodDays:          input.Body.PeriodDays,
 		VariableMethod:      input.Body.VariableMethod,
 		ProjectedRatePerDay: input.Body.ProjectedRatePerDay,
-		Conditions:          input.Body.Conditions,
+		Conditions:          conditions,
 		Priority:            input.Body.Priority,
 		Status:              input.Body.Status,
 		ProjectTentatively:  input.Body.ProjectTentatively,
@@ -343,6 +354,7 @@ func (h *EntriesHandler) UpdateEntry(ctx context.Context, input *updateEntryInpu
 	if err != nil {
 		return nil, huma.Error500InternalServerError("internal error")
 	}
+	item.Conditions = h.s.EnrichConditions(ctx, entityID, item.Conditions)
 	out := &updateEntryOutput{}
 	out.Body = response.Single(toEntryView(item))
 	return out, nil
@@ -420,13 +432,19 @@ func (h *EntriesHandler) UpdateEntryConditions(ctx context.Context, input *updat
 		return nil, huma.Error422UnprocessableEntity("conditions must be valid JSON")
 	}
 
-	item, err := h.s.UpdateEntryConditions(ctx, entityID, input.PathID, input.Body.Conditions)
+	resolved, resolveErr := h.s.ResolveConditions(ctx, entityID, input.Body.Conditions)
+	if resolveErr != nil {
+		return nil, huma.Error422UnprocessableEntity("could not resolve conditions: " + resolveErr.Error())
+	}
+
+	item, err := h.s.UpdateEntryConditions(ctx, entityID, input.PathID, resolved)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, huma.Error404NotFound("not found")
 	}
 	if err != nil {
 		return nil, huma.Error500InternalServerError("internal error")
 	}
+	item.Conditions = h.s.EnrichConditions(ctx, entityID, item.Conditions)
 	out := &updateEntryConditionsOutput{}
 	out.Body = response.Single(toEntryView(item))
 	return out, nil

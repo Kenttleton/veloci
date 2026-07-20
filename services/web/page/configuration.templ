@@ -418,7 +418,8 @@ templ ConfigurationPage(shell ShellData, data ConfigurationData) {
 							'<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Aliases</div>' +
 							'<div id="alias-chips-' + id + '" style="display:flex;flex-wrap:wrap;gap:6px;min-height:24px;margin-bottom:8px"><span style="color:var(--text3);font-size:12px">Loading…</span></div>' +
 							'<div style="display:flex;gap:6px;align-items:center">' +
-								'<input id="add-alias-input-' + id + '" type="text" placeholder="normalized alias" style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:12px;color:var(--text);outline:none;width:220px"/>' +
+								'<input id="add-alias-input-' + id + '" list="add-alias-list-' + id + '" type="text" placeholder="search transaction merchants…" style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:12px;color:var(--text);outline:none;width:240px"/>' +
+								'<datalist id="add-alias-list-' + id + '"></datalist>' +
 								'<button class="js-alias-add" data-merchant-id="' + id + '" style="background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--accent);font-size:12px;font-family:inherit;padding:3px 10px">Add alias</button>' +
 								'<span id="add-alias-err-' + id + '" style="color:var(--commit);font-size:11px"></span>' +
 							'</div>' +
@@ -690,6 +691,27 @@ templ ConfigurationPage(shell ShellData, data ConfigurationData) {
 							cancelBtn ? (cancelBtn.dataset.source||'engine') : 'engine',
 							cancelBtn ? parseInt(cancelBtn.dataset.aliasCount||'0',10) : 0);
 					}
+				});
+
+				// Alias input — fuzzy-populate datalist from unaliased transaction merchants
+				document.addEventListener('input', function(e) {
+					if (!e.target.id || e.target.id.indexOf('add-alias-input-') !== 0) return;
+					var mid = e.target.id.slice('add-alias-input-'.length);
+					var dl = document.getElementById('add-alias-list-' + mid);
+					if (!dl) return;
+					var q = e.target.value.trim();
+					clearTimeout(e.target._aliasDebounce);
+					e.target._aliasDebounce = setTimeout(function() {
+						fetch('/api/transactions/merchant-strings' + (q ? '?q=' + encodeURIComponent(q) : ''))
+							.then(function(r){ return r.json(); })
+							.then(function(env) {
+								var items = env.items || [];
+								dl.innerHTML = items.map(function(s) {
+									return '<option value="' + escHtml(s) + '">';
+								}).join('');
+							})
+							.catch(function(){});
+					}, 200);
 				});
 
 				// ── Institutions ──────────────────────────────────────────────────────────
