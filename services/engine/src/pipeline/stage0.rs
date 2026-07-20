@@ -78,11 +78,11 @@ pub async fn run(
     .await?;
 
     // Canonical merchant resolution: runs after dedup classification, before batch insert.
-    let mut canonical_snapshot = load_canonical_snapshot(pool).await?;
+    let mut canonical_snapshot = load_canonical_snapshot(entity_id, pool).await?;
     for c in classified.iter_mut() {
         if matches!(c.action, DedupAction::Insert | DedupAction::Supersede(_)) {
             let id =
-                resolve_canonical(&c.candidate.merchant_normalized, &mut canonical_snapshot, pool)
+                resolve_canonical(&c.candidate.merchant_normalized, entity_id, &mut canonical_snapshot, pool)
                     .await?;
             c.canonical_merchant_id = Some(id);
         }
@@ -432,7 +432,7 @@ impl CanonicalSnapshot {
     }
 }
 
-async fn load_canonical_snapshot(pool: &PgPool) -> Result<CanonicalSnapshot> {
+async fn load_canonical_snapshot(entity_id: Uuid, pool: &PgPool) -> Result<CanonicalSnapshot> {
     #[derive(sqlx::FromRow)]
     struct AliasRow {
         normalized_name:       String,
@@ -445,16 +445,20 @@ async fn load_canonical_snapshot(pool: &PgPool) -> Result<CanonicalSnapshot> {
     }
 
     let alias_rows: Vec<AliasRow> = sqlx::query_as(
-        "SELECT normalized_name, canonical_merchant_id FROM canonical_merchant_aliases",
+        "SELECT normalized_name, canonical_merchant_id FROM canonical_merchant_aliases WHERE entity_id = $1",
     )
+    .bind(entity_id)
     .fetch_all(pool)
     .await
     .context("load canonical aliases")?;
 
-    let name_rows: Vec<NameRow> = sqlx::query_as("SELECT id, name FROM canonical_merchants")
-        .fetch_all(pool)
-        .await
-        .context("load canonical names")?;
+    let name_rows: Vec<NameRow> = sqlx::query_as(
+        "SELECT id, name FROM canonical_merchants WHERE entity_id = $1",
+    )
+    .bind(entity_id)
+    .fetch_all(pool)
+    .await
+    .context("load canonical names")?;
 
     Ok(CanonicalSnapshot {
         aliases: alias_rows
@@ -468,13 +472,15 @@ async fn load_canonical_snapshot(pool: &PgPool) -> Result<CanonicalSnapshot> {
 async fn persist_canonical_alias(
     normalized_name: &str,
     canonical_id: Uuid,
+    entity_id: Uuid,
     snapshot: &mut CanonicalSnapshot,
     pool: &PgPool,
 ) -> Result<()> {
     sqlx::query(
-        "INSERT INTO canonical_merchant_aliases (normalized_name, canonical_merchant_id, source)
-         VALUES ($1, $2, 'engine') ON CONFLICT (normalized_name) DO NOTHING",
+        "INSERT INTO canonical_merchant_aliases (entity_id, normalized_name, canonical_merchant_id, source)
+         VALUES ($1, $2, $3, 'engine') ON CONFLICT (entity_id, normalized_name) DO NOTHING",
     )
+    .bind(entity_id)
     .bind(normalized_name)
     .bind(canonical_id)
     .execute(pool)
@@ -486,35 +492,38 @@ async fn persist_canonical_alias(
 
 async fn create_canonical_merchant(
     normalized_name: &str,
+    entity_id: Uuid,
     snapshot: &mut CanonicalSnapshot,
     pool: &PgPool,
 ) -> Result<Uuid> {
     let (id,): (Uuid,) = sqlx::query_as(
-        "INSERT INTO canonical_merchants (name, source) VALUES ($1, 'engine')
-         ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING id",
+        "INSERT INTO canonical_merchants (entity_id, name, source) VALUES ($1, $2, 'engine')
+         ON CONFLICT (entity_id, name) DO UPDATE SET name = EXCLUDED.name RETURNING id",
     )
+    .bind(entity_id)
     .bind(normalized_name)
     .fetch_one(pool)
     .await
     .context("create canonical merchant")?;
     snapshot.add_canonical(id, normalized_name.to_string());
-    persist_canonical_alias(normalized_name, id, snapshot, pool).await?;
+    persist_canonical_alias(normalized_name, id, entity_id, snapshot, pool).await?;
     Ok(id)
 }
 
 async fn resolve_canonical(
     normalized_name: &str,
+    entity_id: Uuid,
     snapshot: &mut CanonicalSnapshot,
     pool: &PgPool,
 ) -> Result<Uuid> {
     match snapshot.resolve_in_memory(normalized_name) {
         CanonicalResolution::ExactHit(id) => Ok(id),
         CanonicalResolution::FuzzyHit(id) => {
-            persist_canonical_alias(normalized_name, id, snapshot, pool).await?;
+            persist_canonical_alias(normalized_name, id, entity_id, snapshot, pool).await?;
             Ok(id)
         }
         CanonicalResolution::Miss => {
-            create_canonical_merchant(normalized_name, snapshot, pool).await
+            create_canonical_merchant(normalized_name, entity_id, snapshot, pool).await
         }
     }
 }

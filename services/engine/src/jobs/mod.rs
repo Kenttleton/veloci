@@ -40,9 +40,9 @@ pub struct JobMessage {
 pub enum JobType {
     /// Stages 0 → 7. Requires `metadata.pending_import_id`.
     ImportProcess,
-    /// Stages 1 → 7. Triggered on rule create/modify/delete.
-    RulesReprocess,
-    /// Stages 3 → 7. Triggered on rule approval or manual recalculate.
+    /// Stages 1 → 7. Triggered on entry create/modify/delete or canonical merchant change.
+    EntriesReprocess,
+    /// Stages 3 → 7. Triggered on entry approval or manual recalculate.
     AccountAnalyze,
     /// Stage 7 only. Triggered on manual balance update.
     BalanceProject,
@@ -53,7 +53,7 @@ impl JobType {
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "import.process"   => Some(Self::ImportProcess),
-            "rules.reprocess"  => Some(Self::RulesReprocess),
+            "entries.reprocess" => Some(Self::EntriesReprocess),
             "account.analyze"  => Some(Self::AccountAnalyze),
             "balance.project"  => Some(Self::BalanceProject),
             _                  => None,
@@ -97,8 +97,8 @@ pub async fn dispatch(
             pipeline::run_import(entity_id, job_id, import_id, pools).await
         }
 
-        JobType::RulesReprocess => {
-            pipeline::run_rules_reprocess(entity_id, job_id, pools).await
+        JobType::EntriesReprocess => {
+            pipeline::run_entries_reprocess(entity_id, job_id, pools).await
         }
 
         JobType::AccountAnalyze => {
@@ -123,7 +123,7 @@ mod tests {
     #[test]
     fn job_type_from_str_known() {
         assert_eq!(JobType::from_str("import.process"),  Some(JobType::ImportProcess));
-        assert_eq!(JobType::from_str("rules.reprocess"), Some(JobType::RulesReprocess));
+        assert_eq!(JobType::from_str("entries.reprocess"), Some(JobType::EntriesReprocess));
         assert_eq!(JobType::from_str("account.analyze"), Some(JobType::AccountAnalyze));
         assert_eq!(JobType::from_str("balance.project"), Some(JobType::BalanceProject));
     }
@@ -152,7 +152,7 @@ mod tests {
         let raw = json!({
             "job_id":    "00000000-0000-0000-0000-000000000001",
             "entity_id": "00000000-0000-0000-0000-000000000002",
-            "job_type":  "rules.reprocess"
+            "job_type":  "entries.reprocess"
         });
         let msg: JobMessage = serde_json::from_value(raw).unwrap();
         assert!(msg.metadata.is_null() || msg.metadata.is_object());

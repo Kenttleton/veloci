@@ -78,7 +78,7 @@ templ jobStream() {
 			var _fetch = window.fetch;
 			window.fetch = function(url, opts) {
 				return _fetch(url, opts).then(function(r) {
-					if (r.status === 401) {
+					if (r.status === 401 || r.status === 403) {
 						window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search);
 					}
 					return r;
@@ -87,7 +87,7 @@ templ jobStream() {
 		})();
 
 		(function() {
-			var TX_JOBS = { 'import.process': true, 'account.analyze': true, 'rules.reprocess': true };
+			var TX_JOBS = { 'import.process': true, 'account.analyze': true, 'entries.reprocess': true };
 			var running = {};
 			var backoff = 1000;
 

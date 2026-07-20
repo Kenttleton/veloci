@@ -71,7 +71,7 @@ pub async fn run_import(
 ///
 /// Re-reads all `transactions` for the entity; rebuilds assignments,
 /// patterns, rates, trends, snapshots, and projections.
-pub async fn run_rules_reprocess(
+pub async fn run_entries_reprocess(
     entity_id: Uuid,
     job_id: Uuid,
     pools: &Pools,

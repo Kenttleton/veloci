@@ -97,17 +97,17 @@ pub fn compute_label_rate(label_id: Uuid, rates: &[&EntryRate]) -> LabelRate {
 // Cycle detection (defense-in-depth)
 // ---------------------------------------------------------------------------
 
-/// Check for cycles in the label hierarchy via rule conditions.
+/// Check for cycles in the label hierarchy via entry conditions.
 ///
-/// A cycle occurs when label A is an input condition to a rule that outputs
+/// A cycle occurs when label A is an input condition to an entry that outputs
 /// label B, and label B feeds back to label A. The Go API prevents cycles at
 /// write time; this is a defense-in-depth check on the engine side.
 ///
 /// Returns `Err` if any cycle is detected.
 ///
 /// This function operates on a map of `label_id → set of input label UUIDs
-/// referenced in its defining rule's conditions`. The caller builds this map
-/// from the loaded rules + their JSONB conditions.
+/// referenced in its defining entry's conditions`. The caller builds this map
+/// from the loaded entries + their JSONB conditions.
 pub fn detect_label_cycles(
     label_inputs: &std::collections::HashMap<Uuid, Vec<Uuid>>,
 ) -> Result<(), Vec<Uuid>> {
@@ -213,7 +213,7 @@ mod tests {
 
     #[test]
     fn rules_without_label_id_are_skipped() {
-        // Rule with no label_id should not appear in label output.
+        // Entry with no label_id should not appear in label output.
         let rates = vec![entry_rate(
             "00000000-0000-0000-0000-000000000001",
             None, // no label
@@ -231,12 +231,12 @@ mod tests {
                 label_map.entry(lid).or_default().push(r);
             }
         }
-        assert!(label_map.is_empty(), "rule with no label_id should produce no label rate");
+        assert!(label_map.is_empty(), "entry with no label_id should produce no label rate");
     }
 
     #[test]
     fn direction_income_short_circuits() {
-        // Mix of income + expense rules → income wins.
+        // Mix of income + expense entries → income wins.
         let rates = vec![
             entry_rate(
                 "00000000-0000-0000-0000-000000000001",
@@ -261,7 +261,7 @@ mod tests {
         let rate_refs: Vec<&EntryRate> = rates.iter().collect();
         let label = compute_label_rate(label_id, &rate_refs);
         assert_eq!(label.direction, Direction::Income);
-        // Rates are summed across both rules.
+        // Rates are summed across both entries.
         assert!((label.actual_rate_per_day - 300.0).abs() < 0.01);
     }
 
