@@ -721,6 +721,13 @@ templ AccountPage(shell ShellData, data AccountData) {
 									var isNeg = cents < 0 && (a.account_type === 'credit' || a.account_type === 'loan' || a.account_type === 'mortgage');
 									el.style.color = isNeg ? 'var(--commit)' : '';
 								}
+								// Sync nav sidebar balance for this account
+								var navLink = document.querySelector('a[href="/accounts/' + encodeURIComponent(accountId) + '"]');
+								if (navLink && cents != null) {
+									var navBal = navLink.querySelector('.account-item-balance');
+									if (navBal) navBal.textContent = fmtCents(cents);
+								}
+								if (el) el.dataset.startingBalanceCents = a.starting_balance_cents != null ? String(a.starting_balance_cents) : '0';
 							})
 							.catch(function() {});
 
@@ -778,69 +785,120 @@ templ AccountPage(shell ShellData, data AccountData) {
 				})();
 
 				// ─── Inline balance edit ──────────────────────────────────────────────
+				// Clicking the balance opens a breakdown panel:
+				//   Transactions (read-only) + Starting balance (editable) = Balance (live)
 				(function() {
 					var balanceEl = document.getElementById('account-balance');
 					if (!balanceEl) return;
 					var accountId = balanceEl.dataset.accountId;
 
+					function fmtC(c) {
+						var neg = c < 0, abs = Math.abs(c);
+						return (neg ? '-$' : '$') + Math.floor(abs / 100).toLocaleString('en-US') + '.' + String(abs % 100).padStart(2, '0');
+					}
+
 					balanceEl.addEventListener('click', function() {
 						if (balanceEl.dataset.editing === 'true') return;
 						balanceEl.dataset.editing = 'true';
 
-						var currentCents = balanceEl.dataset.balanceCents ? parseInt(balanceEl.dataset.balanceCents, 10) : 0;
-						var currentDollars = currentCents / 100;
+						var currentBalance  = parseInt(balanceEl.dataset.balanceCents || '0', 10);
+						var currentStarting = parseInt(balanceEl.dataset.startingBalanceCents || '0', 10);
+						var txnSum = currentBalance - currentStarting;
 
-						var input = document.createElement('input');
-						input.type = 'text';
-						input.inputMode = 'decimal';
-						input.value = currentCents !== 0 ? currentDollars.toFixed(2) : '';
-						input.placeholder = '0.00';
-						input.style.cssText = 'width:120px;background:var(--surface2);border:1px solid var(--accent);border-radius:4px;padding:2px 6px;font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--text);font-family:inherit;outline:none';
+						// Anchor: zero-height inline span; panel floats below it
+						var anchor = document.createElement('span');
+						anchor.style.cssText = 'position:relative;display:inline-block';
 
-						var saveEl = document.createElement('span');
-						saveEl.textContent = '✓';
-						saveEl.title = 'Save';
-						saveEl.style.cssText = 'cursor:pointer;color:var(--income);font-size:18px;margin-left:4px';
+						var panel = document.createElement('div');
+						panel.style.cssText = 'position:absolute;right:0;top:calc(100% + 6px);z-index:200;' +
+							'background:var(--surface);border:1px solid var(--border);border-radius:8px;' +
+							'padding:12px 14px;min-width:240px;' +
+							'box-shadow:0 4px 16px rgba(0,0,0,0.18);display:flex;flex-direction:column;gap:8px';
 
-						var cancelEl = document.createElement('span');
-						cancelEl.textContent = '✕';
-						cancelEl.title = 'Cancel';
-						cancelEl.style.cssText = 'cursor:pointer;color:var(--text3);font-size:14px;margin-left:4px';
+						function mkRow(label, valueEl) {
+							var r = document.createElement('div');
+							r.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:12px';
+							var lbl = document.createElement('span');
+							lbl.style.cssText = 'font-size:12px;color:var(--text3);white-space:nowrap';
+							lbl.textContent = label;
+							r.appendChild(lbl);
+							r.appendChild(valueEl);
+							return r;
+						}
 
-						var wrap = document.createElement('span');
-						wrap.style.display = 'inline-flex';
-						wrap.style.alignItems = 'center';
-						wrap.appendChild(input);
-						wrap.appendChild(saveEl);
-						wrap.appendChild(cancelEl);
+						function mkDivider() {
+							var d = document.createElement('div');
+							d.style.cssText = 'border-top:1px solid var(--border);margin:0 -14px';
+							return d;
+						}
 
+						// Transactions row (read-only)
+						var txnSpan = document.createElement('span');
+						txnSpan.style.cssText = 'font-size:13px;color:var(--text2);font-variant-numeric:tabular-nums';
+						txnSpan.textContent = fmtC(txnSum);
+						panel.appendChild(mkRow('Transactions', txnSpan));
+						panel.appendChild(mkDivider());
+
+						// Starting balance row (editable)
+						var startInput = document.createElement('input');
+						startInput.type = 'text';
+						startInput.inputMode = 'decimal';
+						startInput.value = (currentStarting / 100).toFixed(2);
+						startInput.style.cssText = 'width:90px;background:var(--surface2);border:1px solid var(--accent);' +
+							'border-radius:4px;padding:2px 6px;font-size:13px;font-variant-numeric:tabular-nums;' +
+							'color:var(--text);font-family:inherit;outline:none;text-align:right';
+						panel.appendChild(mkRow('Starting balance', startInput));
+						panel.appendChild(mkDivider());
+
+						// Resulting balance row (live-computed, read-only)
+						var resultSpan = document.createElement('span');
+						resultSpan.style.cssText = 'font-size:14px;font-weight:600;color:var(--text);font-variant-numeric:tabular-nums';
+						panel.appendChild(mkRow('Balance', resultSpan));
+
+						function updateResult() {
+							var raw = startInput.value.trim().replace(/,/g, '');
+							var n = parseFloat(raw);
+							var s = isNaN(n) ? currentStarting : Math.round(n * 100);
+							resultSpan.textContent = fmtC(s + txnSum);
+						}
+						startInput.addEventListener('input', updateResult);
+						updateResult();
+
+						// Buttons
+						var btnRow = document.createElement('div');
+						btnRow.style.cssText = 'display:flex;gap:6px;justify-content:flex-end;margin-top:2px';
+						var cancelBtn = document.createElement('button');
+						cancelBtn.textContent = 'Cancel';
+						cancelBtn.style.cssText = 'background:none;border:1px solid var(--border);border-radius:4px;padding:3px 10px;cursor:pointer;font-size:12px;color:var(--text2);font-family:inherit';
+						var saveBtn = document.createElement('button');
+						saveBtn.textContent = 'Save';
+						saveBtn.style.cssText = 'background:var(--accent);border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:12px;font-weight:600;color:#fff;font-family:inherit';
+						btnRow.appendChild(cancelBtn);
+						btnRow.appendChild(saveBtn);
+						panel.appendChild(btnRow);
+
+						anchor.appendChild(panel);
 						balanceEl.style.display = 'none';
-						balanceEl.parentNode.insertBefore(wrap, balanceEl.nextSibling);
-						input.focus();
-						input.select();
+						balanceEl.parentNode.insertBefore(anchor, balanceEl.nextSibling);
+						startInput.focus();
+						startInput.select();
 
 						function restore() {
-							wrap.remove();
+							anchor.remove();
 							balanceEl.style.display = '';
 							delete balanceEl.dataset.editing;
 						}
 
 						function save() {
-							var raw = input.value.trim().replace(/,/g, '');
+							var raw = startInput.value.trim().replace(/,/g, '');
 							if (raw === '') raw = '0';
 							var n = parseFloat(raw);
-							if (isNaN(n)) { input.focus(); return; }
-							var desiredCents = Math.round(n * 100);
+							if (isNaN(n)) { startInput.focus(); return; }
+							var newStartingCents = Math.round(n * 100);
 
-							// Back-calculate starting_balance_cents:
-							//   balance = starting + txn_sum  →  txn_sum = balance - starting
-							//   new_starting = desired - txn_sum
-							var currentBalance  = parseInt(balanceEl.dataset.balanceCents       || '0', 10);
-							var currentStarting = parseInt(balanceEl.dataset.startingBalanceCents || '0', 10);
-							var txnSum          = currentBalance - currentStarting;
-							var newStarting     = desiredCents - txnSum;
+							saveBtn.disabled = true;
+							saveBtn.textContent = 'Saving…';
 
-							// Need full account to PUT (all fields required)
 							fetch('/api/accounts/' + encodeURIComponent(accountId))
 								.then(function(r) { return r.json(); })
 								.then(function(body) {
@@ -856,7 +914,7 @@ templ AccountPage(shell ShellData, data AccountData) {
 											institution_id:         a.institution_id,
 											interest_rate:          a.interest_rate,
 											credit_limit_cents:     a.credit_limit_cents,
-											starting_balance_cents: newStarting,
+											starting_balance_cents: newStartingCents,
 										}),
 									});
 								})
@@ -867,24 +925,37 @@ templ AccountPage(shell ShellData, data AccountData) {
 										var c = a.balance_cents;
 										balanceEl.dataset.balanceCents = c != null ? String(c) : '';
 										balanceEl.dataset.startingBalanceCents = String(a.starting_balance_cents || 0);
-										if (c == null) {
-											balanceEl.textContent = '—';
-										} else {
-											var neg = c < 0, abs = Math.abs(c);
-											balanceEl.textContent = (neg?'-$':'$') + Math.floor(abs/100).toLocaleString('en-US') + '.' + String(abs%100).padStart(2,'0');
+										balanceEl.textContent = c != null ? fmtC(c) : '—';
+										// Sync nav sidebar
+										var navLink = document.querySelector('a[href="/accounts/' + encodeURIComponent(accountId) + '"]');
+										if (navLink && c != null) {
+											var navBal = navLink.querySelector('.account-item-balance');
+											if (navBal) navBal.textContent = fmtC(c);
 										}
 									}
 									restore();
 								})
-								.catch(function() { restore(); });
+								.catch(function() {
+									saveBtn.disabled = false;
+									saveBtn.textContent = 'Save';
+								});
 						}
 
-						saveEl.addEventListener('click', save);
-						cancelEl.addEventListener('click', restore);
-						input.addEventListener('keydown', function(e) {
+						saveBtn.addEventListener('click', save);
+						cancelBtn.addEventListener('click', restore);
+						startInput.addEventListener('keydown', function(e) {
 							if (e.key === 'Enter') save();
 							if (e.key === 'Escape') restore();
 						});
+
+						// Close on outside click
+						function onOutside(e) {
+							if (!panel.contains(e.target) && e.target !== balanceEl) {
+								restore();
+								document.removeEventListener('click', onOutside, true);
+							}
+						}
+						setTimeout(function() { document.addEventListener('click', onOutside, true); }, 0);
 					});
 				})();
 			})();
