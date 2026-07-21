@@ -112,14 +112,6 @@ pub struct ClusterScore {
 
 /// Run Stage 2 for the given unmatched transaction IDs.
 pub async fn run(entity_id: Uuid, unmatched_tx_ids: &[Uuid], pool: &PgPool) -> Result<Stage2Output> {
-    // Delete stale engine pending_review entries before re-running.
-    sqlx::query(
-        "DELETE FROM entries WHERE entity_id = $1 AND source = 'engine' AND status = 'pending_review'",
-    )
-    .bind(entity_id)
-    .execute(pool)
-    .await?;
-
     if unmatched_tx_ids.is_empty() {
         return Ok(Stage2Output { clusters_created: 0 });
     }
@@ -152,8 +144,27 @@ pub async fn run(entity_id: Uuid, unmatched_tx_ids: &[Uuid], pool: &PgPool) -> R
         persist_cluster(entity_id, &cluster, &score, pool).await?;
         clusters_created += 1;
     }
+
+    // Remove engine pending_review entries that have no transaction assignments —
+    // they have no backing data and the pattern is no longer present.
+    sqlx::query(
+        "DELETE FROM entries
+         WHERE entity_id = $1
+           AND source = 'engine'
+           AND status = 'pending_review'
+           AND NOT EXISTS (
+               SELECT 1 FROM transaction_entry_assignments
+               WHERE entry_id = entries.id
+           )",
+    )
+    .bind(entity_id)
+    .execute(pool)
+    .await
+    .context("failed to prune orphaned engine entries")?;
+
     Ok(Stage2Output { clusters_created })
 }
+
 
 // ---------------------------------------------------------------------------
 // Amount confidence (pure — used by score_cluster)
@@ -511,7 +522,7 @@ async fn persist_cluster(
     cluster: &Cluster,
     score: &ClusterScore,
     pool: &PgPool,
-) -> Result<()> {
+) -> Result<Uuid> {
     // Conditions use payee_exact so Stage 1 can match against merchant_normalized.
     let conditions = serde_json::json!({
         "op": "AND",
@@ -559,65 +570,105 @@ async fn persist_cluster(
     .await
     .context("failed to upsert label for merchant entry")?;
 
-    let entry_id: (Uuid,) = sqlx::query_as(
-        r#"
-        INSERT INTO entries (
-          entity_id, label_id, direction, entry_type, period_days, next_due_date,
-          recurrence_anchor, conditions, projected_rate_per_day,
-          status, source, project_tentatively, start_date,
-          alert_type, confidence, merchant_confidence, timing_confidence, amount_confidence,
-          sample_merchants, matched_transaction_count
-        ) VALUES (
-          $1, $2, $3, $4, $5, $6,
-          $7, $8, $9,
-          'pending_review', 'engine', false, $10,
-          'new', $11, $12, $13, $14,
-          $15, $16
-        )
-        RETURNING id
-        "#,
+    // Look up an existing engine-generated pending_review entry for this label.
+    // If one exists, update it in place to preserve the stable UUID.
+    // Only create a new entry if none exists yet.
+    let existing: Option<(Uuid,)> = sqlx::query_as(
+        "SELECT id FROM entries
+         WHERE entity_id = $1 AND label_id = $2 AND source = 'engine' AND status = 'pending_review'",
     )
     .bind(entity_id)
     .bind(label_id)
-    .bind(direction)
-    .bind(score.entry_type)
-    .bind(period_days)
-    .bind(next_due_date)
-    .bind(anchor.as_deref())
-    .bind(&conditions)
-    .bind(rate_per_day)
-    .bind(start_date)
-    .bind(score.confidence)
-    .bind(score.merchant_confidence)
-    .bind(score.timing_confidence)
-    .bind(score.amount_confidence)
-    .bind(&score.sample_merchants)
-    .bind(cluster.transactions.len() as i32)
-    .fetch_one(pool)
+    .fetch_optional(pool)
     .await
-    .context("failed to insert pending_review entry")?;
-    let entry_id = entry_id.0;
+    .context("failed to look up existing pending_review entry")?;
+
+    let entry_id = if let Some((id,)) = existing {
+        sqlx::query(
+            "UPDATE entries SET
+               direction = $2, entry_type = $3, period_days = $4, next_due_date = $5,
+               recurrence_anchor = $6, conditions = $7, projected_rate_per_day = $8,
+               start_date = $9, alert_type = 'new',
+               confidence = $10, merchant_confidence = $11, timing_confidence = $12,
+               amount_confidence = $13, sample_merchants = $14, matched_transaction_count = $15
+             WHERE id = $1",
+        )
+        .bind(id)
+        .bind(direction)
+        .bind(score.entry_type)
+        .bind(period_days)
+        .bind(next_due_date)
+        .bind(anchor.as_deref())
+        .bind(&conditions)
+        .bind(rate_per_day)
+        .bind(start_date)
+        .bind(score.confidence)
+        .bind(score.merchant_confidence)
+        .bind(score.timing_confidence)
+        .bind(score.amount_confidence)
+        .bind(&score.sample_merchants)
+        .bind(cluster.transactions.len() as i32)
+        .execute(pool)
+        .await
+        .context("failed to update existing pending_review entry")?;
+        id
+    } else {
+        let (id,): (Uuid,) = sqlx::query_as(
+            "INSERT INTO entries (
+               entity_id, label_id, direction, entry_type, period_days, next_due_date,
+               recurrence_anchor, conditions, projected_rate_per_day,
+               status, source, project_tentatively, start_date,
+               alert_type, confidence, merchant_confidence, timing_confidence, amount_confidence,
+               sample_merchants, matched_transaction_count
+             ) VALUES (
+               $1, $2, $3, $4, $5, $6,
+               $7, $8, $9,
+               'pending_review', 'engine', false, $10,
+               'new', $11, $12, $13, $14,
+               $15, $16
+             )
+             RETURNING id",
+        )
+        .bind(entity_id)
+        .bind(label_id)
+        .bind(direction)
+        .bind(score.entry_type)
+        .bind(period_days)
+        .bind(next_due_date)
+        .bind(anchor.as_deref())
+        .bind(&conditions)
+        .bind(rate_per_day)
+        .bind(start_date)
+        .bind(score.confidence)
+        .bind(score.merchant_confidence)
+        .bind(score.timing_confidence)
+        .bind(score.amount_confidence)
+        .bind(&score.sample_merchants)
+        .bind(cluster.transactions.len() as i32)
+        .fetch_one(pool)
+        .await
+        .context("failed to insert pending_review entry")?;
+        id
+    };
 
     let tx_ids: Vec<Uuid> = cluster.transactions.iter().map(|t| t.id).collect();
     let entry_ids: Vec<Uuid> = vec![entry_id; tx_ids.len()];
     let confidences: Vec<f64> = vec![score.confidence; tx_ids.len()];
 
     sqlx::query(
-        r#"
-        INSERT INTO transaction_entry_assignments (transaction_id, entry_id, confidence)
-        SELECT t, e, c
-        FROM UNNEST($1::uuid[], $2::uuid[], $3::float8[]) AS u(t, e, c)
-        ON CONFLICT (transaction_id, entry_id) DO UPDATE SET confidence = EXCLUDED.confidence
-        "#,
+        "INSERT INTO transaction_entry_assignments (transaction_id, entry_id, confidence)
+         SELECT t, e, c
+         FROM UNNEST($1::uuid[], $2::uuid[], $3::float8[]) AS u(t, e, c)
+         ON CONFLICT (transaction_id, entry_id) DO UPDATE SET confidence = EXCLUDED.confidence",
     )
     .bind(&tx_ids)
     .bind(&entry_ids)
     .bind(&confidences)
     .execute(pool)
     .await
-    .context("failed to insert stage 2 entry assignments")?;
+    .context("failed to upsert stage 2 entry assignments")?;
 
-    Ok(())
+    Ok(entry_id)
 }
 
 // ---------------------------------------------------------------------------
