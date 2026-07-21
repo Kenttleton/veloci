@@ -1,31 +1,19 @@
 package handler
 
 import (
-	"context"
 	"net/http"
 
-	"github.com/danielgtaylor/huma/v2"
+	"github.com/labstack/echo/v4"
 )
 
-type healthOutput struct {
-	Body struct {
-		Status string `json:"status" doc:"Always 'ok' when the service is up"`
-	}
+type HealthHandler struct{}
+
+func (h *HealthHandler) Health(c echo.Context) error {
+	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
 
-func health(ctx context.Context, _ *struct{}) (*healthOutput, error) {
-	out := &healthOutput{}
-	out.Body.Status = "ok"
-	return out, nil
-}
-
-// RegisterHealthRoutes registers the health check endpoint.
-func RegisterHealthRoutes(api huma.API) {
-	huma.Register(api, huma.Operation{
-		OperationID: "health",
-		Method:      http.MethodGet,
-		Path:        "/health",
-		Summary:     "Service health check",
-		Tags:        []string{"system"},
-	}, health)
+// RegisterHealthRoutes registers the health check endpoint directly on the Echo instance (no auth).
+func RegisterHealthRoutes(e *echo.Echo) {
+	h := &HealthHandler{}
+	e.GET("/health", h.Health)
 }

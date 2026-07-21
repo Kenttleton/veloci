@@ -10,11 +10,9 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
-	"github.com/danielgtaylor/huma/v2"
-	"github.com/danielgtaylor/huma/v2/adapters/humachi"
-	"github.com/go-chi/chi/v5"
-	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
+	echo "github.com/labstack/echo/v4"
+	echomiddleware "github.com/labstack/echo/v4/middleware"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -150,73 +148,65 @@ func runServe(_ *cobra.Command, _ []string) error {
 	pages := page.NewServer(s, authClient, pool)
 	jobsHandler := handler.NewJobsHandler(s, pub, pool)
 
-	r := chi.NewRouter()
-	r.Use(chimiddleware.Logger)
+	e := echo.New()
+	e.HideBanner = true
+	e.Use(echomiddleware.Logger())
+	e.Use(echomiddleware.Recover())
 
-	// Unknown routes redirect to budget (authenticated users) or login (everyone else).
-	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/budget", http.StatusFound)
+	// Unknown routes: redirect to /budget
+	e.RouteNotFound("/*", func(c echo.Context) error {
+		return c.Redirect(http.StatusFound, "/budget")
 	})
 
-	// Static assets (CSS, JS islands).
-	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
+	// Static assets
+	e.Static("/static", "static")
 
-	// ─── Public page routes ───────────────────────────────────────────────────
-	r.Get("/login", pages.GetLogin)
-	r.Post("/login", pages.PostLogin)
+	// Register health (no auth)
+	handler.RegisterHealthRoutes(e)
 
-	// ─── Protected page routes (cookie auth) ─────────────────────────────────
-	r.Group(func(r chi.Router) {
-		r.Use(middleware.AuthenticateCookieOrRedirect(authClient))
-		r.Post("/logout", pages.PostLogout)
-		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-			http.Redirect(w, r, "/budget", http.StatusFound)
-		})
-		r.Get("/budget", pages.Budget)
-		r.Get("/reports", pages.Reports)
-		r.Get("/ledger", pages.Ledger)
-		r.Get("/activity", pages.Activity)
-		r.Get("/accounts/{id}", pages.Account)
-		r.Get("/settings", pages.Settings)
-		r.Get("/glossary", pages.Glossary)
-		r.Get("/configuration", pages.Configuration)
-	})
+	// Public page routes
+	e.GET("/login", pages.GetLogin)
+	e.POST("/login", pages.PostLogin)
 
-	r.Post("/api/session/refresh", pages.PostSessionRefresh)
+	// Session refresh (public — uses refresh cookie internally)
+	e.POST("/api/session/refresh", pages.PostSessionRefresh)
 
-	// ─── Internal API routes (cookie or Bearer, same-origin JS islands) ───────
-	// All data endpoints are mounted under /api/ to avoid conflicts with page routes.
-	internalAPI := humachi.New(r, huma.DefaultConfig("Veloci", "1.0.0"))
-	handler.RegisterHealthRoutes(internalAPI)
+	// Protected page routes (cookie auth → redirect on failure)
+	pageGroup := e.Group("", middleware.AuthenticateCookieOrRedirect(authClient))
+	pageGroup.POST("/logout", pages.PostLogout)
+	pageGroup.GET("/", func(c echo.Context) error { return c.Redirect(http.StatusFound, "/budget") })
+	pageGroup.GET("/budget", pages.Budget)
+	pageGroup.GET("/reports", pages.Reports)
+	pageGroup.GET("/ledger", pages.Ledger)
+	pageGroup.GET("/activity", pages.Activity)
+	pageGroup.GET("/accounts/:id", pages.Account)
+	pageGroup.GET("/settings", pages.Settings)
+	pageGroup.GET("/glossary", pages.Glossary)
+	pageGroup.GET("/configuration", pages.Configuration)
 
-	r.Route("/api", func(r chi.Router) {
-		r.Use(middleware.AuthenticateBearerOrCookie(authClient))
-		subAPI := humachi.New(r, huma.DefaultConfig("Veloci", "1.0.0"))
+	// SSE — cookie auth, same-origin EventSource sends cookies automatically
+	e.GET("/api/jobs/stream", jobsHandler.StreamJobs, middleware.AuthenticateCookieOrRedirect(authClient))
 
-		handler.RegisterUsersRoutes(subAPI, s, authClient, pub, perms)
-		handler.RegisterInstitutionsRoutes(subAPI, s, pub, perms)
-		handler.RegisterAccountsRoutes(subAPI, s, pub, perms)
-		handler.RegisterLabelsRoutes(subAPI, s, pub, perms)
-		handler.RegisterEntriesRoutes(subAPI, s, pub, perms)
-		handler.RegisterTransactionsRoutes(subAPI, s, pub, perms)
-		handler.RegisterSnapshotsRoutes(subAPI, s, pub, perms)
-		handler.RegisterProjectionsRoutes(subAPI, s, pub, perms)
-		handler.RegisterAdminRoutes(subAPI, s, pub, perms)
-		handler.RegisterJobsRoutes(subAPI, jobsHandler, perms)
-		handler.RegisterAutocompleteRoutes(subAPI, s, perms)
+	// API routes — Bearer or cookie auth
+	api := e.Group("/api", middleware.AuthenticateBearerOrCookie(authClient))
+	handler.RegisterUsersRoutes(api, s, authClient, perms)
+	handler.RegisterInstitutionsRoutes(api, s, perms)
+	handler.RegisterAccountsRoutes(api, s, perms)
+	handler.RegisterLabelsRoutes(api, s, perms)
+	handler.RegisterEntriesRoutes(api, s, pub, perms)
+	handler.RegisterTransactionsRoutes(api, s, perms)
+	handler.RegisterSnapshotsRoutes(api, s, perms)
+	handler.RegisterProjectionsRoutes(api, s, perms)
+	handler.RegisterAdminRoutes(api, s, perms)
+	handler.RegisterJobsRoutes(api, jobsHandler, perms)
+	handler.RegisterAutocompleteRoutes(api, s, perms)
 
-		// Raw chi handler (multipart upload cannot use Huma).
-		r.Post("/imports", handler.NewImportsHandler(s, pub).UploadImport)
-	})
-
-	// SSE uses cookie auth (same-origin; EventSource sends cookies automatically).
-	r.With(middleware.AuthenticateCookieOrRedirect(authClient)).Get("/api/jobs/stream", jobsHandler.StreamJobs)
-
-	_ = internalAPI // suppress unused warning; routes registered via side-effect
+	// Multipart upload — same API group auth already applied
+	api.POST("/imports", handler.NewImportsHandler(s, pub).UploadImport)
 
 	port := viper.GetInt("veloci.port")
 	log.Printf("veloci listening on :%d", port)
-	return http.ListenAndServe(fmt.Sprintf(":%d", port), r)
+	return e.Start(fmt.Sprintf(":%d", port))
 }
 
 func runMigrate(_ *cobra.Command, _ []string) error {

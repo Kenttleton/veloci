@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/a-h/templ"
-	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/labstack/echo/v4"
 	"github.com/veloci/veloci/authclient"
 	"github.com/veloci/veloci/fieldregistry"
 	"github.com/veloci/veloci/middleware"
@@ -139,11 +139,9 @@ func NewServer(s *store.Store, auth *authclient.Client, pool *pgxpool.Pool) *Ser
 	return &Server{store: s, auth: auth, pool: pool}
 }
 
-func (s *Server) render(w http.ResponseWriter, r *http.Request, c templ.Component) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := c.Render(r.Context(), w); err != nil {
-		http.Error(w, "render error", http.StatusInternalServerError)
-	}
+func (s *Server) render(c echo.Context, comp templ.Component) error {
+	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
+	return comp.Render(c.Request().Context(), c.Response())
 }
 
 func (s *Server) buildShellData(r *http.Request) ShellData {
@@ -179,32 +177,30 @@ func (s *Server) buildShellData(r *http.Request) ShellData {
 }
 
 // GetLogin renders the login form.
-func (s *Server) GetLogin(w http.ResponseWriter, r *http.Request) {
-	s.render(w, r, Login("", "", r.URL.Query().Get("next")))
+func (s *Server) GetLogin(c echo.Context) error {
+	return s.render(c, Login("", "", c.QueryParam("next")))
 }
 
 // PostLogin handles login form submission.
-func (s *Server) PostLogin(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		s.render(w, r, Login("Invalid request", "", ""))
-		return
+func (s *Server) PostLogin(c echo.Context) error {
+	if err := c.Request().ParseForm(); err != nil {
+		return s.render(c, Login("Invalid request", "", ""))
 	}
-	email := r.FormValue("email")
-	password := r.FormValue("password")
-	next := r.FormValue("next")
+	email := c.FormValue("email")
+	password := c.FormValue("password")
+	next := c.FormValue("next")
 	// Only allow relative paths to prevent open-redirect attacks.
 	if next == "" || !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") {
 		next = "/"
 	}
-	ctx := r.Context()
+	ctx := c.Request().Context()
 
 	cred, err := s.auth.ValidateCredential(ctx, &authclient.ValidateCredentialInputBody{
 		Email:    email,
 		Password: password,
 	})
 	if err != nil {
-		s.render(w, r, Login("Invalid email or password", email, next))
-		return
+		return s.render(c, Login("Invalid email or password", email, next))
 	}
 
 	var userID, entityID, entityRole string
@@ -216,8 +212,7 @@ func (s *Server) PostLogin(w http.ResponseWriter, r *http.Request) {
 		LIMIT 1
 	`, email).Scan(&userID, &entityID, &entityRole)
 	if err != nil {
-		s.render(w, r, Login("Invalid email or password", email, next))
-		return
+		return s.render(c, Login("Invalid email or password", email, next))
 	}
 
 	claims := make(authclient.MintTokenInputBodyClaims)
@@ -237,12 +232,11 @@ func (s *Server) PostLogin(w http.ResponseWriter, r *http.Request) {
 		Claims:       claims,
 	})
 	if err != nil {
-		s.render(w, r, Login("Login failed, please try again", email, next))
-		return
+		return s.render(c, Login("Login failed, please try again", email, next))
 	}
 
 	expiry, _ := time.Parse(time.RFC3339, minted.ExpiresAt)
-	http.SetCookie(w, &http.Cookie{
+	c.SetCookie(&http.Cookie{
 		Name:     sessionCookie,
 		Value:    minted.AccessToken,
 		Path:     "/",
@@ -250,7 +244,7 @@ func (s *Server) PostLogin(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
-	http.SetCookie(w, &http.Cookie{
+	c.SetCookie(&http.Cookie{
 		Name:     "veloci_refresh",
 		Value:    minted.RefreshToken,
 		Path:     "/api/session/refresh",
@@ -258,49 +252,47 @@ func (s *Server) PostLogin(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	http.Redirect(w, r, next, http.StatusFound)
+	return c.Redirect(http.StatusFound, next)
 }
 
 // PostLogout revokes the session token and clears the cookie.
-func (s *Server) PostLogout(w http.ResponseWriter, r *http.Request) {
-	if jti := middleware.JTI(r.Context()); jti != "" {
-		s.auth.RevokeToken(r.Context(), authclient.RevokeTokenParams{Jti: jti}) //nolint:errcheck
+func (s *Server) PostLogout(c echo.Context) error {
+	if jti := middleware.JTI(c.Request().Context()); jti != "" {
+		s.auth.RevokeToken(c.Request().Context(), authclient.RevokeTokenParams{Jti: jti}) //nolint:errcheck
 	}
-	http.SetCookie(w, &http.Cookie{
+	c.SetCookie(&http.Cookie{
 		Name:     sessionCookie,
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
 	})
-	http.SetCookie(w, &http.Cookie{
+	c.SetCookie(&http.Cookie{
 		Name:     "veloci_refresh",
 		Value:    "",
 		Path:     "/api/session/refresh",
 		HttpOnly: true,
 		MaxAge:   -1,
 	})
-	http.Redirect(w, r, "/login", http.StatusFound)
+	return c.Redirect(http.StatusFound, "/login")
 }
 
 // PostSessionRefresh uses the veloci_refresh cookie to issue a new token pair.
 // Not behind auth middleware — the access token may be expired when this is called.
-func (s *Server) PostSessionRefresh(w http.ResponseWriter, r *http.Request) {
-	cookie, err := r.Cookie("veloci_refresh")
+func (s *Server) PostSessionRefresh(c echo.Context) error {
+	cookie, err := c.Cookie("veloci_refresh")
 	if err != nil || cookie.Value == "" {
-		http.Error(w, `{"code":"UNAUTHORIZED"}`, http.StatusUnauthorized)
-		return
+		return echo.NewHTTPError(http.StatusUnauthorized, `{"code":"UNAUTHORIZED"}`)
 	}
-	minted, err := s.auth.RefreshToken(r.Context(), &authclient.RefreshTokenInputBody{
+	minted, err := s.auth.RefreshToken(c.Request().Context(), &authclient.RefreshTokenInputBody{
 		RefreshToken: cookie.Value,
 	})
 	if err != nil {
-		http.SetCookie(w, &http.Cookie{Name: "veloci_refresh", Value: "", Path: "/api/session/refresh", MaxAge: -1})
-		http.Error(w, `{"code":"UNAUTHORIZED"}`, http.StatusUnauthorized)
-		return
+		c.SetCookie(&http.Cookie{Name: "veloci_refresh", Value: "", Path: "/api/session/refresh", MaxAge: -1})
+		return echo.NewHTTPError(http.StatusUnauthorized, `{"code":"UNAUTHORIZED"}`)
 	}
 	expiry, _ := time.Parse(time.RFC3339, minted.ExpiresAt)
-	http.SetCookie(w, &http.Cookie{
+	c.SetCookie(&http.Cookie{
 		Name:     sessionCookie,
 		Value:    minted.AccessToken,
 		Path:     "/",
@@ -308,15 +300,14 @@ func (s *Server) PostSessionRefresh(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
-	http.SetCookie(w, &http.Cookie{
+	c.SetCookie(&http.Cookie{
 		Name:     "veloci_refresh",
 		Value:    minted.RefreshToken,
 		Path:     "/api/session/refresh",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
-	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(`{"ok":true}`))
+	return c.JSON(http.StatusOK, map[string]any{"ok": true})
 }
 
 // ─── Page handlers ───────────────────────────────────────────────────────────
@@ -328,8 +319,8 @@ type BudgetData struct {
 	Commits []store.EntryRow
 }
 
-func (s *Server) Budget(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+func (s *Server) Budget(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
 
 	summary, _ := s.store.GetSnapshotSummary(ctx, entityID)
@@ -345,7 +336,7 @@ func (s *Server) Budget(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	s.render(w, r, BudgetPage(s.buildShellData(r), BudgetData{
+	return s.render(c, BudgetPage(s.buildShellData(c.Request()), BudgetData{
 		Summary: summary,
 		Income:  income,
 		Commits: commits,
@@ -391,19 +382,18 @@ func ledgerFilterURL(d LedgerData, key, value string) string {
 	return "/ledger?" + q.Encode()
 }
 
-func (s *Server) Ledger(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+func (s *Server) Ledger(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
 
-	qp := r.URL.Query()
-	filter := qp.Get("filter")
+	filter := c.QueryParam("filter")
 	if filter == "" {
 		filter = "all"
 	}
-	labelFilter := qp.Get("label")
-	dirFilter := qp.Get("direction")
-	typeFilter := qp.Get("entry_type")
-	srt := qp.Get("sort")
+	labelFilter := c.QueryParam("label")
+	dirFilter := c.QueryParam("direction")
+	typeFilter := c.QueryParam("entry_type")
+	srt := c.QueryParam("sort")
 	if srt == "" {
 		srt = "start_date"
 	}
@@ -499,16 +489,16 @@ func (s *Server) Ledger(w http.ResponseWriter, r *http.Request) {
 		TypeFilter:      typeFilter,
 		Sort:            srt,
 	}
-	s.render(w, r, LedgerPage(s.buildShellData(r), data))
+	return s.render(c, LedgerPage(s.buildShellData(c.Request()), data))
 }
 
-func (s *Server) Activity(w http.ResponseWriter, r *http.Request) {
+func (s *Server) Activity(c echo.Context) error {
 	const pageSize = 50
-	cursor := r.URL.Query().Get("cursor")
-	targetJobID := r.URL.Query().Get("job")
-	entityID := middleware.EntityID(r.Context())
+	cursor := c.QueryParam("cursor")
+	targetJobID := c.QueryParam("job")
+	entityID := middleware.EntityID(c.Request().Context())
 
-	jobs, _ := s.store.ListJobs(r.Context(), entityID, pageSize, cursor)
+	jobs, _ := s.store.ListJobs(c.Request().Context(), entityID, pageSize, cursor)
 
 	var nextCursor string
 	if len(jobs) == pageSize {
@@ -521,7 +511,7 @@ func (s *Server) Activity(w http.ResponseWriter, r *http.Request) {
 		NextCursor:  nextCursor,
 		TargetJobID: targetJobID,
 	}
-	s.render(w, r, ActivityPage(s.buildShellData(r), data))
+	return s.render(c, ActivityPage(s.buildShellData(c.Request()), data))
 }
 
 // fieldRegistryJSON returns the static field registry serialised as a JSON string
@@ -561,15 +551,14 @@ type AccountData struct {
 	NextCursor   string
 }
 
-func (s *Server) Account(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	ctx := r.Context()
+func (s *Server) Account(c echo.Context) error {
+	id := c.Param("id")
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
 
 	account, err := s.store.GetAccount(ctx, entityID, id)
 	if err != nil {
-		http.Redirect(w, r, "/budget", http.StatusFound)
-		return
+		return c.Redirect(http.StatusFound, "/budget")
 	}
 
 	var institution *store.Institution
@@ -594,7 +583,7 @@ func (s *Server) Account(w http.ResponseWriter, r *http.Request) {
 		Transactions: txns,
 		NextCursor:   nextCursor,
 	}
-	s.render(w, r, AccountPage(s.buildShellData(r), data))
+	return s.render(c, AccountPage(s.buildShellData(c.Request()), data))
 }
 
 // ─── Page helpers ─────────────────────────────────────────────────────────────
@@ -848,11 +837,11 @@ type ConfigurationData struct {
 	Institutions []InstitutionWithAccounts
 }
 
-func (s *Server) Configuration(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+func (s *Server) Configuration(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
 
-	tab := r.URL.Query().Get("tab")
+	tab := c.QueryParam("tab")
 	if tab == "" || tab == "merchants" {
 		tab = "labels"
 	}
@@ -871,15 +860,15 @@ func (s *Server) Configuration(w http.ResponseWriter, r *http.Request) {
 	default:
 		data.Labels, _ = s.store.ListLabelsWithEntryCount(ctx, entityID)
 	}
-	s.render(w, r, ConfigurationPage(s.buildShellData(r), data))
+	return s.render(c, ConfigurationPage(s.buildShellData(c.Request()), data))
 }
 
-func (s *Server) Settings(w http.ResponseWriter, r *http.Request) {
-	s.render(w, r, SettingsPage(s.buildShellData(r)))
+func (s *Server) Settings(c echo.Context) error {
+	return s.render(c, SettingsPage(s.buildShellData(c.Request())))
 }
 
-func (s *Server) Glossary(w http.ResponseWriter, r *http.Request) {
-	s.render(w, r, GlossaryPage(s.buildShellData(r)))
+func (s *Server) Glossary(c echo.Context) error {
+	return s.render(c, GlossaryPage(s.buildShellData(c.Request())))
 }
 
 // ReportsData is passed to the Reports page template.
@@ -889,8 +878,8 @@ type ReportsData struct {
 	PinchCount  int
 }
 
-func (s *Server) Reports(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+func (s *Server) Reports(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
 
 	summary, _ := s.store.GetSnapshotSummary(ctx, entityID)
@@ -918,7 +907,7 @@ func (s *Server) Reports(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	s.render(w, r, ReportsPage(s.buildShellData(r), ReportsData{
+	return s.render(c, ReportsPage(s.buildShellData(c.Request()), ReportsData{
 		Summary:     summary,
 		Projections: projections,
 		PinchCount:  pinchCount,

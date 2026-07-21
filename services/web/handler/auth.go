@@ -6,7 +6,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/danielgtaylor/huma/v2"
+	"github.com/labstack/echo/v4"
 	"github.com/veloci/veloci/authclient"
 	"github.com/veloci/veloci/middleware"
 )
@@ -34,41 +34,37 @@ func NewAuthHandler(auth *authclient.Client, db AppDB) *AuthHandler {
 	return &AuthHandler{auth: auth, db: db}
 }
 
-type loginInput struct {
-	Body struct {
-		Email    string `json:"email"    required:"true" doc:"User email address"`
-		Password string `json:"password" required:"true" doc:"Plaintext password"`
-	}
-}
-
-type loginOutput struct {
-	Body struct {
-		Token     string `json:"token"      doc:"Short-lived access token"`
-		ExpiresAt string `json:"expires_at" doc:"Token expiry as RFC 3339 timestamp"`
-	}
-}
-
 // Login validates credentials, looks up the user entity, and mints a JWT pair.
-func (h *AuthHandler) Login(ctx context.Context, input *loginInput) (*loginOutput, error) {
+func (h *AuthHandler) Login(c echo.Context) error {
+	var body struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+	if err := c.Bind(&body); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid body")
+	}
+
+	ctx := c.Request().Context()
+
 	cred, err := h.auth.ValidateCredential(ctx, &authclient.ValidateCredentialInputBody{
-		Email:    input.Body.Email,
-		Password: input.Body.Password,
+		Email:    body.Email,
+		Password: body.Password,
 	})
 	if err != nil {
-		log.Printf("login: ValidateCredential failed for %s: %v", input.Body.Email, err)
-		return nil, huma.Error401Unauthorized("invalid credentials")
+		log.Printf("login: ValidateCredential failed for %s: %v", body.Email, err)
+		return echo.NewHTTPError(http.StatusUnauthorized, "invalid credentials")
 	}
 
-	ue, err := h.db.FindUserEntity(ctx, input.Body.Email)
+	ue, err := h.db.FindUserEntity(ctx, body.Email)
 	if err != nil {
-		log.Printf("login: FindUserEntity failed for %s: %v", input.Body.Email, err)
-		return nil, huma.Error401Unauthorized("invalid credentials")
+		log.Printf("login: FindUserEntity failed for %s: %v", body.Email, err)
+		return echo.NewHTTPError(http.StatusUnauthorized, "invalid credentials")
 	}
 
 	claims := make(authclient.MintTokenInputBodyClaims)
 	for k, v := range map[string]any{
 		"sub":         ue.UserID,
-		"email":       input.Body.Email,
+		"email":       body.Email,
 		"system_role": string(cred.SystemRole),
 		"entity_id":   ue.EntityID,
 		"entity_role": ue.EntityRole,
@@ -82,42 +78,30 @@ func (h *AuthHandler) Login(ctx context.Context, input *loginInput) (*loginOutpu
 		Claims:       claims,
 	})
 	if err != nil {
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 
-	out := &loginOutput{}
-	out.Body.Token = minted.AccessToken
-	out.Body.ExpiresAt = minted.ExpiresAt
-	return out, nil
+	return c.JSON(http.StatusOK, map[string]string{
+		"token":      minted.AccessToken,
+		"expires_at": minted.ExpiresAt,
+	})
 }
 
 // Logout revokes the caller's access token using the JTI injected by Authenticate middleware.
-func (h *AuthHandler) Logout(ctx context.Context, input *struct{}) (*struct{}, error) {
+func (h *AuthHandler) Logout(c echo.Context) error {
+	ctx := c.Request().Context()
 	if jti := middleware.JTI(ctx); jti != "" {
 		h.auth.RevokeToken(ctx, authclient.RevokeTokenParams{Jti: jti}) //nolint:errcheck
 	}
-	return nil, nil
+	return c.NoContent(http.StatusNoContent)
 }
 
 // RegisterAuthRoutes registers public auth endpoints (no token required).
-func RegisterAuthRoutes(api huma.API, h *AuthHandler) {
-	huma.Register(api, huma.Operation{
-		OperationID: "login",
-		Method:      http.MethodPost,
-		Path:        "/auth/login",
-		Summary:     "Login with email and password",
-		Tags:        []string{"auth"},
-	}, h.Login)
+func RegisterAuthRoutes(g *echo.Group, h *AuthHandler) {
+	g.POST("/auth/login", h.Login)
 }
 
 // RegisterLogoutRoute registers the logout endpoint on an authenticated API.
-func RegisterLogoutRoute(api huma.API, h *AuthHandler) {
-	huma.Register(api, huma.Operation{
-		OperationID:   "logout",
-		Method:        http.MethodPost,
-		Path:          "/auth/logout",
-		Summary:       "Revoke the caller's access token",
-		Tags:          []string{"auth"},
-		DefaultStatus: http.StatusNoContent,
-	}, h.Logout)
+func RegisterLogoutRoute(g *echo.Group, h *AuthHandler) {
+	g.POST("/auth/logout", h.Logout)
 }

@@ -1,17 +1,15 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 
-	"github.com/danielgtaylor/huma/v2"
 	"github.com/go-faster/jx"
 	"github.com/jackc/pgx/v5"
+	"github.com/labstack/echo/v4"
 	"github.com/veloci/veloci/authclient"
 	"github.com/veloci/veloci/middleware"
-	"github.com/veloci/veloci/queue"
 	"github.com/veloci/veloci/response"
 	"github.com/veloci/veloci/store"
 )
@@ -46,161 +44,142 @@ func toUserView(u store.User) userView {
 	}
 }
 
-type getMeOutput struct {
-	Body response.Envelope[userView]
-}
-
-type updateMeInput struct {
-	Body struct {
-		Name string `json:"name" required:"true"`
-	}
-}
-
-type updateMeOutput struct {
-	Body response.Envelope[userView]
-}
-
-type listUsersOutput struct {
-	Body response.Envelope[[]userView]
-}
-
-type changePasswordInput struct {
-	PathID string `path:"id"`
-	Body   struct {
-		Password string `json:"password" required:"true"`
-	}
-}
-
-type deleteUserInput struct {
-	PathID string `path:"id"`
-}
-
-type inviteUserInput struct {
-	Body struct {
-		Email      string `json:"email"       required:"true"`
-		EntityRole string `json:"entity_role" required:"true"`
-	}
-}
-
-type inviteUserOutput struct {
-	Body struct {
-		Token     string `json:"token"`
-		ExpiresAt string `json:"expires_at"`
-	}
-}
-
-func (h *UsersHandler) GetMe(ctx context.Context, _ *struct{}) (*getMeOutput, error) {
+func (h *UsersHandler) GetMe(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
 	userID := middleware.UserID(ctx)
 
 	u, err := h.s.GetUserByID(ctx, entityID, userID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, huma.Error404NotFound("not found")
+		return echo.NewHTTPError(http.StatusNotFound, "not found")
 	}
 	if err != nil {
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
-	out := &getMeOutput{}
-	out.Body = response.Single(toUserView(u))
-	return out, nil
+	return c.JSON(http.StatusOK, response.Single(toUserView(u)))
 }
 
-func (h *UsersHandler) UpdateMe(ctx context.Context, input *updateMeInput) (*updateMeOutput, error) {
+func (h *UsersHandler) UpdateMe(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
 	userID := middleware.UserID(ctx)
 
-	if err := h.s.UpdateUserProfile(ctx, userID, input.Body.Name); err != nil {
-		return nil, huma.Error500InternalServerError("internal error")
+	var body struct {
+		Name string `json:"name"`
+	}
+	if err := c.Bind(&body); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid body")
+	}
+
+	if err := h.s.UpdateUserProfile(ctx, userID, body.Name); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 	u, err := h.s.GetUserByID(ctx, entityID, userID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, huma.Error404NotFound("not found")
+		return echo.NewHTTPError(http.StatusNotFound, "not found")
 	}
 	if err != nil {
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
-	out := &updateMeOutput{}
-	out.Body = response.Single(toUserView(u))
-	return out, nil
+	return c.JSON(http.StatusOK, response.Single(toUserView(u)))
 }
 
-func (h *UsersHandler) ListUsers(ctx context.Context, _ *struct{}) (*listUsersOutput, error) {
+func (h *UsersHandler) ListUsers(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
 
 	users, err := h.s.ListUsers(ctx, entityID)
 	if err != nil {
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 	views := make([]userView, len(users))
 	for i, u := range users {
 		views[i] = toUserView(u)
 	}
-	out := &listUsersOutput{}
-	out.Body = response.Single(views)
-	return out, nil
+	return c.JSON(http.StatusOK, response.Single(views))
 }
 
-func (h *UsersHandler) ChangePassword(ctx context.Context, input *changePasswordInput) (*struct{}, error) {
+func (h *UsersHandler) ChangePassword(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
+	id := c.Param("id")
 
-	credID, err := h.s.GetUserCredentialID(ctx, input.PathID)
+	var body struct {
+		Password string `json:"password"`
+	}
+	if err := c.Bind(&body); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid body")
+	}
+
+	credID, err := h.s.GetUserCredentialID(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, huma.Error404NotFound("not found")
+		return echo.NewHTTPError(http.StatusNotFound, "not found")
 	}
 	if err != nil {
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 
 	// Verify user belongs to entity.
-	if _, err := h.s.GetUserByID(ctx, entityID, input.PathID); errors.Is(err, pgx.ErrNoRows) {
-		return nil, huma.Error404NotFound("not found")
+	if _, err := h.s.GetUserByID(ctx, entityID, id); errors.Is(err, pgx.ErrNoRows) {
+		return echo.NewHTTPError(http.StatusNotFound, "not found")
 	} else if err != nil {
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 
 	if err := h.auth.UpdateCredentialPassword(ctx, &authclient.UpdateCredentialPasswordInputBody{
-		Password: input.Body.Password,
+		Password: body.Password,
 	}, authclient.UpdateCredentialPasswordParams{ID: credID}); err != nil {
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
-	return nil, nil
+	return c.NoContent(http.StatusNoContent)
 }
 
-func (h *UsersHandler) DeleteUser(ctx context.Context, input *deleteUserInput) (*struct{}, error) {
+func (h *UsersHandler) DeleteUser(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
+	id := c.Param("id")
 
-	credID, err := h.s.GetUserCredentialID(ctx, input.PathID)
+	credID, err := h.s.GetUserCredentialID(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, huma.Error404NotFound("not found")
+		return echo.NewHTTPError(http.StatusNotFound, "not found")
 	}
 	if err != nil {
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 
 	// Verify user belongs to entity.
-	if _, err := h.s.GetUserByID(ctx, entityID, input.PathID); errors.Is(err, pgx.ErrNoRows) {
-		return nil, huma.Error404NotFound("not found")
+	if _, err := h.s.GetUserByID(ctx, entityID, id); errors.Is(err, pgx.ErrNoRows) {
+		return echo.NewHTTPError(http.StatusNotFound, "not found")
 	} else if err != nil {
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 
 	h.auth.RevokeUserTokens(ctx, authclient.RevokeUserTokensParams{CredentialID: credID}) //nolint:errcheck
 
-	if err := h.s.DeleteUser(ctx, entityID, input.PathID); err != nil {
-		return nil, huma.Error500InternalServerError("internal error")
+	if err := h.s.DeleteUser(ctx, entityID, id); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
-	return nil, nil
+	return c.NoContent(http.StatusNoContent)
 }
 
-func (h *UsersHandler) InviteUser(ctx context.Context, input *inviteUserInput) (*inviteUserOutput, error) {
+func (h *UsersHandler) InviteUser(c echo.Context) error {
+	ctx := c.Request().Context()
 	userID := middleware.UserID(ctx)
 	entityID := middleware.EntityID(ctx)
 
+	var body struct {
+		Email      string `json:"email"`
+		EntityRole string `json:"entity_role"`
+	}
+	if err := c.Bind(&body); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid body")
+	}
+
 	claims := make(authclient.CreateInviteInputBodyClaims)
 	for k, v := range map[string]string{
-		"email":       input.Body.Email,
+		"email":       body.Email,
 		"entity_id":   entityID,
-		"entity_role": input.Body.EntityRole,
+		"entity_role": body.EntityRole,
 	} {
 		b, _ := json.Marshal(v)
 		claims[k] = jx.Raw(b)
@@ -211,72 +190,29 @@ func (h *UsersHandler) InviteUser(ctx context.Context, input *inviteUserInput) (
 		CreatedBy: userID,
 	})
 	if err != nil {
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 
-	out := &inviteUserOutput{}
-	out.Body.Token = result.Token
-	out.Body.ExpiresAt = result.ExpiresAt
-	return out, nil
+	return c.JSON(http.StatusOK, struct {
+		Token     string `json:"token"`
+		ExpiresAt string `json:"expires_at"`
+	}{
+		Token:     result.Token,
+		ExpiresAt: result.ExpiresAt,
+	})
 }
 
-// RegisterUsersRoutes registers user management endpoints on the given Huma API.
-func RegisterUsersRoutes(api huma.API, s *store.Store, auth *authclient.Client, _ *queue.Publisher, perms middleware.PermissionCache) {
+// RegisterUsersRoutes registers user management endpoints on the given Echo group.
+func RegisterUsersRoutes(g *echo.Group, s *store.Store, auth *authclient.Client, perms middleware.PermissionCache) {
 	h := NewUsersHandler(s, auth)
 
-	huma.Register(api, huma.Operation{
-		OperationID: "get-me",
-		Method:      http.MethodGet,
-		Path:        "/users/me",
-		Summary:     "Get current user profile",
-		Tags:        []string{"users"},
-		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "accounts:read")},
-	}, h.GetMe)
+	read := g.Group("", middleware.RequirePermission(perms, "accounts:read"))
+	manage := g.Group("", middleware.RequirePermission(perms, "users:manage"))
 
-	huma.Register(api, huma.Operation{
-		OperationID: "update-me",
-		Method:      http.MethodPut,
-		Path:        "/users/me",
-		Summary:     "Update current user profile",
-		Tags:        []string{"users"},
-		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "accounts:read")},
-	}, h.UpdateMe)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "list-users",
-		Method:      http.MethodGet,
-		Path:        "/users",
-		Summary:     "List all entity users",
-		Tags:        []string{"users"},
-		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "users:manage")},
-	}, h.ListUsers)
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "change-user-password",
-		Method:        http.MethodPut,
-		Path:          "/users/{id}/password",
-		Summary:       "Change a user password",
-		Tags:          []string{"users"},
-		DefaultStatus: http.StatusNoContent,
-		Middlewares:   huma.Middlewares{middleware.RequirePermission(perms, "users:manage")},
-	}, h.ChangePassword)
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "delete-user",
-		Method:        http.MethodDelete,
-		Path:          "/users/{id}",
-		Summary:       "Remove a user from the entity",
-		Tags:          []string{"users"},
-		DefaultStatus: http.StatusNoContent,
-		Middlewares:   huma.Middlewares{middleware.RequirePermission(perms, "users:manage")},
-	}, h.DeleteUser)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "invite-user",
-		Method:      http.MethodPost,
-		Path:        "/users/invite",
-		Summary:     "Send a user invite",
-		Tags:        []string{"users"},
-		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "users:manage")},
-	}, h.InviteUser)
+	read.GET("/users/me", h.GetMe)
+	read.PUT("/users/me", h.UpdateMe)
+	manage.GET("/users", h.ListUsers)
+	manage.PUT("/users/:id/password", h.ChangePassword)
+	manage.DELETE("/users/:id", h.DeleteUser)
+	manage.POST("/users/invite", h.InviteUser)
 }

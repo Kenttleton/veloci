@@ -3,7 +3,7 @@ package middleware
 import (
 	"net/http"
 
-	"github.com/danielgtaylor/huma/v2"
+	"github.com/labstack/echo/v4"
 )
 
 // PermissionCache maps entity_role to a set of permission names.
@@ -20,18 +20,17 @@ func (c PermissionCache) Has(entityRole, permission string) bool {
 	return found
 }
 
-// RequirePermission returns a Huma middleware that checks the cache.
+// RequirePermission returns an Echo middleware that checks the cache.
 // Reads entity_role from context (set by Authenticate).
 // Returns 403 if permission missing.
-func RequirePermission(cache PermissionCache, permission string) func(huma.Context, func(huma.Context)) {
-	return func(ctx huma.Context, next func(huma.Context)) {
-		role := EntityRole(ctx.Context())
-		if !cache.Has(role, permission) {
-			ctx.SetHeader("Content-Type", "application/problem+json")
-			ctx.SetStatus(http.StatusForbidden)
-			ctx.BodyWriter().Write([]byte(`{"status":403,"title":"Forbidden","detail":"forbidden"}`)) //nolint:errcheck
-			return
+func RequirePermission(cache PermissionCache, permission string) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			role := EntityRole(c.Request().Context())
+			if !cache.Has(role, permission) {
+				return echo.NewHTTPError(http.StatusForbidden, "forbidden")
+			}
+			return next(c)
 		}
-		next(ctx)
 	}
 }

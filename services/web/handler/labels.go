@@ -1,15 +1,14 @@
 package handler
 
 import (
-	"context"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 
-	"github.com/danielgtaylor/huma/v2"
 	"github.com/jackc/pgx/v5"
+	"github.com/labstack/echo/v4"
 	"github.com/veloci/veloci/middleware"
-	"github.com/veloci/veloci/queue"
 	"github.com/veloci/veloci/response"
 	"github.com/veloci/veloci/store"
 )
@@ -39,68 +38,19 @@ func toLabelView(l store.Label) labelView {
 	}
 }
 
-type listLabelsInput struct {
-	Cursor string `query:"cursor"`
-	Limit  int    `query:"limit" default:"50" minimum:"1" maximum:"200"`
-}
-
-type listLabelsOutput struct {
-	Body response.Envelope[[]labelView]
-}
-
-type getLabelInput struct {
-	PathID string `path:"id"`
-}
-
-type getLabelOutput struct {
-	Body response.Envelope[labelView]
-}
-
-type createLabelInput struct {
-	Body struct {
-		Name string `json:"name" required:"true"`
-	}
-}
-
-type createLabelOutput struct {
-	Body response.Envelope[labelView]
-}
-
-type updateLabelInput struct {
-	PathID string `path:"id"`
-	Body   struct {
-		Name string `json:"name" required:"true"`
-	}
-}
-
-type updateLabelOutput struct {
-	Body response.Envelope[labelView]
-}
-
-type deleteLabelInput struct {
-	PathID string `path:"id"`
-}
-
-type listLabelEntriesInput struct {
-	PathID string `path:"id"`
-	Cursor string `query:"cursor"`
-	Limit  int    `query:"limit" default:"50" minimum:"1" maximum:"200"`
-}
-
-type listLabelEntriesOutput struct {
-	Body response.Envelope[[]entryView]
-}
-
-func (h *LabelsHandler) ListLabels(ctx context.Context, input *listLabelsInput) (*listLabelsOutput, error) {
+func (h *LabelsHandler) ListLabels(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
-	limit := input.Limit
-	if limit == 0 {
-		limit = 50
+
+	cursor := c.QueryParam("cursor")
+	limit := 50
+	if l, err := strconv.Atoi(c.QueryParam("limit")); err == nil && l > 0 {
+		limit = l
 	}
 
-	items, err := h.s.ListLabels(ctx, entityID, limit+1, input.Cursor)
+	items, err := h.s.ListLabels(ctx, entityID, limit+1, cursor)
 	if err != nil {
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 
 	hasMore := len(items) > limit
@@ -110,87 +60,108 @@ func (h *LabelsHandler) ListLabels(ctx context.Context, input *listLabelsInput) 
 	var nextCursor *string
 	if hasMore && len(items) > 0 {
 		last := items[len(items)-1]
-		c := store.EncodeCursor(last.ID, last.CreatedAt)
-		nextCursor = &c
+		cur := store.EncodeCursor(last.ID, last.CreatedAt)
+		nextCursor = &cur
 	}
 
 	views := make([]labelView, len(items))
 	for i, item := range items {
 		views[i] = toLabelView(item)
 	}
-	out := &listLabelsOutput{}
-	out.Body = response.Page(views, nextCursor, limit, hasMore)
-	return out, nil
+	return c.JSON(http.StatusOK, response.Page(views, nextCursor, limit, hasMore))
 }
 
-func (h *LabelsHandler) GetLabel(ctx context.Context, input *getLabelInput) (*getLabelOutput, error) {
+func (h *LabelsHandler) GetLabel(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
-	item, err := h.s.GetLabel(ctx, entityID, input.PathID)
+	id := c.Param("id")
+
+	item, err := h.s.GetLabel(ctx, entityID, id)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, huma.Error404NotFound("not found")
+		return echo.NewHTTPError(http.StatusNotFound, "not found")
 	}
 	if err != nil {
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
-	out := &getLabelOutput{}
-	out.Body = response.Single(toLabelView(item))
-	return out, nil
+	return c.JSON(http.StatusOK, response.Single(toLabelView(item)))
 }
 
-func (h *LabelsHandler) CreateLabel(ctx context.Context, input *createLabelInput) (*createLabelOutput, error) {
+func (h *LabelsHandler) CreateLabel(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
-	item, err := h.s.CreateLabel(ctx, entityID, input.Body.Name)
+
+	var body struct {
+		Name string `json:"name"`
+	}
+	if err := c.Bind(&body); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid body")
+	}
+
+	item, err := h.s.CreateLabel(ctx, entityID, body.Name)
 	if err != nil {
 		// Unique constraint violation
 		if strings.Contains(err.Error(), "unique") || strings.Contains(err.Error(), "duplicate") {
-			return nil, huma.Error409Conflict("label name already exists")
+			return echo.NewHTTPError(http.StatusConflict, "label name already exists")
 		}
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
-	out := &createLabelOutput{}
-	out.Body = response.Single(toLabelView(item))
-	return out, nil
+	return c.JSON(http.StatusOK, response.Single(toLabelView(item)))
 }
 
-func (h *LabelsHandler) UpdateLabel(ctx context.Context, input *updateLabelInput) (*updateLabelOutput, error) {
+func (h *LabelsHandler) UpdateLabel(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
-	item, err := h.s.UpdateLabel(ctx, entityID, input.PathID, input.Body.Name)
+	id := c.Param("id")
+
+	var body struct {
+		Name string `json:"name"`
+	}
+	if err := c.Bind(&body); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid body")
+	}
+
+	item, err := h.s.UpdateLabel(ctx, entityID, id, body.Name)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, huma.Error404NotFound("not found")
+		return echo.NewHTTPError(http.StatusNotFound, "not found")
 	}
 	if err != nil {
 		if strings.Contains(err.Error(), "unique") || strings.Contains(err.Error(), "duplicate") {
-			return nil, huma.Error409Conflict("label name already exists")
+			return echo.NewHTTPError(http.StatusConflict, "label name already exists")
 		}
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
-	out := &updateLabelOutput{}
-	out.Body = response.Single(toLabelView(item))
-	return out, nil
+	return c.JSON(http.StatusOK, response.Single(toLabelView(item)))
 }
 
-func (h *LabelsHandler) DeleteLabel(ctx context.Context, input *deleteLabelInput) (*struct{}, error) {
+func (h *LabelsHandler) DeleteLabel(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
-	err := h.s.DeleteLabel(ctx, entityID, input.PathID)
+	id := c.Param("id")
+
+	err := h.s.DeleteLabel(ctx, entityID, id)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, huma.Error404NotFound("not found")
+		return echo.NewHTTPError(http.StatusNotFound, "not found")
 	}
 	if err != nil {
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
-	return nil, nil
+	return c.NoContent(http.StatusNoContent)
 }
 
-func (h *LabelsHandler) ListLabelEntries(ctx context.Context, input *listLabelEntriesInput) (*listLabelEntriesOutput, error) {
+func (h *LabelsHandler) ListLabelEntries(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
-	limit := input.Limit
-	if limit == 0 {
-		limit = 50
+	id := c.Param("id")
+
+	cursor := c.QueryParam("cursor")
+	limit := 50
+	if l, err := strconv.Atoi(c.QueryParam("limit")); err == nil && l > 0 {
+		limit = l
 	}
 
-	items, err := h.s.ListEntriesByLabel(ctx, entityID, input.PathID, limit+1, input.Cursor)
+	items, err := h.s.ListEntriesByLabel(ctx, entityID, id, limit+1, cursor)
 	if err != nil {
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 
 	hasMore := len(items) > limit
@@ -200,75 +171,28 @@ func (h *LabelsHandler) ListLabelEntries(ctx context.Context, input *listLabelEn
 	var nextCursor *string
 	if hasMore && len(items) > 0 {
 		last := items[len(items)-1]
-		c := store.EncodeCursor(last.ID, last.CreatedAt)
-		nextCursor = &c
+		cur := store.EncodeCursor(last.ID, last.CreatedAt)
+		nextCursor = &cur
 	}
 
 	views := make([]entryView, len(items))
 	for i, item := range items {
 		views[i] = toEntryView(item)
 	}
-	out := &listLabelEntriesOutput{}
-	out.Body = response.Page(views, nextCursor, limit, hasMore)
-	return out, nil
+	return c.JSON(http.StatusOK, response.Page(views, nextCursor, limit, hasMore))
 }
 
-// RegisterLabelsRoutes registers label endpoints on the given Huma API.
-func RegisterLabelsRoutes(api huma.API, s *store.Store, _ *queue.Publisher, perms middleware.PermissionCache) {
+// RegisterLabelsRoutes registers label endpoints on the given Echo group.
+func RegisterLabelsRoutes(g *echo.Group, s *store.Store, perms middleware.PermissionCache) {
 	h := NewLabelsHandler(s)
 
-	huma.Register(api, huma.Operation{
-		OperationID: "list-labels",
-		Method:      http.MethodGet,
-		Path:        "/labels",
-		Summary:     "List all labels",
-		Tags:        []string{"labels"},
-		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "accounts:read")},
-	}, h.ListLabels)
+	read := g.Group("", middleware.RequirePermission(perms, "accounts:read"))
+	write := g.Group("", middleware.RequirePermission(perms, "labels:write"))
 
-	huma.Register(api, huma.Operation{
-		OperationID: "create-label",
-		Method:      http.MethodPost,
-		Path:        "/labels",
-		Summary:     "Create a label",
-		Tags:        []string{"labels"},
-		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "labels:write")},
-	}, h.CreateLabel)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-label",
-		Method:      http.MethodGet,
-		Path:        "/labels/{id}",
-		Summary:     "Get a label",
-		Tags:        []string{"labels"},
-		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "accounts:read")},
-	}, h.GetLabel)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "update-label",
-		Method:      http.MethodPut,
-		Path:        "/labels/{id}",
-		Summary:     "Update a label",
-		Tags:        []string{"labels"},
-		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "labels:write")},
-	}, h.UpdateLabel)
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "delete-label",
-		Method:        http.MethodDelete,
-		Path:          "/labels/{id}",
-		Summary:       "Delete a label",
-		Tags:          []string{"labels"},
-		DefaultStatus: http.StatusNoContent,
-		Middlewares:   huma.Middlewares{middleware.RequirePermission(perms, "labels:write")},
-	}, h.DeleteLabel)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "list-label-entries",
-		Method:      http.MethodGet,
-		Path:        "/labels/{id}/entries",
-		Summary:     "List entries for a label",
-		Tags:        []string{"labels"},
-		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "accounts:read")},
-	}, h.ListLabelEntries)
+	read.GET("/labels", h.ListLabels)
+	write.POST("/labels", h.CreateLabel)
+	read.GET("/labels/:id", h.GetLabel)
+	write.PUT("/labels/:id", h.UpdateLabel)
+	write.DELETE("/labels/:id", h.DeleteLabel)
+	read.GET("/labels/:id/entries", h.ListLabelEntries)
 }

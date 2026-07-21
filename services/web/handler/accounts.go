@@ -1,14 +1,13 @@
 package handler
 
 import (
-	"context"
 	"errors"
 	"net/http"
+	"strconv"
 
-	"github.com/danielgtaylor/huma/v2"
 	"github.com/jackc/pgx/v5"
+	"github.com/labstack/echo/v4"
 	"github.com/veloci/veloci/middleware"
-	"github.com/veloci/veloci/queue"
 	"github.com/veloci/veloci/response"
 	"github.com/veloci/veloci/store"
 )
@@ -52,71 +51,19 @@ func toAccountView(a store.Account) accountView {
 	}
 }
 
-type listAccountsInput struct {
-	Cursor        string `query:"cursor"`
-	Limit         int    `query:"limit" default:"200" minimum:"1" maximum:"200"`
-	InstitutionID string `query:"institution_id" required:"false"`
-}
-
-type listAccountsOutput struct {
-	Body response.Envelope[[]accountView]
-}
-
-type createAccountInput struct {
-	Body struct {
-		Name                 string   `json:"name"          required:"true"`
-		AccountType          string   `json:"account_type"  required:"true"`
-		Status               string   `json:"status"        required:"true"`
-		InstitutionID        *string  `json:"institution_id"`
-		InterestRate         *float64 `json:"interest_rate"`
-		StartingBalanceCents int64    `json:"starting_balance_cents"`
-		CreditLimitCents     *int64   `json:"credit_limit_cents"`
-	}
-}
-
-type createAccountOutput struct {
-	Body response.Envelope[accountView]
-}
-
-type getAccountInput struct {
-	PathID string `path:"id"`
-}
-
-type getAccountOutput struct {
-	Body response.Envelope[accountView]
-}
-
-type updateAccountInput struct {
-	PathID string `path:"id"`
-	Body   struct {
-		Name                 string   `json:"name"          required:"true"`
-		AccountType          string   `json:"account_type"  required:"true"`
-		Status               string   `json:"status"        required:"true"`
-		InstitutionID        *string  `json:"institution_id"`
-		InterestRate         *float64 `json:"interest_rate"`
-		StartingBalanceCents int64    `json:"starting_balance_cents"`
-		CreditLimitCents     *int64   `json:"credit_limit_cents"`
-	}
-}
-
-type updateAccountOutput struct {
-	Body response.Envelope[accountView]
-}
-
-type deleteAccountInput struct {
-	PathID string `path:"id"`
-}
-
-func (h *AccountsHandler) ListAccounts(ctx context.Context, input *listAccountsInput) (*listAccountsOutput, error) {
+func (h *AccountsHandler) ListAccounts(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
-	limit := input.Limit
-	if limit == 0 {
-		limit = 200
-	}
 
-	items, err := h.s.ListAccounts(ctx, entityID, limit+1, input.Cursor)
+	limit := 200
+	if l, err := strconv.Atoi(c.QueryParam("limit")); err == nil && l > 0 {
+		limit = l
+	}
+	cursor := c.QueryParam("cursor")
+
+	items, err := h.s.ListAccounts(ctx, entityID, limit+1, cursor)
 	if err != nil {
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 
 	hasMore := len(items) > limit
@@ -126,8 +73,8 @@ func (h *AccountsHandler) ListAccounts(ctx context.Context, input *listAccountsI
 	var nextCursor *string
 	if hasMore && len(items) > 0 {
 		last := items[len(items)-1]
-		c := store.EncodeCursor(last.ID, last.CreatedAt)
-		nextCursor = &c
+		cur := store.EncodeCursor(last.ID, last.CreatedAt)
+		nextCursor = &cur
 	}
 
 	views := make([]accountView, len(items))
@@ -135,129 +82,121 @@ func (h *AccountsHandler) ListAccounts(ctx context.Context, input *listAccountsI
 		views[i] = toAccountView(item)
 	}
 
-	out := &listAccountsOutput{}
-	out.Body = response.Page(views, nextCursor, limit, hasMore)
-	return out, nil
+	return c.JSON(http.StatusOK, response.Page(views, nextCursor, limit, hasMore))
 }
 
-func (h *AccountsHandler) CreateAccount(ctx context.Context, input *createAccountInput) (*createAccountOutput, error) {
+func (h *AccountsHandler) CreateAccount(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
+
+	var body struct {
+		Name                 string   `json:"name"`
+		AccountType          string   `json:"account_type"`
+		Status               string   `json:"status"`
+		InstitutionID        *string  `json:"institution_id"`
+		InterestRate         *float64 `json:"interest_rate"`
+		StartingBalanceCents int64    `json:"starting_balance_cents"`
+		CreditLimitCents     *int64   `json:"credit_limit_cents"`
+	}
+	if err := c.Bind(&body); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid body")
+	}
 
 	item, err := h.s.CreateAccount(ctx, entityID, store.Account{
-		InstitutionID:        input.Body.InstitutionID,
-		Name:                 input.Body.Name,
-		AccountType:          input.Body.AccountType,
-		Status:               input.Body.Status,
-		InterestRate:         input.Body.InterestRate,
-		StartingBalanceCents: input.Body.StartingBalanceCents,
-		CreditLimitCents:     input.Body.CreditLimitCents,
+		InstitutionID:        body.InstitutionID,
+		Name:                 body.Name,
+		AccountType:          body.AccountType,
+		Status:               body.Status,
+		InterestRate:         body.InterestRate,
+		StartingBalanceCents: body.StartingBalanceCents,
+		CreditLimitCents:     body.CreditLimitCents,
 	})
 	if err != nil {
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
-	out := &createAccountOutput{}
-	out.Body = response.Single(toAccountView(item))
-	return out, nil
+
+	return c.JSON(http.StatusOK, response.Single(toAccountView(item)))
 }
 
-func (h *AccountsHandler) GetAccount(ctx context.Context, input *getAccountInput) (*getAccountOutput, error) {
+func (h *AccountsHandler) GetAccount(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
+	id := c.Param("id")
 
-	item, err := h.s.GetAccount(ctx, entityID, input.PathID)
+	item, err := h.s.GetAccount(ctx, entityID, id)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, huma.Error404NotFound("not found")
+		return echo.NewHTTPError(http.StatusNotFound, "not found")
 	}
 	if err != nil {
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
-	out := &getAccountOutput{}
-	out.Body = response.Single(toAccountView(item))
-	return out, nil
+
+	return c.JSON(http.StatusOK, response.Single(toAccountView(item)))
 }
 
-func (h *AccountsHandler) UpdateAccount(ctx context.Context, input *updateAccountInput) (*updateAccountOutput, error) {
+func (h *AccountsHandler) UpdateAccount(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
+	id := c.Param("id")
 
-	item, err := h.s.UpdateAccount(ctx, entityID, input.PathID, store.Account{
-		Name:                 input.Body.Name,
-		AccountType:          input.Body.AccountType,
-		Status:               input.Body.Status,
-		InstitutionID:        input.Body.InstitutionID,
-		InterestRate:         input.Body.InterestRate,
-		StartingBalanceCents: input.Body.StartingBalanceCents,
-		CreditLimitCents:     input.Body.CreditLimitCents,
+	var body struct {
+		Name                 string   `json:"name"`
+		AccountType          string   `json:"account_type"`
+		Status               string   `json:"status"`
+		InstitutionID        *string  `json:"institution_id"`
+		InterestRate         *float64 `json:"interest_rate"`
+		StartingBalanceCents int64    `json:"starting_balance_cents"`
+		CreditLimitCents     *int64   `json:"credit_limit_cents"`
+	}
+	if err := c.Bind(&body); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid body")
+	}
+
+	item, err := h.s.UpdateAccount(ctx, entityID, id, store.Account{
+		Name:                 body.Name,
+		AccountType:          body.AccountType,
+		Status:               body.Status,
+		InstitutionID:        body.InstitutionID,
+		InterestRate:         body.InterestRate,
+		StartingBalanceCents: body.StartingBalanceCents,
+		CreditLimitCents:     body.CreditLimitCents,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, huma.Error404NotFound("not found")
+		return echo.NewHTTPError(http.StatusNotFound, "not found")
 	}
 	if err != nil {
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
-	out := &updateAccountOutput{}
-	out.Body = response.Single(toAccountView(item))
-	return out, nil
+
+	return c.JSON(http.StatusOK, response.Single(toAccountView(item)))
 }
 
-func (h *AccountsHandler) DeleteAccount(ctx context.Context, input *deleteAccountInput) (*struct{}, error) {
+func (h *AccountsHandler) DeleteAccount(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
+	id := c.Param("id")
 
-	err := h.s.DeleteAccount(ctx, entityID, input.PathID)
+	err := h.s.DeleteAccount(ctx, entityID, id)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, huma.Error404NotFound("not found")
+		return echo.NewHTTPError(http.StatusNotFound, "not found")
 	}
 	if err != nil {
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
-	return nil, nil
+
+	return c.NoContent(http.StatusNoContent)
 }
 
-// RegisterAccountsRoutes registers account endpoints on the given Huma API.
-func RegisterAccountsRoutes(api huma.API, s *store.Store, _ *queue.Publisher, perms middleware.PermissionCache) {
+// RegisterAccountsRoutes registers account endpoints on the given Echo group.
+func RegisterAccountsRoutes(g *echo.Group, s *store.Store, perms middleware.PermissionCache) {
 	h := NewAccountsHandler(s)
 
-	huma.Register(api, huma.Operation{
-		OperationID: "list-accounts",
-		Method:      http.MethodGet,
-		Path:        "/accounts",
-		Summary:     "List accounts",
-		Tags:        []string{"accounts"},
-		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "accounts:read")},
-	}, h.ListAccounts)
+	read := g.Group("", middleware.RequirePermission(perms, "accounts:read"))
+	write := g.Group("", middleware.RequirePermission(perms, "accounts:write"))
 
-	huma.Register(api, huma.Operation{
-		OperationID: "create-account",
-		Method:      http.MethodPost,
-		Path:        "/accounts",
-		Summary:     "Create an account",
-		Tags:        []string{"accounts"},
-		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "accounts:write")},
-	}, h.CreateAccount)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-account",
-		Method:      http.MethodGet,
-		Path:        "/accounts/{id}",
-		Summary:     "Get an account",
-		Tags:        []string{"accounts"},
-		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "accounts:read")},
-	}, h.GetAccount)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "update-account",
-		Method:      http.MethodPut,
-		Path:        "/accounts/{id}",
-		Summary:     "Update an account",
-		Tags:        []string{"accounts"},
-		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "accounts:write")},
-	}, h.UpdateAccount)
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "delete-account",
-		Method:        http.MethodDelete,
-		Path:          "/accounts/{id}",
-		Summary:       "Delete an account",
-		Tags:          []string{"accounts"},
-		DefaultStatus: http.StatusNoContent,
-		Middlewares:   huma.Middlewares{middleware.RequirePermission(perms, "accounts:write")},
-	}, h.DeleteAccount)
+	read.GET("/accounts", h.ListAccounts)
+	write.POST("/accounts", h.CreateAccount)
+	read.GET("/accounts/:id", h.GetAccount)
+	write.PUT("/accounts/:id", h.UpdateAccount)
+	write.DELETE("/accounts/:id", h.DeleteAccount)
 }

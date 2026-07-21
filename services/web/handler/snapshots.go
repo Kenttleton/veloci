@@ -1,13 +1,12 @@
 package handler
 
 import (
-	"context"
 	"net/http"
+	"strconv"
 	"time"
 
-	"github.com/danielgtaylor/huma/v2"
+	"github.com/labstack/echo/v4"
 	"github.com/veloci/veloci/middleware"
-	"github.com/veloci/veloci/queue"
 	"github.com/veloci/veloci/response"
 	"github.com/veloci/veloci/store"
 )
@@ -24,21 +23,21 @@ func NewSnapshotsHandler(s *store.Store) *SnapshotsHandler {
 
 // snapshotView is the API representation of a snapshot row.
 type snapshotView struct {
-	ID                     string  `json:"id"`
-	NodeID                 string  `json:"node_id"`
-	NodeType               string  `json:"node_type"`
-	SnapshotDate           string  `json:"snapshot_date"`
-	ComputedAsOf           string  `json:"computed_as_of"`
-	JobID                  string  `json:"job_id"`
-	ActualRatePerDay       float64 `json:"actual_rate_per_day"`
-	ProjectedRatePerDay    float64 `json:"projected_rate_per_day"`
-	DriftPerDay            float64 `json:"drift_per_day"`
-	SlopePerDay            float64 `json:"slope_per_day"`
-	RSquared               float64 `json:"r_squared"`
-	TransactionCount       int     `json:"transaction_count"`
-	WindowDaysUsed         int     `json:"window_days_used"`
-	RollingWindowTotalCents int64  `json:"rolling_window_total_cents"`
-	BalanceCents           *int64  `json:"balance_cents"`
+	ID                      string  `json:"id"`
+	NodeID                  string  `json:"node_id"`
+	NodeType                string  `json:"node_type"`
+	SnapshotDate            string  `json:"snapshot_date"`
+	ComputedAsOf            string  `json:"computed_as_of"`
+	JobID                   string  `json:"job_id"`
+	ActualRatePerDay        float64 `json:"actual_rate_per_day"`
+	ProjectedRatePerDay     float64 `json:"projected_rate_per_day"`
+	DriftPerDay             float64 `json:"drift_per_day"`
+	SlopePerDay             float64 `json:"slope_per_day"`
+	RSquared                float64 `json:"r_squared"`
+	TransactionCount        int     `json:"transaction_count"`
+	WindowDaysUsed          int     `json:"window_days_used"`
+	RollingWindowTotalCents int64   `json:"rolling_window_total_cents"`
+	BalanceCents            *int64  `json:"balance_cents"`
 }
 
 func toSnapshotView(s store.Snapshot) snapshotView {
@@ -79,40 +78,19 @@ type snapshotHistoryView struct {
 	CloseRate        *float64 `json:"close_rate,omitempty"`
 }
 
-type listSnapshotsInput struct {
-	Cursor string `query:"cursor"`
-	Limit  int    `query:"limit" default:"50" minimum:"1" maximum:"200"`
-}
-
-type listSnapshotsOutput struct {
-	Body response.Envelope[[]snapshotView]
-}
-
-type getSnapshotSummaryOutput struct {
-	Body response.Envelope[snapshotSummaryView]
-}
-
-type getSnapshotHistoryInput struct {
-	NodeID      string `path:"node_id"`
-	Cursor      string `query:"cursor"`
-	Limit       int    `query:"limit" default:"60" minimum:"1" maximum:"180"`
-	Granularity string `query:"granularity" default:"day"`
-}
-
-type getSnapshotHistoryOutput struct {
-	Body response.Envelope[[]snapshotHistoryView]
-}
-
-func (h *SnapshotsHandler) ListSnapshots(ctx context.Context, input *listSnapshotsInput) (*listSnapshotsOutput, error) {
+func (h *SnapshotsHandler) ListSnapshots(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
-	limit := input.Limit
-	if limit == 0 {
+
+	limit, err := strconv.Atoi(c.QueryParam("limit"))
+	if err != nil || limit <= 0 {
 		limit = 50
 	}
+	cursor := c.QueryParam("cursor")
 
-	items, err := h.s.ListSnapshots(ctx, entityID, limit+1, input.Cursor)
+	items, err := h.s.ListSnapshots(ctx, entityID, limit+1, cursor)
 	if err != nil {
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 
 	hasMore := len(items) > limit
@@ -130,53 +108,53 @@ func (h *SnapshotsHandler) ListSnapshots(ctx context.Context, input *listSnapsho
 	for i, item := range items {
 		views[i] = toSnapshotView(item)
 	}
-	out := &listSnapshotsOutput{}
-	out.Body = response.Page(views, nextCursor, limit, hasMore)
-	return out, nil
+	return c.JSON(http.StatusOK, response.Page(views, nextCursor, limit, hasMore))
 }
 
-func (h *SnapshotsHandler) GetSnapshotSummary(ctx context.Context, _ *struct{}) (*getSnapshotSummaryOutput, error) {
+func (h *SnapshotsHandler) GetSnapshotSummary(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
 
 	summary, err := h.s.GetSnapshotSummary(ctx, entityID)
 	if err != nil {
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 
-	out := &getSnapshotSummaryOutput{}
-	out.Body = response.Single(snapshotSummaryView{
+	return c.JSON(http.StatusOK, response.Single(snapshotSummaryView{
 		IncomeRate:      summary.IncomeRate,
 		CommitmentsRate: summary.CommitmentsRate,
 		MarginRate:      summary.IncomeRate - summary.CommitmentsRate,
 		DriftRate:       summary.DriftRate,
-	})
-	return out, nil
+	}))
 }
 
-func (h *SnapshotsHandler) GetSnapshotHistory(ctx context.Context, input *getSnapshotHistoryInput) (*getSnapshotHistoryOutput, error) {
+func (h *SnapshotsHandler) GetSnapshotHistory(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
-	limit := input.Limit
-	if limit == 0 {
+	nodeID := c.Param("node_id")
+
+	limit, err := strconv.Atoi(c.QueryParam("limit"))
+	if err != nil || limit <= 0 {
 		limit = 60
 	}
 
 	before := time.Now()
-	if input.Cursor != "" {
-		t, err := time.Parse("2006-01-02", input.Cursor)
+	if cursor := c.QueryParam("cursor"); cursor != "" {
+		t, err := time.Parse("2006-01-02", cursor)
 		if err != nil {
-			return nil, huma.Error422UnprocessableEntity("invalid cursor date")
+			return echo.NewHTTPError(http.StatusUnprocessableEntity, "invalid cursor date")
 		}
 		before = t
 	}
 
-	granularity := input.Granularity
+	granularity := c.QueryParam("granularity")
 	if granularity == "" {
 		granularity = "day"
 	}
 
-	items, err := h.s.GetSnapshotHistory(ctx, entityID, input.NodeID, before, limit, granularity)
+	items, err := h.s.GetSnapshotHistory(ctx, entityID, nodeID, before, limit, granularity)
 	if err != nil {
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 
 	views := make([]snapshotHistoryView, len(items))
@@ -196,39 +174,15 @@ func (h *SnapshotsHandler) GetSnapshotHistory(ctx context.Context, input *getSna
 		views[i] = v
 	}
 
-	out := &getSnapshotHistoryOutput{}
-	out.Body = response.Single(views)
-	return out, nil
+	return c.JSON(http.StatusOK, response.Single(views))
 }
 
-// RegisterSnapshotsRoutes registers snapshot endpoints on the given Huma API.
-func RegisterSnapshotsRoutes(api huma.API, s *store.Store, _ *queue.Publisher, perms middleware.PermissionCache) {
+// RegisterSnapshotsRoutes registers snapshot endpoints on the given Echo group.
+func RegisterSnapshotsRoutes(g *echo.Group, s *store.Store, perms middleware.PermissionCache) {
 	h := NewSnapshotsHandler(s)
 
-	huma.Register(api, huma.Operation{
-		OperationID: "list-snapshots",
-		Method:      http.MethodGet,
-		Path:        "/snapshots",
-		Summary:     "List snapshots",
-		Tags:        []string{"snapshots"},
-		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "reports:read")},
-	}, h.ListSnapshots)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-snapshot-summary",
-		Method:      http.MethodGet,
-		Path:        "/snapshots/summary",
-		Summary:     "Get aggregate snapshot summary",
-		Tags:        []string{"snapshots"},
-		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "reports:read")},
-	}, h.GetSnapshotSummary)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-snapshot-history",
-		Method:      http.MethodGet,
-		Path:        "/snapshots/{node_id}/history",
-		Summary:     "Get snapshot history for a node",
-		Tags:        []string{"snapshots"},
-		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "reports:read")},
-	}, h.GetSnapshotHistory)
+	read := g.Group("", middleware.RequirePermission(perms, "reports:read"))
+	read.GET("/snapshots", h.ListSnapshots)
+	read.GET("/snapshots/summary", h.GetSnapshotSummary)
+	read.GET("/snapshots/:node_id/history", h.GetSnapshotHistory)
 }

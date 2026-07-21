@@ -1,12 +1,11 @@
 package handler
 
 import (
-	"context"
 	"net/http"
+	"strconv"
 
-	"github.com/danielgtaylor/huma/v2"
+	"github.com/labstack/echo/v4"
 	"github.com/veloci/veloci/middleware"
-	"github.com/veloci/veloci/queue"
 	"github.com/veloci/veloci/response"
 	"github.com/veloci/veloci/store"
 )
@@ -48,25 +47,19 @@ func toProjectionView(p store.Projection) projectionView {
 	}
 }
 
-type listProjectionsInput struct {
-	Cursor string `query:"cursor"`
-	Limit  int    `query:"limit" default:"50" minimum:"1" maximum:"200"`
-}
-
-type listProjectionsOutput struct {
-	Body response.Envelope[[]projectionView]
-}
-
-func (h *ProjectionsHandler) ListProjections(ctx context.Context, input *listProjectionsInput) (*listProjectionsOutput, error) {
+func (h *ProjectionsHandler) ListProjections(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
-	limit := input.Limit
-	if limit == 0 {
+
+	cursor := c.QueryParam("cursor")
+	limit, err := strconv.Atoi(c.QueryParam("limit"))
+	if err != nil || limit <= 0 {
 		limit = 50
 	}
 
-	items, err := h.s.ListProjections(ctx, entityID, limit+1, input.Cursor)
+	items, err := h.s.ListProjections(ctx, entityID, limit+1, cursor)
 	if err != nil {
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 
 	hasMore := len(items) > limit
@@ -84,21 +77,12 @@ func (h *ProjectionsHandler) ListProjections(ctx context.Context, input *listPro
 	for i, item := range items {
 		views[i] = toProjectionView(item)
 	}
-	out := &listProjectionsOutput{}
-	out.Body = response.Page(views, nextCursor, limit, hasMore)
-	return out, nil
+	return c.JSON(http.StatusOK, response.Page(views, nextCursor, limit, hasMore))
 }
 
-// RegisterProjectionsRoutes registers projection endpoints on the given Huma API.
-func RegisterProjectionsRoutes(api huma.API, s *store.Store, _ *queue.Publisher, perms middleware.PermissionCache) {
+// RegisterProjectionsRoutes registers projection endpoints on the given Echo group.
+func RegisterProjectionsRoutes(g *echo.Group, s *store.Store, perms middleware.PermissionCache) {
 	h := NewProjectionsHandler(s)
 
-	huma.Register(api, huma.Operation{
-		OperationID: "list-projections",
-		Method:      http.MethodGet,
-		Path:        "/projections",
-		Summary:     "List balance projections",
-		Tags:        []string{"projections"},
-		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "reports:read")},
-	}, h.ListProjections)
+	g.GET("/projections", h.ListProjections, middleware.RequirePermission(perms, "reports:read"))
 }

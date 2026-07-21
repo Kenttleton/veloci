@@ -2,17 +2,17 @@ package handler
 
 import (
 	"bytes"
-	"context"
 	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
-	"github.com/danielgtaylor/huma/v2"
 	"github.com/jackc/pgx/v5"
+	"github.com/labstack/echo/v4"
 	"github.com/veloci/veloci/fieldregistry"
 	"github.com/veloci/veloci/middleware"
 	"github.com/veloci/veloci/queue"
@@ -147,34 +147,20 @@ func toImportView(i store.PendingImport) importView {
 	return v
 }
 
-type listImportsInput struct {
-	AccountID string `query:"account_id"`
-	Cursor    string `query:"cursor"`
-	Limit     int    `query:"limit" default:"50" minimum:"1" maximum:"200"`
-}
-
-type listImportsOutput struct {
-	Body response.Envelope[[]importView]
-}
-
-type getImportInput struct {
-	PathID string `path:"id"`
-}
-
-type getImportOutput struct {
-	Body response.Envelope[importView]
-}
-
-func (h *ImportsHandler) ListImports(ctx context.Context, input *listImportsInput) (*listImportsOutput, error) {
+func (h *ImportsHandler) ListImports(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
-	limit := input.Limit
-	if limit == 0 {
-		limit = 50
+
+	accountID := c.QueryParam("account_id")
+	cursor := c.QueryParam("cursor")
+	limit := 50
+	if l, err := strconv.Atoi(c.QueryParam("limit")); err == nil && l > 0 {
+		limit = l
 	}
 
-	items, err := h.s.ListPendingImports(ctx, entityID, input.AccountID, limit+1, input.Cursor)
+	items, err := h.s.ListPendingImports(ctx, entityID, accountID, limit+1, cursor)
 	if err != nil {
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 
 	hasMore := len(items) > limit
@@ -184,116 +170,99 @@ func (h *ImportsHandler) ListImports(ctx context.Context, input *listImportsInpu
 	var nextCursor *string
 	if hasMore && len(items) > 0 {
 		last := items[len(items)-1]
-		c := store.EncodeCursor(last.ID, last.UploadedAt)
-		nextCursor = &c
+		nc := store.EncodeCursor(last.ID, last.UploadedAt)
+		nextCursor = &nc
 	}
 
 	views := make([]importView, len(items))
 	for i, item := range items {
 		views[i] = toImportView(item)
 	}
-	out := &listImportsOutput{}
-	out.Body = response.Page(views, nextCursor, limit, hasMore)
-	return out, nil
+	return c.JSON(http.StatusOK, response.Page(views, nextCursor, limit, hasMore))
 }
 
-func (h *ImportsHandler) GetImport(ctx context.Context, input *getImportInput) (*getImportOutput, error) {
+func (h *ImportsHandler) GetImport(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
 
-	item, err := h.s.GetPendingImport(ctx, entityID, input.PathID)
+	item, err := h.s.GetPendingImport(ctx, entityID, c.Param("id"))
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, huma.Error404NotFound("not found")
+		return echo.NewHTTPError(http.StatusNotFound, "not found")
 	}
 	if err != nil {
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
-	out := &getImportOutput{}
-	out.Body = response.Single(toImportView(item))
-	return out, nil
+	return c.JSON(http.StatusOK, response.Single(toImportView(item)))
 }
 
-// UploadImport handles multipart/form-data CSV upload as a raw chi handler.
-func (h *ImportsHandler) UploadImport(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+// UploadImport handles multipart/form-data CSV upload.
+func (h *ImportsHandler) UploadImport(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
 	userID := middleware.UserID(ctx)
 
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		http.Error(w, `{"title":"Bad Request","status":400,"detail":"failed to parse form"}`, http.StatusBadRequest)
-		return
+	if err := c.Request().ParseMultipartForm(32 << 20); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "failed to parse form")
 	}
 
-	accountID := r.FormValue("account_id")
+	accountID := c.FormValue("account_id")
 	if accountID == "" {
-		http.Error(w, `{"title":"Bad Request","status":400,"detail":"account_id required"}`, http.StatusBadRequest)
-		return
+		return echo.NewHTTPError(http.StatusBadRequest, "account_id required")
 	}
 
-	file, _, err := r.FormFile("csv")
+	file, _, err := c.Request().FormFile("csv")
 	if err != nil {
-		http.Error(w, `{"title":"Bad Request","status":400,"detail":"csv file required"}`, http.StatusBadRequest)
-		return
+		return echo.NewHTTPError(http.StatusBadRequest, "csv file required")
 	}
 	defer file.Close()
 
 	csvBytes, err := io.ReadAll(file)
 	if err != nil {
-		http.Error(w, `{"title":"Internal Server Error","status":500,"detail":"internal error"}`, http.StatusInternalServerError)
-		return
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 
 	// Resolve the institution mapping linked to this account so we can parse dates.
 	account, err := h.s.GetAccount(ctx, entityID, accountID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		http.Error(w, `{"title":"Not Found","status":404,"detail":"account not found"}`, http.StatusNotFound)
-		return
+		return echo.NewHTTPError(http.StatusNotFound, "account not found")
 	}
 	if err != nil {
-		http.Error(w, `{"title":"Internal Server Error","status":500,"detail":"internal error"}`, http.StatusInternalServerError)
-		return
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 	if account.InstitutionID == nil {
-		http.Error(w, `{"title":"Bad Request","status":400,"detail":"account has no institution mapping; set one before uploading"}`, http.StatusBadRequest)
-		return
+		return echo.NewHTTPError(http.StatusBadRequest, "account has no institution mapping; set one before uploading")
 	}
 
 	institution, err := h.s.GetInstitution(ctx, entityID, *account.InstitutionID)
 	if err != nil {
-		http.Error(w, `{"title":"Internal Server Error","status":500,"detail":"internal error"}`, http.StatusInternalServerError)
-		return
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 
 	var mappingCfg fieldregistry.MappingConfig
 	if err := json.Unmarshal(institution.MappingConfig, &mappingCfg); err != nil || mappingCfg.Fields["date"] == "" {
-		http.Error(w, `{"title":"Bad Request","status":400,"detail":"institution mapping is missing date column configuration"}`, http.StatusBadRequest)
-		return
+		return echo.NewHTTPError(http.StatusBadRequest, "institution mapping is missing date column configuration")
 	}
 	minDate, maxDate, rowCount, err := extractDateRange(csvBytes, mappingCfg.Fields["date"])
 	if err != nil {
-		http.Error(w, `{"title":"Bad Request","status":400,"detail":"could not parse dates from CSV using the current mapping"}`, http.StatusBadRequest)
-		return
+		return echo.NewHTTPError(http.StatusBadRequest, "could not parse dates from CSV using the current mapping")
 	}
 
 	importID, err := h.s.CreatePendingImport(ctx, entityID, accountID, userID, account.InstitutionID, minDate, maxDate, rowCount, csvBytes)
 	if err != nil {
-		http.Error(w, `{"title":"Internal Server Error","status":500,"detail":"internal error"}`, http.StatusInternalServerError)
-		return
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 
 	meta, _ := json.Marshal(map[string]string{"pending_import_id": importID})
 	job, err := h.s.CreateJob(ctx, entityID, "import.process", userID, meta)
 	if err != nil {
 		if strings.Contains(err.Error(), "processing_jobs_one_active") || strings.Contains(err.Error(), "unique") {
-			http.Error(w, `{"title":"Conflict","status":409,"detail":"a job of this type is already active"}`, http.StatusConflict)
-			return
+			return echo.NewHTTPError(http.StatusConflict, "a job of this type is already active")
 		}
-		http.Error(w, `{"title":"Internal Server Error","status":500,"detail":"internal error"}`, http.StatusInternalServerError)
-		return
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 
 	if err := h.s.SetPendingImportJob(ctx, importID, job.ID); err != nil {
-		http.Error(w, `{"title":"Internal Server Error","status":500,"detail":"internal error"}`, http.StatusInternalServerError)
-		return
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 
 	h.pub.Publish(ctx, queue.Job{ //nolint:errcheck
@@ -305,38 +274,24 @@ func (h *ImportsHandler) UploadImport(w http.ResponseWriter, r *http.Request) {
 
 	item, err := h.s.GetPendingImport(ctx, entityID, importID)
 	if err != nil {
-		http.Error(w, `{"title":"Internal Server Error","status":500,"detail":"internal error"}`, http.StatusInternalServerError)
-		return
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 
 	type importCreatedBody struct {
 		Data importView `json:"data"`
 		Meta struct{}   `json:"meta"`
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(importCreatedBody{Data: toImportView(item)}) //nolint:errcheck
+	return c.JSON(http.StatusCreated, importCreatedBody{Data: toImportView(item)})
 }
 
-// RegisterImportsRoutes registers import endpoints on the given Huma API and chi router.
-func RegisterImportsRoutes(api huma.API, s *store.Store, pub *queue.Publisher, perms middleware.PermissionCache) {
+// RegisterImportsRoutes registers import endpoints on the given Echo group.
+func RegisterImportsRoutes(g *echo.Group, s *store.Store, pub *queue.Publisher, perms middleware.PermissionCache) {
 	h := NewImportsHandler(s, pub)
 
-	huma.Register(api, huma.Operation{
-		OperationID: "list-imports",
-		Method:      http.MethodGet,
-		Path:        "/imports",
-		Summary:     "List CSV imports",
-		Tags:        []string{"imports"},
-		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "accounts:read")},
-	}, h.ListImports)
+	read := g.Group("", middleware.RequirePermission(perms, "accounts:read"))
+	read.GET("/imports", h.ListImports)
+	read.GET("/imports/:id", h.GetImport)
 
-	huma.Register(api, huma.Operation{
-		OperationID: "get-import",
-		Method:      http.MethodGet,
-		Path:        "/imports/{id}",
-		Summary:     "Get a CSV import",
-		Tags:        []string{"imports"},
-		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "accounts:read")},
-	}, h.GetImport)
+	write := g.Group("", middleware.RequirePermission(perms, "accounts:write"))
+	write.POST("/imports", h.UploadImport)
 }

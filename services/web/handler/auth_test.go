@@ -8,22 +8,20 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/danielgtaylor/huma/v2"
-	"github.com/danielgtaylor/huma/v2/adapters/humachi"
-	"github.com/go-chi/chi/v5"
+	echo "github.com/labstack/echo/v4"
 	"github.com/veloci/veloci/authclient"
 	"github.com/veloci/veloci/handler"
 )
 
-func authRouter(authURL string, db handler.AppDB) (*chi.Mux, error) {
+func authRouter(authURL string, db handler.AppDB) (*echo.Echo, error) {
 	client, err := authclient.NewClient(authURL)
 	if err != nil {
 		return nil, err
 	}
-	r := chi.NewRouter()
-	api := humachi.New(r, huma.DefaultConfig("test", "1.0.0"))
-	handler.RegisterAuthRoutes(api, handler.NewAuthHandler(client, db))
-	return r, nil
+	e := echo.New()
+	g := e.Group("")
+	handler.RegisterAuthRoutes(g, handler.NewAuthHandler(client, db))
+	return e, nil
 }
 
 func stubAuthForLogin(t *testing.T) *httptest.Server {
@@ -62,7 +60,7 @@ func TestLoginSuccess(t *testing.T) {
 	authSrv := stubAuthForLogin(t)
 	defer authSrv.Close()
 
-	r, err := authRouter(authSrv.URL, &stubAppDB{})
+	e, err := authRouter(authSrv.URL, &stubAppDB{})
 	if err != nil {
 		t.Fatalf("authRouter: %v", err)
 	}
@@ -71,7 +69,7 @@ func TestLoginSuccess(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
+	e.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status: got %d; body: %s", w.Code, w.Body)
@@ -87,7 +85,7 @@ func TestLoginSuccess(t *testing.T) {
 }
 
 func TestLoginBadJSON(t *testing.T) {
-	r, err := authRouter("http://unused", &stubAppDB{})
+	e, err := authRouter("http://unused", &stubAppDB{})
 	if err != nil {
 		t.Fatalf("authRouter: %v", err)
 	}
@@ -95,7 +93,7 @@ func TestLoginBadJSON(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewReader([]byte("not-json")))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
+	e.ServeHTTP(w, req)
 
 	if w.Code < 400 {
 		t.Errorf("status: got %d want 4xx", w.Code)
@@ -114,7 +112,7 @@ func TestLoginInvalidCredentials(t *testing.T) {
 	}))
 	defer authSrv.Close()
 
-	r, err := authRouter(authSrv.URL, &stubAppDB{})
+	e, err := authRouter(authSrv.URL, &stubAppDB{})
 	if err != nil {
 		t.Fatalf("authRouter: %v", err)
 	}
@@ -123,7 +121,7 @@ func TestLoginInvalidCredentials(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
+	e.ServeHTTP(w, req)
 
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("status: got %d want 401", w.Code)

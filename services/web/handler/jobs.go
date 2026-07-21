@@ -6,10 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
-	"github.com/danielgtaylor/huma/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/labstack/echo/v4"
 	"github.com/veloci/veloci/middleware"
 	"github.com/veloci/veloci/queue"
 	"github.com/veloci/veloci/response"
@@ -62,29 +63,19 @@ func toJobView(j store.ProcessingJob) jobView {
 	return v
 }
 
-type listJobsInput struct {
-	Cursor string `query:"cursor"`
-	Limit  int    `query:"limit" default:"50" minimum:"1" maximum:"200"`
-}
-
-type listJobsOutput struct {
-	Body response.Envelope[[]jobView]
-}
-
-type triggerJobOutput struct {
-	Body response.Envelope[jobView]
-}
-
-func (h *JobsHandler) ListJobs(ctx context.Context, input *listJobsInput) (*listJobsOutput, error) {
+func (h *JobsHandler) ListJobs(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
-	limit := input.Limit
-	if limit == 0 {
+
+	cursor := c.QueryParam("cursor")
+	limit, err := strconv.Atoi(c.QueryParam("limit"))
+	if err != nil || limit <= 0 {
 		limit = 50
 	}
 
-	items, err := h.s.ListJobs(ctx, entityID, limit+1, input.Cursor)
+	items, err := h.s.ListJobs(ctx, entityID, limit+1, cursor)
 	if err != nil {
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 
 	hasMore := len(items) > limit
@@ -102,12 +93,11 @@ func (h *JobsHandler) ListJobs(ctx context.Context, input *listJobsInput) (*list
 	for i, item := range items {
 		views[i] = toJobView(item)
 	}
-	out := &listJobsOutput{}
-	out.Body = response.Page(views, nextCursor, limit, hasMore)
-	return out, nil
+	return c.JSON(http.StatusOK, response.Page(views, nextCursor, limit, hasMore))
 }
 
-func (h *JobsHandler) TriggerReprocess(ctx context.Context, _ *struct{}) (*triggerJobOutput, error) {
+func (h *JobsHandler) TriggerReprocess(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
 	userID := middleware.UserID(ctx)
 
@@ -115,9 +105,9 @@ func (h *JobsHandler) TriggerReprocess(ctx context.Context, _ *struct{}) (*trigg
 	job, err := h.s.CreateJob(ctx, entityID, "entries.reprocess", userID, meta)
 	if err != nil {
 		if strings.Contains(err.Error(), "unique") || strings.Contains(err.Error(), "processing_jobs_one_active") {
-			return nil, huma.Error409Conflict("a job of this type is already active")
+			return echo.NewHTTPError(http.StatusConflict, "a job of this type is already active")
 		}
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 
 	h.pub.Publish(ctx, queue.Job{ //nolint:errcheck
@@ -127,12 +117,11 @@ func (h *JobsHandler) TriggerReprocess(ctx context.Context, _ *struct{}) (*trigg
 		Metadata: meta,
 	})
 
-	out := &triggerJobOutput{}
-	out.Body = response.Single(toJobView(job))
-	return out, nil
+	return c.JSON(http.StatusOK, response.Single(toJobView(job)))
 }
 
-func (h *JobsHandler) TriggerAnalyze(ctx context.Context, _ *struct{}) (*triggerJobOutput, error) {
+func (h *JobsHandler) TriggerAnalyze(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
 	userID := middleware.UserID(ctx)
 
@@ -140,9 +129,9 @@ func (h *JobsHandler) TriggerAnalyze(ctx context.Context, _ *struct{}) (*trigger
 	job, err := h.s.CreateJob(ctx, entityID, "account.analyze", userID, meta)
 	if err != nil {
 		if strings.Contains(err.Error(), "unique") || strings.Contains(err.Error(), "processing_jobs_one_active") {
-			return nil, huma.Error409Conflict("a job of this type is already active")
+			return echo.NewHTTPError(http.StatusConflict, "a job of this type is already active")
 		}
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 
 	h.pub.Publish(ctx, queue.Job{ //nolint:errcheck
@@ -152,12 +141,11 @@ func (h *JobsHandler) TriggerAnalyze(ctx context.Context, _ *struct{}) (*trigger
 		Metadata: meta,
 	})
 
-	out := &triggerJobOutput{}
-	out.Body = response.Single(toJobView(job))
-	return out, nil
+	return c.JSON(http.StatusOK, response.Single(toJobView(job)))
 }
 
-func (h *JobsHandler) TriggerProject(ctx context.Context, _ *struct{}) (*triggerJobOutput, error) {
+func (h *JobsHandler) TriggerProject(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
 	userID := middleware.UserID(ctx)
 
@@ -165,9 +153,9 @@ func (h *JobsHandler) TriggerProject(ctx context.Context, _ *struct{}) (*trigger
 	job, err := h.s.CreateJob(ctx, entityID, "balance.project", userID, meta)
 	if err != nil {
 		if strings.Contains(err.Error(), "unique") || strings.Contains(err.Error(), "processing_jobs_one_active") {
-			return nil, huma.Error409Conflict("a job of this type is already active")
+			return echo.NewHTTPError(http.StatusConflict, "a job of this type is already active")
 		}
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 
 	h.pub.Publish(ctx, queue.Job{ //nolint:errcheck
@@ -177,29 +165,27 @@ func (h *JobsHandler) TriggerProject(ctx context.Context, _ *struct{}) (*trigger
 		Metadata: meta,
 	})
 
-	out := &triggerJobOutput{}
-	out.Body = response.Single(toJobView(job))
-	return out, nil
+	return c.JSON(http.StatusOK, response.Single(toJobView(job)))
 }
 
 // sseJobEvent is the payload sent over the SSE channel.
 type sseJobEvent struct {
-	JobID    string  `json:"job_id"`
-	JobType  string  `json:"job_type"`
-	Status   string  `json:"status"`
-	Error    *string `json:"error"`
+	JobID   string  `json:"job_id"`
+	JobType string  `json:"job_type"`
+	Status  string  `json:"status"`
+	Error   *string `json:"error"`
 }
 
 // StreamJobs streams job state changes as Server-Sent Events.
-// This handler must be registered directly on the chi router inside the authenticated group.
-func (h *JobsHandler) StreamJobs(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+// This handler is registered in main.go with its own auth middleware.
+func (h *JobsHandler) StreamJobs(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
 
-	flusher, ok := w.(http.Flusher)
+	w := c.Response()
+	flusher, ok := w.Writer.(http.Flusher)
 	if !ok {
-		http.Error(w, "streaming not supported", http.StatusInternalServerError)
-		return
+		return echo.NewHTTPError(http.StatusInternalServerError, "streaming not supported")
 	}
 
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -209,16 +195,14 @@ func (h *JobsHandler) StreamJobs(w http.ResponseWriter, r *http.Request) {
 
 	conn, err := h.pool.Acquire(ctx)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 	defer conn.Release()
 
 	rawConn := conn.Conn()
 	channel := "job:" + entityID
 	if _, err := rawConn.Exec(ctx, "LISTEN "+pgxQuoteIdentifier(channel)); err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 
 	activeJobs, err := h.s.ListActiveJobs(ctx, entityID)
@@ -234,16 +218,16 @@ func (h *JobsHandler) StreamJobs(w http.ResponseWriter, r *http.Request) {
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return nil
 		default:
 		}
 
 		notification, err := rawConn.WaitForNotification(ctx)
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-				return
+				return nil
 			}
-			return
+			return nil
 		}
 
 		var event sseJobEvent
@@ -268,42 +252,14 @@ func pgxQuoteIdentifier(name string) string {
 	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
 }
 
-// RegisterJobsRoutes registers job endpoints on the given Huma API.
-func RegisterJobsRoutes(api huma.API, h *JobsHandler, perms middleware.PermissionCache) {
-	huma.Register(api, huma.Operation{
-		OperationID: "list-jobs",
-		Method:      http.MethodGet,
-		Path:        "/jobs",
-		Summary:     "List processing jobs",
-		Tags:        []string{"jobs"},
-		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "accounts:read")},
-	}, h.ListJobs)
+// RegisterJobsRoutes registers job endpoints on the given Echo group.
+func RegisterJobsRoutes(g *echo.Group, h *JobsHandler, perms middleware.PermissionCache) {
+	read := g.Group("", middleware.RequirePermission(perms, "accounts:read"))
+	write := g.Group("", middleware.RequirePermission(perms, "entries:write"))
+	reports := g.Group("", middleware.RequirePermission(perms, "reports:read"))
 
-	huma.Register(api, huma.Operation{
-		OperationID: "trigger-reprocess",
-		Method:      http.MethodPost,
-		Path:        "/jobs/reprocess",
-		Summary:     "Trigger an entries reprocess job",
-		Tags:        []string{"jobs"},
-		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "entries:write")},
-	}, h.TriggerReprocess)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "trigger-analyze",
-		Method:      http.MethodPost,
-		Path:        "/jobs/analyze",
-		Summary:     "Trigger an account analyze job",
-		Tags:        []string{"jobs"},
-		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "entries:write")},
-	}, h.TriggerAnalyze)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "trigger-project",
-		Method:      http.MethodPost,
-		Path:        "/jobs/project",
-		Summary:     "Trigger a balance projection job",
-		Tags:        []string{"jobs"},
-		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "reports:read")},
-	}, h.TriggerProject)
-
+	read.GET("/jobs", h.ListJobs)
+	write.POST("/jobs/reprocess", h.TriggerReprocess)
+	write.POST("/jobs/analyze", h.TriggerAnalyze)
+	reports.POST("/jobs/project", h.TriggerProject)
 }

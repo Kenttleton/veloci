@@ -1,14 +1,13 @@
 package handler
 
 import (
-	"context"
 	"errors"
 	"net/http"
+	"strconv"
 
-	"github.com/danielgtaylor/huma/v2"
 	"github.com/jackc/pgx/v5"
+	"github.com/labstack/echo/v4"
 	"github.com/veloci/veloci/middleware"
-	"github.com/veloci/veloci/queue"
 	"github.com/veloci/veloci/response"
 	"github.com/veloci/veloci/store"
 )
@@ -58,41 +57,27 @@ func toTransactionView(t store.Transaction) transactionView {
 	}
 }
 
-type listTransactionsInput struct {
-	DateFrom   string `query:"date_from"`
-	DateTo     string `query:"date_to"`
-	SpanDays   int    `query:"span_days"   minimum:"0"`
-	SpanMonths int    `query:"span_months" minimum:"0"`
-	SpanYears  int    `query:"span_years"  minimum:"0"`
-	AccountID  string `query:"account_id"`
-	EntryID    string `query:"entry_id"`
-	Cursor     string `query:"cursor"`
-	Limit      int    `query:"limit" default:"200" minimum:"1" maximum:"500"`
-}
-
-type listTransactionsOutput struct {
-	Body response.Envelope[[]transactionView]
-}
-
-type getTransactionInput struct {
-	PathID string `path:"id"`
-}
-
-type getTransactionOutput struct {
-	Body response.Envelope[transactionView]
-}
-
-func (h *TransactionsHandler) ListTransactions(ctx context.Context, input *listTransactionsInput) (*listTransactionsOutput, error) {
+func (h *TransactionsHandler) ListTransactions(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
-	limit := input.Limit
-	if limit == 0 {
-		limit = 50
+
+	dateFrom := c.QueryParam("date_from")
+	dateTo := c.QueryParam("date_to")
+	spanDays, _ := strconv.Atoi(c.QueryParam("span_days"))
+	spanMonths, _ := strconv.Atoi(c.QueryParam("span_months"))
+	spanYears, _ := strconv.Atoi(c.QueryParam("span_years"))
+	accountID := c.QueryParam("account_id")
+	entryID := c.QueryParam("entry_id")
+	cursor := c.QueryParam("cursor")
+	limit, err := strconv.Atoi(c.QueryParam("limit"))
+	if err != nil || limit <= 0 {
+		limit = 200
 	}
 
-	dr := store.ResolveRange(input.DateFrom, input.DateTo, input.SpanDays, input.SpanMonths, input.SpanYears)
-	items, err := h.s.ListTransactions(ctx, entityID, dr, input.AccountID, input.EntryID, limit+1, input.Cursor)
+	dr := store.ResolveRange(dateFrom, dateTo, spanDays, spanMonths, spanYears)
+	items, err := h.s.ListTransactions(ctx, entityID, dr, accountID, entryID, limit+1, cursor)
 	if err != nil {
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 
 	hasMore := len(items) > limit
@@ -110,78 +95,51 @@ func (h *TransactionsHandler) ListTransactions(ctx context.Context, input *listT
 	for i, item := range items {
 		views[i] = toTransactionView(item)
 	}
-	out := &listTransactionsOutput{}
-	out.Body = response.Page(views, nextCursor, limit, hasMore)
-	return out, nil
+	return c.JSON(http.StatusOK, response.Page(views, nextCursor, limit, hasMore))
 }
 
-func (h *TransactionsHandler) GetTransaction(ctx context.Context, input *getTransactionInput) (*getTransactionOutput, error) {
+func (h *TransactionsHandler) GetTransaction(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
+	id := c.Param("id")
 
-	item, err := h.s.GetTransaction(ctx, entityID, input.PathID)
+	item, err := h.s.GetTransaction(ctx, entityID, id)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, huma.Error404NotFound("not found")
+		return echo.NewHTTPError(http.StatusNotFound, "not found")
 	}
 	if err != nil {
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
-	out := &getTransactionOutput{}
-	out.Body = response.Single(toTransactionView(item))
-	return out, nil
+	return c.JSON(http.StatusOK, response.Single(toTransactionView(item)))
 }
 
-type queryMerchantsInput struct {
-	Body struct {
-		Payee string `json:"payee" required:"true"`
-	}
-}
-
-type queryMerchantsOutput struct {
-	Body response.Envelope[[]string]
-}
-
-func (h *TransactionsHandler) QueryMerchants(ctx context.Context, input *queryMerchantsInput) (*queryMerchantsOutput, error) {
+func (h *TransactionsHandler) QueryMerchants(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
-	results, err := h.s.SearchMerchants(ctx, entityID, input.Body.Payee)
+
+	var body struct {
+		Payee string `json:"payee"`
+	}
+	if err := c.Bind(&body); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid body")
+	}
+
+	results, err := h.s.SearchMerchants(ctx, entityID, body.Payee)
 	if err != nil {
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 	if results == nil {
 		results = []string{}
 	}
-	out := &queryMerchantsOutput{}
-	out.Body = response.Single(results)
-	return out, nil
+	return c.JSON(http.StatusOK, response.Single(results))
 }
 
-// RegisterTransactionsRoutes registers transaction endpoints on the given Huma API.
-func RegisterTransactionsRoutes(api huma.API, s *store.Store, _ *queue.Publisher, perms middleware.PermissionCache) {
+// RegisterTransactionsRoutes registers transaction endpoints on the given Echo group.
+func RegisterTransactionsRoutes(g *echo.Group, s *store.Store, perms middleware.PermissionCache) {
 	h := NewTransactionsHandler(s)
 
-	huma.Register(api, huma.Operation{
-		OperationID: "list-transactions",
-		Method:      http.MethodGet,
-		Path:        "/transactions",
-		Summary:     "List transactions",
-		Tags:        []string{"transactions"},
-		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "accounts:read")},
-	}, h.ListTransactions)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-transaction",
-		Method:      http.MethodGet,
-		Path:        "/transactions/{id}",
-		Summary:     "Get a transaction",
-		Tags:        []string{"transactions"},
-		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "accounts:read")},
-	}, h.GetTransaction)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "query-transaction-merchants",
-		Method:      "QUERY",
-		Path:        "/transactions/merchant",
-		Summary:     "Search merchant strings from transaction history",
-		Tags:        []string{"transactions"},
-		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "accounts:read")},
-	}, h.QueryMerchants)
+	read := g.Group("", middleware.RequirePermission(perms, "accounts:read"))
+	read.GET("/transactions", h.ListTransactions)
+	read.GET("/transactions/:id", h.GetTransaction)
+	read.Add("QUERY", "/transactions/merchant", h.QueryMerchants)
 }

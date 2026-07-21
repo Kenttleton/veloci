@@ -1,17 +1,16 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/danielgtaylor/huma/v2"
+	"github.com/labstack/echo/v4"
 	"github.com/veloci/veloci/fieldregistry"
 	"github.com/veloci/veloci/middleware"
-	"github.com/veloci/veloci/queue"
 	"github.com/veloci/veloci/response"
 	"github.com/veloci/veloci/store"
 )
@@ -51,85 +50,10 @@ func toInstitutionView(i store.Institution) institutionView {
 	}
 }
 
-type listInstitutionsInput struct{}
-
-type listInstitutionsOutput struct {
-	Body response.Envelope[[]institutionView]
-}
-
-type getInstitutionInput struct {
-	PathID string `path:"id"`
-}
-
-type getInstitutionOutput struct {
-	Body response.Envelope[institutionView]
-}
-
 // mappingConfigBody is used in create/update request bodies.
 type mappingConfigBody struct {
 	Layout string            `json:"layout"`
 	Fields map[string]string `json:"fields"`
-}
-
-type createInstitutionInput struct {
-	Body struct {
-		InstitutionName      string             `json:"institution_name"       required:"true"`
-		SourceType           string             `json:"source_type"            required:"true"`
-		SettlementWindowDays *int               `json:"settlement_window_days" required:"false"`
-		DedupWindowDays      *int               `json:"dedup_window_days"      required:"false"`
-		AmountTolerancePct   *float64           `json:"amount_tolerance_pct"   required:"false"`
-		MappingConfig        *mappingConfigBody `json:"mapping_config"         required:"false"`
-	}
-}
-
-type createInstitutionOutput struct {
-	Body response.Envelope[institutionView]
-}
-
-type updateInstitutionInput struct {
-	PathID string `path:"id"`
-	Body   struct {
-		InstitutionName      string             `json:"institution_name"       required:"true"`
-		SourceType           string             `json:"source_type"            required:"true"`
-		SettlementWindowDays *int               `json:"settlement_window_days" required:"false"`
-		DedupWindowDays      *int               `json:"dedup_window_days"      required:"false"`
-		AmountTolerancePct   *float64           `json:"amount_tolerance_pct"   required:"false"`
-		MappingConfig        *mappingConfigBody `json:"mapping_config"         required:"false"`
-	}
-}
-
-type updateInstitutionOutput struct {
-	Body response.Envelope[institutionView]
-}
-
-type deleteInstitutionInput struct {
-	PathID string `path:"id"`
-}
-
-type listInstitutionAccountsInput struct {
-	PathID string `path:"id"`
-	Cursor string `query:"cursor"`
-	Limit  int    `query:"limit" default:"50" minimum:"1" maximum:"200"`
-}
-
-type listInstitutionAccountsOutput struct {
-	Body response.Envelope[[]accountView]
-}
-
-type createInstitutionAccountInput struct {
-	PathID string `path:"id"`
-	Body   struct {
-		Name             string   `json:"name"          required:"true"`
-		AccountType      string   `json:"account_type"  required:"true"`
-		Status           string   `json:"status"        required:"true"`
-		InterestRate     *float64 `json:"interest_rate"`
-		BalanceCents     *int64   `json:"balance_cents"`
-		CreditLimitCents *int64   `json:"credit_limit_cents"`
-	}
-}
-
-type createInstitutionAccountOutput struct {
-	Body response.Envelope[accountView]
 }
 
 func institutionFromInput(entityID string, b struct {
@@ -176,45 +100,56 @@ func institutionFromInput(entityID string, b struct {
 	}, nil
 }
 
-// fieldRegistryOutput is the response type for GET /field-registry.
-type fieldRegistryOutput struct {
-	Body any
+func (h *InstitutionsHandler) GetFieldRegistry(c echo.Context) error {
+	return c.JSON(http.StatusOK, fieldregistry.Registry)
 }
 
-func (h *InstitutionsHandler) ListInstitutions(ctx context.Context, _ *listInstitutionsInput) (*listInstitutionsOutput, error) {
+func (h *InstitutionsHandler) ListInstitutions(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
 
 	items, err := h.s.ListInstitutions(ctx, entityID)
 	if err != nil {
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 
 	views := make([]institutionView, len(items))
 	for i, item := range items {
 		views[i] = toInstitutionView(item)
 	}
-	out := &listInstitutionsOutput{}
-	out.Body = response.Single(views)
-	return out, nil
+	return c.JSON(http.StatusOK, response.Single(views))
 }
 
-func (h *InstitutionsHandler) GetInstitution(ctx context.Context, input *getInstitutionInput) (*getInstitutionOutput, error) {
+func (h *InstitutionsHandler) GetInstitution(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
+	id := c.Param("id")
 
-	item, err := h.s.GetInstitution(ctx, entityID, input.PathID)
+	item, err := h.s.GetInstitution(ctx, entityID, id)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, huma.Error404NotFound("not found")
+		return echo.NewHTTPError(http.StatusNotFound, "not found")
 	}
 	if err != nil {
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
-	out := &getInstitutionOutput{}
-	out.Body = response.Single(toInstitutionView(item))
-	return out, nil
+	return c.JSON(http.StatusOK, response.Single(toInstitutionView(item)))
 }
 
-func (h *InstitutionsHandler) CreateInstitution(ctx context.Context, input *createInstitutionInput) (*createInstitutionOutput, error) {
+func (h *InstitutionsHandler) CreateInstitution(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
+
+	var body struct {
+		InstitutionName      string             `json:"institution_name"`
+		SourceType           string             `json:"source_type"`
+		SettlementWindowDays *int               `json:"settlement_window_days"`
+		DedupWindowDays      *int               `json:"dedup_window_days"`
+		AmountTolerancePct   *float64           `json:"amount_tolerance_pct"`
+		MappingConfig        *mappingConfigBody `json:"mapping_config"`
+	}
+	if err := c.Bind(&body); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid body")
+	}
 
 	inst, err := institutionFromInput(entityID, struct {
 		InstitutionName      string
@@ -224,29 +159,41 @@ func (h *InstitutionsHandler) CreateInstitution(ctx context.Context, input *crea
 		AmountTolerancePct   *float64
 		MappingConfig        *mappingConfigBody
 	}{
-		input.Body.InstitutionName, input.Body.SourceType,
-		input.Body.SettlementWindowDays, input.Body.DedupWindowDays, input.Body.AmountTolerancePct,
-		input.Body.MappingConfig,
+		body.InstitutionName, body.SourceType,
+		body.SettlementWindowDays, body.DedupWindowDays, body.AmountTolerancePct,
+		body.MappingConfig,
 	})
 	if err != nil {
-		return nil, huma.Error422UnprocessableEntity(err.Error())
+		return echo.NewHTTPError(http.StatusUnprocessableEntity, err.Error())
 	}
 
 	item, err := h.s.CreateInstitution(ctx, entityID, inst)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return nil, huma.Error409Conflict("an institution with this name already exists")
+			return echo.NewHTTPError(http.StatusConflict, "an institution with this name already exists")
 		}
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
-	out := &createInstitutionOutput{}
-	out.Body = response.Single(toInstitutionView(item))
-	return out, nil
+	return c.JSON(http.StatusOK, response.Single(toInstitutionView(item)))
 }
 
-func (h *InstitutionsHandler) UpdateInstitution(ctx context.Context, input *updateInstitutionInput) (*updateInstitutionOutput, error) {
+func (h *InstitutionsHandler) UpdateInstitution(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
+	id := c.Param("id")
+
+	var body struct {
+		InstitutionName      string             `json:"institution_name"`
+		SourceType           string             `json:"source_type"`
+		SettlementWindowDays *int               `json:"settlement_window_days"`
+		DedupWindowDays      *int               `json:"dedup_window_days"`
+		AmountTolerancePct   *float64           `json:"amount_tolerance_pct"`
+		MappingConfig        *mappingConfigBody `json:"mapping_config"`
+	}
+	if err := c.Bind(&body); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid body")
+	}
 
 	inst, err := institutionFromInput(entityID, struct {
 		InstitutionName      string
@@ -256,49 +203,53 @@ func (h *InstitutionsHandler) UpdateInstitution(ctx context.Context, input *upda
 		AmountTolerancePct   *float64
 		MappingConfig        *mappingConfigBody
 	}{
-		input.Body.InstitutionName, input.Body.SourceType,
-		input.Body.SettlementWindowDays, input.Body.DedupWindowDays, input.Body.AmountTolerancePct,
-		input.Body.MappingConfig,
+		body.InstitutionName, body.SourceType,
+		body.SettlementWindowDays, body.DedupWindowDays, body.AmountTolerancePct,
+		body.MappingConfig,
 	})
 	if err != nil {
-		return nil, huma.Error422UnprocessableEntity(err.Error())
+		return echo.NewHTTPError(http.StatusUnprocessableEntity, err.Error())
 	}
 
-	item, err := h.s.UpdateInstitution(ctx, entityID, input.PathID, inst)
+	item, err := h.s.UpdateInstitution(ctx, entityID, id, inst)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, huma.Error404NotFound("not found")
+		return echo.NewHTTPError(http.StatusNotFound, "not found")
 	}
 	if err != nil {
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
-	out := &updateInstitutionOutput{}
-	out.Body = response.Single(toInstitutionView(item))
-	return out, nil
+	return c.JSON(http.StatusOK, response.Single(toInstitutionView(item)))
 }
 
-func (h *InstitutionsHandler) DeleteInstitution(ctx context.Context, input *deleteInstitutionInput) (*struct{}, error) {
+func (h *InstitutionsHandler) DeleteInstitution(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
+	id := c.Param("id")
 
-	err := h.s.DeleteInstitution(ctx, entityID, input.PathID)
+	err := h.s.DeleteInstitution(ctx, entityID, id)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, huma.Error404NotFound("not found")
+		return echo.NewHTTPError(http.StatusNotFound, "not found")
 	}
 	if err != nil {
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
-	return nil, nil
+	return c.NoContent(http.StatusNoContent)
 }
 
-func (h *InstitutionsHandler) ListInstitutionAccounts(ctx context.Context, input *listInstitutionAccountsInput) (*listInstitutionAccountsOutput, error) {
+func (h *InstitutionsHandler) ListInstitutionAccounts(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
-	limit := input.Limit
-	if limit == 0 {
-		limit = 50
+	institutionID := c.Param("id")
+	cursor := c.QueryParam("cursor")
+
+	limit := 50
+	if l, err := strconv.Atoi(c.QueryParam("limit")); err == nil && l > 0 {
+		limit = l
 	}
 
-	items, err := h.s.ListAccountsByInstitution(ctx, entityID, input.PathID, limit+1, input.Cursor)
+	items, err := h.s.ListAccountsByInstitution(ctx, entityID, institutionID, limit+1, cursor)
 	if err != nil {
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 
 	hasMore := len(items) > limit
@@ -308,116 +259,63 @@ func (h *InstitutionsHandler) ListInstitutionAccounts(ctx context.Context, input
 	var nextCursor *string
 	if hasMore && len(items) > 0 {
 		last := items[len(items)-1]
-		c := store.EncodeCursor(last.ID, last.CreatedAt)
-		nextCursor = &c
+		cur := store.EncodeCursor(last.ID, last.CreatedAt)
+		nextCursor = &cur
 	}
 
 	views := make([]accountView, len(items))
 	for i, item := range items {
 		views[i] = toAccountView(item)
 	}
-	out := &listInstitutionAccountsOutput{}
-	out.Body = response.Page(views, nextCursor, limit, hasMore)
-	return out, nil
+	return c.JSON(http.StatusOK, response.Page(views, nextCursor, limit, hasMore))
 }
 
-func (h *InstitutionsHandler) CreateInstitutionAccount(ctx context.Context, input *createInstitutionAccountInput) (*createInstitutionAccountOutput, error) {
+func (h *InstitutionsHandler) CreateInstitutionAccount(c echo.Context) error {
+	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
+	institutionID := c.Param("id")
 
-	institutionID := input.PathID
+	var body struct {
+		Name             string   `json:"name"`
+		AccountType      string   `json:"account_type"`
+		Status           string   `json:"status"`
+		InterestRate     *float64 `json:"interest_rate"`
+		BalanceCents     *int64   `json:"balance_cents"`
+		CreditLimitCents *int64   `json:"credit_limit_cents"`
+	}
+	if err := c.Bind(&body); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid body")
+	}
+
 	item, err := h.s.CreateAccount(ctx, entityID, store.Account{
 		InstitutionID:    &institutionID,
-		Name:             input.Body.Name,
-		AccountType:      input.Body.AccountType,
-		Status:           input.Body.Status,
-		InterestRate:     input.Body.InterestRate,
-		BalanceCents:     input.Body.BalanceCents,
-		CreditLimitCents: input.Body.CreditLimitCents,
+		Name:             body.Name,
+		AccountType:      body.AccountType,
+		Status:           body.Status,
+		InterestRate:     body.InterestRate,
+		BalanceCents:     body.BalanceCents,
+		CreditLimitCents: body.CreditLimitCents,
 	})
 	if err != nil {
-		return nil, huma.Error500InternalServerError("internal error")
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
-	out := &createInstitutionAccountOutput{}
-	out.Body = response.Single(toAccountView(item))
-	return out, nil
+	return c.JSON(http.StatusOK, response.Single(toAccountView(item)))
 }
 
-// RegisterInstitutionsRoutes registers institution endpoints on the given Huma API.
-func RegisterInstitutionsRoutes(api huma.API, s *store.Store, _ *queue.Publisher, perms middleware.PermissionCache) {
+// RegisterInstitutionsRoutes registers institution endpoints on the given Echo group.
+func RegisterInstitutionsRoutes(g *echo.Group, s *store.Store, perms middleware.PermissionCache) {
 	h := NewInstitutionsHandler(s)
 
-	huma.Register(api, huma.Operation{
-		OperationID: "get-field-registry",
-		Method:      http.MethodGet,
-		Path:        "/field-registry",
-		Summary:     "Get the static field registry for CSV layout schemas",
-		Tags:        []string{"institutions"},
-		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "accounts:read")},
-	}, func(ctx context.Context, _ *struct{}) (*fieldRegistryOutput, error) {
-		return &fieldRegistryOutput{Body: fieldregistry.Registry}, nil
-	})
+	read := g.Group("", middleware.RequirePermission(perms, "accounts:read"))
+	write := g.Group("", middleware.RequirePermission(perms, "accounts:write"))
 
-	huma.Register(api, huma.Operation{
-		OperationID: "list-institutions",
-		Method:      http.MethodGet,
-		Path:        "/institutions",
-		Summary:     "List institution mappings",
-		Tags:        []string{"institutions"},
-		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "accounts:read")},
-	}, h.ListInstitutions)
+	read.GET("/field-registry", h.GetFieldRegistry)
+	read.GET("/institutions", h.ListInstitutions)
+	read.GET("/institutions/:id", h.GetInstitution)
+	read.GET("/institutions/:id/accounts", h.ListInstitutionAccounts)
 
-	huma.Register(api, huma.Operation{
-		OperationID: "create-institution",
-		Method:      http.MethodPost,
-		Path:        "/institutions",
-		Summary:     "Create an institution mapping",
-		Tags:        []string{"institutions"},
-		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "accounts:write")},
-	}, h.CreateInstitution)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-institution",
-		Method:      http.MethodGet,
-		Path:        "/institutions/{id}",
-		Summary:     "Get an institution mapping",
-		Tags:        []string{"institutions"},
-		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "accounts:read")},
-	}, h.GetInstitution)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "update-institution",
-		Method:      http.MethodPut,
-		Path:        "/institutions/{id}",
-		Summary:     "Update an institution mapping",
-		Tags:        []string{"institutions"},
-		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "accounts:write")},
-	}, h.UpdateInstitution)
-
-	huma.Register(api, huma.Operation{
-		OperationID:   "delete-institution",
-		Method:        http.MethodDelete,
-		Path:          "/institutions/{id}",
-		Summary:       "Delete an institution mapping",
-		Tags:          []string{"institutions"},
-		DefaultStatus: http.StatusNoContent,
-		Middlewares:   huma.Middlewares{middleware.RequirePermission(perms, "accounts:write")},
-	}, h.DeleteInstitution)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "list-institution-accounts",
-		Method:      http.MethodGet,
-		Path:        "/institutions/{id}/accounts",
-		Summary:     "List accounts for an institution",
-		Tags:        []string{"institutions"},
-		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "accounts:read")},
-	}, h.ListInstitutionAccounts)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "create-institution-account",
-		Method:      http.MethodPost,
-		Path:        "/institutions/{id}/accounts",
-		Summary:     "Create an account under an institution",
-		Tags:        []string{"institutions"},
-		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "accounts:write")},
-	}, h.CreateInstitutionAccount)
+	write.POST("/institutions", h.CreateInstitution)
+	write.PUT("/institutions/:id", h.UpdateInstitution)
+	write.DELETE("/institutions/:id", h.DeleteInstitution)
+	write.POST("/institutions/:id/accounts", h.CreateInstitutionAccount)
 }

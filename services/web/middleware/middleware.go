@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/labstack/echo/v4"
 	"github.com/veloci/veloci/authclient"
 )
 
@@ -65,98 +66,93 @@ const SessionCookie = "veloci_session"
 // AuthenticateCookieOrRedirect reads the session cookie, validates the token, and
 // injects claims into context. Invalid or missing tokens clear the cookie and
 // redirect to /login?next=<original-path> — never returns JSON.
-func AuthenticateCookieOrRedirect(client *authclient.Client) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			loginURL := "/login?next=" + r.URL.RequestURI()
-			cookie, err := r.Cookie(SessionCookie)
+func AuthenticateCookieOrRedirect(client *authclient.Client) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			loginURL := "/login?next=" + c.Request().URL.RequestURI()
+			cookie, err := c.Cookie(SessionCookie)
 			if err != nil || cookie.Value == "" {
-				http.Redirect(w, r, loginURL, http.StatusFound)
-				return
+				return c.Redirect(http.StatusFound, loginURL)
 			}
-			req, ok := validateToken(client, cookie.Value, r)
+			req, ok := validateToken(client, cookie.Value, c.Request())
 			if !ok {
-				http.SetCookie(w, &http.Cookie{Name: SessionCookie, Value: "", Path: "/", MaxAge: -1})
-				http.SetCookie(w, &http.Cookie{Name: "veloci_refresh", Value: "", Path: "/api/session/refresh", MaxAge: -1})
-				http.Redirect(w, r, loginURL, http.StatusFound)
-				return
+				c.SetCookie(&http.Cookie{Name: SessionCookie, Value: "", Path: "/", MaxAge: -1})
+				c.SetCookie(&http.Cookie{Name: "veloci_refresh", Value: "", Path: "/api/session/refresh", MaxAge: -1})
+				return c.Redirect(http.StatusFound, loginURL)
 			}
-			next.ServeHTTP(w, req)
-		})
+			c.SetRequest(req)
+			return next(c)
+		}
 	}
 }
 
 // AuthenticateBearerOrCookie accepts a Bearer token OR the session cookie.
 // Returns JSON 401 on failure — suitable for same-origin JS fetch calls.
-func AuthenticateBearerOrCookie(client *authclient.Client) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func AuthenticateBearerOrCookie(client *authclient.Client) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
 			// Bearer token takes priority.
-			if header := r.Header.Get("Authorization"); strings.HasPrefix(header, "Bearer ") {
+			if header := c.Request().Header.Get("Authorization"); strings.HasPrefix(header, "Bearer ") {
 				token := strings.TrimPrefix(header, "Bearer ")
-				req, ok := validateToken(client, token, r)
+				req, ok := validateToken(client, token, c.Request())
 				if !ok {
-					http.Error(w, `{"code":"UNAUTHORIZED"}`, http.StatusUnauthorized)
-					return
+					return echo.NewHTTPError(http.StatusUnauthorized, `{"code":"UNAUTHORIZED"}`)
 				}
-				next.ServeHTTP(w, req)
-				return
+				c.SetRequest(req)
+				return next(c)
 			}
 			// Fall back to session cookie.
-			cookie, err := r.Cookie(SessionCookie)
+			cookie, err := c.Cookie(SessionCookie)
 			if err != nil || cookie.Value == "" {
-				http.Error(w, `{"code":"UNAUTHORIZED"}`, http.StatusUnauthorized)
-				return
+				return echo.NewHTTPError(http.StatusUnauthorized, `{"code":"UNAUTHORIZED"}`)
 			}
-			req, ok := validateToken(client, cookie.Value, r)
+			req, ok := validateToken(client, cookie.Value, c.Request())
 			if !ok {
-				http.Error(w, `{"code":"UNAUTHORIZED"}`, http.StatusUnauthorized)
-				return
+				return echo.NewHTTPError(http.StatusUnauthorized, `{"code":"UNAUTHORIZED"}`)
 			}
-			next.ServeHTTP(w, req)
-		})
+			c.SetRequest(req)
+			return next(c)
+		}
 	}
 }
 
 // Authenticate validates the Bearer token via veloci-auth /tokens/validate.
 // Only access tokens are accepted — invite tokens are rejected with 401.
 // Verified claims (entity_id, entity_role, system_role, sub) are injected into context.
-func Authenticate(client *authclient.Client) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			header := r.Header.Get("Authorization")
+func Authenticate(client *authclient.Client) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			header := c.Request().Header.Get("Authorization")
 			if !strings.HasPrefix(header, "Bearer ") {
-				http.Error(w, `{"code":"UNAUTHORIZED"}`, http.StatusUnauthorized)
-				return
+				return echo.NewHTTPError(http.StatusUnauthorized, `{"code":"UNAUTHORIZED"}`)
 			}
 			token := strings.TrimPrefix(header, "Bearer ")
-			req, ok := validateToken(client, token, r)
+			req, ok := validateToken(client, token, c.Request())
 			if !ok {
-				http.Error(w, `{"code":"UNAUTHORIZED"}`, http.StatusUnauthorized)
-				return
+				return echo.NewHTTPError(http.StatusUnauthorized, `{"code":"UNAUTHORIZED"}`)
 			}
-			next.ServeHTTP(w, req)
-		})
+			c.SetRequest(req)
+			return next(c)
+		}
 	}
 }
 
 // AuthenticateSSE validates a token passed as the ?token= query parameter.
 // Used exclusively for the SSE endpoint, which cannot send Authorization headers.
-func AuthenticateSSE(client *authclient.Client) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			token := r.URL.Query().Get("token")
+func AuthenticateSSE(client *authclient.Client) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			token := c.QueryParam("token")
 			if token == "" {
-				http.Error(w, `{"code":"UNAUTHORIZED"}`, http.StatusUnauthorized)
-				return
+				return echo.NewHTTPError(http.StatusUnauthorized, `{"code":"UNAUTHORIZED"}`)
 			}
-			req, ok := validateToken(client, token, r)
+			req, ok := validateToken(client, token, c.Request())
 			if !ok {
-				http.Error(w, `{"code":"UNAUTHORIZED"}`, http.StatusUnauthorized)
-				return
+				return echo.NewHTTPError(http.StatusUnauthorized, `{"code":"UNAUTHORIZED"}`)
 			}
-			next.ServeHTTP(w, req)
-		})
+			c.SetRequest(req)
+			return next(c)
+		}
 	}
 }
 
