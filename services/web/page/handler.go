@@ -375,6 +375,10 @@ func (s *Server) Ledger(w http.ResponseWriter, r *http.Request) {
 		entries, _ = s.store.ListEntries(ctx, entityID, store.DateRange{}, "", filter, 500, "")
 	}
 
+	for i := range entries {
+		entries[i].Conditions = s.store.EnrichConditions(ctx, entityID, entries[i].Conditions)
+	}
+
 	data := LedgerData{
 		Entries: entries,
 		Counts:  counts,
