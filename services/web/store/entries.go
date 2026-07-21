@@ -25,7 +25,7 @@ type EntryRow struct {
 	Priority            int             `db:"priority"`
 	Status              string          `db:"status"`
 	Source              string          `db:"source"`
-	RecurrenceAnchor    *time.Time      `db:"recurrence_anchor"`
+	RecurrenceAnchor    *string         `db:"recurrence_anchor"`
 	NextDueDate         *time.Time      `db:"next_due_date"`
 	ProjectTentatively  bool            `db:"project_tentatively"`
 	PendingAmountCents  *int64          `db:"pending_amount_cents"`
