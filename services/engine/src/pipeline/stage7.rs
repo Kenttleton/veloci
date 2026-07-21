@@ -28,7 +28,7 @@
 //! Determinism: uses `computed_as_of` as "today" — never `NOW()`.
 
 use anyhow::{Context, Result};
-use chrono::NaiveDate;
+use chrono::{Datelike, NaiveDate};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -43,13 +43,15 @@ const PROJECTION_DAYS: i64 = 90;
 
 #[derive(Debug, Clone)]
 struct EligibleEntry {
-    id:               Uuid,
-    account_id:       Option<Uuid>,
-    direction:        String,
-    period_days:      i32,
-    amount_cents:     i64,
-    recurrence_anchor: Option<String>,
-    next_due_date:    Option<NaiveDate>,
+    id:                     Uuid,
+    account_id:             Option<Uuid>,
+    direction:              String,
+    period_days:            i32,
+    /// Pre-computed projected rate in cents/day. Loaded from DB and used by
+    /// `rate_for_day`. Replaces the old `amount_cents / period_days` division.
+    projected_rate_per_day: f64,
+    recurrence_anchor:      Option<String>,
+    next_due_date:          Option<NaiveDate>,
 }
 
 #[derive(Debug)]
@@ -62,6 +64,232 @@ struct ProjectionRow {
     margin_rate_per_day:     i64,
     projected_balance_cents: i64,
     is_pinch_point:          bool,
+}
+
+// ---------------------------------------------------------------------------
+// Recurrence anchor parsing
+// ---------------------------------------------------------------------------
+
+/// Decoded form of a `recurrence_anchor` TEXT column value.
+#[derive(Debug, Clone)]
+enum RecurrenceAnchor {
+    /// `dom:N` or `dom:N,M,...` — day(s) of month; positive = 1-indexed from
+    /// start, negative = 1-indexed from end (`-1` = last day).
+    Dom(Vec<i32>),
+    /// `dow:N` — day of week; 0 = Monday … 6 = Sunday.
+    Dow(u32),
+    /// `interval:N` — every N days from `next_due_date`.
+    Interval(i64),
+}
+
+/// Parse a `recurrence_anchor` string into a typed `RecurrenceAnchor`.
+///
+/// Returns `None` for unrecognised or malformed strings.
+///
+/// # Examples
+///
+/// ```
+/// // "dom:15"    → Dom(vec![15])
+/// // "dom:-1"    → Dom(vec![-1])
+/// // "dom:15,-1" → Dom(vec![15, -1])
+/// // "dow:4"     → Dow(4)
+/// // "interval:14" → Interval(14)
+/// ```
+fn parse_anchor(s: &str) -> Option<RecurrenceAnchor> {
+    if let Some(rest) = s.strip_prefix("dom:") {
+        let days: Option<Vec<i32>> = rest
+            .split(',')
+            .map(|part| part.trim().parse::<i32>().ok())
+            .collect();
+        let days = days?;
+        if days.is_empty() {
+            return None;
+        }
+        return Some(RecurrenceAnchor::Dom(days));
+    }
+    if let Some(rest) = s.strip_prefix("dow:") {
+        let n: u32 = rest.trim().parse().ok()?;
+        return Some(RecurrenceAnchor::Dow(n));
+    }
+    if let Some(rest) = s.strip_prefix("interval:") {
+        let n: i64 = rest.trim().parse().ok()?;
+        return Some(RecurrenceAnchor::Interval(n));
+    }
+    None
+}
+
+// ---------------------------------------------------------------------------
+// Dom expansion helpers
+// ---------------------------------------------------------------------------
+
+/// Number of days in a given year/month.
+fn days_in_month(year: i32, month: u32) -> u32 {
+    let next = if month == 12 {
+        NaiveDate::from_ymd_opt(year + 1, 1, 1)
+    } else {
+        NaiveDate::from_ymd_opt(year, month + 1, 1)
+    }
+    .expect("valid date arithmetic");
+    let first = NaiveDate::from_ymd_opt(year, month, 1).expect("valid date arithmetic");
+    next.signed_duration_since(first).num_days() as u32
+}
+
+/// Resolve a dom anchor (positive = 1-indexed from start, negative = from end)
+/// to the concrete day-of-month for the given year and month.
+///
+/// Returns `None` when `anchor_day` is positive but exceeds the number of days
+/// in that month (e.g. `dom:31` in February).
+pub(crate) fn resolve_dom_day(anchor_day: i32, year: i32, month: u32) -> Option<u32> {
+    let dim = days_in_month(year, month) as i32;
+    if anchor_day > 0 {
+        if anchor_day <= dim { Some(anchor_day as u32) } else { None }
+    } else {
+        let resolved = dim + anchor_day + 1;
+        if resolved >= 1 { Some(resolved as u32) } else { None }
+    }
+}
+
+/// Expand all dom fire dates that fall within `[window_start, window_end]` for
+/// the given set of anchor days.
+///
+/// The result is sorted and deduplicated (two anchors could theoretically
+/// resolve to the same calendar day, though that is unusual).
+pub(crate) fn expand_dom_fires(
+    anchors: &[i32],
+    window_start: NaiveDate,
+    window_end: NaiveDate,
+) -> Vec<NaiveDate> {
+    let mut fires: Vec<NaiveDate> = Vec::new();
+
+    // Start one month before the window to ensure we capture fires whose
+    // influence extends into the window from before its start.
+    let (mut year, mut month) = {
+        let (y, m) = (window_start.year(), window_start.month());
+        if m == 1 { (y - 1, 12) } else { (y, m - 1) }
+    };
+
+    let (end_year, end_month) = (window_end.year(), window_end.month());
+
+    loop {
+        for &anchor in anchors {
+            if let Some(day) = resolve_dom_day(anchor, year, month) {
+                if let Some(date) = NaiveDate::from_ymd_opt(year, month, day) {
+                    if date >= window_start && date <= window_end {
+                        fires.push(date);
+                    }
+                }
+            }
+        }
+
+        if year > end_year || (year == end_year && month >= end_month) {
+            break;
+        }
+        if month == 12 {
+            year += 1;
+            month = 1;
+        } else {
+            month += 1;
+        }
+    }
+
+    fires.sort_unstable();
+    fires.dedup();
+    fires
+}
+
+// ---------------------------------------------------------------------------
+// Schedule window logic
+// ---------------------------------------------------------------------------
+
+/// Return `true` if day `D` falls within the active signal window of `entry`.
+///
+/// Dispatches on the parsed `recurrence_anchor`:
+/// - `dom:…`    — pre-expands fire dates for a ±45-day window and checks membership.
+/// - `dow:N`    — active on every occurrence of that weekday.
+/// - `interval:N` — active in `[fire, fire + N)` windows from `next_due_date`.
+/// - Unparseable anchor — treated as interval using `period_days`.
+/// - No anchor  — one-time window `[next_due, next_due + period_days)`.
+fn window_covers(entry: &EligibleEntry, day: NaiveDate, _computed_as_of: NaiveDate) -> bool {
+    let Some(next_due) = entry.next_due_date else {
+        return false;
+    };
+
+    let Some(ref anchor_str) = entry.recurrence_anchor else {
+        // Non-recurring: one window [next_due, next_due + period_days).
+        return day >= next_due
+            && day < next_due + chrono::Duration::days(i64::from(entry.period_days));
+    };
+
+    match parse_anchor(anchor_str) {
+        Some(RecurrenceAnchor::Dom(ref anchors)) => {
+            let window_start = day - chrono::Duration::days(45);
+            let window_end   = day + chrono::Duration::days(45);
+            let fires = expand_dom_fires(anchors, window_start, window_end);
+            is_day_in_dom_window(day, &fires)
+        }
+        Some(RecurrenceAnchor::Dow(weekday)) => {
+            day.weekday().num_days_from_monday() == weekday
+        }
+        Some(RecurrenceAnchor::Interval(n)) => {
+            if n == 0 { return false; }
+            let days_since_due = (day - next_due).num_days();
+            if days_since_due < 0 { return false; }
+            let cycle = days_since_due / n;
+            let fire_date = next_due + chrono::Duration::days(cycle * n);
+            day >= fire_date && day < fire_date + chrono::Duration::days(n)
+        }
+        None => {
+            // Unparseable anchor — fall back to period_days interval logic.
+            let period_days = i64::from(entry.period_days);
+            if period_days == 0 { return false; }
+            let days_since_due = (day - next_due).num_days();
+            if days_since_due < 0 { return false; }
+            let cycle = days_since_due / period_days;
+            let fire_date = next_due + chrono::Duration::days(cycle * period_days);
+            day >= fire_date && day < fire_date + chrono::Duration::days(period_days)
+        }
+    }
+}
+
+/// Return `true` if `day` falls within an active dom window.
+///
+/// Finds the last fire date ≤ day in the sorted `fires` slice. The signal is
+/// active from that fire date up to (but not including) the next fire date.
+/// When there is no next fire, a 45-day guard window is assumed.
+pub(crate) fn is_day_in_dom_window(day: NaiveDate, fires: &[NaiveDate]) -> bool {
+    // partition_point returns the index of the first element > day.
+    let pos = fires.partition_point(|&f| f <= day);
+    if pos == 0 {
+        return false;
+    }
+    let fire = fires[pos - 1];
+    if fire > day {
+        return false;
+    }
+    let next_fire = fires
+        .get(pos)
+        .copied()
+        .unwrap_or(fire + chrono::Duration::days(45));
+    day >= fire && day < next_fire
+}
+
+// ---------------------------------------------------------------------------
+// Rate computation
+// ---------------------------------------------------------------------------
+
+/// Compute the daily rate contribution for an entry (in cents).
+///
+/// For variable entries, prefers the actual rate from the most recent snapshot
+/// over the stored projected rate. For all others, returns
+/// `entry.projected_rate_per_day` as an integer (truncated).
+fn rate_for_day(
+    entry: &EligibleEntry,
+    snapshot_rates: &std::collections::HashMap<Uuid, f64>,
+) -> i64 {
+    if let Some(&rate) = snapshot_rates.get(&entry.id) {
+        return rate.abs() as i64;
+    }
+    entry.projected_rate_per_day.abs() as i64
 }
 
 // ---------------------------------------------------------------------------
@@ -159,13 +387,13 @@ fn project_account(
 
         let income_rate: i64 = entries
             .iter()
-            .filter(|e| e.direction == "income" && window_covers(e, day, computed_as_of, snapshot_rates))
+            .filter(|e| e.direction == "income" && window_covers(e, day, computed_as_of))
             .map(|e| rate_for_day(e, snapshot_rates))
             .sum();
 
         let commitment_rate: i64 = entries
             .iter()
-            .filter(|e| e.direction == "expense" && window_covers(e, day, computed_as_of, snapshot_rates))
+            .filter(|e| e.direction == "expense" && window_covers(e, day, computed_as_of))
             .map(|e| rate_for_day(e, snapshot_rates))
             .sum();
 
@@ -187,65 +415,6 @@ fn project_account(
     rows
 }
 
-/// Determine whether an entry's schedule window covers day D.
-///
-/// An entry's window covers day D when D falls within `[fire_date, fire_date + period_days)`.
-/// `next_due_date` is the phase anchor; `recurrence_anchor` determines periodicity.
-fn window_covers(
-    entry: &EligibleEntry,
-    day: NaiveDate,
-    _computed_as_of: NaiveDate,
-    _snapshot_rates: &std::collections::HashMap<Uuid, f64>,
-) -> bool {
-    // Entries without scheduling data don't contribute to the projection.
-    let Some(next_due) = entry.next_due_date else {
-        return false;
-    };
-
-    let period = chrono::Duration::days(i64::from(entry.period_days));
-
-    // Walk forward from next_due_date to find the fire date covering `day`.
-    // We need to check if `day` falls in [fire, fire + period) for any fire date.
-    // Efficient: find the fire date closest to `day`.
-    if entry.recurrence_anchor.is_some() {
-        // Recurring entry: compute fire_date = next_due + N * period_days such that
-        // fire_date <= day < fire_date + period.
-        let days_since_due = (day - next_due).num_days();
-        if days_since_due < 0 {
-            // `day` is before the first fire date — not yet scheduled.
-            return false;
-        }
-        let period_days = i64::from(entry.period_days);
-        if period_days == 0 {
-            return false;
-        }
-        let cycle = days_since_due / period_days;
-        let fire_date = next_due + chrono::Duration::days(cycle * period_days);
-        day >= fire_date && day < fire_date + period
-    } else {
-        // Non-recurring (hit/boost): one window starting at next_due.
-        day >= next_due && day < next_due + period
-    }
-}
-
-/// Compute the daily rate for an entry (in cents).
-///
-/// For variable entries, uses the actual_rate from the most recent snapshot.
-/// For all others, uses `amount_cents / period_days`.
-fn rate_for_day(
-    entry: &EligibleEntry,
-    snapshot_rates: &std::collections::HashMap<Uuid, f64>,
-) -> i64 {
-    if entry.period_days == 0 {
-        return 0;
-    }
-    // Check if there's a snapshot-derived rate (variable entries).
-    if let Some(&rate) = snapshot_rates.get(&entry.id) {
-        return rate.abs() as i64;
-    }
-    (entry.amount_cents.abs() / i64::from(entry.period_days)).max(0)
-}
-
 // ---------------------------------------------------------------------------
 // DB loaders
 // ---------------------------------------------------------------------------
@@ -253,17 +422,19 @@ fn rate_for_day(
 async fn load_eligible_entries(entity_id: Uuid, pool: &PgPool) -> Result<Vec<EligibleEntry>> {
     #[derive(sqlx::FromRow)]
     struct Row {
-        id:                Uuid,
-        direction:         String,
-        period_days:       i32,
-        recurrence_anchor: Option<String>,
-        next_due_date:     Option<NaiveDate>,
-        account_id:        Option<Uuid>,
+        id:                     Uuid,
+        direction:              String,
+        period_days:            i32,
+        recurrence_anchor:      Option<String>,
+        next_due_date:          Option<NaiveDate>,
+        projected_rate_per_day: Option<sqlx::types::BigDecimal>,
+        account_id:             Option<Uuid>,
     }
 
     let rows: Vec<Row> = sqlx::query_as(
         r#"
         SELECT e.id, e.direction, e.period_days, e.recurrence_anchor, e.next_due_date,
+               e.projected_rate_per_day,
                a.id AS account_id
         FROM entries e
         LEFT JOIN accounts a ON a.entity_id = e.entity_id AND a.status = 'active'
@@ -287,7 +458,11 @@ async fn load_eligible_entries(entity_id: Uuid, pool: &PgPool) -> Result<Vec<Eli
             account_id:        r.account_id,
             direction:         r.direction,
             period_days:       r.period_days,
-            amount_cents:      0,
+            projected_rate_per_day: r
+                .projected_rate_per_day
+                .as_ref()
+                .and_then(|bd| bd.to_string().parse::<f64>().ok())
+                .unwrap_or(0.0),
             recurrence_anchor: r.recurrence_anchor,
             next_due_date:     r.next_due_date,
         })
@@ -434,33 +609,334 @@ mod tests {
         NaiveDate::parse_from_str(s, "%Y-%m-%d").unwrap()
     }
 
+    /// Build an `EligibleEntry` for unit tests.
+    ///
+    /// `rate_cents_per_day` is the projected daily rate (already divided).
+    /// `anchor` is the optional anchor string (e.g. `"interval:30"`, `"dom:15"`).
     fn make_entry(
         id: &str,
         direction: &str,
         period_days: i32,
-        amount_cents: i64,
+        rate_cents_per_day: f64,
         next_due: Option<&str>,
-        recurrence: bool,
+        anchor: Option<&str>,
     ) -> EligibleEntry {
         EligibleEntry {
-            id:                Uuid::parse_str(id).unwrap_or(Uuid::nil()),
-            account_id:        None,
-            direction:         direction.to_string(),
+            id:                     Uuid::parse_str(id).unwrap_or(Uuid::nil()),
+            account_id:             None,
+            direction:              direction.to_string(),
             period_days,
-            amount_cents,
-            recurrence_anchor: if recurrence { Some("monthly".to_string()) } else { None },
-            next_due_date:     next_due.map(|s| date(s)),
+            projected_rate_per_day: rate_cents_per_day,
+            recurrence_anchor:      anchor.map(str::to_string),
+            next_due_date:          next_due.map(|s| date(s)),
         }
     }
 
     const ENTRY_1: &str = "00000000-0000-0000-0000-000000000001";
     const ENTRY_2: &str = "00000000-0000-0000-0000-000000000002";
 
-    // Spec §11: is_pinch_point = margin < 0
+    // ── parse_anchor ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn parse_anchor_dom_single_positive() {
+        let a = parse_anchor("dom:15").unwrap();
+        let RecurrenceAnchor::Dom(days) = a else { panic!("expected Dom") };
+        assert_eq!(days, vec![15]);
+    }
+
+    #[test]
+    fn parse_anchor_dom_single_negative() {
+        let a = parse_anchor("dom:-1").unwrap();
+        let RecurrenceAnchor::Dom(days) = a else { panic!("expected Dom") };
+        assert_eq!(days, vec![-1]);
+    }
+
+    #[test]
+    fn parse_anchor_dom_multi() {
+        let a = parse_anchor("dom:15,-1").unwrap();
+        let RecurrenceAnchor::Dom(days) = a else { panic!("expected Dom") };
+        assert_eq!(days, vec![15, -1]);
+    }
+
+    #[test]
+    fn parse_anchor_dow() {
+        let a = parse_anchor("dow:4").unwrap();
+        let RecurrenceAnchor::Dow(n) = a else { panic!("expected Dow") };
+        assert_eq!(n, 4);
+    }
+
+    #[test]
+    fn parse_anchor_interval() {
+        let a = parse_anchor("interval:14").unwrap();
+        let RecurrenceAnchor::Interval(n) = a else { panic!("expected Interval") };
+        assert_eq!(n, 14);
+    }
+
+    #[test]
+    fn parse_anchor_unknown_returns_none() {
+        assert!(parse_anchor("monthly").is_none());
+        assert!(parse_anchor("").is_none());
+        assert!(parse_anchor("dom:").is_none());
+    }
+
+    // ── resolve_dom_day ───────────────────────────────────────────────────────
+
+    #[test]
+    fn resolve_dom_day_positive_within_month() {
+        assert_eq!(resolve_dom_day(15, 2026, 2), Some(15));
+        assert_eq!(resolve_dom_day(28, 2026, 2), Some(28));
+    }
+
+    #[test]
+    fn resolve_dom_day_positive_exceeds_month() {
+        // dom:31 does not exist in February (28 days in 2026).
+        assert_eq!(resolve_dom_day(31, 2026, 2), None);
+        // dom:30 does not exist in February.
+        assert_eq!(resolve_dom_day(30, 2026, 2), None);
+    }
+
+    #[test]
+    fn resolve_dom_day_negative_last_day() {
+        // dom:-1 = last day of each month.
+        assert_eq!(resolve_dom_day(-1, 2026, 1), Some(31)); // January
+        assert_eq!(resolve_dom_day(-1, 2026, 2), Some(28)); // February (non-leap)
+        assert_eq!(resolve_dom_day(-1, 2026, 4), Some(30)); // April
+    }
+
+    #[test]
+    fn resolve_dom_day_negative_second_to_last() {
+        // dom:-2 = second-to-last day.
+        assert_eq!(resolve_dom_day(-2, 2026, 1), Some(30));
+        assert_eq!(resolve_dom_day(-2, 2026, 4), Some(29));
+    }
+
+    #[test]
+    fn resolve_dom_day_leap_year_feb() {
+        // 2028 is a leap year.
+        assert_eq!(resolve_dom_day(-1, 2028, 2), Some(29));
+        assert_eq!(resolve_dom_day(29, 2028, 2), Some(29));
+        assert_eq!(resolve_dom_day(29, 2026, 2), None); // non-leap
+    }
+
+    // ── expand_dom_fires ──────────────────────────────────────────────────────
+
+    #[test]
+    fn expand_dom_fires_monthly_15th() {
+        let fires = expand_dom_fires(
+            &[15],
+            date("2026-01-01"),
+            date("2026-04-30"),
+        );
+        assert_eq!(fires, vec![
+            date("2026-01-15"),
+            date("2026-02-15"),
+            date("2026-03-15"),
+            date("2026-04-15"),
+        ]);
+    }
+
+    #[test]
+    fn expand_dom_fires_last_day_skips_short_months_correctly() {
+        // dom:31 — only months with 31 days should produce a fire.
+        let fires = expand_dom_fires(
+            &[31],
+            date("2026-01-01"),
+            date("2026-06-30"),
+        );
+        // Jan, Mar, May have 31 days; Feb, Apr, Jun do not.
+        assert_eq!(fires, vec![
+            date("2026-01-31"),
+            date("2026-03-31"),
+            date("2026-05-31"),
+        ]);
+    }
+
+    #[test]
+    fn expand_dom_fires_negative_last_day_all_months() {
+        // dom:-1 fires on the last day of every month.
+        let fires = expand_dom_fires(
+            &[-1],
+            date("2026-01-01"),
+            date("2026-04-30"),
+        );
+        assert_eq!(fires, vec![
+            date("2026-01-31"),
+            date("2026-02-28"), // non-leap 2026
+            date("2026-03-31"),
+            date("2026-04-30"),
+        ]);
+    }
+
+    #[test]
+    fn expand_dom_fires_semi_monthly_15_and_last() {
+        // dom:15,-1
+        let fires = expand_dom_fires(
+            &[15, -1],
+            date("2026-01-01"),
+            date("2026-02-28"),
+        );
+        assert_eq!(fires, vec![
+            date("2026-01-15"),
+            date("2026-01-31"),
+            date("2026-02-15"),
+            date("2026-02-28"),
+        ]);
+    }
+
+    #[test]
+    fn expand_dom_fires_feb_29_in_leap_year() {
+        let fires = expand_dom_fires(
+            &[29],
+            date("2028-02-01"),
+            date("2028-03-31"),
+        );
+        assert_eq!(fires, vec![date("2028-02-29"), date("2028-03-29")]);
+    }
+
+    // ── is_day_in_dom_window ──────────────────────────────────────────────────
+
+    #[test]
+    fn is_day_in_dom_window_on_fire_date() {
+        let fires = vec![date("2026-01-15"), date("2026-02-15")];
+        assert!(is_day_in_dom_window(date("2026-01-15"), &fires));
+    }
+
+    #[test]
+    fn is_day_in_dom_window_between_fires() {
+        let fires = vec![date("2026-01-15"), date("2026-02-15")];
+        // Jan 20 is after Jan 15 and before Feb 15 → active.
+        assert!(is_day_in_dom_window(date("2026-01-20"), &fires));
+    }
+
+    #[test]
+    fn is_day_in_dom_window_on_next_fire_is_false() {
+        let fires = vec![date("2026-01-15"), date("2026-02-15")];
+        // Feb 15 starts the next window, so it belongs to the Feb window not Jan.
+        assert!(is_day_in_dom_window(date("2026-02-15"), &fires));
+        // Feb 14 is in Jan window (last day before Feb fire).
+        assert!(is_day_in_dom_window(date("2026-02-14"), &fires));
+    }
+
+    #[test]
+    fn is_day_in_dom_window_before_first_fire() {
+        let fires = vec![date("2026-01-15"), date("2026-02-15")];
+        assert!(!is_day_in_dom_window(date("2026-01-14"), &fires));
+    }
+
+    #[test]
+    fn is_day_in_dom_window_empty_fires() {
+        assert!(!is_day_in_dom_window(date("2026-01-15"), &[]));
+    }
+
+    #[test]
+    fn is_day_in_dom_window_after_last_fire_uses_guard() {
+        // Single fire — after the fire, uses 45-day guard window.
+        let fires = vec![date("2026-01-15")];
+        assert!(is_day_in_dom_window(date("2026-01-20"), &fires));
+        // 45 days after Jan 15 is Mar 1; day 46 (Mar 2) should be outside.
+        assert!(is_day_in_dom_window(date("2026-02-28"), &fires));
+        assert!(!is_day_in_dom_window(date("2026-03-02"), &fires));
+    }
+
+    // ── window_covers ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn window_covers_no_next_due_returns_false() {
+        let r = make_entry(ENTRY_1, "income", 30, 10_000.0, None, Some("interval:30"));
+        assert!(!window_covers(&r, date("2026-03-15"), date("2026-03-01")));
+    }
+
+    #[test]
+    fn window_covers_non_recurring() {
+        let r = make_entry(ENTRY_1, "income", 10, 10_000.0, Some("2026-03-05"), None);
+        // Days 5–14 should be covered.
+        assert!( window_covers(&r, date("2026-03-05"), date("2026-03-01")));
+        assert!( window_covers(&r, date("2026-03-14"), date("2026-03-01")));
+        // Day 15 is outside.
+        assert!(!window_covers(&r, date("2026-03-15"), date("2026-03-01")));
+        // Day 4 is before fire date.
+        assert!(!window_covers(&r, date("2026-03-04"), date("2026-03-01")));
+    }
+
+    #[test]
+    fn window_covers_interval_recurring_multiple_cycles() {
+        // Monthly entry: interval:30 from 2026-03-01.
+        let r = make_entry(ENTRY_1, "income", 30, 10_000.0, Some("2026-03-01"), Some("interval:30"));
+        // Cycle 0: March 1–30
+        assert!(window_covers(&r, date("2026-03-01"), date("2026-03-01")));
+        assert!(window_covers(&r, date("2026-03-30"), date("2026-03-01")));
+        // Cycle 1: March 31 – April 29
+        assert!(window_covers(&r, date("2026-03-31"), date("2026-03-01")));
+        assert!(window_covers(&r, date("2026-04-29"), date("2026-03-01")));
+    }
+
+    #[test]
+    fn window_covers_dom_anchor() {
+        // dom:15 — active from the 15th of each month until the next 15th.
+        // The ±45-day expansion always finds a prior fire, so a dom entry is
+        // active on any day D ≥ first_ever_fire.
+        let r = make_entry(ENTRY_1, "income", 30, 10_000.0, Some("2026-01-15"), Some("dom:15"));
+        // Jan 15 is the fire date itself — covered.
+        assert!(window_covers(&r, date("2026-01-15"), date("2026-01-01")));
+        // Jan 20 is within the [Jan 15, Feb 15) window — covered.
+        assert!(window_covers(&r, date("2026-01-20"), date("2026-01-01")));
+        // Feb 14 is the last day of [Jan 15, Feb 15) — covered.
+        assert!(window_covers(&r, date("2026-02-14"), date("2026-01-01")));
+        // Feb 15 starts the [Feb 15, Mar 15) window — covered.
+        assert!(window_covers(&r, date("2026-02-15"), date("2026-01-01")));
+        // Jan 14 falls in the [Dec 15, Jan 15) window of the prior cycle — covered.
+        assert!(window_covers(&r, date("2026-01-14"), date("2026-01-01")));
+        // A dom entry without next_due_date is never active.
+        let r_no_due = make_entry(ENTRY_2, "income", 30, 10_000.0, None, Some("dom:15"));
+        assert!(!window_covers(&r_no_due, date("2026-01-15"), date("2026-01-01")));
+    }
+
+    #[test]
+    fn window_covers_dow_anchor_fires_on_correct_weekday() {
+        // dow:0 = every Monday.
+        let r = make_entry(ENTRY_1, "income", 7, 1_000.0, Some("2026-07-06"), Some("dow:0"));
+        // 2026-07-06 is a Monday.
+        assert!( window_covers(&r, date("2026-07-06"), date("2026-07-01")));
+        assert!( window_covers(&r, date("2026-07-13"), date("2026-07-01")));
+        // Tuesdays are not active.
+        assert!(!window_covers(&r, date("2026-07-07"), date("2026-07-01")));
+        assert!(!window_covers(&r, date("2026-07-14"), date("2026-07-01")));
+    }
+
+    #[test]
+    fn window_covers_unknown_anchor_falls_back_to_period_days() {
+        // Anchor "monthly" is unparseable; falls back to period_days = 30.
+        let r = make_entry(ENTRY_1, "income", 30, 10_000.0, Some("2026-03-01"), Some("monthly"));
+        // Same interval-like behaviour as period_days.
+        assert!(window_covers(&r, date("2026-03-01"), date("2026-03-01")));
+        assert!(window_covers(&r, date("2026-03-30"), date("2026-03-01")));
+        assert!(window_covers(&r, date("2026-03-31"), date("2026-03-01")));
+    }
+
+    // ── rate_for_day ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn rate_for_day_uses_projected_rate() {
+        let r = make_entry(ENTRY_1, "income", 30, 10_000.0, Some("2026-03-01"), None);
+        let rates = std::collections::HashMap::new();
+        assert_eq!(rate_for_day(&r, &rates), 10_000);
+    }
+
+    #[test]
+    fn rate_for_day_prefers_snapshot_rate() {
+        let r = make_entry(ENTRY_1, "income", 30, 10_000.0, Some("2026-03-01"), None);
+        let id = Uuid::parse_str(ENTRY_1).unwrap();
+        let mut rates = std::collections::HashMap::new();
+        rates.insert(id, 15_000.0_f64);
+        assert_eq!(rate_for_day(&r, &rates), 15_000);
+    }
+
+    // ── project_account integration ───────────────────────────────────────────
+
     #[test]
     fn pinch_point_when_commitments_exceed_income() {
-        let income = make_entry(ENTRY_1, "income", 30, 300_000, Some("2026-03-01"), true);   // $100/day
-        let expense = make_entry(ENTRY_2, "expense", 30, 600_000, Some("2026-03-01"), true); // $200/day
+        let income  = make_entry(ENTRY_1, "income",  30, 10_000.0, Some("2026-03-01"), Some("interval:30"));
+        let expense = make_entry(ENTRY_2, "expense", 30, 20_000.0, Some("2026-03-01"), Some("interval:30"));
         let rates = std::collections::HashMap::new();
         let rows = project_account(
             Uuid::nil(),
@@ -470,15 +946,14 @@ mod tests {
             date("2026-03-01"),
             &rates,
         );
-        // Income < commitments → all days are pinch points.
         assert!(rows[0].is_pinch_point, "should be a pinch point");
         assert!(rows[0].margin_rate_per_day < 0, "margin should be negative");
     }
 
     #[test]
     fn no_pinch_point_when_income_exceeds_commitments() {
-        let income = make_entry(ENTRY_1, "income", 30, 600_000, Some("2026-03-01"), true);   // $200/day
-        let expense = make_entry(ENTRY_2, "expense", 30, 300_000, Some("2026-03-01"), true); // $100/day
+        let income  = make_entry(ENTRY_1, "income",  30, 20_000.0, Some("2026-03-01"), Some("interval:30"));
+        let expense = make_entry(ENTRY_2, "expense", 30, 10_000.0, Some("2026-03-01"), Some("interval:30"));
         let rates = std::collections::HashMap::new();
         let rows = project_account(
             Uuid::nil(),
@@ -492,10 +967,9 @@ mod tests {
         assert!(rows[0].margin_rate_per_day > 0);
     }
 
-    // Spec §11: projection horizon is 90 days
     #[test]
     fn projection_covers_ninety_days() {
-        let income = make_entry(ENTRY_1, "income", 30, 300_000, Some("2026-03-01"), true);
+        let income = make_entry(ENTRY_1, "income", 30, 10_000.0, Some("2026-03-01"), Some("interval:30"));
         let rates = std::collections::HashMap::new();
         let rows = project_account(
             Uuid::nil(),
@@ -508,10 +982,9 @@ mod tests {
         assert_eq!(rows.len() as i64, PROJECTION_DAYS + 1, "should have 91 rows (0..=90)");
     }
 
-    // Spec §11: uses computed_as_of — never NOW()
     #[test]
     fn projection_starts_at_computed_as_of() {
-        let income = make_entry(ENTRY_1, "income", 30, 300_000, Some("2026-03-01"), true);
+        let income = make_entry(ENTRY_1, "income", 30, 10_000.0, Some("2026-03-01"), Some("interval:30"));
         let rates = std::collections::HashMap::new();
         let computed_as_of = date("2026-03-01");
         let rows = project_account(
@@ -525,46 +998,9 @@ mod tests {
         assert_eq!(rows[0].projected_date, computed_as_of, "first row must be at computed_as_of");
     }
 
-    // window_covers: entry with no next_due_date never fires
-    #[test]
-    fn window_covers_no_next_due_returns_false() {
-        let r = make_entry(ENTRY_1, "income", 30, 300_000, None, true);
-        let rates = std::collections::HashMap::new();
-        assert!(!window_covers(&r, date("2026-03-15"), date("2026-03-01"), &rates));
-    }
-
-    // Non-recurring entry fires once in its window.
-    #[test]
-    fn window_covers_non_recurring() {
-        let r = make_entry(ENTRY_1, "income", 10, 100_000, Some("2026-03-05"), false);
-        let rates = std::collections::HashMap::new();
-        // Day 5–14 should be covered.
-        assert!(window_covers(&r, date("2026-03-05"), date("2026-03-01"), &rates));
-        assert!(window_covers(&r, date("2026-03-14"), date("2026-03-01"), &rates));
-        // Day 15 is outside.
-        assert!(!window_covers(&r, date("2026-03-15"), date("2026-03-01"), &rates));
-        // Day 4 is before fire date.
-        assert!(!window_covers(&r, date("2026-03-04"), date("2026-03-01"), &rates));
-    }
-
-    // Recurring entry fires in multiple cycles.
-    #[test]
-    fn window_covers_recurring_multiple_cycles() {
-        // Monthly entry: fires on day 1 of each month window.
-        let r = make_entry(ENTRY_1, "income", 30, 300_000, Some("2026-03-01"), true);
-        let rates = std::collections::HashMap::new();
-        // Cycle 0: March 1–30
-        assert!(window_covers(&r, date("2026-03-01"), date("2026-03-01"), &rates));
-        assert!(window_covers(&r, date("2026-03-30"), date("2026-03-01"), &rates));
-        // Cycle 1: March 31 – April 29
-        assert!(window_covers(&r, date("2026-03-31"), date("2026-03-01"), &rates));
-        assert!(window_covers(&r, date("2026-04-29"), date("2026-03-01"), &rates));
-    }
-
-    // Balance accumulates correctly.
     #[test]
     fn balance_accumulates_from_start_balance() {
-        let income = make_entry(ENTRY_1, "income", 30, 300_000, Some("2026-03-01"), true); // 10000/day
+        let income = make_entry(ENTRY_1, "income", 30, 10_000.0, Some("2026-03-01"), Some("interval:30"));
         let rates = std::collections::HashMap::new();
         let rows = project_account(
             Uuid::nil(),
@@ -574,7 +1010,6 @@ mod tests {
             date("2026-03-01"),
             &rates,
         );
-        // Each day adds income rate cents.
         assert!(rows[0].projected_balance_cents > 1_000_000, "balance should increase with income");
     }
 }
