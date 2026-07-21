@@ -42,6 +42,8 @@ html, body {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  /* Reserve space so fixed user-menu (right:16px, 32px wide) never overlaps content */
+  padding-right: 56px;
 }
 
 /* ─── Sidebar ───────────────────────────────────────────────────────────── */

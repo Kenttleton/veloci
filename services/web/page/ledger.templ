@@ -81,6 +81,95 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 				}
 			</div>
 		</div>
+		<!-- Add Entry Dialog — must appear before the script so getElementById finds it -->
+		<dialog
+			id="add-entry-dialog"
+			style="border:1px solid var(--border);border-radius:8px;padding:0;background:var(--surface);color:var(--text);max-width:480px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.3)"
+		>
+			<div style="display:flex;align-items:center;padding:14px 18px;border-bottom:1px solid var(--border)">
+				<span style="font-size:14px;font-weight:700;flex:1">Add Entry</span>
+				<button id="add-entry-close" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--text3);line-height:1;padding:2px 6px">&times;</button>
+			</div>
+			<div style="padding:16px 18px;display:grid;gap:12px">
+				<div>
+					<label style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">Label</label>
+					<input
+						id="ae-label"
+						type="text"
+						placeholder="e.g. Rent"
+						style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit"
+					/>
+				</div>
+				<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+					<div>
+						<label style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">Direction</label>
+						<select
+							id="ae-direction"
+							style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit"
+						>
+							<option value="">— select —</option>
+							<option value="expense">Expense</option>
+							<option value="income">Income</option>
+						</select>
+					</div>
+					<div>
+						<label style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">Type</label>
+						<select
+							id="ae-type"
+							style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit"
+						>
+							<option value="">— select —</option>
+							<option value="standing">Standing</option>
+							<option value="variable">Variable</option>
+							<option value="irregular">Irregular</option>
+						</select>
+					</div>
+				</div>
+				<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+					<div>
+						<label style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">Projected $/mo <span style="font-weight:400;color:var(--text3)">(optional)</span></label>
+						<input
+							id="ae-rate"
+							type="number"
+							min="0"
+							step="0.01"
+							placeholder="e.g. 1500"
+							style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit"
+						/>
+					</div>
+					<div>
+						<label style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">Start date</label>
+						<input
+							id="ae-start-date"
+							type="date"
+							style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit"
+						/>
+					</div>
+				</div>
+				<div>
+					<label style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">
+						Conditions JSON <span style="font-weight:400;color:var(--text3)">(optional — you can add via the editor after saving)</span>
+					</label>
+					<textarea
+						id="ae-conditions"
+						rows="4"
+						placeholder="{}"
+						style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:12px;color:var(--text);font-family:monospace;resize:vertical"
+					></textarea>
+				</div>
+				<div id="add-entry-error" style="font-size:12px;color:var(--commit);min-height:16px"></div>
+			</div>
+			<div style="display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--border)">
+				<button
+					id="add-entry-cancel"
+					style="background:none;border:1px solid var(--border);border-radius:5px;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit"
+				>Cancel</button>
+				<button
+					id="add-entry-save"
+					style="background:var(--accent);border:none;border-radius:5px;padding:6px 16px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit"
+				>Save</button>
+			</div>
+		</dialog>
 		<script>
 			(function() {
 				// ── Dirty state ───────────────────────────────────────────────────────────
@@ -413,95 +502,6 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 			})();
 		</script>
 		<script type="module" src="/static/js/conditions-editor.js"></script>
-		<!-- Add Entry Dialog -->
-		<dialog
-			id="add-entry-dialog"
-			style="border:1px solid var(--border);border-radius:8px;padding:0;background:var(--surface);color:var(--text);max-width:480px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.3)"
-		>
-			<div style="display:flex;align-items:center;padding:14px 18px;border-bottom:1px solid var(--border)">
-				<span style="font-size:14px;font-weight:700;flex:1">Add Entry</span>
-				<button id="add-entry-close" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--text3);line-height:1;padding:2px 6px">&times;</button>
-			</div>
-			<div style="padding:16px 18px;display:grid;gap:12px">
-				<div>
-					<label style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">Label</label>
-					<input
-						id="ae-label"
-						type="text"
-						placeholder="e.g. Rent"
-						style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit"
-					/>
-				</div>
-				<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-					<div>
-						<label style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">Direction</label>
-						<select
-							id="ae-direction"
-							style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit"
-						>
-							<option value="">— select —</option>
-							<option value="expense">Expense</option>
-							<option value="income">Income</option>
-						</select>
-					</div>
-					<div>
-						<label style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">Type</label>
-						<select
-							id="ae-type"
-							style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit"
-						>
-							<option value="">— select —</option>
-							<option value="standing">Standing</option>
-							<option value="variable">Variable</option>
-							<option value="irregular">Irregular</option>
-						</select>
-					</div>
-				</div>
-				<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-					<div>
-						<label style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">Projected $/mo <span style="font-weight:400;color:var(--text3)">(optional)</span></label>
-						<input
-							id="ae-rate"
-							type="number"
-							min="0"
-							step="0.01"
-							placeholder="e.g. 1500"
-							style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit"
-						/>
-					</div>
-					<div>
-						<label style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">Start date</label>
-						<input
-							id="ae-start-date"
-							type="date"
-							style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit"
-						/>
-					</div>
-				</div>
-				<div>
-					<label style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">
-						Conditions JSON <span style="font-weight:400;color:var(--text3)">(optional — you can add via the editor after saving)</span>
-					</label>
-					<textarea
-						id="ae-conditions"
-						rows="4"
-						placeholder="{}"
-						style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:12px;color:var(--text);font-family:monospace;resize:vertical"
-					></textarea>
-				</div>
-				<div id="add-entry-error" style="font-size:12px;color:var(--commit);min-height:16px"></div>
-			</div>
-			<div style="display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--border)">
-				<button
-					id="add-entry-cancel"
-					style="background:none;border:1px solid var(--border);border-radius:5px;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit"
-				>Cancel</button>
-				<button
-					id="add-entry-save"
-					style="background:var(--accent);border:none;border-radius:5px;padding:6px 16px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit"
-				>Save</button>
-			</div>
-		</dialog>
 	}
 }
 
