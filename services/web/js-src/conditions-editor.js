@@ -1,7 +1,7 @@
 import { EditorView, keymap } from "@codemirror/view"
 import { EditorState } from "@codemirror/state"
 import { json } from "@codemirror/lang-json"
-import { autocompletion, snippet, startCompletion } from "@codemirror/autocomplete"
+import { autocompletion, snippet, closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete"
 import { syntaxTree, HighlightStyle, syntaxHighlighting } from "@codemirror/language"
 import { tags } from "@lezer/highlight"
 import { linter, lintGutter } from "@codemirror/lint"
@@ -112,9 +112,10 @@ function getJsonContext(state, pos) {
     return raw.startsWith('"') ? raw.slice(1, raw.endsWith('"') ? -1 : undefined) : raw
   }
 
-  // resolveInner(pos, -1) finds the node ending at or before pos — this
-  // correctly lands inside a String node while the user is typing.
-  let cur = tree.resolveInner(pos, -1)
+  // resolveInner(pos, 0) finds the deepest node containing pos — works for
+  // both incomplete strings (no closing ") and complete ones (closing " is
+  // after pos, so the node doesn't end at pos and bias -1 would miss it).
+  let cur = tree.resolveInner(pos, 0)
 
   while (cur) {
     if (cur.name === "String") {
@@ -221,9 +222,10 @@ function contextKeyCompleter(context) {
 
   if (!options.length) return null
 
-  // validFor keeps the completion list active while the user continues typing
-  // inside the opening-quoted key string (no closing quote yet).
-  return { from: node.from, options, filter: false, validFor: /^"[^"]*$/ }
+  // from/to span the entire key string (including both quotes) so applying a
+  // completion replaces the whole key rather than leaving a stray closing ".
+  // validFor keeps the list alive while the cursor stays inside the string.
+  return { from: node.from, to: node.to, options, filter: false, validFor: /^"[^"]*/ }
 }
 
 // ── Value completer ────────────────────────────────────────────────────────
@@ -558,19 +560,39 @@ const velociTheme = EditorView.theme({
   },
 })
 
-// ── Delete-triggered autocomplete ─────────────────────────────────────────
-// activateOnTyping only fires on "input" events; backspace/delete are "delete"
-// events. This listener re-triggers completion after any deletion while the
-// cursor is inside a key string so partial keys still show suggestions.
+// ── Structure completer ────────────────────────────────────────────────────
+// Fires in non-string positions after logic combinator keys.
+// Suggests the expected array/object structure so the user doesn't have to
+// remember which combinators take arrays vs objects.
 
-function makeDeleteAutocompleteTrigger() {
-  return EditorView.updateListener.of((update) => {
-    if (!update.docChanged) return
-    if (!update.transactions.some(tr => tr.isUserEvent("delete"))) return
-    const pos = update.state.selection.main.head
-    const ctx = getJsonContext(update.state, pos)
-    if (ctx?.type === "key") startCompletion(update.view)
-  })
+function structureCompleter(context) {
+  const andOr = context.matchBefore(/"(and|or)"\s*:\s*/)
+  if (andOr) {
+    return {
+      from: context.pos,
+      options: [{
+        label: "[ … ]",
+        detail: "array of condition objects",
+        type: "keyword",
+        apply: snippet("[\n  {${}}\n]"),
+      }],
+    }
+  }
+
+  const not = context.matchBefore(/"not"\s*:\s*/)
+  if (not) {
+    return {
+      from: context.pos,
+      options: [{
+        label: "{ … }",
+        detail: "single condition object",
+        type: "keyword",
+        apply: snippet("{${}}"),
+      }],
+    }
+  }
+
+  return null
 }
 
 // ── Init ───────────────────────────────────────────────────────────────────
@@ -603,17 +625,17 @@ function initEditor(textarea) {
       doc: textarea.value,
       extensions: [
         history(),
-        keymap.of([...defaultKeymap, ...historyKeymap]),
+        closeBrackets(),
+        keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...historyKeymap]),
         json(),
         syntaxHighlighting(velociHighlightStyle),
         autocompletion({
-          override: [contextKeyCompleter, valueCompleter],
+          override: [contextKeyCompleter, valueCompleter, structureCompleter],
           activateOnTyping: true,
         }),
         lintGutter(),
         linter(conditionsLinter, { delay: 600 }),
         EditorView.lineWrapping,
-        makeDeleteAutocompleteTrigger(),
         makeSaveExtension(entryId, indicator),
         makeSummaryUpdater(summaryDiv),
         velociTheme,
