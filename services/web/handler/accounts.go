@@ -53,8 +53,9 @@ func toAccountView(a store.Account) accountView {
 }
 
 type listAccountsInput struct {
-	Cursor string `query:"cursor"`
-	Limit  int    `query:"limit" default:"200" minimum:"1" maximum:"200"`
+	Cursor        string `query:"cursor"`
+	Limit         int    `query:"limit" default:"200" minimum:"1" maximum:"200"`
+	InstitutionID string `query:"institution_id" required:"false"`
 }
 
 type listAccountsOutput struct {

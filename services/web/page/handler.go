@@ -835,14 +835,17 @@ func txnAmountStyle(cents int64) string {
 	return "color:var(--commit);font-variant-numeric:tabular-nums"
 }
 
+// InstitutionWithAccounts pairs an institution with the accounts that use it.
+type InstitutionWithAccounts struct {
+	store.Institution
+	Accounts []store.Account
+}
+
 // ConfigurationData is passed to the Configuration page template.
-// The canonical merchants tab and CanonicalMerchants field have been removed
-// per the conditions refactor (2026-07-21): merchant matching is now handled
-// by entry conditions, not a separate canonical_merchants table.
 type ConfigurationData struct {
 	Tab          string
 	Labels       []store.LabelWithCount
-	Institutions []store.Institution
+	Institutions []InstitutionWithAccounts
 }
 
 func (s *Server) Configuration(w http.ResponseWriter, r *http.Request) {
@@ -850,7 +853,6 @@ func (s *Server) Configuration(w http.ResponseWriter, r *http.Request) {
 	entityID := middleware.EntityID(ctx)
 
 	tab := r.URL.Query().Get("tab")
-	// "merchants" tab is removed; redirect old bookmarks to labels.
 	if tab == "" || tab == "merchants" {
 		tab = "labels"
 	}
@@ -858,7 +860,14 @@ func (s *Server) Configuration(w http.ResponseWriter, r *http.Request) {
 	data := ConfigurationData{Tab: tab}
 	switch tab {
 	case "institutions":
-		data.Institutions, _ = s.store.ListInstitutions(ctx, entityID)
+		insts, _ := s.store.ListInstitutions(ctx, entityID)
+		for _, inst := range insts {
+			accounts, _ := s.store.ListAccountsByInstitution(ctx, entityID, inst.ID, 200, "")
+			data.Institutions = append(data.Institutions, InstitutionWithAccounts{
+				Institution: inst,
+				Accounts:    accounts,
+			})
+		}
 	default:
 		data.Labels, _ = s.store.ListLabelsWithEntryCount(ctx, entityID)
 	}

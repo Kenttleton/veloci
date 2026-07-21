@@ -331,43 +331,6 @@ templ ConfigurationPage(shell ShellData, data ConfigurationData) {
 					}
 				});
 
-				// ── Institution accounts ("where used") ───────────────────────────────────
-				// Spec gap: no /api/accounts?institution_id=<id> endpoint.
-				// We fetch all accounts and filter client-side.
-
-				var _accountsCache = null;
-
-				document.addEventListener('toggle', function(e) {
-					var det = e.target;
-					if (!det.dataset.instId || !det.open) return;
-					var accountsDiv = det.querySelector('.js-inst-accounts');
-					if (!accountsDiv || accountsDiv.dataset.loaded) return;
-					accountsDiv.dataset.loaded = '1';
-					loadInstAccounts(det.dataset.instId, accountsDiv);
-				}, true);
-
-				function loadInstAccounts(instId, container) {
-					function renderAccounts() {
-						var filtered = (_accountsCache || []).filter(function(a) { return a.institution_id === instId; });
-						if (!filtered.length) {
-							container.innerHTML = '<span style="color:var(--text3);font-size:12px">No accounts linked to this institution.</span>';
-							return;
-						}
-						container.innerHTML = filtered.map(function(a) {
-							return '<a href="/accounts/' + escHtml(a.id) + '" style="display:block;font-size:12px;color:var(--accent);text-decoration:none;padding:1px 0">' + escHtml(a.name) + '</a>';
-						}).join('');
-					}
-					if (_accountsCache !== null) { renderAccounts(); return; }
-					fetch('/api/accounts?limit=200', { credentials: 'same-origin' })
-						.then(function(r) { return r.json(); })
-						.then(function(env) {
-							_accountsCache = env.data || [];
-							renderAccounts();
-						})
-						.catch(function() {
-							container.innerHTML = '<span style="color:var(--commit);font-size:12px">Failed to load.</span>';
-						});
-				}
 
 				// ── Merchants (removed) ───────────────────────────────────────────────────
 				// Canonical merchants tab was removed in the 2026-07-21 conditions refactor.
@@ -661,7 +624,7 @@ templ cfgLabelsSection(labels []store.LabelWithCount) {
 	</section>
 }
 
-templ cfgInstitutionsSection(institutions []store.Institution) {
+templ cfgInstitutionsSection(institutions []InstitutionWithAccounts) {
 	<section style="max-width:640px">
 		<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
 			<div>
@@ -687,7 +650,7 @@ templ cfgInstitutionsSection(institutions []store.Institution) {
 	</section>
 }
 
-templ cfgInstRow(inst store.Institution, isLast bool) {
+templ cfgInstRow(inst InstitutionWithAccounts, isLast bool) {
 	<details
 		data-inst-id={ inst.ID }
 		style={ func() string {
@@ -703,7 +666,7 @@ templ cfgInstRow(inst store.Institution, isLast bool) {
 				<div class="js-inst-actions-normal" style="display:flex;gap:4px">
 					<button
 						class="js-inst-edit"
-						data-institution={ instJSON(inst) }
+						data-institution={ instJSON(inst.Institution) }
 						style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:2px 6px"
 					>Edit</button>
 					<button
@@ -726,7 +689,7 @@ templ cfgInstRow(inst store.Institution, isLast bool) {
 			</div>
 		</summary>
 		<div style="border-top:1px solid var(--border);background:var(--bg);padding:12px 16px;display:grid;grid-template-columns:1fr 1fr;gap:8px 20px">
-			for _, field := range instMappingFields(inst) {
+			for _, field := range instMappingFields(inst.Institution) {
 				@cfgInstField(field.Label, field.Value)
 			}
 			@cfgInstField("Settlement window", fmt.Sprintf("%d days", inst.SettlementWindowDays))
@@ -735,7 +698,13 @@ templ cfgInstRow(inst store.Institution, isLast bool) {
 		</div>
 		<div style="border-top:1px solid var(--border);background:var(--bg);padding:10px 16px">
 			<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Accounts using this institution</div>
-			<div class="js-inst-accounts"><span style="color:var(--text3);font-size:12px">Open to load…</span></div>
+			if len(inst.Accounts) == 0 {
+				<span style="color:var(--text3);font-size:12px">No accounts linked to this institution.</span>
+			} else {
+				for _, a := range inst.Accounts {
+					<a href={ templ.SafeURL("/accounts/" + a.ID) } style="display:block;font-size:12px;color:var(--accent);text-decoration:none;padding:1px 0">{ a.Name }</a>
+				}
+			}
 		</div>
 	</details>
 }

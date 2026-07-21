@@ -97,7 +97,7 @@ func ConfigurationPage(shell ShellData, data ConfigurationData) templ.Component 
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, " <script>\n\t\t\t(function() {\n\t\t\t\t// ── Labels ────────────────────────────────────────────────────────────────\n\n\t\t\t\tvar labelsBody = document.getElementById('labels-body');\n\t\t\t\tvar addLabelBtn = document.getElementById('add-label-btn');\n\t\t\t\tvar newLabelRow = document.getElementById('new-label-row');\n\t\t\t\tvar newLabelInput = document.getElementById('new-label-input');\n\t\t\t\tvar newLabelError = document.getElementById('new-label-error');\n\t\t\t\tvar newLabelSave = document.getElementById('new-label-save');\n\t\t\t\tvar newLabelCancel = document.getElementById('new-label-cancel');\n\n\t\t\t\tfunction labelNames() {\n\t\t\t\t\tvar names = [];\n\t\t\t\t\t(labelsBody ? labelsBody.querySelectorAll('[data-label-name]') : []).forEach(function(el) {\n\t\t\t\t\t\tnames.push(el.dataset.labelName.toLowerCase());\n\t\t\t\t\t});\n\t\t\t\t\treturn names;\n\t\t\t\t}\n\n\t\t\t\tif (addLabelBtn && newLabelRow) {\n\t\t\t\t\taddLabelBtn.addEventListener('click', function() {\n\t\t\t\t\t\tnewLabelRow.style.display = '';\n\t\t\t\t\t\tnewLabelInput.value = '';\n\t\t\t\t\t\tnewLabelError.textContent = '';\n\t\t\t\t\t\tnewLabelInput.focus();\n\t\t\t\t\t});\n\t\t\t\t\tnewLabelCancel.addEventListener('click', function() {\n\t\t\t\t\t\tnewLabelRow.style.display = 'none';\n\t\t\t\t\t});\n\t\t\t\t\tnewLabelInput.addEventListener('keydown', function(e) {\n\t\t\t\t\t\tif (e.key === 'Enter') saveNewLabel();\n\t\t\t\t\t\tif (e.key === 'Escape') { newLabelRow.style.display = 'none'; }\n\t\t\t\t\t});\n\t\t\t\t\tnewLabelSave.addEventListener('click', saveNewLabel);\n\t\t\t\t}\n\n\t\t\t\tfunction saveNewLabel() {\n\t\t\t\t\tvar name = newLabelInput ? newLabelInput.value.trim() : '';\n\t\t\t\t\tif (!name) { newLabelRow.style.display = 'none'; return; }\n\t\t\t\t\tif (labelNames().includes(name.toLowerCase())) {\n\t\t\t\t\t\tnewLabelError.textContent = 'A label with this name already exists.';\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tnewLabelInput.disabled = true;\n\t\t\t\t\tfetch('/api/labels', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})\n\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t.then(function(env) {\n\t\t\t\t\t\t\tvar label = env.data;\n\t\t\t\t\t\t\tif (!label) throw new Error('no data');\n\t\t\t\t\t\t\tnewLabelRow.style.display = 'none';\n\t\t\t\t\t\t\tnewLabelInput.disabled = false;\n\t\t\t\t\t\t\t// Prepend row to table\n\t\t\t\t\t\t\tvar row = buildLabelRow(label.id, label.name, 0);\n\t\t\t\t\t\t\tif (labelsBody) {\n\t\t\t\t\t\t\t\tvar first = labelsBody.querySelector('tr');\n\t\t\t\t\t\t\t\tif (first) labelsBody.insertBefore(row, first);\n\t\t\t\t\t\t\t\telse labelsBody.appendChild(row);\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\tvar empty = document.getElementById('labels-empty');\n\t\t\t\t\t\t\tif (empty) empty.style.display = 'none';\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function() {\n\t\t\t\t\t\t\tnewLabelInput.disabled = false;\n\t\t\t\t\t\t\tnewLabelError.textContent = 'Failed to create label.';\n\t\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\tfunction buildLabelRow(id, name, entryCount) {\n\t\t\t\t\tvar tr = document.createElement('tr');\n\t\t\t\t\ttr.dataset.labelId = id;\n\t\t\t\t\ttr.style.borderBottom = '1px solid var(--border)';\n\t\t\t\t\ttr.innerHTML = labelRowHTML(id, name, entryCount, false);\n\t\t\t\t\treturn tr;\n\t\t\t\t}\n\n\t\t\t\tfunction labelRowHTML(id, name, entryCount, editing) {\n\t\t\t\t\tvar countStr = entryCount > 0 ? entryCount + ' entr' + (entryCount === 1 ? 'y' : 'ies') : '—';\n\t\t\t\t\tif (editing) {\n\t\t\t\t\t\treturn '<td style=\"padding:8px 12px\"><input class=\"label-edit-input\" data-label-id=\"' + id + '\" type=\"text\" value=\"' + escHtml(name) + '\" style=\"background:var(--surface2);border:1px solid var(--accent);border-radius:4px;padding:4px 8px;font-size:13px;color:var(--text);outline:none;width:100%\"/><div class=\"label-edit-error\" style=\"font-size:11px;color:var(--commit);margin-top:2px\"></div></td>' +\n\t\t\t\t\t\t\t'<td style=\"padding:8px 12px;font-size:12px;color:var(--text2)\">' + countStr + '</td>' +\n\t\t\t\t\t\t\t'<td style=\"padding:8px 12px\"><div style=\"display:flex;gap:6px\">' +\n\t\t\t\t\t\t\t'<button class=\"js-label-save\" data-label-id=\"' + id + '\" style=\"background:none;border:none;cursor:pointer;color:var(--income);font-size:12px;font-family:inherit;padding:0\">Save</button>' +\n\t\t\t\t\t\t\t'<button class=\"js-label-cancel-edit\" data-label-id=\"' + id + '\" data-original-name=\"' + escHtml(name) + '\" data-entry-count=\"' + entryCount + '\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit;padding:0\">Cancel</button>' +\n\t\t\t\t\t\t\t'</div></td>';\n\t\t\t\t\t}\n\t\t\t\t\treturn '<td style=\"padding:8px 12px;font-size:13px;color:var(--text);cursor:pointer\" class=\"js-label-name-cell\" data-label-id=\"' + id + '\" data-label-name=\"' + escHtml(name) + '\" data-entry-count=\"' + entryCount + '\">' + escHtml(name) + '</td>' +\n\t\t\t\t\t\t'<td style=\"padding:8px 12px;font-size:12px;color:var(--text2)\">' + countStr + '</td>' +\n\t\t\t\t\t\t'<td style=\"padding:8px 12px\">' +\n\t\t\t\t\t\t  '<div class=\"js-label-actions-normal\" style=\"display:flex;gap:6px\">' +\n\t\t\t\t\t\t    '<button class=\"js-label-where-used\" data-label-id=\"' + id + '\" data-label-name=\"' + escHtml(name) + '\" style=\"background:none;border:none;cursor:pointer;color:var(--accent);font-size:12px;font-family:inherit;padding:0\">Where used</button>' +\n\t\t\t\t\t\t    '<button class=\"js-label-rename\" data-label-id=\"' + id + '\" data-label-name=\"' + escHtml(name) + '\" data-entry-count=\"' + entryCount + '\" style=\"background:none;border:none;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:0\">Rename</button>' +\n\t\t\t\t\t\t    '<button class=\"js-label-delete\" data-label-id=\"' + id + '\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit;padding:0\">Delete</button>' +\n\t\t\t\t\t\t  '</div>' +\n\t\t\t\t\t\t  '<div class=\"js-label-delete-confirm\" style=\"display:none;align-items:center;gap:4px\">' +\n\t\t\t\t\t\t    '<span style=\"font-size:11px;color:var(--commit)\">Delete?</span>' +\n\t\t\t\t\t\t    '<button class=\"js-label-delete-yes\" data-label-id=\"' + id + '\" style=\"background:none;border:none;cursor:pointer;color:var(--commit);font-size:11px;font-family:inherit;padding:2px 4px\">Yes</button>' +\n\t\t\t\t\t\t    '<button class=\"js-label-delete-no\" data-label-id=\"' + id + '\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:11px;font-family:inherit;padding:2px 4px\">No</button>' +\n\t\t\t\t\t\t  '</div>' +\n\t\t\t\t\t\t'</td>';\n\t\t\t\t}\n\n\t\t\t\tfunction escHtml(s) {\n\t\t\t\t\treturn String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;');\n\t\t\t\t}\n\n\t\t\t\tfunction startEdit(id, name, entryCount) {\n\t\t\t\t\tvar tr = labelsBody ? labelsBody.querySelector('[data-label-id=\"' + id + '\"]') : null;\n\t\t\t\t\tif (!tr) return;\n\t\t\t\t\ttr.innerHTML = labelRowHTML(id, name, entryCount, true);\n\t\t\t\t\tvar input = tr.querySelector('.label-edit-input');\n\t\t\t\t\tif (input) { input.focus(); input.select(); }\n\t\t\t\t}\n\n\t\t\t\tfunction saveEdit(id) {\n\t\t\t\t\tvar tr = labelsBody ? labelsBody.querySelector('[data-label-id=\"' + id + '\"]') : null;\n\t\t\t\t\tif (!tr) return;\n\t\t\t\t\tvar input = tr.querySelector('.label-edit-input');\n\t\t\t\t\tvar errorEl = tr.querySelector('.label-edit-error');\n\t\t\t\t\tvar name = input ? input.value.trim() : '';\n\t\t\t\t\tvar originalName = tr.querySelector('[data-original-name]');\n\t\t\t\t\tvar origName = originalName ? originalName.dataset.originalName : '';\n\t\t\t\t\tif (!name) { cancelEdit(id, origName, 0); return; }\n\t\t\t\t\t// Check duplicate (exclude self)\n\t\t\t\t\tvar others = [];\n\t\t\t\t\t(labelsBody ? labelsBody.querySelectorAll('[data-label-name]') : []).forEach(function(el) {\n\t\t\t\t\t\tif (el.dataset.labelId !== id) others.push(el.dataset.labelName.toLowerCase());\n\t\t\t\t\t});\n\t\t\t\t\tif (others.includes(name.toLowerCase())) {\n\t\t\t\t\t\tif (errorEl) errorEl.textContent = 'A label with this name already exists.';\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tif (input) input.disabled = true;\n\t\t\t\t\tfetch('/api/labels/' + id, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})\n\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t.then(function(env) {\n\t\t\t\t\t\t\tvar label = env.data;\n\t\t\t\t\t\t\tvar cnt = tr.querySelector('[data-entry-count]');\n\t\t\t\t\t\t\tvar count = cnt ? parseInt(cnt.dataset.entryCount||'0',10) : 0;\n\t\t\t\t\t\t\ttr.innerHTML = labelRowHTML(label.id, label.name, count, false);\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function() {\n\t\t\t\t\t\t\tif (input) input.disabled = false;\n\t\t\t\t\t\t\tif (errorEl) errorEl.textContent = 'Failed to save.';\n\t\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\tfunction cancelEdit(id, name, entryCount) {\n\t\t\t\t\tvar tr = labelsBody ? labelsBody.querySelector('[data-label-id=\"' + id + '\"]') : null;\n\t\t\t\t\tif (!tr) return;\n\t\t\t\t\tvar btn = tr.querySelector('[data-original-name]');\n\t\t\t\t\tvar cnt = btn ? parseInt((btn.dataset.entryCount||'0'),10) : entryCount;\n\t\t\t\t\ttr.innerHTML = labelRowHTML(id, name, cnt, false);\n\t\t\t\t}\n\n\t\t\t\tdocument.addEventListener('click', function(e) {\n\t\t\t\t\tvar rename = e.target.closest('.js-label-rename');\n\t\t\t\t\tif (rename) { startEdit(rename.dataset.labelId, rename.dataset.labelName, parseInt(rename.dataset.entryCount||'0',10)); return; }\n\t\t\t\t\tvar nameCell = e.target.closest('.js-label-name-cell');\n\t\t\t\t\tif (nameCell) { startEdit(nameCell.dataset.labelId, nameCell.dataset.labelName, parseInt(nameCell.dataset.entryCount||'0',10)); return; }\n\t\t\t\t\tvar save = e.target.closest('.js-label-save');\n\t\t\t\t\tif (save) { saveEdit(save.dataset.labelId); return; }\n\t\t\t\t\tvar cancelEdit_ = e.target.closest('.js-label-cancel-edit');\n\t\t\t\t\tif (cancelEdit_) { cancelEdit(cancelEdit_.dataset.labelId, cancelEdit_.dataset.originalName, parseInt(cancelEdit_.dataset.entryCount||'0',10)); return; }\n\t\t\t\t\tvar labelDel = e.target.closest('.js-label-delete');\n\t\t\t\t\tif (labelDel) {\n\t\t\t\t\t\tvar row = labelDel.closest('tr[data-label-id]');\n\t\t\t\t\t\tif (row) {\n\t\t\t\t\t\t\tvar norm = row.querySelector('.js-label-actions-normal');\n\t\t\t\t\t\t\tvar conf = row.querySelector('.js-label-delete-confirm');\n\t\t\t\t\t\t\tif (norm) norm.style.display = 'none';\n\t\t\t\t\t\t\tif (conf) { conf.style.display = 'flex'; }\n\t\t\t\t\t\t}\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tvar labelDelNo = e.target.closest('.js-label-delete-no');\n\t\t\t\t\tif (labelDelNo) {\n\t\t\t\t\t\tvar row = labelDelNo.closest('tr[data-label-id]');\n\t\t\t\t\t\tif (row) {\n\t\t\t\t\t\t\tvar norm = row.querySelector('.js-label-actions-normal');\n\t\t\t\t\t\t\tvar conf = row.querySelector('.js-label-delete-confirm');\n\t\t\t\t\t\t\tif (norm) norm.style.display = 'flex';\n\t\t\t\t\t\t\tif (conf) conf.style.display = 'none';\n\t\t\t\t\t\t}\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tvar labelDelYes = e.target.closest('.js-label-delete-yes');\n\t\t\t\t\tif (labelDelYes) {\n\t\t\t\t\t\tvar lid = labelDelYes.dataset.labelId;\n\t\t\t\t\t\tlabelDelYes.disabled = true;\n\t\t\t\t\t\tfetch('/api/labels/' + lid, {method: 'DELETE'})\n\t\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\t\tif (r.ok || r.status === 404) {\n\t\t\t\t\t\t\t\t\tvar row = labelsBody ? labelsBody.querySelector('tr[data-label-id=\"' + lid + '\"]') : null;\n\t\t\t\t\t\t\t\t\tif (row) row.remove();\n\t\t\t\t\t\t\t\t\tif (labelsBody && !labelsBody.querySelector('tr[data-label-id]')) {\n\t\t\t\t\t\t\t\t\t\tvar empty = document.getElementById('labels-empty');\n\t\t\t\t\t\t\t\t\t\tif (empty) empty.style.display = '';\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t} else { labelDelYes.disabled = false; }\n\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t.catch(function() { labelDelYes.disabled = false; });\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t});\n\n\t\t\t\tdocument.addEventListener('keydown', function(e) {\n\t\t\t\t\tif (!e.target.classList.contains('label-edit-input')) return;\n\t\t\t\t\tvar id = e.target.dataset.labelId;\n\t\t\t\t\tif (e.key === 'Enter') saveEdit(id);\n\t\t\t\t\tif (e.key === 'Escape') {\n\t\t\t\t\t\tvar btn = e.target.closest('tr') ? e.target.closest('tr').querySelector('[data-original-name]') : null;\n\t\t\t\t\t\tvar name = btn ? btn.dataset.originalName : '';\n\t\t\t\t\t\tvar cnt = btn ? parseInt(btn.dataset.entryCount||'0',10) : 0;\n\t\t\t\t\t\tcancelEdit(id, name, cnt);\n\t\t\t\t\t}\n\t\t\t\t});\n\n\t\t\t\t\t\t\t\t// ── Label \"where used\" ───────────────────────────────────────────────────\n\t\t\t\t// Spec gap: the entries API does not support filtering by condition content\n\t\t\t\t// (label_matched references). Only direct label_id entries are shown here.\n\t\t\t\t// Entries referenced via label_matched conditions must be found via the\n\t\t\t\t// Ledger page with ?label=<uuid> filter.\n\n\t\t\t\tvar _allEntriesCache = null;\n\n\t\t\t\tfunction toggleLabelExpansion(id, name) {\n\t\t\t\t\tvar existing = document.querySelector('tr[data-label-expansion=\"' + id + '\"]');\n\t\t\t\t\tif (existing) { existing.remove(); return; }\n\t\t\t\t\tvar labelTr = labelsBody ? labelsBody.querySelector('tr[data-label-id=\"' + id + '\"]') : null;\n\t\t\t\t\tif (!labelTr) return;\n\t\t\t\t\tvar expTr = document.createElement('tr');\n\t\t\t\t\texpTr.dataset.labelExpansion = id;\n\t\t\t\t\texpTr.innerHTML = '<td colspan=\"3\" style=\"padding:12px 16px;background:var(--bg);border-bottom:1px solid var(--border)\">' + buildLabelExpansionHTML(id, name) + '</td>';\n\t\t\t\t\tlabelTr.parentNode.insertBefore(expTr, labelTr.nextSibling);\n\t\t\t\t\tloadLabelEntries(id);\n\t\t\t\t}\n\n\t\t\t\tfunction buildLabelExpansionHTML(id, name) {\n\t\t\t\t\treturn '<div style=\"display:grid;gap:10px\">' +\n\t\t\t\t\t\t'<div>' +\n\t\t\t\t\t\t\t'<div style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px\">Entries using this label</div>' +\n\t\t\t\t\t\t\t'<div id=\"label-entries-' + escHtml(id) + '\"><span style=\"color:var(--text3);font-size:12px\">Loading…</span></div>' +\n\t\t\t\t\t\t'</div>' +\n\t\t\t\t\t\t'<div style=\"font-size:11px;color:var(--text3);border-top:1px solid var(--border);padding-top:8px\">' +\n\t\t\t\t\t\t\t'Entries that reference this label via <code style=\"font-family:monospace\">label_matched</code> conditions: ' +\n\t\t\t\t\t\t\t'<a href=\"/ledger?label=' + escHtml(id) + '\" style=\"color:var(--accent)\">view in Ledger</a>. ' +\n\t\t\t\t\t\t\t'(Condition-content search is not yet supported by the API — spec gap.)' +\n\t\t\t\t\t\t'</div>' +\n\t\t\t\t\t'</div>';\n\t\t\t\t}\n\n\t\t\t\tfunction loadLabelEntries(id) {\n\t\t\t\t\tfunction renderFromCache() {\n\t\t\t\t\t\tvar entries = (_allEntriesCache || []).filter(function(e) { return e.label_id === id; });\n\t\t\t\t\t\trenderLabelEntries(id, entries);\n\t\t\t\t\t}\n\t\t\t\t\tif (_allEntriesCache !== null) { renderFromCache(); return; }\n\t\t\t\t\tfetch('/api/entries?status=all&limit=500', { credentials: 'same-origin' })\n\t\t\t\t\t\t.then(function(r) { return r.json(); })\n\t\t\t\t\t\t.then(function(env) {\n\t\t\t\t\t\t\t_allEntriesCache = env.data || [];\n\t\t\t\t\t\t\trenderFromCache();\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function() {\n\t\t\t\t\t\t\tvar el = document.getElementById('label-entries-' + id);\n\t\t\t\t\t\t\tif (el) el.innerHTML = '<span style=\"color:var(--commit);font-size:12px\">Failed to load.</span>';\n\t\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\tfunction renderLabelEntries(id, entries) {\n\t\t\t\t\tvar el = document.getElementById('label-entries-' + id);\n\t\t\t\t\tif (!el) return;\n\t\t\t\t\tif (!entries.length) {\n\t\t\t\t\t\tel.innerHTML = '<span style=\"color:var(--text3);font-size:12px\">No entries directly using this label.</span>';\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tel.innerHTML = '<div style=\"display:flex;flex-direction:column;gap:4px\">' +\n\t\t\t\t\t\tentries.map(function(e) {\n\t\t\t\t\t\t\tvar lname = e.label_name || '(unlabeled)';\n\t\t\t\t\t\t\tvar status = e.status || '';\n\t\t\t\t\t\t\tvar etype = e.entry_type || '';\n\t\t\t\t\t\t\treturn '<div style=\"display:flex;align-items:center;gap:8px\">' +\n\t\t\t\t\t\t\t\t'<span style=\"font-size:12px;color:var(--text)\">' + escHtml(lname) + '</span>' +\n\t\t\t\t\t\t\t\t'<span style=\"font-size:11px;color:var(--text3)\">' + escHtml(etype) + '</span>' +\n\t\t\t\t\t\t\t\t'<span style=\"font-size:11px;padding:1px 5px;border-radius:3px;background:var(--surface2);color:var(--text3)\">' + escHtml(status) + '</span>' +\n\t\t\t\t\t\t\t'</div>';\n\t\t\t\t\t\t}).join('') +\n\t\t\t\t\t'</div>';\n\t\t\t\t}\n\n\t\t\t\t// Hook \"where used\" toggle into existing label event delegation\n\t\t\t\tdocument.addEventListener('click', function(e) {\n\t\t\t\t\tvar whereUsed = e.target.closest('.js-label-where-used');\n\t\t\t\t\tif (whereUsed) {\n\t\t\t\t\t\ttoggleLabelExpansion(whereUsed.dataset.labelId, whereUsed.dataset.labelName);\n\t\t\t\t\t}\n\t\t\t\t});\n\n\t\t\t\t// ── Institution accounts (\"where used\") ───────────────────────────────────\n\t\t\t\t// Spec gap: no /api/accounts?institution_id=<id> endpoint.\n\t\t\t\t// We fetch all accounts and filter client-side.\n\n\t\t\t\tvar _accountsCache = null;\n\n\t\t\t\tdocument.addEventListener('toggle', function(e) {\n\t\t\t\t\tvar det = e.target;\n\t\t\t\t\tif (!det.dataset.instId || !det.open) return;\n\t\t\t\t\tvar accountsDiv = det.querySelector('.js-inst-accounts');\n\t\t\t\t\tif (!accountsDiv || accountsDiv.dataset.loaded) return;\n\t\t\t\t\taccountsDiv.dataset.loaded = '1';\n\t\t\t\t\tloadInstAccounts(det.dataset.instId, accountsDiv);\n\t\t\t\t}, true);\n\n\t\t\t\tfunction loadInstAccounts(instId, container) {\n\t\t\t\t\tfunction renderAccounts() {\n\t\t\t\t\t\tvar filtered = (_accountsCache || []).filter(function(a) { return a.institution_id === instId; });\n\t\t\t\t\t\tif (!filtered.length) {\n\t\t\t\t\t\t\tcontainer.innerHTML = '<span style=\"color:var(--text3);font-size:12px\">No accounts linked to this institution.</span>';\n\t\t\t\t\t\t\treturn;\n\t\t\t\t\t\t}\n\t\t\t\t\t\tcontainer.innerHTML = filtered.map(function(a) {\n\t\t\t\t\t\t\treturn '<a href=\"/accounts/' + escHtml(a.id) + '\" style=\"display:block;font-size:12px;color:var(--accent);text-decoration:none;padding:1px 0\">' + escHtml(a.name) + '</a>';\n\t\t\t\t\t\t}).join('');\n\t\t\t\t\t}\n\t\t\t\t\tif (_accountsCache !== null) { renderAccounts(); return; }\n\t\t\t\t\tfetch('/api/accounts?limit=200', { credentials: 'same-origin' })\n\t\t\t\t\t\t.then(function(r) { return r.json(); })\n\t\t\t\t\t\t.then(function(env) {\n\t\t\t\t\t\t\t_accountsCache = env.data || [];\n\t\t\t\t\t\t\trenderAccounts();\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function() {\n\t\t\t\t\t\t\tcontainer.innerHTML = '<span style=\"color:var(--commit);font-size:12px\">Failed to load.</span>';\n\t\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\t// ── Merchants (removed) ───────────────────────────────────────────────────\n\t\t\t\t// Canonical merchants tab was removed in the 2026-07-21 conditions refactor.\n\t\t\t\t// (merchant JS removed)\n\t\t\t\t// ── Institutions ──────────────────────────────────────────────────────────\n\n\t\t\t\tvar instDialog = document.getElementById('inst-dialog');\n\t\t\t\tvar instDialogTitle = document.getElementById('inst-dialog-title');\n\t\t\t\tvar instDialogClose = document.getElementById('inst-dialog-close');\n\t\t\t\tvar instDialogCancel = document.getElementById('inst-dialog-cancel');\n\t\t\t\tvar instDialogSave = document.getElementById('inst-dialog-save');\n\t\t\t\tvar instDialogError = document.getElementById('inst-dialog-error');\n\t\t\t\tvar instEditId = null;\n\n\t\t\t\tvar FIELD_REGISTRY = JSON.parse((instDialog && instDialog.dataset.fieldRegistry) || '[]');\n\n\t\t\t\tvar INST_INPUT_STYLE = 'background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;color:var(--text);outline:none;width:100%;box-sizing:border-box;font-family:inherit';\n\n\t\t\t\tfunction buildInstFields(layoutKey, existingFields) {\n\t\t\t\t\tvar container = document.getElementById('inst-fields-container');\n\t\t\t\t\tif (!container) return;\n\t\t\t\t\tvar src = FIELD_REGISTRY.find(function(s) { return s.key === 'csv'; });\n\t\t\t\t\tif (!src) return;\n\t\t\t\t\tvar layout = src.layouts.find(function(l) { return l.key === layoutKey; });\n\t\t\t\t\tif (!layout) return;\n\t\t\t\t\tcontainer.innerHTML = '';\n\t\t\t\t\tlayout.fields.forEach(function(field) {\n\t\t\t\t\t\tvar wrap = document.createElement('div');\n\t\t\t\t\t\tvar lbl = document.createElement('label');\n\t\t\t\t\t\tlbl.style.cssText = 'display:block;font-size:12px;color:var(--text3);margin-bottom:4px';\n\t\t\t\t\t\tlbl.textContent = field.label + (field.required ? ' *' : ' (optional)');\n\t\t\t\t\t\twrap.appendChild(lbl);\n\t\t\t\t\t\tvar input;\n\t\t\t\t\t\tif (field.kind === 'enum') {\n\t\t\t\t\t\t\tinput = document.createElement('select');\n\t\t\t\t\t\t\tinput.style.cssText = INST_INPUT_STYLE + ';cursor:pointer';\n\t\t\t\t\t\t\t(field.enum_values || []).forEach(function(v) {\n\t\t\t\t\t\t\t\tvar opt = document.createElement('option');\n\t\t\t\t\t\t\t\topt.value = v;\n\t\t\t\t\t\t\t\topt.textContent = v === 'positive_is_credit' ? 'Positive = credit (money in)' : 'Positive = debit (money out)';\n\t\t\t\t\t\t\t\topt.selected = existingFields && existingFields[field.key] === v;\n\t\t\t\t\t\t\t\tinput.appendChild(opt);\n\t\t\t\t\t\t\t});\n\t\t\t\t\t\t} else {\n\t\t\t\t\t\t\tinput = document.createElement('input');\n\t\t\t\t\t\t\tinput.type = 'text';\n\t\t\t\t\t\t\tinput.style.cssText = INST_INPUT_STYLE;\n\t\t\t\t\t\t\tinput.placeholder = (field.aliases && field.aliases[0]) || '';\n\t\t\t\t\t\t\tinput.value = (existingFields && existingFields[field.key]) || '';\n\t\t\t\t\t\t}\n\t\t\t\t\t\tinput.dataset.fieldKey = field.key;\n\t\t\t\t\t\twrap.appendChild(input);\n\t\t\t\t\t\tcontainer.appendChild(wrap);\n\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\tvar instLayoutSel = document.getElementById('inst-layout');\n\t\t\t\tif (instLayoutSel) {\n\t\t\t\t\tinstLayoutSel.addEventListener('change', function() {\n\t\t\t\t\t\tbuildInstFields(instLayoutSel.value, null);\n\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\tfunction openInstDialog(inst) {\n\t\t\t\t\tinstEditId = inst ? inst.id : null;\n\t\t\t\t\tif (instDialogTitle) instDialogTitle.textContent = inst ? 'Edit: ' + inst.institution_name : 'New Institution Mapping';\n\t\t\t\t\tsetField('inst-name', inst ? inst.institution_name : '');\n\t\t\t\t\tvar cfg = (inst && inst.mapping_config) ? inst.mapping_config : {};\n\t\t\t\t\tvar layout = cfg.layout || 'signed';\n\t\t\t\t\tif (instLayoutSel) instLayoutSel.value = layout;\n\t\t\t\t\tbuildInstFields(layout, cfg.fields || null);\n\t\t\t\t\tsetField('inst-settlement', inst ? inst.settlement_window_days : '14');\n\t\t\t\t\tsetField('inst-dedup', inst ? inst.dedup_window_days : '3');\n\t\t\t\t\tvar tol = inst ? inst.amount_tolerance_pct * 100 : 0.5;\n\t\t\t\t\tsetField('inst-tolerance', String(tol ? parseFloat(tol.toFixed(3)) : 0.5));\n\t\t\t\t\tif (instDialogError) { instDialogError.textContent = ''; instDialogError.style.display = 'none'; }\n\t\t\t\t\tif (instDialog) instDialog.showModal();\n\t\t\t\t}\n\n\t\t\t\tbuildInstFields('signed', null);\n\n\t\t\t\tfunction setField(id, val) {\n\t\t\t\t\tvar el = document.getElementById(id);\n\t\t\t\t\tif (el) el.value = String(val === null || val === undefined ? '' : val);\n\t\t\t\t}\n\n\t\t\t\tfunction getField(id) {\n\t\t\t\t\tvar el = document.getElementById(id);\n\t\t\t\t\treturn el ? el.value.trim() : '';\n\t\t\t\t}\n\n\t\t\t\tif (instDialogClose) instDialogClose.addEventListener('click', function(){ if(instDialog) instDialog.close(); });\n\t\t\t\tif (instDialogCancel) instDialogCancel.addEventListener('click', function(){ if(instDialog) instDialog.close(); });\n\t\t\t\tif (instDialog) instDialog.addEventListener('click', function(e){ if(e.target===instDialog) instDialog.close(); });\n\n\t\t\t\tdocument.addEventListener('click', function(e) {\n\t\t\t\t\tvar newBtn = e.target.closest('#new-inst-btn');\n\t\t\t\t\tif (newBtn) { openInstDialog(null); return; }\n\t\t\t\t});\n\n\t\t\t\tif (instDialogSave) instDialogSave.addEventListener('click', function() {\n\t\t\t\t\tvar name = getField('inst-name');\n\t\t\t\t\tif (!name) {\n\t\t\t\t\t\tif (instDialogError) { instDialogError.textContent = 'Institution name is required.'; instDialogError.style.display = ''; }\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tvar instFields = {};\n\t\t\t\t\tdocument.querySelectorAll('#inst-fields-container [data-field-key]').forEach(function(el) {\n\t\t\t\t\t\tif (el.value) instFields[el.dataset.fieldKey] = el.value;\n\t\t\t\t\t});\n\t\t\t\t\tvar body = {\n\t\t\t\t\t\tinstitution_name: name,\n\t\t\t\t\t\tsource_type: 'csv',\n\t\t\t\t\t\tsettlement_window_days: parseInt(getField('inst-settlement')) || 14,\n\t\t\t\t\t\tdedup_window_days: parseInt(getField('inst-dedup')) || 3,\n\t\t\t\t\t\tamount_tolerance_pct: (parseFloat(getField('inst-tolerance')) / 100) || 0.005,\n\t\t\t\t\t\tmapping_config: {\n\t\t\t\t\t\t\tlayout: instLayoutSel ? instLayoutSel.value : 'signed',\n\t\t\t\t\t\t\tfields: instFields,\n\t\t\t\t\t\t},\n\t\t\t\t\t};\n\t\t\t\t\tinstDialogSave.disabled = true;\n\t\t\t\t\tinstDialogSave.textContent = 'Saving…';\n\t\t\t\t\tvar url = instEditId ? '/api/institutions/' + instEditId : '/api/institutions';\n\t\t\t\t\tvar method = instEditId ? 'PUT' : 'POST';\n\t\t\t\t\tfetch(url, {method:method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})\n\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\tif (!r.ok) return r.json().then(function(e){ throw new Error(e.detail||'Save failed'); });\n\t\t\t\t\t\t\tif (instDialog) instDialog.close();\n\t\t\t\t\t\t\tlocation.reload();\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function(err) {\n\t\t\t\t\t\t\tinstDialogSave.disabled = false;\n\t\t\t\t\t\t\tinstDialogSave.textContent = 'Save mapping';\n\t\t\t\t\t\t\tif (instDialogError) { instDialogError.textContent = err.message||'Save failed.'; instDialogError.style.display = ''; }\n\t\t\t\t\t\t});\n\t\t\t\t});\n\n\t\t\t\t// Direct listeners for institution buttons — document delegation is blocked by\n\t\t\t\t// the stopPropagation wrapper inside <summary>, so we attach here instead.\n\t\t\t\t(function() {\n\t\t\t\t\tfunction bindInstButtons() {\n\t\t\t\t\t\tdocument.querySelectorAll('.js-inst-edit').forEach(function(btn) {\n\t\t\t\t\t\t\tbtn.addEventListener('click', function(e) {\n\t\t\t\t\t\t\t\te.stopPropagation();\n\t\t\t\t\t\t\t\ttry { openInstDialog(JSON.parse(btn.dataset.institution)); } catch(ex) {}\n\t\t\t\t\t\t\t});\n\t\t\t\t\t\t});\n\t\t\t\t\t\tdocument.querySelectorAll('.js-inst-delete').forEach(function(btn) {\n\t\t\t\t\t\t\tbtn.addEventListener('click', function(e) {\n\t\t\t\t\t\t\t\te.stopPropagation();\n\t\t\t\t\t\t\t\tvar row = btn.closest('[data-inst-id]');\n\t\t\t\t\t\t\t\tif (!row) return;\n\t\t\t\t\t\t\t\tvar norm = row.querySelector('.js-inst-actions-normal');\n\t\t\t\t\t\t\t\tvar conf = row.querySelector('.js-inst-delete-confirm');\n\t\t\t\t\t\t\t\tif (norm) norm.style.display = 'none';\n\t\t\t\t\t\t\t\tif (conf) conf.style.display = '';\n\t\t\t\t\t\t\t});\n\t\t\t\t\t\t});\n\t\t\t\t\t\tdocument.querySelectorAll('.js-inst-delete-no').forEach(function(btn) {\n\t\t\t\t\t\t\tbtn.addEventListener('click', function(e) {\n\t\t\t\t\t\t\t\te.stopPropagation();\n\t\t\t\t\t\t\t\tvar row = btn.closest('[data-inst-id]');\n\t\t\t\t\t\t\t\tif (!row) return;\n\t\t\t\t\t\t\t\tvar norm = row.querySelector('.js-inst-actions-normal');\n\t\t\t\t\t\t\t\tvar conf = row.querySelector('.js-inst-delete-confirm');\n\t\t\t\t\t\t\t\tif (norm) norm.style.display = '';\n\t\t\t\t\t\t\t\tif (conf) conf.style.display = 'none';\n\t\t\t\t\t\t\t});\n\t\t\t\t\t\t});\n\t\t\t\t\t\tdocument.querySelectorAll('.js-inst-delete-yes').forEach(function(btn) {\n\t\t\t\t\t\t\tbtn.addEventListener('click', function(e) {\n\t\t\t\t\t\t\t\te.stopPropagation();\n\t\t\t\t\t\t\t\tvar id = btn.dataset.instId;\n\t\t\t\t\t\t\t\tbtn.disabled = true;\n\t\t\t\t\t\t\t\tfetch('/api/institutions/' + id, {method: 'DELETE'})\n\t\t\t\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\t\t\t\tif (r.ok || r.status === 404) {\n\t\t\t\t\t\t\t\t\t\t\tvar row = document.querySelector('[data-inst-id=\"' + id + '\"]');\n\t\t\t\t\t\t\t\t\t\t\tif (row) row.remove();\n\t\t\t\t\t\t\t\t\t\t\tvar list = document.getElementById('inst-list');\n\t\t\t\t\t\t\t\t\t\t\tif (list && !list.querySelector('[data-inst-id]')) {\n\t\t\t\t\t\t\t\t\t\t\t\tvar empty = document.getElementById('inst-empty');\n\t\t\t\t\t\t\t\t\t\t\t\tif (empty) empty.style.display = '';\n\t\t\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t\t\t} else { btn.disabled = false; }\n\t\t\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t\t\t.catch(function() { btn.disabled = false; });\n\t\t\t\t\t\t\t});\n\t\t\t\t\t\t});\n\t\t\t\t\t}\n\t\t\t\t\tbindInstButtons();\n\t\t\t\t})();\n\t\t\t})();\n\t\t</script>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, " <script>\n\t\t\t(function() {\n\t\t\t\t// ── Labels ────────────────────────────────────────────────────────────────\n\n\t\t\t\tvar labelsBody = document.getElementById('labels-body');\n\t\t\t\tvar addLabelBtn = document.getElementById('add-label-btn');\n\t\t\t\tvar newLabelRow = document.getElementById('new-label-row');\n\t\t\t\tvar newLabelInput = document.getElementById('new-label-input');\n\t\t\t\tvar newLabelError = document.getElementById('new-label-error');\n\t\t\t\tvar newLabelSave = document.getElementById('new-label-save');\n\t\t\t\tvar newLabelCancel = document.getElementById('new-label-cancel');\n\n\t\t\t\tfunction labelNames() {\n\t\t\t\t\tvar names = [];\n\t\t\t\t\t(labelsBody ? labelsBody.querySelectorAll('[data-label-name]') : []).forEach(function(el) {\n\t\t\t\t\t\tnames.push(el.dataset.labelName.toLowerCase());\n\t\t\t\t\t});\n\t\t\t\t\treturn names;\n\t\t\t\t}\n\n\t\t\t\tif (addLabelBtn && newLabelRow) {\n\t\t\t\t\taddLabelBtn.addEventListener('click', function() {\n\t\t\t\t\t\tnewLabelRow.style.display = '';\n\t\t\t\t\t\tnewLabelInput.value = '';\n\t\t\t\t\t\tnewLabelError.textContent = '';\n\t\t\t\t\t\tnewLabelInput.focus();\n\t\t\t\t\t});\n\t\t\t\t\tnewLabelCancel.addEventListener('click', function() {\n\t\t\t\t\t\tnewLabelRow.style.display = 'none';\n\t\t\t\t\t});\n\t\t\t\t\tnewLabelInput.addEventListener('keydown', function(e) {\n\t\t\t\t\t\tif (e.key === 'Enter') saveNewLabel();\n\t\t\t\t\t\tif (e.key === 'Escape') { newLabelRow.style.display = 'none'; }\n\t\t\t\t\t});\n\t\t\t\t\tnewLabelSave.addEventListener('click', saveNewLabel);\n\t\t\t\t}\n\n\t\t\t\tfunction saveNewLabel() {\n\t\t\t\t\tvar name = newLabelInput ? newLabelInput.value.trim() : '';\n\t\t\t\t\tif (!name) { newLabelRow.style.display = 'none'; return; }\n\t\t\t\t\tif (labelNames().includes(name.toLowerCase())) {\n\t\t\t\t\t\tnewLabelError.textContent = 'A label with this name already exists.';\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tnewLabelInput.disabled = true;\n\t\t\t\t\tfetch('/api/labels', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})\n\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t.then(function(env) {\n\t\t\t\t\t\t\tvar label = env.data;\n\t\t\t\t\t\t\tif (!label) throw new Error('no data');\n\t\t\t\t\t\t\tnewLabelRow.style.display = 'none';\n\t\t\t\t\t\t\tnewLabelInput.disabled = false;\n\t\t\t\t\t\t\t// Prepend row to table\n\t\t\t\t\t\t\tvar row = buildLabelRow(label.id, label.name, 0);\n\t\t\t\t\t\t\tif (labelsBody) {\n\t\t\t\t\t\t\t\tvar first = labelsBody.querySelector('tr');\n\t\t\t\t\t\t\t\tif (first) labelsBody.insertBefore(row, first);\n\t\t\t\t\t\t\t\telse labelsBody.appendChild(row);\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\tvar empty = document.getElementById('labels-empty');\n\t\t\t\t\t\t\tif (empty) empty.style.display = 'none';\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function() {\n\t\t\t\t\t\t\tnewLabelInput.disabled = false;\n\t\t\t\t\t\t\tnewLabelError.textContent = 'Failed to create label.';\n\t\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\tfunction buildLabelRow(id, name, entryCount) {\n\t\t\t\t\tvar tr = document.createElement('tr');\n\t\t\t\t\ttr.dataset.labelId = id;\n\t\t\t\t\ttr.style.borderBottom = '1px solid var(--border)';\n\t\t\t\t\ttr.innerHTML = labelRowHTML(id, name, entryCount, false);\n\t\t\t\t\treturn tr;\n\t\t\t\t}\n\n\t\t\t\tfunction labelRowHTML(id, name, entryCount, editing) {\n\t\t\t\t\tvar countStr = entryCount > 0 ? entryCount + ' entr' + (entryCount === 1 ? 'y' : 'ies') : '—';\n\t\t\t\t\tif (editing) {\n\t\t\t\t\t\treturn '<td style=\"padding:8px 12px\"><input class=\"label-edit-input\" data-label-id=\"' + id + '\" type=\"text\" value=\"' + escHtml(name) + '\" style=\"background:var(--surface2);border:1px solid var(--accent);border-radius:4px;padding:4px 8px;font-size:13px;color:var(--text);outline:none;width:100%\"/><div class=\"label-edit-error\" style=\"font-size:11px;color:var(--commit);margin-top:2px\"></div></td>' +\n\t\t\t\t\t\t\t'<td style=\"padding:8px 12px;font-size:12px;color:var(--text2)\">' + countStr + '</td>' +\n\t\t\t\t\t\t\t'<td style=\"padding:8px 12px\"><div style=\"display:flex;gap:6px\">' +\n\t\t\t\t\t\t\t'<button class=\"js-label-save\" data-label-id=\"' + id + '\" style=\"background:none;border:none;cursor:pointer;color:var(--income);font-size:12px;font-family:inherit;padding:0\">Save</button>' +\n\t\t\t\t\t\t\t'<button class=\"js-label-cancel-edit\" data-label-id=\"' + id + '\" data-original-name=\"' + escHtml(name) + '\" data-entry-count=\"' + entryCount + '\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit;padding:0\">Cancel</button>' +\n\t\t\t\t\t\t\t'</div></td>';\n\t\t\t\t\t}\n\t\t\t\t\treturn '<td style=\"padding:8px 12px;font-size:13px;color:var(--text);cursor:pointer\" class=\"js-label-name-cell\" data-label-id=\"' + id + '\" data-label-name=\"' + escHtml(name) + '\" data-entry-count=\"' + entryCount + '\">' + escHtml(name) + '</td>' +\n\t\t\t\t\t\t'<td style=\"padding:8px 12px;font-size:12px;color:var(--text2)\">' + countStr + '</td>' +\n\t\t\t\t\t\t'<td style=\"padding:8px 12px\">' +\n\t\t\t\t\t\t  '<div class=\"js-label-actions-normal\" style=\"display:flex;gap:6px\">' +\n\t\t\t\t\t\t    '<button class=\"js-label-where-used\" data-label-id=\"' + id + '\" data-label-name=\"' + escHtml(name) + '\" style=\"background:none;border:none;cursor:pointer;color:var(--accent);font-size:12px;font-family:inherit;padding:0\">Where used</button>' +\n\t\t\t\t\t\t    '<button class=\"js-label-rename\" data-label-id=\"' + id + '\" data-label-name=\"' + escHtml(name) + '\" data-entry-count=\"' + entryCount + '\" style=\"background:none;border:none;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:0\">Rename</button>' +\n\t\t\t\t\t\t    '<button class=\"js-label-delete\" data-label-id=\"' + id + '\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit;padding:0\">Delete</button>' +\n\t\t\t\t\t\t  '</div>' +\n\t\t\t\t\t\t  '<div class=\"js-label-delete-confirm\" style=\"display:none;align-items:center;gap:4px\">' +\n\t\t\t\t\t\t    '<span style=\"font-size:11px;color:var(--commit)\">Delete?</span>' +\n\t\t\t\t\t\t    '<button class=\"js-label-delete-yes\" data-label-id=\"' + id + '\" style=\"background:none;border:none;cursor:pointer;color:var(--commit);font-size:11px;font-family:inherit;padding:2px 4px\">Yes</button>' +\n\t\t\t\t\t\t    '<button class=\"js-label-delete-no\" data-label-id=\"' + id + '\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:11px;font-family:inherit;padding:2px 4px\">No</button>' +\n\t\t\t\t\t\t  '</div>' +\n\t\t\t\t\t\t'</td>';\n\t\t\t\t}\n\n\t\t\t\tfunction escHtml(s) {\n\t\t\t\t\treturn String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;');\n\t\t\t\t}\n\n\t\t\t\tfunction startEdit(id, name, entryCount) {\n\t\t\t\t\tvar tr = labelsBody ? labelsBody.querySelector('[data-label-id=\"' + id + '\"]') : null;\n\t\t\t\t\tif (!tr) return;\n\t\t\t\t\ttr.innerHTML = labelRowHTML(id, name, entryCount, true);\n\t\t\t\t\tvar input = tr.querySelector('.label-edit-input');\n\t\t\t\t\tif (input) { input.focus(); input.select(); }\n\t\t\t\t}\n\n\t\t\t\tfunction saveEdit(id) {\n\t\t\t\t\tvar tr = labelsBody ? labelsBody.querySelector('[data-label-id=\"' + id + '\"]') : null;\n\t\t\t\t\tif (!tr) return;\n\t\t\t\t\tvar input = tr.querySelector('.label-edit-input');\n\t\t\t\t\tvar errorEl = tr.querySelector('.label-edit-error');\n\t\t\t\t\tvar name = input ? input.value.trim() : '';\n\t\t\t\t\tvar originalName = tr.querySelector('[data-original-name]');\n\t\t\t\t\tvar origName = originalName ? originalName.dataset.originalName : '';\n\t\t\t\t\tif (!name) { cancelEdit(id, origName, 0); return; }\n\t\t\t\t\t// Check duplicate (exclude self)\n\t\t\t\t\tvar others = [];\n\t\t\t\t\t(labelsBody ? labelsBody.querySelectorAll('[data-label-name]') : []).forEach(function(el) {\n\t\t\t\t\t\tif (el.dataset.labelId !== id) others.push(el.dataset.labelName.toLowerCase());\n\t\t\t\t\t});\n\t\t\t\t\tif (others.includes(name.toLowerCase())) {\n\t\t\t\t\t\tif (errorEl) errorEl.textContent = 'A label with this name already exists.';\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tif (input) input.disabled = true;\n\t\t\t\t\tfetch('/api/labels/' + id, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})\n\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t.then(function(env) {\n\t\t\t\t\t\t\tvar label = env.data;\n\t\t\t\t\t\t\tvar cnt = tr.querySelector('[data-entry-count]');\n\t\t\t\t\t\t\tvar count = cnt ? parseInt(cnt.dataset.entryCount||'0',10) : 0;\n\t\t\t\t\t\t\ttr.innerHTML = labelRowHTML(label.id, label.name, count, false);\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function() {\n\t\t\t\t\t\t\tif (input) input.disabled = false;\n\t\t\t\t\t\t\tif (errorEl) errorEl.textContent = 'Failed to save.';\n\t\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\tfunction cancelEdit(id, name, entryCount) {\n\t\t\t\t\tvar tr = labelsBody ? labelsBody.querySelector('[data-label-id=\"' + id + '\"]') : null;\n\t\t\t\t\tif (!tr) return;\n\t\t\t\t\tvar btn = tr.querySelector('[data-original-name]');\n\t\t\t\t\tvar cnt = btn ? parseInt((btn.dataset.entryCount||'0'),10) : entryCount;\n\t\t\t\t\ttr.innerHTML = labelRowHTML(id, name, cnt, false);\n\t\t\t\t}\n\n\t\t\t\tdocument.addEventListener('click', function(e) {\n\t\t\t\t\tvar rename = e.target.closest('.js-label-rename');\n\t\t\t\t\tif (rename) { startEdit(rename.dataset.labelId, rename.dataset.labelName, parseInt(rename.dataset.entryCount||'0',10)); return; }\n\t\t\t\t\tvar nameCell = e.target.closest('.js-label-name-cell');\n\t\t\t\t\tif (nameCell) { startEdit(nameCell.dataset.labelId, nameCell.dataset.labelName, parseInt(nameCell.dataset.entryCount||'0',10)); return; }\n\t\t\t\t\tvar save = e.target.closest('.js-label-save');\n\t\t\t\t\tif (save) { saveEdit(save.dataset.labelId); return; }\n\t\t\t\t\tvar cancelEdit_ = e.target.closest('.js-label-cancel-edit');\n\t\t\t\t\tif (cancelEdit_) { cancelEdit(cancelEdit_.dataset.labelId, cancelEdit_.dataset.originalName, parseInt(cancelEdit_.dataset.entryCount||'0',10)); return; }\n\t\t\t\t\tvar labelDel = e.target.closest('.js-label-delete');\n\t\t\t\t\tif (labelDel) {\n\t\t\t\t\t\tvar row = labelDel.closest('tr[data-label-id]');\n\t\t\t\t\t\tif (row) {\n\t\t\t\t\t\t\tvar norm = row.querySelector('.js-label-actions-normal');\n\t\t\t\t\t\t\tvar conf = row.querySelector('.js-label-delete-confirm');\n\t\t\t\t\t\t\tif (norm) norm.style.display = 'none';\n\t\t\t\t\t\t\tif (conf) { conf.style.display = 'flex'; }\n\t\t\t\t\t\t}\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tvar labelDelNo = e.target.closest('.js-label-delete-no');\n\t\t\t\t\tif (labelDelNo) {\n\t\t\t\t\t\tvar row = labelDelNo.closest('tr[data-label-id]');\n\t\t\t\t\t\tif (row) {\n\t\t\t\t\t\t\tvar norm = row.querySelector('.js-label-actions-normal');\n\t\t\t\t\t\t\tvar conf = row.querySelector('.js-label-delete-confirm');\n\t\t\t\t\t\t\tif (norm) norm.style.display = 'flex';\n\t\t\t\t\t\t\tif (conf) conf.style.display = 'none';\n\t\t\t\t\t\t}\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tvar labelDelYes = e.target.closest('.js-label-delete-yes');\n\t\t\t\t\tif (labelDelYes) {\n\t\t\t\t\t\tvar lid = labelDelYes.dataset.labelId;\n\t\t\t\t\t\tlabelDelYes.disabled = true;\n\t\t\t\t\t\tfetch('/api/labels/' + lid, {method: 'DELETE'})\n\t\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\t\tif (r.ok || r.status === 404) {\n\t\t\t\t\t\t\t\t\tvar row = labelsBody ? labelsBody.querySelector('tr[data-label-id=\"' + lid + '\"]') : null;\n\t\t\t\t\t\t\t\t\tif (row) row.remove();\n\t\t\t\t\t\t\t\t\tif (labelsBody && !labelsBody.querySelector('tr[data-label-id]')) {\n\t\t\t\t\t\t\t\t\t\tvar empty = document.getElementById('labels-empty');\n\t\t\t\t\t\t\t\t\t\tif (empty) empty.style.display = '';\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t} else { labelDelYes.disabled = false; }\n\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t.catch(function() { labelDelYes.disabled = false; });\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t});\n\n\t\t\t\tdocument.addEventListener('keydown', function(e) {\n\t\t\t\t\tif (!e.target.classList.contains('label-edit-input')) return;\n\t\t\t\t\tvar id = e.target.dataset.labelId;\n\t\t\t\t\tif (e.key === 'Enter') saveEdit(id);\n\t\t\t\t\tif (e.key === 'Escape') {\n\t\t\t\t\t\tvar btn = e.target.closest('tr') ? e.target.closest('tr').querySelector('[data-original-name]') : null;\n\t\t\t\t\t\tvar name = btn ? btn.dataset.originalName : '';\n\t\t\t\t\t\tvar cnt = btn ? parseInt(btn.dataset.entryCount||'0',10) : 0;\n\t\t\t\t\t\tcancelEdit(id, name, cnt);\n\t\t\t\t\t}\n\t\t\t\t});\n\n\t\t\t\t\t\t\t\t// ── Label \"where used\" ───────────────────────────────────────────────────\n\t\t\t\t// Spec gap: the entries API does not support filtering by condition content\n\t\t\t\t// (label_matched references). Only direct label_id entries are shown here.\n\t\t\t\t// Entries referenced via label_matched conditions must be found via the\n\t\t\t\t// Ledger page with ?label=<uuid> filter.\n\n\t\t\t\tvar _allEntriesCache = null;\n\n\t\t\t\tfunction toggleLabelExpansion(id, name) {\n\t\t\t\t\tvar existing = document.querySelector('tr[data-label-expansion=\"' + id + '\"]');\n\t\t\t\t\tif (existing) { existing.remove(); return; }\n\t\t\t\t\tvar labelTr = labelsBody ? labelsBody.querySelector('tr[data-label-id=\"' + id + '\"]') : null;\n\t\t\t\t\tif (!labelTr) return;\n\t\t\t\t\tvar expTr = document.createElement('tr');\n\t\t\t\t\texpTr.dataset.labelExpansion = id;\n\t\t\t\t\texpTr.innerHTML = '<td colspan=\"3\" style=\"padding:12px 16px;background:var(--bg);border-bottom:1px solid var(--border)\">' + buildLabelExpansionHTML(id, name) + '</td>';\n\t\t\t\t\tlabelTr.parentNode.insertBefore(expTr, labelTr.nextSibling);\n\t\t\t\t\tloadLabelEntries(id);\n\t\t\t\t}\n\n\t\t\t\tfunction buildLabelExpansionHTML(id, name) {\n\t\t\t\t\treturn '<div style=\"display:grid;gap:10px\">' +\n\t\t\t\t\t\t'<div>' +\n\t\t\t\t\t\t\t'<div style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px\">Entries using this label</div>' +\n\t\t\t\t\t\t\t'<div id=\"label-entries-' + escHtml(id) + '\"><span style=\"color:var(--text3);font-size:12px\">Loading…</span></div>' +\n\t\t\t\t\t\t'</div>' +\n\t\t\t\t\t\t'<div style=\"font-size:11px;color:var(--text3);border-top:1px solid var(--border);padding-top:8px\">' +\n\t\t\t\t\t\t\t'Entries that reference this label via <code style=\"font-family:monospace\">label_matched</code> conditions: ' +\n\t\t\t\t\t\t\t'<a href=\"/ledger?label=' + escHtml(id) + '\" style=\"color:var(--accent)\">view in Ledger</a>. ' +\n\t\t\t\t\t\t\t'(Condition-content search is not yet supported by the API — spec gap.)' +\n\t\t\t\t\t\t'</div>' +\n\t\t\t\t\t'</div>';\n\t\t\t\t}\n\n\t\t\t\tfunction loadLabelEntries(id) {\n\t\t\t\t\tfunction renderFromCache() {\n\t\t\t\t\t\tvar entries = (_allEntriesCache || []).filter(function(e) { return e.label_id === id; });\n\t\t\t\t\t\trenderLabelEntries(id, entries);\n\t\t\t\t\t}\n\t\t\t\t\tif (_allEntriesCache !== null) { renderFromCache(); return; }\n\t\t\t\t\tfetch('/api/entries?status=all&limit=500', { credentials: 'same-origin' })\n\t\t\t\t\t\t.then(function(r) { return r.json(); })\n\t\t\t\t\t\t.then(function(env) {\n\t\t\t\t\t\t\t_allEntriesCache = env.data || [];\n\t\t\t\t\t\t\trenderFromCache();\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function() {\n\t\t\t\t\t\t\tvar el = document.getElementById('label-entries-' + id);\n\t\t\t\t\t\t\tif (el) el.innerHTML = '<span style=\"color:var(--commit);font-size:12px\">Failed to load.</span>';\n\t\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\tfunction renderLabelEntries(id, entries) {\n\t\t\t\t\tvar el = document.getElementById('label-entries-' + id);\n\t\t\t\t\tif (!el) return;\n\t\t\t\t\tif (!entries.length) {\n\t\t\t\t\t\tel.innerHTML = '<span style=\"color:var(--text3);font-size:12px\">No entries directly using this label.</span>';\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tel.innerHTML = '<div style=\"display:flex;flex-direction:column;gap:4px\">' +\n\t\t\t\t\t\tentries.map(function(e) {\n\t\t\t\t\t\t\tvar lname = e.label_name || '(unlabeled)';\n\t\t\t\t\t\t\tvar status = e.status || '';\n\t\t\t\t\t\t\tvar etype = e.entry_type || '';\n\t\t\t\t\t\t\treturn '<div style=\"display:flex;align-items:center;gap:8px\">' +\n\t\t\t\t\t\t\t\t'<span style=\"font-size:12px;color:var(--text)\">' + escHtml(lname) + '</span>' +\n\t\t\t\t\t\t\t\t'<span style=\"font-size:11px;color:var(--text3)\">' + escHtml(etype) + '</span>' +\n\t\t\t\t\t\t\t\t'<span style=\"font-size:11px;padding:1px 5px;border-radius:3px;background:var(--surface2);color:var(--text3)\">' + escHtml(status) + '</span>' +\n\t\t\t\t\t\t\t'</div>';\n\t\t\t\t\t\t}).join('') +\n\t\t\t\t\t'</div>';\n\t\t\t\t}\n\n\t\t\t\t// Hook \"where used\" toggle into existing label event delegation\n\t\t\t\tdocument.addEventListener('click', function(e) {\n\t\t\t\t\tvar whereUsed = e.target.closest('.js-label-where-used');\n\t\t\t\t\tif (whereUsed) {\n\t\t\t\t\t\ttoggleLabelExpansion(whereUsed.dataset.labelId, whereUsed.dataset.labelName);\n\t\t\t\t\t}\n\t\t\t\t});\n\n\n\t\t\t\t// ── Merchants (removed) ───────────────────────────────────────────────────\n\t\t\t\t// Canonical merchants tab was removed in the 2026-07-21 conditions refactor.\n\t\t\t\t// (merchant JS removed)\n\t\t\t\t// ── Institutions ──────────────────────────────────────────────────────────\n\n\t\t\t\tvar instDialog = document.getElementById('inst-dialog');\n\t\t\t\tvar instDialogTitle = document.getElementById('inst-dialog-title');\n\t\t\t\tvar instDialogClose = document.getElementById('inst-dialog-close');\n\t\t\t\tvar instDialogCancel = document.getElementById('inst-dialog-cancel');\n\t\t\t\tvar instDialogSave = document.getElementById('inst-dialog-save');\n\t\t\t\tvar instDialogError = document.getElementById('inst-dialog-error');\n\t\t\t\tvar instEditId = null;\n\n\t\t\t\tvar FIELD_REGISTRY = JSON.parse((instDialog && instDialog.dataset.fieldRegistry) || '[]');\n\n\t\t\t\tvar INST_INPUT_STYLE = 'background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;color:var(--text);outline:none;width:100%;box-sizing:border-box;font-family:inherit';\n\n\t\t\t\tfunction buildInstFields(layoutKey, existingFields) {\n\t\t\t\t\tvar container = document.getElementById('inst-fields-container');\n\t\t\t\t\tif (!container) return;\n\t\t\t\t\tvar src = FIELD_REGISTRY.find(function(s) { return s.key === 'csv'; });\n\t\t\t\t\tif (!src) return;\n\t\t\t\t\tvar layout = src.layouts.find(function(l) { return l.key === layoutKey; });\n\t\t\t\t\tif (!layout) return;\n\t\t\t\t\tcontainer.innerHTML = '';\n\t\t\t\t\tlayout.fields.forEach(function(field) {\n\t\t\t\t\t\tvar wrap = document.createElement('div');\n\t\t\t\t\t\tvar lbl = document.createElement('label');\n\t\t\t\t\t\tlbl.style.cssText = 'display:block;font-size:12px;color:var(--text3);margin-bottom:4px';\n\t\t\t\t\t\tlbl.textContent = field.label + (field.required ? ' *' : ' (optional)');\n\t\t\t\t\t\twrap.appendChild(lbl);\n\t\t\t\t\t\tvar input;\n\t\t\t\t\t\tif (field.kind === 'enum') {\n\t\t\t\t\t\t\tinput = document.createElement('select');\n\t\t\t\t\t\t\tinput.style.cssText = INST_INPUT_STYLE + ';cursor:pointer';\n\t\t\t\t\t\t\t(field.enum_values || []).forEach(function(v) {\n\t\t\t\t\t\t\t\tvar opt = document.createElement('option');\n\t\t\t\t\t\t\t\topt.value = v;\n\t\t\t\t\t\t\t\topt.textContent = v === 'positive_is_credit' ? 'Positive = credit (money in)' : 'Positive = debit (money out)';\n\t\t\t\t\t\t\t\topt.selected = existingFields && existingFields[field.key] === v;\n\t\t\t\t\t\t\t\tinput.appendChild(opt);\n\t\t\t\t\t\t\t});\n\t\t\t\t\t\t} else {\n\t\t\t\t\t\t\tinput = document.createElement('input');\n\t\t\t\t\t\t\tinput.type = 'text';\n\t\t\t\t\t\t\tinput.style.cssText = INST_INPUT_STYLE;\n\t\t\t\t\t\t\tinput.placeholder = (field.aliases && field.aliases[0]) || '';\n\t\t\t\t\t\t\tinput.value = (existingFields && existingFields[field.key]) || '';\n\t\t\t\t\t\t}\n\t\t\t\t\t\tinput.dataset.fieldKey = field.key;\n\t\t\t\t\t\twrap.appendChild(input);\n\t\t\t\t\t\tcontainer.appendChild(wrap);\n\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\tvar instLayoutSel = document.getElementById('inst-layout');\n\t\t\t\tif (instLayoutSel) {\n\t\t\t\t\tinstLayoutSel.addEventListener('change', function() {\n\t\t\t\t\t\tbuildInstFields(instLayoutSel.value, null);\n\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\tfunction openInstDialog(inst) {\n\t\t\t\t\tinstEditId = inst ? inst.id : null;\n\t\t\t\t\tif (instDialogTitle) instDialogTitle.textContent = inst ? 'Edit: ' + inst.institution_name : 'New Institution Mapping';\n\t\t\t\t\tsetField('inst-name', inst ? inst.institution_name : '');\n\t\t\t\t\tvar cfg = (inst && inst.mapping_config) ? inst.mapping_config : {};\n\t\t\t\t\tvar layout = cfg.layout || 'signed';\n\t\t\t\t\tif (instLayoutSel) instLayoutSel.value = layout;\n\t\t\t\t\tbuildInstFields(layout, cfg.fields || null);\n\t\t\t\t\tsetField('inst-settlement', inst ? inst.settlement_window_days : '14');\n\t\t\t\t\tsetField('inst-dedup', inst ? inst.dedup_window_days : '3');\n\t\t\t\t\tvar tol = inst ? inst.amount_tolerance_pct * 100 : 0.5;\n\t\t\t\t\tsetField('inst-tolerance', String(tol ? parseFloat(tol.toFixed(3)) : 0.5));\n\t\t\t\t\tif (instDialogError) { instDialogError.textContent = ''; instDialogError.style.display = 'none'; }\n\t\t\t\t\tif (instDialog) instDialog.showModal();\n\t\t\t\t}\n\n\t\t\t\tbuildInstFields('signed', null);\n\n\t\t\t\tfunction setField(id, val) {\n\t\t\t\t\tvar el = document.getElementById(id);\n\t\t\t\t\tif (el) el.value = String(val === null || val === undefined ? '' : val);\n\t\t\t\t}\n\n\t\t\t\tfunction getField(id) {\n\t\t\t\t\tvar el = document.getElementById(id);\n\t\t\t\t\treturn el ? el.value.trim() : '';\n\t\t\t\t}\n\n\t\t\t\tif (instDialogClose) instDialogClose.addEventListener('click', function(){ if(instDialog) instDialog.close(); });\n\t\t\t\tif (instDialogCancel) instDialogCancel.addEventListener('click', function(){ if(instDialog) instDialog.close(); });\n\t\t\t\tif (instDialog) instDialog.addEventListener('click', function(e){ if(e.target===instDialog) instDialog.close(); });\n\n\t\t\t\tdocument.addEventListener('click', function(e) {\n\t\t\t\t\tvar newBtn = e.target.closest('#new-inst-btn');\n\t\t\t\t\tif (newBtn) { openInstDialog(null); return; }\n\t\t\t\t});\n\n\t\t\t\tif (instDialogSave) instDialogSave.addEventListener('click', function() {\n\t\t\t\t\tvar name = getField('inst-name');\n\t\t\t\t\tif (!name) {\n\t\t\t\t\t\tif (instDialogError) { instDialogError.textContent = 'Institution name is required.'; instDialogError.style.display = ''; }\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tvar instFields = {};\n\t\t\t\t\tdocument.querySelectorAll('#inst-fields-container [data-field-key]').forEach(function(el) {\n\t\t\t\t\t\tif (el.value) instFields[el.dataset.fieldKey] = el.value;\n\t\t\t\t\t});\n\t\t\t\t\tvar body = {\n\t\t\t\t\t\tinstitution_name: name,\n\t\t\t\t\t\tsource_type: 'csv',\n\t\t\t\t\t\tsettlement_window_days: parseInt(getField('inst-settlement')) || 14,\n\t\t\t\t\t\tdedup_window_days: parseInt(getField('inst-dedup')) || 3,\n\t\t\t\t\t\tamount_tolerance_pct: (parseFloat(getField('inst-tolerance')) / 100) || 0.005,\n\t\t\t\t\t\tmapping_config: {\n\t\t\t\t\t\t\tlayout: instLayoutSel ? instLayoutSel.value : 'signed',\n\t\t\t\t\t\t\tfields: instFields,\n\t\t\t\t\t\t},\n\t\t\t\t\t};\n\t\t\t\t\tinstDialogSave.disabled = true;\n\t\t\t\t\tinstDialogSave.textContent = 'Saving…';\n\t\t\t\t\tvar url = instEditId ? '/api/institutions/' + instEditId : '/api/institutions';\n\t\t\t\t\tvar method = instEditId ? 'PUT' : 'POST';\n\t\t\t\t\tfetch(url, {method:method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})\n\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\tif (!r.ok) return r.json().then(function(e){ throw new Error(e.detail||'Save failed'); });\n\t\t\t\t\t\t\tif (instDialog) instDialog.close();\n\t\t\t\t\t\t\tlocation.reload();\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function(err) {\n\t\t\t\t\t\t\tinstDialogSave.disabled = false;\n\t\t\t\t\t\t\tinstDialogSave.textContent = 'Save mapping';\n\t\t\t\t\t\t\tif (instDialogError) { instDialogError.textContent = err.message||'Save failed.'; instDialogError.style.display = ''; }\n\t\t\t\t\t\t});\n\t\t\t\t});\n\n\t\t\t\t// Direct listeners for institution buttons — document delegation is blocked by\n\t\t\t\t// the stopPropagation wrapper inside <summary>, so we attach here instead.\n\t\t\t\t(function() {\n\t\t\t\t\tfunction bindInstButtons() {\n\t\t\t\t\t\tdocument.querySelectorAll('.js-inst-edit').forEach(function(btn) {\n\t\t\t\t\t\t\tbtn.addEventListener('click', function(e) {\n\t\t\t\t\t\t\t\te.stopPropagation();\n\t\t\t\t\t\t\t\ttry { openInstDialog(JSON.parse(btn.dataset.institution)); } catch(ex) {}\n\t\t\t\t\t\t\t});\n\t\t\t\t\t\t});\n\t\t\t\t\t\tdocument.querySelectorAll('.js-inst-delete').forEach(function(btn) {\n\t\t\t\t\t\t\tbtn.addEventListener('click', function(e) {\n\t\t\t\t\t\t\t\te.stopPropagation();\n\t\t\t\t\t\t\t\tvar row = btn.closest('[data-inst-id]');\n\t\t\t\t\t\t\t\tif (!row) return;\n\t\t\t\t\t\t\t\tvar norm = row.querySelector('.js-inst-actions-normal');\n\t\t\t\t\t\t\t\tvar conf = row.querySelector('.js-inst-delete-confirm');\n\t\t\t\t\t\t\t\tif (norm) norm.style.display = 'none';\n\t\t\t\t\t\t\t\tif (conf) conf.style.display = '';\n\t\t\t\t\t\t\t});\n\t\t\t\t\t\t});\n\t\t\t\t\t\tdocument.querySelectorAll('.js-inst-delete-no').forEach(function(btn) {\n\t\t\t\t\t\t\tbtn.addEventListener('click', function(e) {\n\t\t\t\t\t\t\t\te.stopPropagation();\n\t\t\t\t\t\t\t\tvar row = btn.closest('[data-inst-id]');\n\t\t\t\t\t\t\t\tif (!row) return;\n\t\t\t\t\t\t\t\tvar norm = row.querySelector('.js-inst-actions-normal');\n\t\t\t\t\t\t\t\tvar conf = row.querySelector('.js-inst-delete-confirm');\n\t\t\t\t\t\t\t\tif (norm) norm.style.display = '';\n\t\t\t\t\t\t\t\tif (conf) conf.style.display = 'none';\n\t\t\t\t\t\t\t});\n\t\t\t\t\t\t});\n\t\t\t\t\t\tdocument.querySelectorAll('.js-inst-delete-yes').forEach(function(btn) {\n\t\t\t\t\t\t\tbtn.addEventListener('click', function(e) {\n\t\t\t\t\t\t\t\te.stopPropagation();\n\t\t\t\t\t\t\t\tvar id = btn.dataset.instId;\n\t\t\t\t\t\t\t\tbtn.disabled = true;\n\t\t\t\t\t\t\t\tfetch('/api/institutions/' + id, {method: 'DELETE'})\n\t\t\t\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\t\t\t\tif (r.ok || r.status === 404) {\n\t\t\t\t\t\t\t\t\t\t\tvar row = document.querySelector('[data-inst-id=\"' + id + '\"]');\n\t\t\t\t\t\t\t\t\t\t\tif (row) row.remove();\n\t\t\t\t\t\t\t\t\t\t\tvar list = document.getElementById('inst-list');\n\t\t\t\t\t\t\t\t\t\t\tif (list && !list.querySelector('[data-inst-id]')) {\n\t\t\t\t\t\t\t\t\t\t\t\tvar empty = document.getElementById('inst-empty');\n\t\t\t\t\t\t\t\t\t\t\t\tif (empty) empty.style.display = '';\n\t\t\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t\t\t} else { btn.disabled = false; }\n\t\t\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t\t\t.catch(function() { btn.disabled = false; });\n\t\t\t\t\t\t\t});\n\t\t\t\t\t\t});\n\t\t\t\t\t}\n\t\t\t\t\tbindInstButtons();\n\t\t\t\t})();\n\t\t\t})();\n\t\t</script>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -150,7 +150,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 				var templ_7745c5c3_Var6 string
 				templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(l.ID)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 616, Col: 28}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 579, Col: 28}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
 				if templ_7745c5c3_Err != nil {
@@ -168,7 +168,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 					return ""
 				}())
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 622, Col: 11}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 585, Col: 11}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 				if templ_7745c5c3_Err != nil {
@@ -181,7 +181,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 				var templ_7745c5c3_Var8 string
 				templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(l.ID)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 626, Col: 29}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 589, Col: 29}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
 				if templ_7745c5c3_Err != nil {
@@ -194,7 +194,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 				var templ_7745c5c3_Var9 string
 				templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.ResolveAttributeValue(l.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 627, Col: 33}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 590, Col: 33}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var9)
 				if templ_7745c5c3_Err != nil {
@@ -207,7 +207,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 				var templ_7745c5c3_Var10 string
 				templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", l.EntryCount))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 628, Col: 59}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 591, Col: 59}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
 				if templ_7745c5c3_Err != nil {
@@ -220,7 +220,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 				var templ_7745c5c3_Var11 string
 				templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(l.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 630, Col: 17}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 593, Col: 17}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 				if templ_7745c5c3_Err != nil {
@@ -234,7 +234,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 					var templ_7745c5c3_Var12 string
 					templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", l.EntryCount))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 633, Col: 43}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 596, Col: 43}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 					if templ_7745c5c3_Err != nil {
@@ -248,7 +248,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 						var templ_7745c5c3_Var13 string
 						templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(" entry")
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 635, Col: 21}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 598, Col: 21}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 						if templ_7745c5c3_Err != nil {
@@ -258,7 +258,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 						var templ_7745c5c3_Var14 string
 						templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(" entries")
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 637, Col: 23}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 600, Col: 23}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 						if templ_7745c5c3_Err != nil {
@@ -278,7 +278,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 				var templ_7745c5c3_Var15 string
 				templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.ResolveAttributeValue(l.ID)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 645, Col: 66}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 608, Col: 66}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var15)
 				if templ_7745c5c3_Err != nil {
@@ -291,7 +291,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 				var templ_7745c5c3_Var16 string
 				templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.ResolveAttributeValue(l.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 645, Col: 93}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 608, Col: 93}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var16)
 				if templ_7745c5c3_Err != nil {
@@ -304,7 +304,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 				var templ_7745c5c3_Var17 string
 				templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.ResolveAttributeValue(l.ID)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 646, Col: 62}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 609, Col: 62}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var17)
 				if templ_7745c5c3_Err != nil {
@@ -317,7 +317,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 				var templ_7745c5c3_Var18 string
 				templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.ResolveAttributeValue(l.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 646, Col: 89}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 609, Col: 89}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var18)
 				if templ_7745c5c3_Err != nil {
@@ -330,7 +330,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 				var templ_7745c5c3_Var19 string
 				templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", l.EntryCount))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 646, Col: 142}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 609, Col: 142}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var19)
 				if templ_7745c5c3_Err != nil {
@@ -343,7 +343,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 				var templ_7745c5c3_Var20 string
 				templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.ResolveAttributeValue(l.ID)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 647, Col: 62}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 610, Col: 62}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var20)
 				if templ_7745c5c3_Err != nil {
@@ -356,7 +356,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 				var templ_7745c5c3_Var21 string
 				templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.ResolveAttributeValue(l.ID)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 651, Col: 66}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 614, Col: 66}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var21)
 				if templ_7745c5c3_Err != nil {
@@ -369,7 +369,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 				var templ_7745c5c3_Var22 string
 				templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.ResolveAttributeValue(l.ID)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 652, Col: 65}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 615, Col: 65}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var22)
 				if templ_7745c5c3_Err != nil {
@@ -389,7 +389,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 	})
 }
 
-func cfgInstitutionsSection(institutions []store.Institution) templ.Component {
+func cfgInstitutionsSection(institutions []InstitutionWithAccounts) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -435,7 +435,7 @@ func cfgInstitutionsSection(institutions []store.Institution) templ.Component {
 	})
 }
 
-func cfgInstRow(inst store.Institution, isLast bool) templ.Component {
+func cfgInstRow(inst InstitutionWithAccounts, isLast bool) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -463,7 +463,7 @@ func cfgInstRow(inst store.Institution, isLast bool) templ.Component {
 		var templ_7745c5c3_Var25 string
 		templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.ResolveAttributeValue(inst.ID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 692, Col: 24}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 655, Col: 24}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var25)
 		if templ_7745c5c3_Err != nil {
@@ -481,7 +481,7 @@ func cfgInstRow(inst store.Institution, isLast bool) templ.Component {
 			return "background:var(--surface);border-bottom:1px solid var(--border)"
 		}())
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 696, Col: 5}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 659, Col: 5}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 		if templ_7745c5c3_Err != nil {
@@ -494,7 +494,7 @@ func cfgInstRow(inst store.Institution, isLast bool) templ.Component {
 		var templ_7745c5c3_Var27 string
 		templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(inst.InstitutionName)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 700, Col: 95}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 663, Col: 95}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 		if templ_7745c5c3_Err != nil {
@@ -507,7 +507,7 @@ func cfgInstRow(inst store.Institution, isLast bool) templ.Component {
 		var templ_7745c5c3_Var28 string
 		templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(inst.SourceType)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 701, Col: 143}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 664, Col: 143}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
 		if templ_7745c5c3_Err != nil {
@@ -518,9 +518,9 @@ func cfgInstRow(inst store.Institution, isLast bool) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var29 string
-		templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.ResolveAttributeValue(instJSON(inst))
+		templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.ResolveAttributeValue(instJSON(inst.Institution))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 706, Col: 39}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 669, Col: 51}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var29)
 		if templ_7745c5c3_Err != nil {
@@ -533,7 +533,7 @@ func cfgInstRow(inst store.Institution, isLast bool) templ.Component {
 		var templ_7745c5c3_Var30 string
 		templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.ResolveAttributeValue(inst.ID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 718, Col: 28}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 681, Col: 28}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var30)
 		if templ_7745c5c3_Err != nil {
@@ -543,7 +543,7 @@ func cfgInstRow(inst store.Institution, isLast bool) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		for _, field := range instMappingFields(inst) {
+		for _, field := range instMappingFields(inst.Institution) {
 			templ_7745c5c3_Err = cfgInstField(field.Label, field.Value).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
@@ -561,7 +561,50 @@ func cfgInstRow(inst store.Institution, isLast bool) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "</div><div style=\"border-top:1px solid var(--border);background:var(--bg);padding:10px 16px\"><div style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px\">Accounts using this institution</div><div class=\"js-inst-accounts\"><span style=\"color:var(--text3);font-size:12px\">Open to load…</span></div></div></details>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "</div><div style=\"border-top:1px solid var(--border);background:var(--bg);padding:10px 16px\"><div style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px\">Accounts using this institution</div>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if len(inst.Accounts) == 0 {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "<span style=\"color:var(--text3);font-size:12px\">No accounts linked to this institution.</span>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		} else {
+			for _, a := range inst.Accounts {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "<a href=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var31 templ.SafeURL
+				templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/accounts/" + a.ID))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 705, Col: 49}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "\" style=\"display:block;font-size:12px;color:var(--accent);text-decoration:none;padding:1px 0\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var32 string
+				templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(a.Name)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 705, Col: 152}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "</a>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "</div></details>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -585,38 +628,38 @@ func cfgInstField(label, value string) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var31 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var31 == nil {
-			templ_7745c5c3_Var31 = templ.NopComponent
+		templ_7745c5c3_Var33 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var33 == nil {
+			templ_7745c5c3_Var33 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "<div><div style=\"font-size:11px;color:var(--text3);margin-bottom:1px\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "<div><div style=\"font-size:11px;color:var(--text3);margin-bottom:1px\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var32 string
-		templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(label)
+		var templ_7745c5c3_Var34 string
+		templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 745, Col: 74}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 714, Col: 74}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "</div><div style=\"font-size:13px;color:var(--text);font-family:monospace\">")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var33 string
-		templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(value)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 746, Col: 77}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "</div><div style=\"font-size:13px;color:var(--text);font-family:monospace\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "</div></div>")
+		var templ_7745c5c3_Var35 string
+		templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.JoinStringErrs(value)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 715, Col: 77}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var35))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "</div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -640,9 +683,9 @@ func cfgInstOptField(label string, value *string) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var34 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var34 == nil {
-			templ_7745c5c3_Var34 = templ.NopComponent
+		templ_7745c5c3_Var36 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var36 == nil {
+			templ_7745c5c3_Var36 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		if value != nil && *value != "" {
@@ -671,25 +714,25 @@ func cfgInstDialog() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var35 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var35 == nil {
-			templ_7745c5c3_Var35 = templ.NopComponent
+		templ_7745c5c3_Var37 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var37 == nil {
+			templ_7745c5c3_Var37 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "<dialog id=\"inst-dialog\" data-field-registry=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "<dialog id=\"inst-dialog\" data-field-registry=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var36 string
-		templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.ResolveAttributeValue(fieldRegistryJSON())
+		var templ_7745c5c3_Var38 string
+		templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.ResolveAttributeValue(fieldRegistryJSON())
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 759, Col: 43}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 728, Col: 43}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var36)
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var38)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "\" style=\"background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0;color:var(--text);width:520px;max-width:95vw;max-height:90vh\"><div style=\"display:flex;flex-direction:column;max-height:90vh;overflow:hidden\"><div style=\"padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0\"><span id=\"inst-dialog-title\" style=\"font-size:15px;font-weight:700\">New Institution Mapping</span> <button id=\"inst-dialog-close\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:18px;line-height:1;padding:0 4px\">✕</button></div><div style=\"overflow:auto;flex:1;padding:20px;display:flex;flex-direction:column;gap:12px\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "\" style=\"background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0;color:var(--text);width:520px;max-width:95vw;max-height:90vh\"><div style=\"display:flex;flex-direction:column;max-height:90vh;overflow:hidden\"><div style=\"padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0\"><span id=\"inst-dialog-title\" style=\"font-size:15px;font-weight:700\">New Institution Mapping</span> <button id=\"inst-dialog-close\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:18px;line-height:1;padding:0 4px\">✕</button></div><div style=\"overflow:auto;flex:1;padding:20px;display:flex;flex-direction:column;gap:12px\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -697,7 +740,7 @@ func cfgInstDialog() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "<div><label style=\"display:block;font-size:12px;color:var(--text3);margin-bottom:4px\">Amount layout</label> <select id=\"inst-layout\" style=\"background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;color:var(--text);outline:none;width:100%;box-sizing:border-box;cursor:pointer;font-family:inherit\"><option value=\"signed\">Signed amount (single amount column)</option> <option value=\"indicator\">Amount + debit/credit indicator column</option> <option value=\"split\">Separate debit and credit columns</option></select></div><div id=\"inst-fields-container\" style=\"display:grid;grid-template-columns:1fr 1fr;gap:12px\"></div><div style=\"display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "<div><label style=\"display:block;font-size:12px;color:var(--text3);margin-bottom:4px\">Amount layout</label> <select id=\"inst-layout\" style=\"background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;color:var(--text);outline:none;width:100%;box-sizing:border-box;cursor:pointer;font-family:inherit\"><option value=\"signed\">Signed amount (single amount column)</option> <option value=\"indicator\">Amount + debit/credit indicator column</option> <option value=\"split\">Separate debit and credit columns</option></select></div><div id=\"inst-fields-container\" style=\"display:grid;grid-template-columns:1fr 1fr;gap:12px\"></div><div style=\"display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -713,7 +756,7 @@ func cfgInstDialog() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "</div><div id=\"inst-dialog-error\" style=\"color:var(--commit);font-size:12px;display:none\"></div></div><div style=\"padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0\"><button id=\"inst-dialog-cancel\" style=\"background:transparent;border:1px solid var(--border);border-radius:6px;padding:6px 16px;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit\">Cancel</button> <button id=\"inst-dialog-save\" style=\"background:var(--accent);border:none;border-radius:6px;padding:6px 16px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit\">Save mapping</button></div></div></dialog>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "</div><div id=\"inst-dialog-error\" style=\"color:var(--commit);font-size:12px;display:none\"></div></div><div style=\"padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0\"><button id=\"inst-dialog-cancel\" style=\"background:transparent;border:1px solid var(--border);border-radius:6px;padding:6px 16px;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit\">Cancel</button> <button id=\"inst-dialog-save\" style=\"background:var(--accent);border:none;border-radius:6px;padding:6px 16px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit\">Save mapping</button></div></div></dialog>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -737,74 +780,74 @@ func cfgFormField(label, id, inputType, placeholder string, required bool) templ
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var37 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var37 == nil {
-			templ_7745c5c3_Var37 = templ.NopComponent
+		templ_7745c5c3_Var39 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var39 == nil {
+			templ_7745c5c3_Var39 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "<div><label style=\"display:block;font-size:12px;color:var(--text3);margin-bottom:4px\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var38 string
-		templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.JoinStringErrs(label)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 805, Col: 10}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var38))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, " ")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if required {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "<span style=\"color:var(--commit)\">*</span>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "</label> <input id=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var39 string
-		templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.ResolveAttributeValue(id)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 811, Col: 10}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var39)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "\" type=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "<div><label style=\"display:block;font-size:12px;color:var(--text3);margin-bottom:4px\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var40 string
-		templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.ResolveAttributeValue(inputType)
+		templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 812, Col: 19}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 774, Col: 10}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var40)
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var40))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "\" placeholder=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, " ")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if required {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "<span style=\"color:var(--commit)\">*</span>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, "</label> <input id=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var41 string
-		templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.ResolveAttributeValue(placeholder)
+		templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.ResolveAttributeValue(id)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 813, Col: 28}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 780, Col: 10}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var41)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "\" style=\"background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;color:var(--text);outline:none;width:100%\"></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "\" type=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var42 string
+		templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.ResolveAttributeValue(inputType)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 781, Col: 19}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var42)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "\" placeholder=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var43 string
+		templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.ResolveAttributeValue(placeholder)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 782, Col: 28}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var43)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "\" style=\"background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;color:var(--text);outline:none;width:100%\"></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
