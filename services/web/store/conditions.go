@@ -26,7 +26,7 @@ func (s *Store) EnrichConditions(ctx context.Context, entityID string, raw json.
 
 	var enrichNode func(node map[string]any) map[string]any
 	enrichNode = func(node map[string]any) map[string]any {
-		// Logical node — recurse into children.
+		// Logical node — recurse into children (and/or) or child (not).
 		if children, ok := node["children"]; ok {
 			if arr, ok := children.([]any); ok {
 				enriched := make([]any, len(arr))
@@ -39,6 +39,13 @@ func (s *Store) EnrichConditions(ctx context.Context, entityID string, raw json.
 				}
 				out := copyMap(node)
 				out["children"] = enriched
+				return out
+			}
+		}
+		if child, ok := node["child"]; ok {
+			if childMap, ok := child.(map[string]any); ok {
+				out := copyMap(node)
+				out["child"] = enrichNode(childMap)
 				return out
 			}
 		}
@@ -85,7 +92,7 @@ func (s *Store) ResolveConditions(ctx context.Context, entityID string, raw json
 			return node
 		}
 
-		// Logical node — recurse.
+		// Logical node — recurse into children (and/or) or child (not).
 		if children, ok := node["children"]; ok {
 			if arr, ok := children.([]any); ok {
 				resolved := make([]any, len(arr))
@@ -98,6 +105,13 @@ func (s *Store) ResolveConditions(ctx context.Context, entityID string, raw json
 				}
 				out := copyMap(node)
 				out["children"] = resolved
+				return out
+			}
+		}
+		if child, ok := node["child"]; ok {
+			if childMap, ok := child.(map[string]any); ok {
+				out := copyMap(node)
+				out["child"] = resolveNode(childMap)
 				return out
 			}
 		}
