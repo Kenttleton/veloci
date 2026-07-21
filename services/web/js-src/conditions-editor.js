@@ -1,7 +1,7 @@
 import { EditorView, keymap } from "@codemirror/view"
 import { EditorState } from "@codemirror/state"
 import { json } from "@codemirror/lang-json"
-import { autocompletion, snippet } from "@codemirror/autocomplete"
+import { autocompletion, snippet, startCompletion } from "@codemirror/autocomplete"
 import { syntaxTree, HighlightStyle, syntaxHighlighting } from "@codemirror/language"
 import { tags } from "@lezer/highlight"
 import { linter, lintGutter } from "@codemirror/lint"
@@ -558,6 +558,21 @@ const velociTheme = EditorView.theme({
   },
 })
 
+// ── Delete-triggered autocomplete ─────────────────────────────────────────
+// activateOnTyping only fires on "input" events; backspace/delete are "delete"
+// events. This listener re-triggers completion after any deletion while the
+// cursor is inside a key string so partial keys still show suggestions.
+
+function makeDeleteAutocompleteTrigger() {
+  return EditorView.updateListener.of((update) => {
+    if (!update.docChanged) return
+    if (!update.transactions.some(tr => tr.isUserEvent("delete"))) return
+    const pos = update.state.selection.main.head
+    const ctx = getJsonContext(update.state, pos)
+    if (ctx?.type === "key") startCompletion(update.view)
+  })
+}
+
 // ── Init ───────────────────────────────────────────────────────────────────
 
 function initEditor(textarea) {
@@ -598,6 +613,7 @@ function initEditor(textarea) {
         lintGutter(),
         linter(conditionsLinter, { delay: 600 }),
         EditorView.lineWrapping,
+        makeDeleteAutocompleteTrigger(),
         makeSaveExtension(entryId, indicator),
         makeSummaryUpdater(summaryDiv),
         velociTheme,
