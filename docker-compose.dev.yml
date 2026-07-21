@@ -24,6 +24,8 @@ services:
       context: ./services/web
       dockerfile: Dockerfile.dev
     command: air
+    environment:
+      - VELOCI_DEV=true
     volumes:
       - ./services/web:/app
       - veloci-go-cache:/root/go/pkg/mod

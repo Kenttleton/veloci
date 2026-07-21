@@ -158,8 +158,15 @@ func runServe(_ *cobra.Command, _ []string) error {
 		return c.Redirect(http.StatusFound, "/budget")
 	})
 
-	// Static assets
-	e.Static("/static", "static")
+	// Static assets — no-store in dev so the browser re-fetches after air restarts
+	if os.Getenv("VELOCI_DEV") == "true" {
+		e.GET("/static/*", func(c echo.Context) error {
+			c.Response().Header().Set("Cache-Control", "no-store")
+			return c.File("static/" + c.Param("*"))
+		})
+	} else {
+		e.Static("/static", "static")
+	}
 
 	// Register health (no auth)
 	handler.RegisterHealthRoutes(e)
