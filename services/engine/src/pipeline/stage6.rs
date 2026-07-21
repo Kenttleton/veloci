@@ -61,8 +61,8 @@ pub async fn run(
     // Build lookup maps for Stage 5 trends.
     let entry_trends: std::collections::HashMap<Uuid, &crate::pipeline::types::NodeTrend> =
         stage5.entry_trends.iter().map(|t| (t.node_id, t)).collect();
-    let classification_trends: std::collections::HashMap<Uuid, &crate::pipeline::types::NodeTrend> =
-        stage5.classification_trends.iter().map(|t| (t.node_id, t)).collect();
+    let label_trends: std::collections::HashMap<Uuid, &crate::pipeline::types::NodeTrend> =
+        stage5.label_trends.iter().map(|t| (t.node_id, t)).collect();
 
     // Build all snapshot rows in parallel (CPU work).
     let mut rows: Vec<SnapshotInsert> = Vec::new();
@@ -93,16 +93,16 @@ pub async fn run(
         })
         .collect();
 
-    // Classification snapshots (label aggregates).
-    let classification_rows: Vec<SnapshotInsert> = stage4
+    // Label snapshots (label aggregates).
+    let label_rows: Vec<SnapshotInsert> = stage4
         .label_rates
         .par_iter()
         .map(|rate| {
-            let trend = classification_trends.get(&rate.label_id);
+            let trend = label_trends.get(&rate.label_id);
             SnapshotInsert {
                 entity_id,
                 node_id:                    rate.label_id,
-                node_type:                  NodeType::Classification.as_str(),
+                node_type:                  NodeType::Label.as_str(),
                 snapshot_date,
                 computed_as_of,
                 job_id,
@@ -120,7 +120,7 @@ pub async fn run(
         .collect();
 
     rows.extend(entry_rows);
-    rows.extend(classification_rows);
+    rows.extend(label_rows);
 
     if rows.is_empty() {
         return Ok(());
@@ -248,11 +248,11 @@ mod tests {
     #[test]
     fn entry_snapshot_uses_entry_node_type() {
         assert_eq!(NodeType::Entry.as_str(), "entry");
-        assert_eq!(NodeType::Classification.as_str(), "classification");
+        assert_eq!(NodeType::Label.as_str(), "label");
     }
 
     #[test]
-    fn classification_snapshot_built_from_label_rate() {
+    fn label_snapshot_built_from_label_rate() {
         let label_rate = LabelRate {
             label_id:                 Uuid::nil(),
             direction:                Direction::Expense,
@@ -264,7 +264,7 @@ mod tests {
         let snapshot = SnapshotInsert {
             entity_id:                  Uuid::nil(),
             node_id:                    label_rate.label_id,
-            node_type:                  NodeType::Classification.as_str(),
+            node_type:                  NodeType::Label.as_str(),
             snapshot_date:              date("2026-03-01"),
             computed_as_of:             date("2026-03-01"),
             job_id:                     Uuid::nil(),
@@ -278,7 +278,7 @@ mod tests {
             rolling_window_total_cents: 0,
             balance_cents:              0,
         };
-        assert_eq!(snapshot.node_type, "classification");
+        assert_eq!(snapshot.node_type, "label");
         assert_eq!(snapshot.transaction_count, 3);
     }
 }

@@ -13,7 +13,7 @@
 //! 3. Group into `HashMap<Uuid, Vec<SnapshotRow>>`.
 //! 4. `rayon::par_iter` over all nodes — no DB access inside the loop.
 //!    - Entry nodes: filter by date window (start_date absorbed into entries table).
-//!    - Classification nodes: filter by date window only.
+//!    - Label nodes: filter by date window only.
 //! 5. Linear regression (OLS) over `(days_since_first, actual_rate)` pairs.
 //! 6. Compute drift using direction-aware sign convention.
 
@@ -50,7 +50,7 @@ pub async fn run(
         .map(|r| (r.entry_id, r.period_days * 3))
         .collect();
 
-    let classification_nodes: Vec<(Uuid, i32)> = stage4
+    let label_nodes: Vec<(Uuid, i32)> = stage4
         .label_rates
         .iter()
         .map(|l| (l.label_id, l.period_days * 3))
@@ -60,7 +60,7 @@ pub async fn run(
     let max_window_days = entry_nodes
         .iter()
         .map(|(_, w)| *w)
-        .chain(classification_nodes.iter().map(|(_, w)| *w))
+        .chain(label_nodes.iter().map(|(_, w)| *w))
         .max()
         .unwrap_or(90);
 
@@ -68,13 +68,13 @@ pub async fn run(
     let all_node_ids: Vec<Uuid> = entry_nodes
         .iter()
         .map(|(id, _)| *id)
-        .chain(classification_nodes.iter().map(|(id, _)| *id))
+        .chain(label_nodes.iter().map(|(id, _)| *id))
         .collect();
 
     if all_node_ids.is_empty() {
         return Ok(Stage5Output {
-            entry_trends:          Vec::new(),
-            classification_trends: Vec::new(),
+            entry_trends: Vec::new(),
+            label_trends: Vec::new(),
         });
     }
 
@@ -89,7 +89,7 @@ pub async fn run(
         .collect();
 
     // Build lookup for label → direction (from Stage 4).
-    let classification_direction: std::collections::HashMap<Uuid, Direction> = stage4
+    let label_direction: std::collections::HashMap<Uuid, Direction> = stage4
         .label_rates
         .iter()
         .map(|l| (l.label_id, l.direction))
@@ -143,8 +143,8 @@ pub async fn run(
         })
         .collect();
 
-    // Parallel computation for classification nodes (label aggregates).
-    let classification_trends: Vec<NodeTrend> = classification_nodes
+    // Parallel computation for label nodes (label aggregates).
+    let label_trends: Vec<NodeTrend> = label_nodes
         .par_iter()
         .map(|(node_id, window_days)| {
             let node_history = history_map.get(node_id).map(Vec::as_slice).unwrap_or(&[]);
@@ -162,14 +162,14 @@ pub async fn run(
                 .get(node_id)
                 .map(|l| l.projected_rate_per_day)
                 .unwrap_or(0.0);
-            let direction = classification_direction.get(node_id).copied().unwrap_or(Direction::Expense);
+            let direction = label_direction.get(node_id).copied().unwrap_or(Direction::Expense);
 
             let (slope, r_squared) = linear_regression_from_history(&history, snapshot_date, current_rate);
             let drift = compute_drift(current_rate, current_projected, direction);
 
             NodeTrend {
                 node_id:       *node_id,
-                node_type:     NodeType::Classification,
+                node_type:     NodeType::Label,
                 drift_per_day: drift,
                 slope_per_day: slope,
                 r_squared,
@@ -177,7 +177,7 @@ pub async fn run(
         })
         .collect();
 
-    Ok(Stage5Output { entry_trends, classification_trends })
+    Ok(Stage5Output { entry_trends, label_trends })
 }
 
 // ---------------------------------------------------------------------------

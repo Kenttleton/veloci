@@ -57,6 +57,31 @@ templ AccountPage(shell ShellData, data AccountData) {
 					style="background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);outline:none;width:260px"
 				/>
 			</div>
+			<!-- "Entries referencing this account" collapsible panel.
+			     SPEC GAP: No /api/entries?account_condition= endpoint exists.
+			     We fetch all entries and filter client-side by searching the
+			     conditions JSON string for the account name or ID. -->
+			<details
+				id="entry-refs-details"
+				data-account-id={ data.Account.ID }
+				data-account-name={ data.Account.Name }
+				style="border-bottom:1px solid var(--border);flex-shrink:0"
+			>
+				<summary style="display:flex;align-items:center;gap:6px;padding:8px 20px;cursor:pointer;list-style:none;-webkit-appearance:none;user-select:none;font-size:12px;color:var(--text2);font-weight:600">
+					<span
+						id="entry-refs-chevron"
+						style="display:inline-block;font-size:10px;color:var(--text3);transition:transform 0.1s"
+					>▶</span>
+					Entries referencing this account
+					<span id="entry-refs-count" style="font-size:11px;font-weight:400;color:var(--text3)"></span>
+				</summary>
+				<div
+					id="entry-refs-body"
+					style="padding:8px 20px 12px;background:var(--surface)"
+				>
+					<span style="color:var(--text3);font-size:12px">Loading…</span>
+				</div>
+			</details>
 			<div
 				id="tx-section"
 				data-account-id={ data.Account.ID }
@@ -965,6 +990,84 @@ templ AccountPage(shell ShellData, data AccountData) {
 						}
 						setTimeout(function() { document.addEventListener('click', onOutside, true); }, 0);
 					});
+				})();
+
+				// ─── "Entries referencing this account" panel ─────────────────────────
+				// SPEC GAP: no condition-content search API exists.
+				// Strategy: fetch all entries, stringify conditions, search for the
+				// account name or ID. Matches both enriched (name) and raw (ID) formats.
+				(function() {
+					var details = document.getElementById('entry-refs-details');
+					if (!details) return;
+
+					var accountId   = details.dataset.accountId || '';
+					var accountName = (details.dataset.accountName || '').toLowerCase();
+					var chevron     = document.getElementById('entry-refs-chevron');
+					var body        = document.getElementById('entry-refs-body');
+					var countEl     = document.getElementById('entry-refs-count');
+					var loaded      = false;
+
+					details.addEventListener('toggle', function() {
+						if (chevron) chevron.style.transform = details.open ? 'rotate(90deg)' : '';
+						if (details.open && !loaded) {
+							loaded = true;
+							loadEntryRefs();
+						}
+					});
+
+					function loadEntryRefs() {
+						body.innerHTML = '<span style="color:var(--text3);font-size:12px">Loading&#8230;</span>';
+						fetch('/api/entries?status=all&limit=500', { credentials: 'same-origin' })
+							.then(function(r) { return r.json(); })
+							.then(function(env) {
+								var entries = env.data || [];
+								var matched = entries.filter(function(e) {
+									if (!e.conditions) return false;
+									try {
+										var s = JSON.stringify(e.conditions).toLowerCase();
+										return (accountId && s.indexOf(accountId.toLowerCase()) !== -1)
+											|| (accountName && s.indexOf(accountName) !== -1);
+									} catch(ex) { return false; }
+								});
+								renderEntryRefs(matched);
+							})
+							.catch(function() {
+								body.innerHTML = '<span style="color:var(--commit);font-size:12px">Failed to load entries.</span>';
+							});
+					}
+
+					function esc(s) {
+						return String(s || '')
+							.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+					}
+
+					function renderEntryRefs(entries) {
+						if (countEl) countEl.textContent = entries.length ? '— ' + entries.length + ' found' : '';
+						if (!entries.length) {
+							body.innerHTML = '<span style="color:var(--text3);font-size:12px">No entries reference this account in their conditions.</span>';
+							return;
+						}
+						var rows = entries.map(function(e) {
+							var labelText = e.label_name || '(unlabeled)';
+							var dirColor  = e.direction === 'income' ? 'var(--income)' : 'var(--commit)';
+							var dotColor  = e.status === 'active' ? 'var(--income)'
+								: e.status === 'pending_review' ? 'var(--commit)' : 'var(--text3)';
+							var href = e.label_id
+								? '/ledger?filter=all&label=' + encodeURIComponent(e.label_id)
+								: '/ledger?filter=all';
+							return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-top:1px solid var(--border)">'
+								+ '<span style="font-size:11px;color:' + dotColor + '">&#9679;</span>'
+								+ '<a href="' + esc(href) + '" style="font-size:12px;color:var(--text);text-decoration:none;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
+								+ esc(labelText) + '</a>'
+								+ '<span style="font-size:10px;padding:1px 5px;border-radius:3px;background:var(--surface2);color:' + dirColor + '">' + esc(e.direction || '') + '</span>'
+								+ '<span style="font-size:11px;color:var(--text3);flex-shrink:0">' + esc(e.entry_type || '') + '</span>'
+								+ '</div>';
+						}).join('');
+						body.innerHTML = '<div style="display:flex;flex-direction:column">' + rows + '</div>'
+							+ '<p style="margin:6px 0 0;font-size:11px;color:var(--text3);font-style:italic">'
+							+ 'Matches are approximate — entries whose conditions mention this account name or ID.'
+							+ '</p>';
+					}
 				})();
 			})();
 		</script>

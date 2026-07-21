@@ -198,13 +198,11 @@ func runServe(_ *cobra.Command, _ []string) error {
 		handler.RegisterAccountsRoutes(subAPI, s, pub, perms)
 		handler.RegisterLabelsRoutes(subAPI, s, pub, perms)
 		handler.RegisterEntriesRoutes(subAPI, s, pub, perms)
-		handler.RegisterClassificationsRoutes(subAPI, s, pub, perms)
 		handler.RegisterTransactionsRoutes(subAPI, s, pub, perms)
 		handler.RegisterSnapshotsRoutes(subAPI, s, pub, perms)
 		handler.RegisterProjectionsRoutes(subAPI, s, pub, perms)
 		handler.RegisterAdminRoutes(subAPI, s, pub, perms)
 		handler.RegisterJobsRoutes(subAPI, jobsHandler, perms)
-		handler.RegisterCanonicalMerchantsRoutes(subAPI, s, pub, perms)
 		handler.RegisterAutocompleteRoutes(subAPI, s, perms)
 
 		// Raw chi handler (multipart upload cannot use Huma).
@@ -247,7 +245,6 @@ func runMigrate(_ *cobra.Command, _ []string) error {
 		"accounts:read", "accounts:write",
 		"import:create",
 		"entries:write",
-		"classifications:write",
 		"labels:write",
 		"reports:read",
 		"users:manage",

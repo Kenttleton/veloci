@@ -10,20 +10,57 @@ import (
 templ LedgerPage(shell ShellData, data LedgerData) {
 	@Shell(shell) {
 		<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
-			<div style="display:flex;align-items:center;padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
-				<h1 style="margin:0;font-size:18px;font-weight:700;color:var(--text);letter-spacing:-0.02em">Ledger</h1>
-			</div>
-			<div style="display:flex;align-items:center;justify-content:flex-end;padding:0 20px;height:36px;border-bottom:1px solid var(--border);flex-shrink:0">
+			<div style="display:flex;align-items:center;padding:12px 20px;border-bottom:1px solid var(--border);flex-shrink:0;gap:8px">
+				<h1 style="margin:0;font-size:18px;font-weight:700;color:var(--text);letter-spacing:-0.02em;flex:1">Ledger</h1>
+				<span id="dirty-indicator" style="display:none;font-size:11px;font-weight:600;color:var(--commit);padding:2px 8px;border-radius:10px;background:color-mix(in srgb,var(--surface2) 60%,var(--commit) 40%)">Changes pending — reprocess to apply</span>
+				<button
+					id="add-entry-btn"
+					style="background:var(--accent);border:none;border-radius:5px;padding:4px 12px;cursor:pointer;font-size:12px;font-weight:500;color:#fff;font-family:inherit"
+				>+ Add Entry</button>
 				<button
 					id="run-engine-btn"
-					style="background:none;border:1px solid var(--border);border-radius:4px;padding:3px 10px;cursor:pointer;font-size:12px;color:var(--text2);font-family:inherit"
+					style="background:none;border:1px solid var(--border);border-radius:5px;padding:4px 10px;cursor:pointer;font-size:12px;color:var(--text2);font-family:inherit"
 				>Run Engine</button>
 			</div>
-			<div style="display:flex;gap:6px;padding:10px 20px;border-bottom:1px solid var(--border);flex-shrink:0;align-items:center">
-				@ledgerPill("all", "All", data.Filter, data.Counts.PendingReview+data.Counts.Active+data.Counts.Inactive)
-				@ledgerPill("pending_review", "Review", data.Filter, data.Counts.PendingReview)
-				@ledgerPill("active", "Active", data.Filter, data.Counts.Active)
-				@ledgerPill("inactive", "Inactive", data.Filter, data.Counts.Inactive)
+			<div style="display:flex;gap:6px;padding:8px 20px;border-bottom:1px solid var(--border);flex-shrink:0;align-items:center;flex-wrap:wrap">
+				@ledgerPill("all", "All", data, data.Counts.PendingReview+data.Counts.Active+data.Counts.Inactive)
+				@ledgerPill("pending_review", "Review", data, data.Counts.PendingReview)
+				@ledgerPill("active", "Active", data, data.Counts.Active)
+				@ledgerPill("inactive", "Inactive", data, data.Counts.Inactive)
+				<div style="width:1px;height:16px;background:var(--border);margin:0 4px"></div>
+				@ledgerDirectionPill("income", "Income", data)
+				@ledgerDirectionPill("expense", "Expense", data)
+				<div style="width:1px;height:16px;background:var(--border);margin:0 4px"></div>
+				@ledgerTypePill("standing", "Standing", data)
+				@ledgerTypePill("variable", "Variable", data)
+				@ledgerTypePill("irregular", "Irregular", data)
+				if data.LabelFilter != "" {
+					<div style="width:1px;height:16px;background:var(--border);margin:0 4px"></div>
+					<a
+						href={ templ.SafeURL(ledgerFilterURL(data, "label", "")) }
+						style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:16px;font-size:12px;font-weight:500;cursor:pointer;text-decoration:none;background:var(--accent);color:#fff;border:1px solid transparent"
+						title="Clear label filter"
+					>
+						if data.LabelName != "" {
+							{ data.LabelName }
+						} else {
+							Label filter
+						}
+						<span style="opacity:0.75;font-size:11px">×</span>
+					</a>
+				}
+				<div style="margin-left:auto;display:flex;align-items:center;gap:6px">
+					<label style="font-size:11px;color:var(--text3)">Sort:</label>
+					<select
+						id="ledger-sort"
+						style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:12px;color:var(--text);outline:none;cursor:pointer;font-family:inherit"
+					>
+						<option value="start_date" selected?={ data.Sort == "start_date" || data.Sort == "" }>Start date</option>
+						<option value="rate" selected?={ data.Sort == "rate" }>Rate/day</option>
+						<option value="confidence" selected?={ data.Sort == "confidence" }>Confidence</option>
+						<option value="label" selected?={ data.Sort == "label" }>Label name</option>
+					</select>
+				</div>
 			</div>
 			<div style="display:grid;grid-template-columns:28px 1fr 80px 70px 90px 110px 140px;padding:5px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
 				<div></div>
@@ -46,22 +83,78 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 		</div>
 		<script>
 			(function() {
-				// Run Engine
+				// ── Dirty state ───────────────────────────────────────────────────────────
+				var _dirty = false;
+				function markDirty() {
+					if (_dirty) return;
+					_dirty = true;
+					var ind = document.getElementById('dirty-indicator');
+					if (ind) ind.style.display = '';
+					var runBtn = document.getElementById('run-engine-btn');
+					if (runBtn) {
+						runBtn.style.background = 'var(--commit)';
+						runBtn.style.color = '#fff';
+						runBtn.style.borderColor = 'var(--commit)';
+						runBtn.textContent = 'Reprocess';
+					}
+				}
+				function clearDirty() {
+					_dirty = false;
+					var ind = document.getElementById('dirty-indicator');
+					if (ind) ind.style.display = 'none';
+					var runBtn = document.getElementById('run-engine-btn');
+					if (runBtn) {
+						runBtn.style.background = '';
+						runBtn.style.color = '';
+						runBtn.style.borderColor = '';
+						runBtn.textContent = 'Run Engine';
+					}
+				}
+				// Conditions saved by the CM6 editor module → mark page dirty.
+				document.addEventListener('veloci:conditions-saved', function() { markDirty(); });
+				// Navigate-away warning when dirty.
+				window.addEventListener('beforeunload', function(e) {
+					if (!_dirty) return;
+					e.preventDefault();
+					e.returnValue = '';
+				});
+
+				// ── Run Engine / Reprocess ─────────────────────────────────────────────
 				var runBtn = document.getElementById('run-engine-btn');
 				if (runBtn) {
 					runBtn.addEventListener('click', function() {
 						runBtn.disabled = true;
+						var origText = runBtn.textContent;
 						runBtn.textContent = 'Running…';
 						fetch('/api/jobs/reprocess', {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})
 							.then(function(r) {
-								runBtn.textContent = r.ok ? 'Engine started' : 'Failed';
-								setTimeout(function(){ runBtn.disabled=false; runBtn.textContent='Run Engine'; }, 3000);
+								if (r.ok) {
+									clearDirty();
+									runBtn.textContent = 'Engine started';
+								} else {
+									runBtn.textContent = 'Failed';
+								}
+								setTimeout(function(){ runBtn.disabled=false; runBtn.textContent=_dirty?'Reprocess':'Run Engine'; }, 3000);
 							})
-							.catch(function(){ runBtn.disabled=false; runBtn.textContent='Run Engine'; });
+							.catch(function(){ runBtn.disabled=false; runBtn.textContent=origText; });
 					});
 				}
 
-				// Chevron rotation
+				// ── Sort selector ──────────────────────────────────────────────────────
+				var sortSel = document.getElementById('ledger-sort');
+				if (sortSel) {
+					sortSel.addEventListener('change', function() {
+						var url = new URL(window.location.href);
+						if (sortSel.value === 'start_date') {
+							url.searchParams.delete('sort');
+						} else {
+							url.searchParams.set('sort', sortSel.value);
+						}
+						window.location.href = url.toString();
+					});
+				}
+
+				// ── Chevron rotation ───────────────────────────────────────────────────
 				document.addEventListener('toggle', function(e) {
 					var det = e.target;
 					if (!det.classList.contains('js-entry-details')) return;
@@ -69,11 +162,12 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 					if (chev) chev.style.transform = det.open ? 'rotate(90deg)' : '';
 				}, true);
 
-				// Lazy-load transactions when entry opened
+				// ── Lazy-load transactions when entry opened ────────────────────────────
 				document.addEventListener('toggle', function(e) {
 					var det = e.target;
 					if (!det.classList.contains('js-entry-details') || !det.open) return;
 					var entryId = det.dataset.entryId;
+					var entryStatus = det.dataset.entryStatus || 'active';
 					var txPanel = det.querySelector('.js-tx-panel');
 					if (!txPanel || txPanel.dataset.loaded) return;
 					txPanel.dataset.loaded = '1';
@@ -82,8 +176,13 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 						.then(function(r){ return r.json(); })
 						.then(function(env) {
 							var txns = env.data || [];
+							// "will be" for pending_review, "are" for active/inactive.
+							var verb = entryStatus === 'pending_review' ? 'will be' : 'are';
 							if (!txns.length) {
-								txPanel.innerHTML = '<p style="color:var(--text3);font-size:12px">No matched transactions.</p>';
+								var msg = entryStatus === 'pending_review'
+									? 'No transactions matched yet. Run Engine to process this entry.'
+									: 'No matched transactions.';
+								txPanel.innerHTML = '<p style="color:var(--text3);font-size:12px">' + msg + '</p>';
 								return;
 							}
 							var rows = txns.map(function(t) {
@@ -98,10 +197,14 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 									'<td style="padding:5px 8px;font-size:12px;color:var(--text3)">' + t.settlement_status + '</td>' +
 									'</tr>';
 							}).join('');
-							txPanel.innerHTML = '<table style="width:100%;border-collapse:collapse">' +
+							var countLine = '<div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:6px">' +
+								txns.length + ' transaction' + (txns.length === 1 ? '' : 's') + ' ' + verb + ' matched' +
+							'</div>';
+							txPanel.innerHTML = countLine +
+								'<table style="width:100%;border-collapse:collapse">' +
 								'<thead><tr>' +
 								'<th style="padding:5px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:600">Date</th>' +
-								'<th style="padding:5px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:600">Merchant</th>' +
+								'<th style="padding:5px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:600">Description</th>' +
 								'<th style="padding:5px 8px;text-align:right;font-size:11px;color:var(--text3);font-weight:600">Amount</th>' +
 								'<th style="padding:5px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:600">Status</th>' +
 								'</tr></thead><tbody>' + rows + '</tbody></table>';
@@ -111,7 +214,7 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 						});
 				}, true);
 
-				// Approve / Reject
+				// ── Approve / Reject ───────────────────────────────────────────────────
 				document.addEventListener('click', function(e) {
 					var btn = e.target.closest('.js-review-btn');
 					if (!btn) return;
@@ -172,6 +275,7 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 						})
 						.then(function(r) {
 							if (!r || !r.ok) throw new Error('action-failed');
+							if (action === 'approve') { markDirty(); }
 							var row = document.querySelector('.js-entry-details[data-entry-id="'+entryId+'"]');
 							if (row) row.remove();
 						})
@@ -182,7 +286,7 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 					});
 				});
 
-				// Confidence panel collapse toggle
+				// ── Confidence panel collapse ──────────────────────────────────────────
 				document.addEventListener('click', function(e) {
 					var btn = e.target.closest('.js-conf-toggle');
 					if (!btn) return;
@@ -196,26 +300,250 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 					});
 					btn.textContent = expanded ? '▶' : '◀';
 				});
+
+				// ── Add Entry modal ────────────────────────────────────────────────────
+				var addEntryBtn = document.getElementById('add-entry-btn');
+				var addEntryDialog = document.getElementById('add-entry-dialog');
+				var addEntryClose = document.getElementById('add-entry-close');
+				var addEntryCancel = document.getElementById('add-entry-cancel');
+				var addEntrySave = document.getElementById('add-entry-save');
+				var addEntryError = document.getElementById('add-entry-error');
+
+				if (addEntryBtn && addEntryDialog) {
+					addEntryBtn.addEventListener('click', function() {
+						addEntryDialog.showModal();
+						var startInput = document.getElementById('ae-start-date');
+						if (startInput && !startInput.value) {
+							startInput.value = new Date().toISOString().slice(0, 10);
+						}
+					});
+				}
+				if (addEntryClose) addEntryClose.addEventListener('click', function() { addEntryDialog.close(); });
+				if (addEntryCancel) addEntryCancel.addEventListener('click', function() { addEntryDialog.close(); });
+				if (addEntryDialog) addEntryDialog.addEventListener('click', function(e) {
+					if (e.target === addEntryDialog) addEntryDialog.close();
+				});
+
+				function getAeField(id) {
+					var el = document.getElementById(id);
+					return el ? el.value.trim() : '';
+				}
+
+				function resolveAddEntryLabel(name, cb) {
+					if (!name) { cb(null); return; }
+					fetch('/api/labels?limit=500')
+						.then(function(r){ return r.json(); })
+						.then(function(env) {
+							var found = (env.data||[]).find(function(l){ return l.name.toLowerCase()===name.toLowerCase(); });
+							if (found) { cb(found.id); return; }
+							fetch('/api/labels',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})
+								.then(function(r){ return r.json(); })
+								.then(function(c){ cb(c.data ? c.data.id : null); });
+						})
+						.catch(function(){ cb(null); });
+				}
+
+				if (addEntrySave) {
+					addEntrySave.addEventListener('click', function() {
+						var labelName = getAeField('ae-label');
+						var direction = getAeField('ae-direction');
+						var entryType = getAeField('ae-type');
+						var rateStr = getAeField('ae-rate');
+						var startDate = getAeField('ae-start-date');
+						var condsStr = getAeField('ae-conditions');
+
+						if (!direction || !entryType || !startDate) {
+							if (addEntryError) addEntryError.textContent = 'Direction, type, and start date are required.';
+							return;
+						}
+
+						var conds = {};
+						if (condsStr) {
+							try { conds = JSON.parse(condsStr); }
+							catch(ex) {
+								if (addEntryError) addEntryError.textContent = 'Conditions must be valid JSON.';
+								return;
+							}
+						}
+
+						// Rate: user enters $/mo, convert to cents/day (÷ 30.44 × 100).
+						var ratePerDay = null;
+						if (rateStr) {
+							var rateVal = parseFloat(rateStr);
+							if (!isNaN(rateVal)) { ratePerDay = (rateVal / 30.44) * 100; }
+						}
+
+						addEntrySave.disabled = true;
+						addEntrySave.textContent = 'Saving…';
+						if (addEntryError) addEntryError.textContent = '';
+
+						resolveAddEntryLabel(labelName, function(labelId) {
+							var body = {
+								label_id: labelId,
+								direction: direction,
+								entry_type: entryType,
+								period_days: entryType === 'standing' ? 30 : 1,
+								source: 'user',
+								start_date: startDate,
+								conditions: conds,
+								projected_rate_per_day: ratePerDay,
+								priority: 0,
+								project_tentatively: false,
+							};
+							fetch('/api/entries', {
+								method: 'POST',
+								headers: {'Content-Type': 'application/json'},
+								credentials: 'same-origin',
+								body: JSON.stringify(body),
+							})
+							.then(function(r) {
+								if (!r.ok) return r.json().then(function(e){ throw new Error(e.detail||'Save failed'); });
+								markDirty();
+								addEntryDialog.close();
+								location.reload();
+							})
+							.catch(function(err) {
+								addEntrySave.disabled = false;
+								addEntrySave.textContent = 'Save';
+								if (addEntryError) addEntryError.textContent = err.message || 'Failed to create entry.';
+							});
+						});
+					});
+				}
 			})();
 		</script>
 		<script type="module" src="/static/js/conditions-editor.js"></script>
+		<!-- Add Entry Dialog -->
+		<dialog
+			id="add-entry-dialog"
+			style="border:1px solid var(--border);border-radius:8px;padding:0;background:var(--surface);color:var(--text);max-width:480px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.3)"
+		>
+			<div style="display:flex;align-items:center;padding:14px 18px;border-bottom:1px solid var(--border)">
+				<span style="font-size:14px;font-weight:700;flex:1">Add Entry</span>
+				<button id="add-entry-close" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--text3);line-height:1;padding:2px 6px">&times;</button>
+			</div>
+			<div style="padding:16px 18px;display:grid;gap:12px">
+				<div>
+					<label style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">Label</label>
+					<input
+						id="ae-label"
+						type="text"
+						placeholder="e.g. Rent"
+						style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit"
+					/>
+				</div>
+				<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+					<div>
+						<label style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">Direction</label>
+						<select
+							id="ae-direction"
+							style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit"
+						>
+							<option value="">— select —</option>
+							<option value="expense">Expense</option>
+							<option value="income">Income</option>
+						</select>
+					</div>
+					<div>
+						<label style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">Type</label>
+						<select
+							id="ae-type"
+							style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit"
+						>
+							<option value="">— select —</option>
+							<option value="standing">Standing</option>
+							<option value="variable">Variable</option>
+							<option value="irregular">Irregular</option>
+						</select>
+					</div>
+				</div>
+				<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+					<div>
+						<label style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">Projected $/mo <span style="font-weight:400;color:var(--text3)">(optional)</span></label>
+						<input
+							id="ae-rate"
+							type="number"
+							min="0"
+							step="0.01"
+							placeholder="e.g. 1500"
+							style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit"
+						/>
+					</div>
+					<div>
+						<label style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">Start date</label>
+						<input
+							id="ae-start-date"
+							type="date"
+							style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit"
+						/>
+					</div>
+				</div>
+				<div>
+					<label style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">
+						Conditions JSON <span style="font-weight:400;color:var(--text3)">(optional — you can add via the editor after saving)</span>
+					</label>
+					<textarea
+						id="ae-conditions"
+						rows="4"
+						placeholder="{}"
+						style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:12px;color:var(--text);font-family:monospace;resize:vertical"
+					></textarea>
+				</div>
+				<div id="add-entry-error" style="font-size:12px;color:var(--commit);min-height:16px"></div>
+			</div>
+			<div style="display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--border)">
+				<button
+					id="add-entry-cancel"
+					style="background:none;border:1px solid var(--border);border-radius:5px;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit"
+				>Cancel</button>
+				<button
+					id="add-entry-save"
+					style="background:var(--accent);border:none;border-radius:5px;padding:6px 16px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit"
+				>Save</button>
+			</div>
+		</dialog>
 	}
 }
 
-templ ledgerPill(value, label, current string, count int) {
+templ ledgerPill(value, label string, data LedgerData, count int) {
 	<a
-		href={ templ.SafeURL("?filter=" + value) }
-		style={ ledgerPillStyle(value, value == current) }
+		href={ templ.SafeURL(ledgerFilterURL(data, "filter", value)) }
+		style={ ledgerPillStyle(value, value == data.Filter) }
 	>
 		{ label }
-		<span style={ ledgerPillCountStyle(value == current) }>{ fmt.Sprintf("%d", count) }</span>
+		<span style={ ledgerPillCountStyle(value == data.Filter) }>{ fmt.Sprintf("%d", count) }</span>
 	</a>
+}
+
+templ ledgerDirectionPill(value, label string, data LedgerData) {
+	<a
+		href={ templ.SafeURL(func() string {
+			if data.DirectionFilter == value {
+				return ledgerFilterURL(data, "direction", "")
+			}
+			return ledgerFilterURL(data, "direction", value)
+		}()) }
+		style={ ledgerSmallPillStyle(data.DirectionFilter == value) }
+	>{ label }</a>
+}
+
+templ ledgerTypePill(value, label string, data LedgerData) {
+	<a
+		href={ templ.SafeURL(func() string {
+			if data.TypeFilter == value {
+				return ledgerFilterURL(data, "entry_type", "")
+			}
+			return ledgerFilterURL(data, "entry_type", value)
+		}()) }
+		style={ ledgerSmallPillStyle(data.TypeFilter == value) }
+	>{ label }</a>
 }
 
 templ ledgerEntryRow(e store.EntryRow) {
 	<details
 		class="js-entry-details"
 		data-entry-id={ e.ID }
+		data-entry-status={ e.Status }
 		style="border-bottom:1px solid var(--border)"
 	>
 		<summary style="display:grid;grid-template-columns:28px 1fr 80px 70px 90px 110px 140px;align-items:center;padding:10px 20px;cursor:pointer;list-style:none;user-select:none">
@@ -314,8 +642,10 @@ templ ledgerEntryRow(e store.EntryRow) {
 					</div>
 				}
 			</div>
+			<div style="border-top:1px solid var(--border);background:var(--surface);padding:10px 20px">
+				<div class="js-conditions-summary" style="font-size:12px;color:var(--text2);line-height:1.7"></div>
+			</div>
 			<div style="border-top:1px solid var(--border);background:var(--surface);padding:10px 20px 12px">
-				<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Transactions</div>
 				<div class="js-tx-panel" data-entry-id={ e.ID }>
 					<p style="color:var(--text3);font-size:12px">Open to load matched transactions.</p>
 				</div>
@@ -359,6 +689,13 @@ func ledgerPillCountStyle(active bool) string {
 		return "background:rgba(255,255,255,0.25);border-radius:8px;padding:0 5px;font-size:11px;line-height:17px"
 	}
 	return "background:var(--surface2);border-radius:8px;padding:0 5px;font-size:11px;line-height:17px"
+}
+
+func ledgerSmallPillStyle(active bool) string {
+	if active {
+		return "display:inline-flex;align-items:center;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:500;cursor:pointer;text-decoration:none;background:var(--text2);color:var(--bg);border:1px solid transparent"
+	}
+	return "display:inline-flex;align-items:center;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:400;cursor:pointer;text-decoration:none;background:transparent;color:var(--text3);border:1px solid var(--border)"
 }
 
 func ledgerDirectionBadgeStyle(d string) string {

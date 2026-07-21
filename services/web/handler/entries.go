@@ -29,32 +29,32 @@ func NewEntriesHandler(s *store.Store, pub *queue.Publisher) *EntriesHandler {
 
 // entryView is the API representation of an entry with computed budget fields.
 type entryView struct {
-	ID           string          `json:"id"`
-	LabelID      *string         `json:"label_id"`
-	LabelName    *string         `json:"label_name"`
-	Name         string          `json:"name"`
-	Direction    string          `json:"direction"`
-	EntryType    string          `json:"entry_type"`
-	Period       string          `json:"period"`
-	Status       string          `json:"status"`
-	Source       string          `json:"source"`
-	Priority     int             `json:"priority"`
-	ActualRate   float64         `json:"actual_rate"`
-	ProjectedRate *float64       `json:"projected_rate"`
-	DriftRate    float64         `json:"drift_rate"`
-	Tag          *string         `json:"tag"`
-	Conditions   json.RawMessage `json:"conditions"`
-	StartDate    string          `json:"start_date"`
-	EndDate      *string         `json:"end_date"`
-	CreatedAt    string          `json:"created_at"`
+	ID            string          `json:"id"`
+	LabelID       *string         `json:"label_id"`
+	LabelName     *string         `json:"label_name"`
+	Name          string          `json:"name"`
+	Direction     string          `json:"direction"`
+	EntryType     string          `json:"entry_type"`
+	Period        string          `json:"period"`
+	Status        string          `json:"status"`
+	Source        string          `json:"source"`
+	Priority      int             `json:"priority"`
+	ActualRate    float64         `json:"actual_rate"`
+	ProjectedRate *float64        `json:"projected_rate"`
+	DriftRate     float64         `json:"drift_rate"`
+	Tag           *string         `json:"tag"`
+	Conditions    json.RawMessage `json:"conditions"`
+	StartDate     string          `json:"start_date"`
+	EndDate       *string         `json:"end_date"`
+	CreatedAt     string          `json:"created_at"`
 	// Engine review metadata (null for user-created entries)
-	AlertType                *string  `json:"alert_type"`
-	Confidence               *float64 `json:"confidence"`
-	MerchantConfidence       *float64 `json:"merchant_confidence"`
-	TimingConfidence         *float64 `json:"timing_confidence"`
-	AmountConfidence         *float64 `json:"amount_confidence"`
-	SampleMerchants          []string `json:"sample_merchants"`
-	MatchedTransactionCount  *int     `json:"matched_transaction_count"`
+	AlertType               *string  `json:"alert_type"`
+	Confidence              *float64 `json:"confidence"`
+	MerchantConfidence      *float64 `json:"merchant_confidence"`
+	TimingConfidence        *float64 `json:"timing_confidence"`
+	AmountConfidence        *float64 `json:"amount_confidence"`
+	SampleMerchants         []string `json:"sample_merchants"`
+	MatchedTransactionCount *int     `json:"matched_transaction_count"`
 }
 
 func toEntryView(e store.EntryRow) entryView {
@@ -94,24 +94,24 @@ func toEntryView(e store.EntryRow) entryView {
 	}
 
 	return entryView{
-		ID:           e.ID,
-		LabelID:      e.LabelID,
-		LabelName:    e.LabelName,
-		Name:         name,
-		Direction:    e.Direction,
-		EntryType:    e.EntryType,
-		Period:       period,
-		Status:       e.Status,
-		Source:       e.Source,
-		Priority:     e.Priority,
-		ActualRate:   actualRate,
-		ProjectedRate: e.ProjectedRatePerDay,
-		DriftRate:    driftRate,
-		Tag:          tag,
-		Conditions:   e.Conditions,
-		StartDate:    e.StartDate.Format("2006-01-02"),
-		EndDate:      endDate,
-		CreatedAt:    e.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		ID:                      e.ID,
+		LabelID:                 e.LabelID,
+		LabelName:               e.LabelName,
+		Name:                    name,
+		Direction:               e.Direction,
+		EntryType:               e.EntryType,
+		Period:                  period,
+		Status:                  e.Status,
+		Source:                  e.Source,
+		Priority:                e.Priority,
+		ActualRate:              actualRate,
+		ProjectedRate:           e.ProjectedRatePerDay,
+		DriftRate:               driftRate,
+		Tag:                     tag,
+		Conditions:              e.Conditions,
+		StartDate:               e.StartDate.Format("2006-01-02"),
+		EndDate:                 endDate,
+		CreatedAt:               e.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		AlertType:               e.AlertType,
 		Confidence:              e.Confidence,
 		MerchantConfidence:      e.MerchantConfidence,
@@ -126,10 +126,7 @@ func entryName(e store.EntryRow) string {
 	if e.LabelName != nil && *e.LabelName != "" {
 		return *e.LabelName
 	}
-	if len(e.ID) >= 8 {
-		return e.ID[:8]
-	}
-	return e.ID
+	return "Unlabeled"
 }
 
 type listEntriesInput struct {

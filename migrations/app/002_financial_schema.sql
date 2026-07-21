@@ -169,10 +169,10 @@ CREATE INDEX ON transactions (entity_id, date);
 CREATE INDEX ON transactions (entity_id, account_id, settlement_status, imported_at);
 
 -- ── LABELS ──────────────────────────────────────────────────────────────────
--- Global name registry. Used by entries (canonical merchant/signal name) and
--- classifications (output label). Entity-scoping is on operational tables;
--- labels are pure display names referenced by ID throughout the engine.
--- Renaming a label requires no recalculation — only a UI refresh.
+-- Global name registry. Used by entries (display name tag) and as the
+-- composability key for label_matched conditions. Entity-scoping is on
+-- operational tables; labels are pure display names referenced by ID throughout
+-- the engine. Renaming a label requires no recalculation — only a UI refresh.
 
 CREATE TABLE labels (
   id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -183,36 +183,6 @@ CREATE TABLE labels (
 );
 
 CREATE INDEX ON labels (entity_id);
-
--- ── CANONICAL MERCHANTS ─────────────────────────────────────────────────────
--- Per-entity registry of canonical merchant identities resolved by the engine
--- and curated by users. Scoped by entity_id for v2 multi-tenant isolation.
-
-CREATE TABLE canonical_merchants (
-  id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  entity_id  UUID        NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-  name       TEXT        NOT NULL,
-  source     TEXT        NOT NULL DEFAULT 'engine'
-             CHECK (source IN ('engine', 'user')),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (entity_id, name)
-);
-
-CREATE INDEX ON canonical_merchants (entity_id);
-
-CREATE TABLE canonical_merchant_aliases (
-  entity_id             UUID        NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-  normalized_name       TEXT        NOT NULL,
-  canonical_merchant_id UUID        NOT NULL
-                        REFERENCES canonical_merchants(id) ON DELETE CASCADE,
-  source                TEXT        NOT NULL DEFAULT 'engine'
-                        CHECK (source IN ('engine', 'user')),
-  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  PRIMARY KEY (entity_id, normalized_name)
-);
-
-CREATE INDEX ON canonical_merchant_aliases (entity_id, canonical_merchant_id);
 
 -- ── ENTRIES ──────────────────────────────────────────────────────────────────
 -- One row per continuous rate signal instance (absorbs rules + rule_epochs).
@@ -271,30 +241,6 @@ CREATE INDEX ON entries (entity_id, priority);
 CREATE INDEX ON entries (entity_id, next_due_date);
 CREATE INDEX ON entries (entity_id, label_id);
 
--- ── CLASSIFICATIONS ──────────────────────────────────────────────────────────
--- Post-stage rules: apply labels to entries based on entry attributes and
--- existing label assignments. Entirely user-defined. Do not affect rate
--- calculations — display/grouping only.
--- Composability: conditions reference label UUIDs, enabling aggregate labels
--- built from leaf labels without a separate membership table.
--- Cycle detection (label A → classification → label B → classification → A)
--- enforced by veloci-api at write time.
-
-CREATE TABLE classifications (
-  id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  entity_id  UUID        NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-  label_id   UUID        NOT NULL REFERENCES labels(id) ON DELETE CASCADE,
-  conditions JSONB       NOT NULL,
-  priority   INTEGER     NOT NULL DEFAULT 100,
-  status     TEXT        NOT NULL DEFAULT 'active'
-             CHECK (status IN ('active', 'inactive')),
-  source     TEXT        NOT NULL DEFAULT 'user' CHECK (source IN ('user', 'engine')),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX ON classifications (entity_id, status);
-CREATE INDEX ON classifications (entity_id, label_id);
-
 -- ── TRANSACTION ENTRY ASSIGNMENTS ────────────────────────────────────────────
 -- Many-to-many. A transaction may match multiple entries.
 -- confidence = 1.0 for user entries, 0.0–1.0 for engine-generated entries.
@@ -315,8 +261,8 @@ CREATE INDEX ON transaction_entry_assignments (entry_id);
 -- import and UPSERTs all days in [computed_as_of - settlement_window_days .. computed_as_of].
 -- Days outside the flux window have only settled transactions and are not recomputed.
 --
--- node_type = 'entry'          → entry-level rate signal (Stage 3 output)
--- node_type = 'classification' → classification-level aggregate (Stage 4 output)
+-- node_type = 'entry' → entry-level rate signal (Stage 3 output)
+-- node_type = 'label' → label-level aggregate (Stage 4 output)
 --
 -- snapshot_date    = the calendar day this row represents (identity key).
 -- computed_as_of   = MAX(transactions.date) from the import run that wrote this row.
@@ -333,7 +279,7 @@ CREATE TABLE snapshots (
   id                     UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
   entity_id              UUID          NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
   node_id                UUID          NOT NULL,
-  node_type              TEXT          NOT NULL CHECK (node_type IN ('entry', 'classification')),
+  node_type              TEXT          NOT NULL CHECK (node_type IN ('entry', 'label')),
   snapshot_date          DATE          NOT NULL,
   computed_as_of         DATE          NOT NULL,
   job_id                 UUID          NOT NULL REFERENCES processing_jobs(id),

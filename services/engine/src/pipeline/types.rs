@@ -26,10 +26,10 @@ pub enum EntryType {
 impl EntryType {
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
-            "standing" => Some(Self::Standing),
-            "variable" => Some(Self::Variable),
+            "standing"  => Some(Self::Standing),
+            "variable"  => Some(Self::Variable),
             "irregular" => Some(Self::Irregular),
-            _          => None,
+            _           => None,
         }
     }
 }
@@ -77,15 +77,15 @@ impl Direction {
 /// Per-entry rate computed by Stage 3.
 #[derive(Debug, Clone)]
 pub struct EntryRate {
-    pub entry_id:                  Uuid,
-    pub label_id:                  Option<Uuid>,
-    pub direction:                 Direction,
-    pub entry_type:                EntryType,
-    pub period_days:               i32,
-    pub actual_rate_per_day:       f64,
-    pub projected_rate_per_day:    f64,
-    pub transaction_count:         i32,
-    pub window_days_used:          i32,
+    pub entry_id:                   Uuid,
+    pub label_id:                   Option<Uuid>,
+    pub direction:                  Direction,
+    pub entry_type:                 EntryType,
+    pub period_days:                i32,
+    pub actual_rate_per_day:        f64,
+    pub projected_rate_per_day:     f64,
+    pub transaction_count:          i32,
+    pub window_days_used:           i32,
     pub rolling_window_total_cents: i64,
 }
 
@@ -103,33 +103,36 @@ pub struct LabelRate {
 /// Trend values computed by Stage 5 for a single node.
 #[derive(Debug, Clone)]
 pub struct NodeTrend {
-    pub node_id:            Uuid,
-    pub node_type:          NodeType,
-    pub drift_per_day:      f64,
-    pub slope_per_day:      f64,
-    pub r_squared:          f64,
+    pub node_id:       Uuid,
+    pub node_type:     NodeType,
+    pub drift_per_day: f64,
+    pub slope_per_day: f64,
+    pub r_squared:     f64,
 }
 
-/// Discriminates entry nodes from classification nodes in `snapshots`.
+/// Discriminates entry nodes from label nodes in `snapshots`.
+///
+/// The `node_type` column in the `snapshots` table stores the string form of
+/// this discriminant (`"entry"` or `"label"`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NodeType {
     Entry,
-    Classification,
+    Label,
 }
 
 impl NodeType {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Entry          => "entry",
-            Self::Classification => "classification",
+            Self::Entry => "entry",
+            Self::Label => "label",
         }
     }
 
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
-            "entry"          => Some(Self::Entry),
-            "classification" => Some(Self::Classification),
-            _                => None,
+            "entry" => Some(Self::Entry),
+            "label" => Some(Self::Label),
+            _       => None,
         }
     }
 }
@@ -141,11 +144,11 @@ impl NodeType {
 /// A single historical snapshot row, as bulk-loaded before the Stage 5 par_iter.
 #[derive(Debug, Clone)]
 pub struct SnapshotRow {
-    pub node_id:              Uuid,
-    pub node_type:            NodeType,
-    pub snapshot_date:        NaiveDate,
-    pub computed_as_of:       NaiveDate,
-    pub actual_rate_per_day:  f64,
+    pub node_id:             Uuid,
+    pub node_type:           NodeType,
+    pub snapshot_date:       NaiveDate,
+    pub computed_as_of:      NaiveDate,
+    pub actual_rate_per_day: f64,
 }
 
 // ---------------------------------------------------------------------------
@@ -156,9 +159,9 @@ pub struct SnapshotRow {
 #[derive(Debug, Clone)]
 pub struct Stage0Output {
     /// The `MAX(date)` from transactions — used as the flux window anchor.
-    pub computed_as_of:   NaiveDate,
-    pub imported_count:   u32,
-    pub skipped_count:    u32,
+    pub computed_as_of: NaiveDate,
+    pub imported_count: u32,
+    pub skipped_count:  u32,
 }
 
 /// Output from Stage 1.
@@ -190,8 +193,8 @@ pub struct Stage4Output {
 /// Output from Stage 5.
 #[derive(Debug, Clone)]
 pub struct Stage5Output {
-    pub entry_trends:          Vec<NodeTrend>,
-    pub classification_trends: Vec<NodeTrend>,
+    pub entry_trends: Vec<NodeTrend>,
+    pub label_trends: Vec<NodeTrend>,
 }
 
 // ---------------------------------------------------------------------------
@@ -242,13 +245,13 @@ mod tests {
 
     #[test]
     fn entry_type_from_str() {
-        assert_eq!(EntryType::from_str("standing"), Some(EntryType::Standing));
-        assert_eq!(EntryType::from_str("variable"), Some(EntryType::Variable));
+        assert_eq!(EntryType::from_str("standing"),  Some(EntryType::Standing));
+        assert_eq!(EntryType::from_str("variable"),  Some(EntryType::Variable));
         assert_eq!(EntryType::from_str("irregular"), Some(EntryType::Irregular));
-        assert_eq!(EntryType::from_str("single"),   None); // old name removed
-        assert_eq!(EntryType::from_str("one_time"), None); // older name removed
-        assert_eq!(EntryType::from_str("hit"),      None);
-        assert_eq!(EntryType::from_str("boost"),    None);
+        assert_eq!(EntryType::from_str("single"),    None); // old name removed
+        assert_eq!(EntryType::from_str("one_time"),  None); // older name removed
+        assert_eq!(EntryType::from_str("hit"),       None);
+        assert_eq!(EntryType::from_str("boost"),     None);
     }
 
     #[test]
@@ -260,11 +263,11 @@ mod tests {
 
     #[test]
     fn node_type_roundtrip() {
-        assert_eq!(NodeType::Entry.as_str(),          "entry");
-        assert_eq!(NodeType::Classification.as_str(), "classification");
-        assert_eq!(NodeType::from_str("entry"),          Some(NodeType::Entry));
-        assert_eq!(NodeType::from_str("classification"), Some(NodeType::Classification));
-        assert_eq!(NodeType::from_str("rule"),  None);
-        assert_eq!(NodeType::from_str("label"), None);
+        assert_eq!(NodeType::Entry.as_str(), "entry");
+        assert_eq!(NodeType::Label.as_str(), "label");
+        assert_eq!(NodeType::from_str("entry"), Some(NodeType::Entry));
+        assert_eq!(NodeType::from_str("label"), Some(NodeType::Label));
+        assert_eq!(NodeType::from_str("rule"),           None);
+        assert_eq!(NodeType::from_str("classification"), None);
     }
 }

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -352,18 +354,58 @@ func (s *Server) Budget(w http.ResponseWriter, r *http.Request) {
 
 // LedgerData is passed to the Ledger page template.
 type LedgerData struct {
-	Entries []store.EntryRow
-	Counts  store.EntryCounts
-	Filter  string
+	Entries         []store.EntryRow
+	Counts          store.EntryCounts
+	Filter          string // status filter: all | active | pending_review | inactive
+	LabelFilter     string // ?label=<uuid> — filter by label_id
+	LabelName       string // display name for active label filter
+	DirectionFilter string // ?direction=income|expense
+	TypeFilter      string // ?entry_type=standing|variable|irregular
+	Sort            string // ?sort=start_date|rate|confidence|label
+}
+
+// ledgerFilterURL builds a ledger URL that preserves all current filter params
+// and overrides a single param. Pass an empty value to remove that param.
+func ledgerFilterURL(d LedgerData, key, value string) string {
+	q := url.Values{}
+	set := func(k, v, skipVal string) {
+		if v != "" && v != skipVal {
+			q.Set(k, v)
+		}
+	}
+	set("filter", d.Filter, "all")
+	set("label", d.LabelFilter, "")
+	set("direction", d.DirectionFilter, "")
+	set("entry_type", d.TypeFilter, "")
+	set("sort", d.Sort, "start_date")
+	if value == "" {
+		q.Del(key)
+	} else if (key == "filter" && value == "all") || (key == "sort" && value == "start_date") {
+		q.Del(key)
+	} else {
+		q.Set(key, value)
+	}
+	if len(q) == 0 {
+		return "/ledger"
+	}
+	return "/ledger?" + q.Encode()
 }
 
 func (s *Server) Ledger(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	entityID := middleware.EntityID(ctx)
 
-	filter := r.URL.Query().Get("filter")
+	qp := r.URL.Query()
+	filter := qp.Get("filter")
 	if filter == "" {
 		filter = "all"
+	}
+	labelFilter := qp.Get("label")
+	dirFilter := qp.Get("direction")
+	typeFilter := qp.Get("entry_type")
+	srt := qp.Get("sort")
+	if srt == "" {
+		srt = "start_date"
 	}
 
 	counts, _ := s.store.CountEntriesByStatus(ctx, entityID)
@@ -375,14 +417,87 @@ func (s *Server) Ledger(w http.ResponseWriter, r *http.Request) {
 		entries, _ = s.store.ListEntries(ctx, entityID, store.DateRange{}, "", filter, 500, "")
 	}
 
+	// Apply additional filters (label, direction, type) in Go after fetch.
+	if labelFilter != "" || dirFilter != "" || typeFilter != "" {
+		filtered := entries[:0]
+		for _, e := range entries {
+			if labelFilter != "" && (e.LabelID == nil || *e.LabelID != labelFilter) {
+				continue
+			}
+			if dirFilter != "" && e.Direction != dirFilter {
+				continue
+			}
+			if typeFilter != "" && e.EntryType != typeFilter {
+				continue
+			}
+			filtered = append(filtered, e)
+		}
+		entries = filtered
+	}
+
+	// Apply non-default sort.
+	switch srt {
+	case "rate":
+		sort.SliceStable(entries, func(i, j int) bool {
+			ri, rj := entries[i].ActualRatePerDay, entries[j].ActualRatePerDay
+			if ri == nil && rj == nil {
+				return false
+			}
+			if ri == nil {
+				return false
+			}
+			if rj == nil {
+				return true
+			}
+			return *ri > *rj
+		})
+	case "confidence":
+		sort.SliceStable(entries, func(i, j int) bool {
+			ci, cj := entries[i].Confidence, entries[j].Confidence
+			if ci == nil && cj == nil {
+				return false
+			}
+			if ci == nil {
+				return false
+			}
+			if cj == nil {
+				return true
+			}
+			return *ci > *cj
+		})
+	case "label":
+		sort.SliceStable(entries, func(i, j int) bool {
+			li, lj := "", ""
+			if entries[i].LabelName != nil {
+				li = *entries[i].LabelName
+			}
+			if entries[j].LabelName != nil {
+				lj = *entries[j].LabelName
+			}
+			return li < lj
+		})
+	}
+
 	for i := range entries {
 		entries[i].Conditions = s.store.EnrichConditions(ctx, entityID, entries[i].Conditions)
 	}
 
+	// Resolve label name for the filter display badge.
+	var labelName string
+	if labelFilter != "" {
+		if label, err := s.store.GetLabel(ctx, entityID, labelFilter); err == nil {
+			labelName = label.Name
+		}
+	}
 	data := LedgerData{
-		Entries: entries,
-		Counts:  counts,
-		Filter:  filter,
+		Entries:         entries,
+		Counts:          counts,
+		Filter:          filter,
+		LabelFilter:     labelFilter,
+		LabelName:       labelName,
+		DirectionFilter: dirFilter,
+		TypeFilter:      typeFilter,
+		Sort:            srt,
 	}
 	s.render(w, r, LedgerPage(s.buildShellData(r), data))
 }
@@ -721,11 +836,13 @@ func txnAmountStyle(cents int64) string {
 }
 
 // ConfigurationData is passed to the Configuration page template.
+// The canonical merchants tab and CanonicalMerchants field have been removed
+// per the conditions refactor (2026-07-21): merchant matching is now handled
+// by entry conditions, not a separate canonical_merchants table.
 type ConfigurationData struct {
-	Tab                string
-	Labels             []store.LabelWithCount
-	Institutions       []store.Institution
-	CanonicalMerchants []store.CanonicalMerchantWithCounts
+	Tab          string
+	Labels       []store.LabelWithCount
+	Institutions []store.Institution
 }
 
 func (s *Server) Configuration(w http.ResponseWriter, r *http.Request) {
@@ -733,14 +850,13 @@ func (s *Server) Configuration(w http.ResponseWriter, r *http.Request) {
 	entityID := middleware.EntityID(ctx)
 
 	tab := r.URL.Query().Get("tab")
-	if tab == "" {
+	// "merchants" tab is removed; redirect old bookmarks to labels.
+	if tab == "" || tab == "merchants" {
 		tab = "labels"
 	}
 
 	data := ConfigurationData{Tab: tab}
 	switch tab {
-	case "merchants":
-		data.CanonicalMerchants, _ = s.store.ListCanonicalMerchants(ctx, entityID, 500, "")
 	case "institutions":
 		data.Institutions, _ = s.store.ListInstitutions(ctx, entityID)
 	default:
