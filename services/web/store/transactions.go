@@ -35,6 +35,33 @@ const transactionCols = `
 	), '{}') AS entry_ids
 `
 
+// SearchMerchants returns distinct merchant_normalized values for an entity that
+// contain the given payee string (case-insensitive). Capped at 50 results.
+func (s *Store) SearchMerchants(ctx context.Context, entityID, payee string) ([]string, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT DISTINCT merchant_normalized
+		FROM transactions
+		WHERE entity_id = $1
+		  AND merchant_normalized <> ''
+		  AND merchant_normalized ILIKE '%' || $2 || '%'
+		ORDER BY merchant_normalized
+		LIMIT 50
+	`, entityID, payee)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var v string
+		if err := rows.Scan(&v); err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
 // GetTransaction fetches a single transaction by id for an entity.
 func (s *Store) GetTransaction(ctx context.Context, entityID, id string) (Transaction, error) {
 	rows, err := s.pool.Query(ctx, fmt.Sprintf(`

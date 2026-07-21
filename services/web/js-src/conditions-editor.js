@@ -61,18 +61,17 @@ const KNOWN_KEYS = new Set([
 
 // ── Module-level caches (one fetch per page load) ──────────────────────────
 
-// SPEC GAP: The spec references /api/transactions/payees but that endpoint
-// does not exist. Using /api/transactions/merchant-strings instead.
-// Flag this to the backend team if a dedicated payees endpoint is needed.
-let _payeeCache = null
-
-async function fetchPayees() {
-  if (_payeeCache !== null) return _payeeCache
+async function searchMerchants(payee) {
+  if (!payee) return []
   try {
-    const r = await fetch("/api/transactions/merchant-strings?limit=2000", { credentials: "same-origin" })
-    _payeeCache = r.ok ? ((await r.json()).data || []) : []
-  } catch { _payeeCache = [] }
-  return _payeeCache
+    const r = await fetch("/api/transactions/merchant", {
+      method: "QUERY",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payee }),
+    })
+    return r.ok ? ((await r.json()).data || []) : []
+  } catch { return [] }
 }
 
 // Maps label name (lowercased) → { id, name } — used for autocomplete and summary links.
@@ -159,11 +158,8 @@ async function valueCompleter(context) {
   }
 
   if (PAYEE_KEYS.has(key)) {
-    const payees = await fetchPayees()
-    const options = payees
-      .filter(p => p.toLowerCase().includes(typed.toLowerCase()))
-      .slice(0, 30)
-      .map(p => ({ label: p, type: "constant", apply: makeApply(p) }))
+    const payees = await searchMerchants(typed)
+    const options = payees.map(p => ({ label: p, type: "constant", apply: makeApply(p) }))
     return options.length ? { from: valueStart, options } : null
   }
 
@@ -468,9 +464,7 @@ function initEditor(textarea) {
   const entryDetails = textarea.closest(".js-entry-details")
   const summaryDiv = entryDetails ? entryDetails.querySelector(".js-conditions-summary") : null
 
-  // Pre-warm the payee and label caches so the first autocomplete invocation
-  // feels instant rather than waiting for the network request.
-  fetchPayees()
+  // Pre-warm the label cache so the first autocomplete invocation feels instant.
   fetchLabelMap()
 
   // Render the initial summary from the current textarea value.

@@ -130,6 +130,30 @@ func (h *TransactionsHandler) GetTransaction(ctx context.Context, input *getTran
 	return out, nil
 }
 
+type queryMerchantsInput struct {
+	Body struct {
+		Payee string `json:"payee" required:"true"`
+	}
+}
+
+type queryMerchantsOutput struct {
+	Body response.Envelope[[]string]
+}
+
+func (h *TransactionsHandler) QueryMerchants(ctx context.Context, input *queryMerchantsInput) (*queryMerchantsOutput, error) {
+	entityID := middleware.EntityID(ctx)
+	results, err := h.s.SearchMerchants(ctx, entityID, input.Body.Payee)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("internal error")
+	}
+	if results == nil {
+		results = []string{}
+	}
+	out := &queryMerchantsOutput{}
+	out.Body = response.Single(results)
+	return out, nil
+}
+
 // RegisterTransactionsRoutes registers transaction endpoints on the given Huma API.
 func RegisterTransactionsRoutes(api huma.API, s *store.Store, _ *queue.Publisher, perms middleware.PermissionCache) {
 	h := NewTransactionsHandler(s)
@@ -151,4 +175,13 @@ func RegisterTransactionsRoutes(api huma.API, s *store.Store, _ *queue.Publisher
 		Tags:        []string{"transactions"},
 		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "accounts:read")},
 	}, h.GetTransaction)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "query-transaction-merchants",
+		Method:      "QUERY",
+		Path:        "/transactions/merchant",
+		Summary:     "Search merchant strings from transaction history",
+		Tags:        []string{"transactions"},
+		Middlewares: huma.Middlewares{middleware.RequirePermission(perms, "accounts:read")},
+	}, h.QueryMerchants)
 }
