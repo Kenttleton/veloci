@@ -3,6 +3,8 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"strings"
 )
 
 // ConditionsForDisplay converts a conditions tree from engine Schema A format to the
@@ -23,6 +25,27 @@ func (s *Store) ConditionsForDisplay(ctx context.Context, entityID string, raw j
 		for _, l := range labels {
 			labelsByID[l.ID] = l.Name
 		}
+	}
+
+	accountsByID := map[string]string{}
+	if accounts, err := s.ListAccounts(ctx, entityID, 1000, ""); err == nil {
+		for _, a := range accounts {
+			accountsByID[a.ID] = a.Name
+		}
+	}
+
+	instByID := map[string]string{}
+	if insts, err := s.ListInstitutions(ctx, entityID); err == nil {
+		for _, i := range insts {
+			instByID[i.ID] = i.InstitutionName
+		}
+	}
+
+	resolveID := func(id string, byID map[string]string) string {
+		if name, ok := byID[id]; ok {
+			return name
+		}
+		return id
 	}
 
 	var enrichNode func(node map[string]any) map[string]any
@@ -72,11 +95,7 @@ func (s *Store) ConditionsForDisplay(ctx context.Context, entityID string, raw j
 				return map[string]any{nodeType: value}
 			case "label_matched":
 				id, _ := node["label_id"].(string)
-				name := id
-				if n, found := labelsByID[id]; found {
-					name = n
-				}
-				return map[string]any{"label_matched": name}
+				return map[string]any{"label_matched": resolveID(id, labelsByID)}
 			case "entry_direction":
 				direction, _ := node["direction"].(string)
 				return map[string]any{"entry_direction": direction}
@@ -85,7 +104,10 @@ func (s *Store) ConditionsForDisplay(ctx context.Context, entityID string, raw j
 				return map[string]any{"entry_type": entryType}
 			case "account", "account_id":
 				id, _ := node["value"].(string)
-				return map[string]any{"account": id}
+				return map[string]any{"account": resolveID(id, accountsByID)}
+			case "institution_id", "institution":
+				id, _ := node["value"].(string)
+				return map[string]any{"institution": resolveID(id, instByID)}
 			case "recurrence_anchor":
 				anchor, _ := node["recurrence_anchor"].(string)
 				return map[string]any{"recurrence_anchor": anchor}
@@ -94,8 +116,9 @@ func (s *Store) ConditionsForDisplay(ctx context.Context, entityID string, raw j
 			return node
 		}
 
-		// Schema B node (already in editor format) — recurse into logical containers
-		// in case any nested children are still in Schema A format.
+		// Schema B node (already in editor format) — recurse into logical containers.
+		// Also resolve any account/institution values that may be UUIDs from the old
+		// pass-through behavior (before name resolution was implemented).
 		out := copyMap(node)
 		for key, val := range node {
 			switch key {
@@ -114,6 +137,14 @@ func (s *Store) ConditionsForDisplay(ctx context.Context, entityID string, raw j
 			case "not":
 				if childMap, ok := val.(map[string]any); ok {
 					out[key] = enrichNode(childMap)
+				}
+			case "account":
+				if id, ok := val.(string); ok {
+					out["account"] = resolveID(id, accountsByID)
+				}
+			case "institution":
+				if id, ok := val.(string); ok {
+					out["institution"] = resolveID(id, instByID)
 				}
 			}
 		}
@@ -136,6 +167,36 @@ func (s *Store) ConditionsForStorage(ctx context.Context, entityID string, raw j
 		return raw, nil
 	}
 
+	// Build name→ID maps upfront so each leaf resolution is O(1).
+	accountsByName := map[string]string{} // lower(name) → id
+	accountsByID := map[string]bool{}     // id → exists (UUID passthrough for legacy data)
+	if accounts, err := s.ListAccounts(ctx, entityID, 1000, ""); err == nil {
+		for _, a := range accounts {
+			accountsByName[strings.ToLower(a.Name)] = a.ID
+			accountsByID[a.ID] = true
+		}
+	}
+
+	instByName := map[string]string{} // lower(name) → id
+	instByID := map[string]bool{}     // id → exists
+	if insts, err := s.ListInstitutions(ctx, entityID); err == nil {
+		for _, i := range insts {
+			instByName[strings.ToLower(i.InstitutionName)] = i.ID
+			instByID[i.ID] = true
+		}
+	}
+
+	resolveName := func(name string, byName map[string]string, byID map[string]bool, kind string) (string, error) {
+		if id, ok := byName[strings.ToLower(name)]; ok {
+			return id, nil
+		}
+		// Fallback: value is already a UUID (legacy stored conditions before name resolution).
+		if byID[name] {
+			return name, nil
+		}
+		return "", fmt.Errorf("%s %q not found", kind, name)
+	}
+
 	var resolveErr error
 
 	var resolveNode func(node map[string]any) map[string]any
@@ -144,7 +205,7 @@ func (s *Store) ConditionsForStorage(ctx context.Context, entityID string, raw j
 			return node
 		}
 
-		// Schema A passthrough — already in engine format; recurse for label resolution.
+		// Schema A passthrough — already in engine format; recurse for nested resolution.
 		if _, hasOp := node["op"]; hasOp {
 			if arr, ok := node["children"].([]any); ok {
 				resolved := make([]any, len(arr))
@@ -167,7 +228,7 @@ func (s *Store) ConditionsForStorage(ctx context.Context, entityID string, raw j
 			return node
 		}
 		if _, hasType := node["type"]; hasType {
-			// Schema A leaf — pass through (label_id is already resolved).
+			// Schema A leaf — pass through (UUIDs are already resolved).
 			return node
 		}
 
@@ -229,7 +290,21 @@ func (s *Store) ConditionsForStorage(ctx context.Context, entityID string, raw j
 			case "entry_type":
 				return map[string]any{"type": "entry_type", "entry_type": val}
 			case "account":
-				return map[string]any{"type": "account_id", "value": val}
+				name, _ := val.(string)
+				id, err := resolveName(name, accountsByName, accountsByID, "account")
+				if err != nil {
+					resolveErr = err
+					return node
+				}
+				return map[string]any{"type": "account_id", "value": id}
+			case "institution":
+				name, _ := val.(string)
+				id, err := resolveName(name, instByName, instByID, "institution")
+				if err != nil {
+					resolveErr = err
+					return node
+				}
+				return map[string]any{"type": "institution_id", "value": id}
 			case "recurrence_anchor":
 				return map[string]any{"type": "recurrence_anchor", "recurrence_anchor": val}
 			}

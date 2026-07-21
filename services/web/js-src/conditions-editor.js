@@ -23,12 +23,13 @@ const KEY_LABELS = {
   payee_regex:        "payee matches regex",
   label_matched:      "label matched",
   account:            "account is",
+  institution:        "institution is",
   entry_direction:    "direction is",
   entry_type:         "type is",
 }
 
 const KNOWN_KEYS = new Set([
-  ...PAYEE_KEYS, "label_matched", "account",
+  ...PAYEE_KEYS, "label_matched", "account", "institution",
   "entry_direction", "entry_type", "recurrence_anchor",
   "and", "or", "not",
 ])
@@ -70,6 +71,20 @@ async function fetchAccountMap() {
     _accountMap = Object.fromEntries((env.data || []).map(a => [a.name.toLowerCase(), a]))
   } catch { _accountMap = {} }
   return _accountMap
+}
+
+let _institutionMap = null
+
+async function fetchInstitutionMap() {
+  if (_institutionMap !== null) return _institutionMap
+  try {
+    const r = await fetch("/api/institutions", { credentials: "same-origin" })
+    const env = r.ok ? await r.json() : { data: [] }
+    _institutionMap = Object.fromEntries(
+      (env.data || []).map(i => [i.institution_name.toLowerCase(), i])
+    )
+  } catch { _institutionMap = {} }
+  return _institutionMap
 }
 
 // ── Context detection ──────────────────────────────────────────────────────
@@ -188,6 +203,7 @@ function contextKeyCompleter(context) {
     { label: "payee_regex",        detail: "payee matches regex",           apply: snippet('"payee_regex": "${}"') },
     { label: "label_matched",      detail: "transaction has this label",    apply: snippet('"label_matched": "${}"') },
     { label: "account",            detail: "from this account",             apply: snippet('"account": "${}"') },
+    { label: "institution",        detail: "from this institution",         apply: snippet('"institution": "${}"') },
     { label: "entry_direction",    detail: "income or expense",             apply: snippet('"entry_direction": "${expense}"') },
     { label: "entry_type",         detail: "standing, variable, irregular", apply: snippet('"entry_type": "${standing}"') },
     { label: "recurrence_anchor",  detail: "recurrence anchor date",        apply: snippet('"recurrence_anchor": "${}"') },
@@ -270,6 +286,15 @@ async function valueCompleter(context) {
       .filter(a => a.name.toLowerCase().includes(typed.toLowerCase()))
       .slice(0, 20)
       .map(a => ({ label: a.name, type: "keyword", apply: makeApply(a.name) }))
+    return options.length ? { from: valueStart, options } : null
+  }
+
+  if (key === "institution") {
+    const imap = await fetchInstitutionMap()
+    const options = Object.values(imap)
+      .filter(i => i.institution_name.toLowerCase().includes(typed.toLowerCase()))
+      .slice(0, 20)
+      .map(i => ({ label: i.institution_name, type: "keyword", apply: makeApply(i.institution_name) }))
     return options.length ? { from: valueStart, options } : null
   }
 
@@ -358,8 +383,9 @@ async function summaryHTML(conditions) {
     return ""
   }
 
-  const labelMap   = await fetchLabelMap()
-  const accountMap = await fetchAccountMap()
+  const labelMap       = await fetchLabelMap()
+  const accountMap     = await fetchAccountMap()
+  await fetchInstitutionMap() // warm cache; institution summary uses inline span, no map needed
 
   const esc = s => String(s)
     .replace(/&/g, "&amp;")
@@ -383,6 +409,9 @@ async function summaryHTML(conditions) {
       if (entry) {
         return `<a href="/accounts/${entry.id}" style="color:var(--accent);text-decoration:none;font-weight:500">${esc(val)}</a>`
       }
+      return `<span style="color:var(--accent);font-weight:500">${esc(val)}</span>`
+    }
+    if (key === "institution") {
       return `<span style="color:var(--accent);font-weight:500">${esc(val)}</span>`
     }
     return `<strong style="color:var(--text)">${esc(val)}</strong>`

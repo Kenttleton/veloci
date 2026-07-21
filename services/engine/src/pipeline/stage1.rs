@@ -168,6 +168,7 @@ pub enum CompiledConditionTree {
         end:   NaiveDate,
     },
     AccountId(Uuid),
+    InstitutionId(Uuid),
     // --- Entry targets (Pass 2+) ---
     /// Matches when the transaction's accumulated label set contains this label UUID.
     ///
@@ -230,6 +231,7 @@ struct EntryRow {
 pub(crate) struct TransactionRow {
     id:                  Uuid,
     account_id:          Uuid,
+    institution_id:      Option<Uuid>,
     date:                NaiveDate,
     amount_cents:        i64,
     merchant_normalized: String,
@@ -539,8 +541,11 @@ fn evaluate(
             txn.date >= *start && txn.date <= *end
         }
 
-        // --- Account condition ---
+        // --- Account / institution conditions ---
         CompiledConditionTree::AccountId(id) => txn.account_id == *id,
+        CompiledConditionTree::InstitutionId(id) => {
+            txn.institution_id.map_or(false, |iid| iid == *id)
+        }
 
         // --- Entry-target conditions (Pass 2+ only) ---
         //
@@ -779,6 +784,13 @@ pub fn compile_tree(v: &serde_json::Value) -> Result<CompiledConditionTree> {
                 .with_context(|| format!("invalid UUID in account leaf: {id_str}"))?;
             Ok(CompiledConditionTree::AccountId(id))
         }
+        "institution_id" | "institution" => {
+            let id_str = string_value(v, "value")?;
+            let id: Uuid = id_str
+                .parse()
+                .with_context(|| format!("invalid UUID in institution leaf: {id_str}"))?;
+            Ok(CompiledConditionTree::InstitutionId(id))
+        }
         "label_matched" => {
             let id_str = string_value(v, "label_id")?;
             let id: Uuid = id_str
@@ -854,6 +866,7 @@ async fn load_transactions(entity_id: Uuid, pool: &PgPool) -> Result<Vec<Transac
     struct Row {
         id:                  Uuid,
         account_id:          Uuid,
+        institution_id:      Option<Uuid>,
         date:                NaiveDate,
         amount_cents:        i64,
         merchant_normalized: String,
@@ -861,10 +874,12 @@ async fn load_transactions(entity_id: Uuid, pool: &PgPool) -> Result<Vec<Transac
 
     let rows: Vec<Row> = sqlx::query_as(
         r#"
-        SELECT id, account_id, date, amount_cents, merchant_normalized
-        FROM transactions
-        WHERE entity_id = $1
-        ORDER BY date ASC
+        SELECT t.id, t.account_id, a.institution_id,
+               t.date, t.amount_cents, t.merchant_normalized
+        FROM transactions t
+        LEFT JOIN accounts a ON a.id = t.account_id AND a.entity_id = $1
+        WHERE t.entity_id = $1
+        ORDER BY t.date ASC
         "#,
     )
     .bind(entity_id)
@@ -877,6 +892,7 @@ async fn load_transactions(entity_id: Uuid, pool: &PgPool) -> Result<Vec<Transac
         .map(|r| TransactionRow {
             id:                  r.id,
             account_id:          r.account_id,
+            institution_id:      r.institution_id,
             date:                r.date,
             amount_cents:        r.amount_cents,
             merchant_normalized: r.merchant_normalized,
@@ -1061,6 +1077,7 @@ mod tests {
         TransactionRow {
             id,
             account_id,
+            institution_id:      None,
             date: NaiveDate::parse_from_str(date, "%Y-%m-%d").unwrap(),
             amount_cents,
             merchant_normalized: merchant.to_string(),
@@ -1234,6 +1251,22 @@ mod tests {
         let txn   = make_txn(any_uuid(), acct, "2026-03-15", -1000, "Test");
         assert!(eval(json!({"type": "account_id", "value": acct.to_string()}), &txn));
         assert!(!eval(json!({"type": "account_id", "value": other.to_string()}), &txn));
+    }
+
+    #[test]
+    fn institution_id_leaf() {
+        let inst  = Uuid::parse_str("00000000-0000-0000-0000-000000000010").unwrap();
+        let other = Uuid::parse_str("00000000-0000-0000-0000-000000000011").unwrap();
+        let cond  = json!({"type": "institution_id", "value": inst.to_string()});
+        // Matches when institution_id is set and equals the target.
+        let txn = TransactionRow { institution_id: Some(inst), ..any_txn() };
+        assert!(eval(cond.clone(), &txn));
+        // No match when institution differs.
+        let txn_other = TransactionRow { institution_id: Some(other), ..any_txn() };
+        assert!(!eval(cond.clone(), &txn_other));
+        // No match when account has no institution.
+        let txn_none = TransactionRow { institution_id: None, ..any_txn() };
+        assert!(!eval(cond, &txn_none));
     }
 
     #[test]
