@@ -109,9 +109,8 @@ pub enum CompiledConditionTree {
     // --- Entry targets (Pass 2+) ---
     /// Matches when the transaction's accumulated label set contains this label UUID.
     ///
-    /// SPEC NOTE: The spec JSON key is `"label_matched"` with a `"label"` UUID field.
-    /// Existing DB data uses type `"label"` with field `"label_id"`. Both forms are
-    /// accepted in `compile_tree` for backward compatibility.
+    /// DB format (written by Go's ResolveConditions): `{ "type": "label_matched", "label_id": "<uuid>" }`.
+    /// The `"label"` field (human-readable name) lives only in the enriched display layer.
     LabelMatched(Uuid),
 }
 
@@ -459,8 +458,7 @@ fn compile_entry(row: EntryRow) -> Result<CompiledEntry> {
 /// - `"account_id"` / `"account"` → [`CompiledConditionTree::AccountId`]
 ///
 /// **Entry-target leaves** — `"type"` field:
-/// - `"label"` (legacy, field: `"label_id"`) → [`CompiledConditionTree::LabelMatched`]
-/// - `"label_matched"` (spec, field: `"label"`) → [`CompiledConditionTree::LabelMatched`]
+/// - `"label_matched"` (field: `"label_id"`) → [`CompiledConditionTree::LabelMatched`]
 ///
 /// SPEC QUESTION: The spec defines `"entry_direction"` and `"entry_type"` as
 /// entry-target leaf types, but they are not yet implemented as variants. Until
@@ -589,17 +587,8 @@ pub fn compile_tree(v: &serde_json::Value) -> Result<CompiledConditionTree> {
                 .with_context(|| format!("invalid UUID in account leaf: {id_str}"))?;
             Ok(CompiledConditionTree::AccountId(id))
         }
-        // LabelMatched — legacy key "label" uses field "label_id".
-        "label" => {
-            let id_str = string_value(v, "label_id")?;
-            let id: Uuid = id_str
-                .parse()
-                .with_context(|| format!("invalid UUID in label leaf: {id_str}"))?;
-            Ok(CompiledConditionTree::LabelMatched(id))
-        }
-        // LabelMatched — spec key "label_matched" uses field "label".
         "label_matched" => {
-            let id_str = string_value(v, "label")?;
+            let id_str = string_value(v, "label_id")?;
             let id: Uuid = id_str
                 .parse()
                 .with_context(|| format!("invalid UUID in label_matched leaf: {id_str}"))?;
@@ -1058,28 +1047,16 @@ mod tests {
     fn label_matched_false_with_empty_set() {
         let label_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
         let txn = make_txn(any_uuid(), any_uuid(), "2026-03-01", -1000, "Netflix");
-        // Legacy key form ("label" + "label_id" field).
-        let cond = json!({"type": "label", "label_id": label_id.to_string()});
+        let cond = json!({"type": "label_matched", "label_id": label_id.to_string()});
         assert!(!eval(cond, &txn));
     }
 
-    /// `LabelMatched` (legacy key) returns true when the label is in the accumulated set.
+    /// `LabelMatched` returns true when the label is in the accumulated set.
     #[test]
     fn label_matched_true_with_label_in_set() {
         let label_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
         let txn = make_txn(any_uuid(), any_uuid(), "2026-03-01", -1000, "Netflix");
-        let cond = json!({"type": "label", "label_id": label_id.to_string()});
-        let mut labels = HashSet::new();
-        labels.insert(label_id);
-        assert!(eval_with_labels(cond, &txn, &labels));
-    }
-
-    /// The spec `"label_matched"` key (with `"label"` field) is also accepted.
-    #[test]
-    fn label_matched_spec_key_accepted() {
-        let label_id = Uuid::parse_str("00000000-0000-0000-0000-000000000002").unwrap();
-        let txn = make_txn(any_uuid(), any_uuid(), "2026-03-01", -1000, "Test");
-        let cond = json!({"type": "label_matched", "label": label_id.to_string()});
+        let cond = json!({"type": "label_matched", "label_id": label_id.to_string()});
         let mut labels = HashSet::new();
         labels.insert(label_id);
         assert!(eval_with_labels(cond, &txn, &labels));
