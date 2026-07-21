@@ -13,7 +13,7 @@ use uuid::Uuid;
 // ---------------------------------------------------------------------------
 
 /// Entry type of an entry — determines rate computation semantics.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EntryType {
     /// Recurring commitment with consistent timing and amount. Rate = amount / period_days.
     Standing,
@@ -54,10 +54,12 @@ impl VariableMethod {
 }
 
 /// Cash flow direction.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Direction {
     Income,
     Expense,
+    /// Both income and expense flows — used for entries that span both directions.
+    Mixed,
 }
 
 impl Direction {
@@ -65,6 +67,7 @@ impl Direction {
         match s {
             "income"  => Some(Self::Income),
             "expense" => Some(Self::Expense),
+            "mixed"   => Some(Self::Mixed),
             _         => None,
         }
     }
@@ -258,6 +261,7 @@ mod tests {
     fn direction_from_str() {
         assert_eq!(Direction::from_str("income"),  Some(Direction::Income));
         assert_eq!(Direction::from_str("expense"), Some(Direction::Expense));
+        assert_eq!(Direction::from_str("mixed"),   Some(Direction::Mixed));
         assert_eq!(Direction::from_str(""),        None);
     }
 
