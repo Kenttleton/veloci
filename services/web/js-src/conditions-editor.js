@@ -2,44 +2,18 @@ import { EditorView, keymap } from "@codemirror/view"
 import { EditorState } from "@codemirror/state"
 import { json } from "@codemirror/lang-json"
 import { autocompletion, snippet } from "@codemirror/autocomplete"
+import { syntaxTree, HighlightStyle, syntaxHighlighting } from "@codemirror/language"
+import { tags } from "@lezer/highlight"
 import { linter, lintGutter } from "@codemirror/lint"
 import { history, historyKeymap, defaultKeymap } from "@codemirror/commands"
-import { defaultHighlightStyle, syntaxHighlighting } from "@codemirror/language"
-
-// ── Config ─────────────────────────────────────────────────────────────────
-// Override the palette trigger character in the browser console:
-//   localStorage.setItem('veloci_editor_trigger_char', '/')
-const TRIGGER_CHAR = localStorage.getItem("veloci_editor_trigger_char") || "@"
-
-// ── Condition type palette ─────────────────────────────────────────────────
-// Each entry has a display label and a CM6 snippet template.
-//   ${}       — empty tabstop (cursor placed here after insertion)
-//   ${name}   — named tabstop where "name" is pre-selected placeholder text
-const CONDITION_TYPES = [
-  { label: "Payee contains",       snip: '"payee_contains": "${}"'        },
-  { label: "Payee is exact",       snip: '"payee_exact": "${}"'            },
-  { label: "Payee starts with",    snip: '"payee_starts_with": "${}"'      },
-  { label: "Payee ends with",      snip: '"payee_ends_with": "${}"'        },
-  { label: "Payee not contains",   snip: '"payee_not_contains": "${}"'     },
-  { label: "Payee regex",          snip: '"payee_regex": "${}"'            },
-  { label: "Label matched",        snip: '"label_matched": "${}"'          },
-  { label: "Account",              snip: '"account": "${}"'               },
-  { label: "Direction",            snip: '"entry_direction": "${expense}"' },
-  { label: "Entry type",           snip: '"entry_type": "${standing}"'     },
-  { label: "And (both must match)",  snip: '"and": [${}]'                 },
-  { label: "Or (either matches)",    snip: '"or": [${}]'                  },
-  { label: "Not (must not match)",   snip: '"not": {${}}'                 },
-]
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-// Keys whose values are payee strings — get payee autocomplete.
 const PAYEE_KEYS = new Set([
   "payee_contains", "payee_exact", "payee_starts_with",
   "payee_ends_with", "payee_not_contains", "payee_regex",
 ])
 
-// Human-readable display labels for the plain-language summary.
 const KEY_LABELS = {
   payee_contains:     "payee contains",
   payee_exact:        "payee is exactly",
@@ -53,7 +27,6 @@ const KEY_LABELS = {
   entry_type:         "type is",
 }
 
-// Valid condition keys — anything else triggers a linter warning.
 const KNOWN_KEYS = new Set([
   ...PAYEE_KEYS, "label_matched", "account",
   "entry_direction", "entry_type", "recurrence_anchor",
@@ -75,7 +48,6 @@ async function searchMerchants(payee) {
   } catch { return [] }
 }
 
-// Maps label name (lowercased) → { id, name } — used for autocomplete and summary links.
 let _labelMap = null
 
 async function fetchLabelMap() {
@@ -88,13 +60,11 @@ async function fetchLabelMap() {
   return _labelMap
 }
 
-// Maps account name (lowercased) → { id, name } — used for autocomplete and summary links.
 let _accountMap = null
 
 async function fetchAccountMap() {
   if (_accountMap !== null) return _accountMap
   try {
-    // SPEC GAP: No institution_id filter on /api/accounts; fetching all and filtering in-memory.
     const r = await fetch("/api/accounts?limit=500", { credentials: "same-origin" })
     const env = r.ok ? await r.json() : { data: [] }
     _accountMap = Object.fromEntries((env.data || []).map(a => [a.name.toLowerCase(), a]))
@@ -102,50 +72,157 @@ async function fetchAccountMap() {
   return _accountMap
 }
 
-// ── Command-palette completer ──────────────────────────────────────────────
-// Fires when the cursor follows TRIGGER_CHAR (plus optional filter text).
-// Replaces the trigger and any filter text with the chosen JSON snippet.
+// ── Context detection ──────────────────────────────────────────────────────
+// Walks the CM6 JSON syntax tree to determine where the cursor sits.
+// The Lezer JSON parser is error-tolerant, so partial/unclosed strings
+// still produce a usable tree — no special incomplete-JSON handling needed.
+//
+// Returns one of:
+//   { type: "key",   depth, parentKey, node }
+//   { type: "value", key,              node }
+//   null
 
-function commandPaletteCompleter(context) {
-  // Escape TRIGGER_CHAR in case it's a regex metacharacter (e.g. '.', '+').
-  const escaped = TRIGGER_CHAR.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-  const before = context.matchBefore(new RegExp(`${escaped}[\\w\\s]*`))
-  if (!before) return null
+function getJsonContext(state, pos) {
+  const tree = syntaxTree(state)
 
-  const typed = before.text.slice(TRIGGER_CHAR.length).toLowerCase().trim()
-  const options = CONDITION_TYPES
-    .filter(ct => typed === "" || ct.label.toLowerCase().includes(typed))
-    .map(ct => ({
-      label: ct.label,
+  function objectDepth(n) {
+    let d = 0
+    while (n) { if (n.name === "Object") d++; n = n.parent }
+    return d
+  }
+
+  // Strip surrounding quotes; handles partial strings (no closing quote).
+  function strContent(n) {
+    const raw = state.sliceDoc(n.from, n.to)
+    return raw.startsWith('"') ? raw.slice(1, raw.endsWith('"') ? -1 : undefined) : raw
+  }
+
+  // resolveInner(pos, -1) finds the node ending at or before pos — this
+  // correctly lands inside a String node while the user is typing.
+  let cur = tree.resolveInner(pos, -1)
+
+  while (cur) {
+    if (cur.name === "String") {
+      const prop = cur.parent
+      if (!prop || prop.name !== "Property") break
+
+      const isKey = prop.firstChild?.from === cur.from
+
+      if (isKey) {
+        const containerObj = prop.parent // Object that owns this Property
+        const depth = objectDepth(containerObj)
+
+        // Walk up to find the nearest enclosing logic-combinator key, if any.
+        // Handles arbitrary nesting: not→or, and→not→and, etc.
+        let parentKey = null
+        let n = containerObj
+        while (n) {
+          if (n.name === "Array" && n.parent?.name === "Property") {
+            const k = n.parent.firstChild
+            if (k?.name === "String") { parentKey = strContent(k); break }
+          }
+          if (n.name === "Object" && n.parent?.name === "Property") {
+            const k = n.parent.firstChild
+            if (k?.name === "String") { parentKey = strContent(k); break }
+          }
+          n = n.parent
+        }
+
+        return { type: "key", depth, parentKey, node: cur }
+      }
+
+      // Value string — find the owning property key.
+      const keyNode = prop.firstChild
+      const key = keyNode?.name === "String" ? strContent(keyNode) : null
+      return { type: "value", key, node: cur }
+    }
+    cur = cur.parent
+  }
+
+  return null
+}
+
+// ── Key completer ──────────────────────────────────────────────────────────
+// Fires inside a JSON object key string (the part before the colon).
+// Ordering logic:
+//   depth 1 (root): logic ops (and/or/not) first — root is almost always a combinator
+//   depth 2+:       condition leaves first — nested objects are usually conditions
+//   Both groups always present; typing filters across both.
+//
+// and/or/not can appear at any depth (e.g. {"not":{"or":[]}} is a NOR gate).
+
+function contextKeyCompleter(context) {
+  const ctx = getJsonContext(context.state, context.pos)
+  if (!ctx || ctx.type !== "key") return null
+
+  const node = ctx.node
+  const typed = context.state.sliceDoc(node.from + 1, context.pos).toLowerCase()
+
+  const logicOptions = [
+    {
+      label: "and",
+      detail: "all conditions must match",
       type: "keyword",
-      // Show a cleaned-up preview of the snippet as secondary detail text.
-      detail: ct.snip.replace(/\$\{[^}]*\}/g, "…").replace(/"/g, ""),
-      apply: snippet(ct.snip),
-    }))
+      apply: snippet('"and": [\n  {${}}\n]'),
+    },
+    {
+      label: "or",
+      detail: "any condition must match",
+      type: "keyword",
+      apply: snippet('"or": [\n  {${}}\n]'),
+    },
+    {
+      label: "not",
+      detail: "must not match",
+      type: "keyword",
+      apply: snippet('"not": {${}}'),
+    },
+  ]
+
+  const conditionOptions = [
+    { label: "payee_contains",     detail: "payee contains text",           apply: snippet('"payee_contains": "${}"') },
+    { label: "payee_exact",        detail: "payee is exactly this",         apply: snippet('"payee_exact": "${}"') },
+    { label: "payee_starts_with",  detail: "payee starts with",             apply: snippet('"payee_starts_with": "${}"') },
+    { label: "payee_ends_with",    detail: "payee ends with",               apply: snippet('"payee_ends_with": "${}"') },
+    { label: "payee_not_contains", detail: "payee does not contain",        apply: snippet('"payee_not_contains": "${}"') },
+    { label: "payee_regex",        detail: "payee matches regex",           apply: snippet('"payee_regex": "${}"') },
+    { label: "label_matched",      detail: "transaction has this label",    apply: snippet('"label_matched": "${}"') },
+    { label: "account",            detail: "from this account",             apply: snippet('"account": "${}"') },
+    { label: "entry_direction",    detail: "income or expense",             apply: snippet('"entry_direction": "${expense}"') },
+    { label: "entry_type",         detail: "standing, variable, irregular", apply: snippet('"entry_type": "${standing}"') },
+    { label: "recurrence_anchor",  detail: "recurrence anchor date",        apply: snippet('"recurrence_anchor": "${}"') },
+  ]
+
+  // At the root (depth 1), logic combinators are the most common starting point.
+  // Deeper objects are usually leaf conditions, but logic remains available.
+  const ordered = ctx.depth <= 1
+    ? [...logicOptions, ...conditionOptions]
+    : [...conditionOptions, ...logicOptions]
+
+  const options = typed
+    ? ordered.filter(o => o.label.toLowerCase().includes(typed))
+    : ordered
 
   if (!options.length) return null
-  // filter: false — we handle filtering ourselves; prevent CM6 double-filtering.
-  return { from: before.from, options, filter: false }
+
+  // validFor keeps the completion list active while the user continues typing
+  // inside the opening-quoted key string (no closing quote yet).
+  return { from: node.from, options, filter: false, validFor: /^"[^"]*$/ }
 }
 
 // ── Value completer ────────────────────────────────────────────────────────
-// Fires when the cursor is inside a string value for a known condition key.
-// Returns a Promise — CM6 autocompletion accepts async completers.
+// Fires inside a JSON string value, keyed by the owning property name.
+// Async because payee search hits the API; label/account maps are cached.
 
 async function valueCompleter(context) {
-  // Matches: "key": "typed-so-far  (closing quote not required — may be mid-type)
-  const word = context.matchBefore(/"([^"]+)"\s*:\s*"([^"]*)/)
-  if (!word) return null
+  const ctx = getJsonContext(context.state, context.pos)
+  if (!ctx || ctx.type !== "value" || !ctx.key) return null
 
-  const keyMatch = word.text.match(/^"([^"]+)"\s*:\s*"([^"]*)$/)
-  if (!keyMatch) return null
-  const [, key, typed] = keyMatch
+  const node = ctx.node
+  const valueStart = node.from + 1 // character after the opening quote
+  const typed = context.state.sliceDoc(valueStart, context.pos)
+  const { key } = ctx
 
-  // Position of the character just after the opening quote of the value.
-  // Completions replace from here to the cursor (the typed portion only).
-  const valueStart = word.from + word.text.lastIndexOf('"') + 1
-
-  // Apply helper: inserts the label text and auto-appends closing quote if absent.
   function makeApply(label) {
     return (view, _c, from, to) => {
       const after = view.state.sliceDoc(to, to + 1)
@@ -200,8 +277,6 @@ async function valueCompleter(context) {
 }
 
 // ── Linter ─────────────────────────────────────────────────────────────────
-// Validates condition keys and known enum values. Does not attempt to
-// validate canonical merchants (removed in conditions refactor).
 
 function conditionsLinter(view) {
   const text = view.state.doc.toString()
@@ -209,7 +284,6 @@ function conditionsLinter(view) {
 
   let parsed
   try { parsed = JSON.parse(text) } catch { return [] }
-  // JSON syntax errors are handled by the lang-json linter; nothing to add here.
 
   const diagnostics = []
 
@@ -236,7 +310,7 @@ function conditionsLinter(view) {
         if (pos) diagnostics.push({
           ...pos,
           severity: "warning",
-          message: `Unknown condition key "${key}". Type ${TRIGGER_CHAR} to open the condition palette.`,
+          message: `Unknown condition key "${key}". Type " inside an object to see suggestions.`,
         })
       }
 
@@ -267,7 +341,6 @@ function conditionsLinter(view) {
         })
       }
 
-      // Recurse into nested structures.
       if (key === "and" && Array.isArray(val)) val.forEach(checkObj)
       if (key === "or"  && Array.isArray(val)) val.forEach(checkObj)
       if (key === "not" && val && typeof val === "object") checkObj(val)
@@ -279,10 +352,6 @@ function conditionsLinter(view) {
 }
 
 // ── Plain-language summary ─────────────────────────────────────────────────
-// Converts enriched conditions JSON to an HTML string.
-//   label_matched values → <a href="/ledger?label=<uuid>"> links
-//   account values       → <a href="/accounts/<uuid>"> links
-// Async because it needs the label/account maps.
 
 async function summaryHTML(conditions) {
   if (!conditions || typeof conditions !== "object" || Array.isArray(conditions)) {
@@ -344,8 +413,6 @@ async function summaryHTML(conditions) {
 }
 
 // ── Summary updater extension ──────────────────────────────────────────────
-// Re-renders the plain-language summary div on document changes (debounced).
-// Returns [] when summaryDiv is null so the caller can spread it safely.
 
 function makeSummaryUpdater(summaryDiv) {
   if (!summaryDiv) return []
@@ -365,9 +432,6 @@ function makeSummaryUpdater(summaryDiv) {
 }
 
 // ── Save extension ─────────────────────────────────────────────────────────
-// Auto-saves conditions to the API after 1.5 s of inactivity.
-// Dispatches `veloci:conditions-saved` on success so the ledger page
-// can mark itself dirty and prompt the user to re-run the engine.
 
 function makeSaveExtension(entryId, indicator) {
   let timer = null
@@ -390,7 +454,6 @@ function makeSaveExtension(entryId, indicator) {
         if (r.ok) {
           indicator.textContent = "saved"
           setTimeout(() => { indicator.textContent = "" }, 2000)
-          // Signal the ledger page that conditions changed → needs reprocessing.
           document.dispatchEvent(new CustomEvent("veloci:conditions-saved", {
             detail: { entryId },
             bubbles: true,
@@ -402,6 +465,24 @@ function makeSaveExtension(entryId, indicator) {
     }, 1500)
   })
 }
+
+// ── Syntax highlighting (dark-safe, WCAG AA on #1a2235) ───────────────────
+
+const velociHighlightStyle = HighlightStyle.define([
+  // JSON property keys — accent blue (#7aa3e0 ≈ 5.6:1)
+  { tag: tags.propertyName, color: "#7aa3e0", fontWeight: "600" },
+  // String values — soft green (#7ecb9a ≈ 6.1:1)
+  { tag: tags.string, color: "#7ecb9a" },
+  // Numbers — warm amber (#e8c06a ≈ 8.1:1)
+  { tag: tags.number, color: "#e8c06a" },
+  // Booleans (true / false) — lavender (#c9a7eb ≈ 5.4:1)
+  { tag: tags.bool, color: "#c9a7eb" },
+  // null keyword — same lavender family
+  { tag: tags.null, color: "#c9a7eb" },
+  // Punctuation: braces, brackets, colons, commas — muted text2 (#8a9bb8 ≈ 3.6:1)
+  { tag: tags.punctuation, color: "#8a9bb8" },
+  { tag: tags.bracket, color: "#8a9bb8" },
+])
 
 // ── Theme ──────────────────────────────────────────────────────────────────
 
@@ -452,23 +533,17 @@ const velociTheme = EditorView.theme({
 
 function initEditor(textarea) {
   if (textarea._cmView) return
-  textarea._cmView = "pending"  // guard against double-init on rapid toggles
+  textarea._cmView = "pending"
 
   const entryId = textarea.dataset.entryId
-
-  // Save-state indicator: a sibling element with class js-conditions-status.
   const indicator = textarea.parentNode
     ? textarea.parentNode.querySelector(".js-conditions-status")
     : null
-
-  // Plain-language summary div: found within the enclosing entry <details>.
   const entryDetails = textarea.closest(".js-entry-details")
   const summaryDiv = entryDetails ? entryDetails.querySelector(".js-conditions-summary") : null
 
-  // Pre-warm the label cache so the first autocomplete invocation feels instant.
   fetchLabelMap()
 
-  // Render the initial summary from the current textarea value.
   if (summaryDiv) {
     try {
       const parsed = JSON.parse(textarea.value)
@@ -476,7 +551,7 @@ function initEditor(textarea) {
         summaryDiv.innerHTML = html
           || '<span style="color:var(--text3);font-style:italic">No conditions — this entry will match all transactions.</span>'
       })
-    } catch { /* textarea contains invalid JSON — leave summary empty */ }
+    } catch { /* invalid JSON — leave summary empty */ }
   }
 
   const view = new EditorView({
@@ -486,9 +561,9 @@ function initEditor(textarea) {
         history(),
         keymap.of([...defaultKeymap, ...historyKeymap]),
         json(),
-        syntaxHighlighting(defaultHighlightStyle),
+        syntaxHighlighting(velociHighlightStyle),
         autocompletion({
-          override: [commandPaletteCompleter, valueCompleter],
+          override: [contextKeyCompleter, valueCompleter],
           activateOnTyping: true,
         }),
         lintGutter(),
@@ -508,8 +583,6 @@ function initEditor(textarea) {
 }
 
 // ── Mount ──────────────────────────────────────────────────────────────────
-// Lazy init: spin up CM6 only when the entry <details> is opened.
-// This avoids mounting N editor instances for N collapsed rows on page load.
 
 document.addEventListener("toggle", (e) => {
   const details = e.target
@@ -518,7 +591,5 @@ document.addEventListener("toggle", (e) => {
   if (ta) initEditor(ta)
 }, true)
 
-// Also init any editors that are already open when the module loads
-// (e.g. after a page reload with a previously-open entry, or after approve).
 document.querySelectorAll("details.js-entry-details[open] .js-conditions-ta")
   .forEach(initEditor)

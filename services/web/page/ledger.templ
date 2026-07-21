@@ -199,8 +199,24 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 						runBtn.textContent = 'Run Engine';
 					}
 				}
-				// Conditions saved by the CM6 editor module → mark page dirty.
-				document.addEventListener('veloci:conditions-saved', function() { markDirty(); });
+				// Conditions saved → auto-reprocess, then reload the tx panel for that entry.
+				document.addEventListener('veloci:conditions-saved', function(e) {
+					var entryId = e.detail && e.detail.entryId;
+					fetch('/api/jobs/reprocess', {method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin', body:'{}'})
+						.then(function(r) {
+							if (r.ok) clearDirty();
+							setTimeout(function() {
+								if (!entryId) return;
+								var det = document.querySelector('.js-entry-details[data-entry-id="'+entryId+'"]');
+								if (!det || !det.open) return;
+								var txPanel = det.querySelector('.js-tx-panel');
+								if (!txPanel) return;
+								delete txPanel.dataset.loaded;
+								loadTxPanel(txPanel, entryId, det.dataset.entryStatus || 'active');
+							}, 2000);
+						})
+						.catch(function() { markDirty(); });
+				});
 				// Navigate-away warning when dirty.
 				window.addEventListener('beforeunload', function(e) {
 					if (!_dirty) return;
@@ -251,21 +267,24 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 					if (chev) chev.style.transform = det.open ? 'rotate(90deg)' : '';
 				}, true);
 
-				// ── Lazy-load transactions when entry opened ────────────────────────────
-				document.addEventListener('toggle', function(e) {
-					var det = e.target;
-					if (!det.classList.contains('js-entry-details') || !det.open) return;
-					var entryId = det.dataset.entryId;
-					var entryStatus = det.dataset.entryStatus || 'active';
-					var txPanel = det.querySelector('.js-tx-panel');
-					if (!txPanel || txPanel.dataset.loaded) return;
+				// ── Label cache (shared between hint + blur-save) ─────────────────────
+				var _labelCache = null;
+				function fetchLabels(cb) {
+					if (_labelCache) { cb(_labelCache); return; }
+					fetch('/api/labels?limit=500', {credentials:'same-origin'})
+						.then(function(r){ return r.json(); })
+						.then(function(env){ _labelCache = env.data || []; cb(_labelCache); })
+						.catch(function(){ cb([]); });
+				}
+
+				// ── Tx panel loader ────────────────────────────────────────────────────
+				function loadTxPanel(txPanel, entryId, entryStatus) {
 					txPanel.dataset.loaded = '1';
 					txPanel.innerHTML = '<p style="color:var(--text3);font-size:12px">Loading…</p>';
-					fetch('/api/transactions?entry_id=' + entryId + '&limit=50')
+					fetch('/api/transactions?entry_id=' + entryId + '&limit=50', {credentials:'same-origin'})
 						.then(function(r){ return r.json(); })
 						.then(function(env) {
 							var txns = env.data || [];
-							// "will be" for pending_review, "are" for active/inactive.
 							var verb = entryStatus === 'pending_review' ? 'will be' : 'are';
 							if (!txns.length) {
 								var msg = entryStatus === 'pending_review'
@@ -301,7 +320,75 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 						.catch(function() {
 							txPanel.innerHTML = '<p style="color:var(--commit);font-size:12px">Failed to load.</p>';
 						});
+				}
+
+				// ── Lazy-load transactions when entry opened ────────────────────────────
+				document.addEventListener('toggle', function(e) {
+					var det = e.target;
+					if (!det.classList.contains('js-entry-details') || !det.open) return;
+					var entryId = det.dataset.entryId;
+					var entryStatus = det.dataset.entryStatus || 'active';
+					var txPanel = det.querySelector('.js-tx-panel');
+					if (!txPanel || txPanel.dataset.loaded) return;
+					loadTxPanel(txPanel, entryId, entryStatus);
 				}, true);
+
+				// ── Label input: existing-label hint + blur save ───────────────────────
+				document.addEventListener('input', function(e) {
+					var inp = e.target;
+					if (!inp.classList.contains('js-label-input')) return;
+					var hint = inp.parentNode.querySelector('.js-label-hint');
+					if (!hint) return;
+					var name = inp.value.trim();
+					if (!name) { hint.textContent = ''; return; }
+					fetchLabels(function(labels) {
+						var match = labels.find(function(l){ return l.name.toLowerCase() === name.toLowerCase(); });
+						hint.textContent = match ? '↩ Existing label — will be linked' : '';
+					});
+				});
+
+				document.addEventListener('focusout', function(e) {
+					var inp = e.target;
+					if (!inp.classList.contains('js-label-input')) return;
+					var panel = inp.closest('.js-review-panel');
+					if (!panel) return;
+					var entryId = panel.dataset.entryId;
+					var entry = JSON.parse(panel.dataset.entry);
+					var name = inp.value.trim();
+					// Skip if unchanged (compare against rendered label name).
+					var origName = (entry.label_name || '').toLowerCase();
+					if (name.toLowerCase() === origName) return;
+
+					function saveLabelId(labelId) {
+						var dirSel = panel.querySelector('.js-direction-sel');
+						var typeSel = panel.querySelector('.js-type-sel');
+						fetch('/api/entries/' + entryId, {
+							method: 'PUT',
+							headers: {'Content-Type':'application/json'},
+							credentials: 'same-origin',
+							body: JSON.stringify(Object.assign({}, entry, {
+								label_id: labelId,
+								direction: dirSel ? dirSel.value : entry.direction,
+								entry_type: typeSel ? typeSel.value : entry.entry_type,
+							})),
+						});
+					}
+
+					if (!name) { saveLabelId(null); return; }
+					fetchLabels(function(labels) {
+						var found = labels.find(function(l){ return l.name.toLowerCase() === name.toLowerCase(); });
+						if (found) { saveLabelId(found.id); return; }
+						// Create new label then save.
+						fetch('/api/labels', {method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin', body:JSON.stringify({name:name})})
+							.then(function(r){ return r.json(); })
+							.then(function(env){
+								if (env.data) {
+									_labelCache = null; // bust cache so new label appears in hints
+									saveLabelId(env.data.id);
+								}
+							});
+					});
+				});
 
 				// ── Approve / Reject ───────────────────────────────────────────────────
 				document.addEventListener('click', function(e) {
@@ -572,18 +659,21 @@ templ ledgerEntryRow(e store.EntryRow) {
 					data-entry={ entryDataJSON(e) }
 					style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 20px;border-top:1px solid var(--border);background:var(--surface2)"
 				>
-					<input
-						class="js-label-input"
-						type="text"
-						placeholder="Label name"
-						value={ func() string {
-							if e.LabelName != nil {
-								return *e.LabelName
-							}
-							return ""
-						}() }
-						style="flex:1;min-width:120px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:5px 8px;font-size:13px;color:var(--text);outline:none"
-					/>
+					<div style="flex:1;min-width:120px;display:flex;flex-direction:column;gap:3px">
+						<input
+							class="js-label-input"
+							type="text"
+							placeholder="Label name"
+							value={ func() string {
+								if e.LabelName != nil {
+									return *e.LabelName
+								}
+								return ""
+							}() }
+							style="width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:5px 8px;font-size:13px;color:var(--text);outline:none"
+						/>
+						<span class="js-label-hint" style="font-size:11px;color:var(--income);padding-left:2px;min-height:0;line-height:1.3"></span>
+					</div>
 					<select
 						class="js-direction-sel"
 						style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:5px 8px;font-size:13px;color:var(--text);outline:none"
