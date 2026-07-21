@@ -171,7 +171,7 @@ func (h *EntriesHandler) ListEntries(c echo.Context) error {
 
 	views := make([]entryView, len(items))
 	for i, item := range items {
-		item.Conditions = h.s.EnrichConditions(ctx, entityID, item.Conditions)
+		item.Conditions = h.s.ConditionsForDisplay(ctx, entityID, item.Conditions)
 		views[i] = toEntryView(item)
 	}
 	return c.JSON(http.StatusOK, response.Page(views, nextCursor, limit, hasMore))
@@ -189,7 +189,7 @@ func (h *EntriesHandler) GetEntry(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
-	item.Conditions = h.s.EnrichConditions(ctx, entityID, item.Conditions)
+	item.Conditions = h.s.ConditionsForDisplay(ctx, entityID, item.Conditions)
 	return c.JSON(http.StatusOK, response.Single(toEntryView(item)))
 }
 
@@ -291,7 +291,7 @@ func (h *EntriesHandler) UpdateEntry(c echo.Context) error {
 
 	conditions := body.Conditions
 	if len(conditions) > 0 {
-		resolved, resolveErr := h.s.ResolveConditions(ctx, entityID, conditions)
+		resolved, resolveErr := h.s.ConditionsForStorage(ctx, entityID, conditions)
 		if resolveErr != nil {
 			return echo.NewHTTPError(http.StatusUnprocessableEntity, "could not resolve conditions: "+resolveErr.Error())
 		}
@@ -318,7 +318,7 @@ func (h *EntriesHandler) UpdateEntry(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
-	item.Conditions = h.s.EnrichConditions(ctx, entityID, item.Conditions)
+	item.Conditions = h.s.ConditionsForDisplay(ctx, entityID, item.Conditions)
 	return c.JSON(http.StatusOK, response.Single(toEntryView(item)))
 }
 
@@ -390,7 +390,7 @@ func (h *EntriesHandler) UpdateEntryConditions(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusUnprocessableEntity, "conditions must be valid JSON")
 	}
 
-	resolved, resolveErr := h.s.ResolveConditions(ctx, entityID, body.Conditions)
+	resolved, resolveErr := h.s.ConditionsForStorage(ctx, entityID, body.Conditions)
 	if resolveErr != nil {
 		return echo.NewHTTPError(http.StatusUnprocessableEntity, "could not resolve conditions: "+resolveErr.Error())
 	}
@@ -402,7 +402,7 @@ func (h *EntriesHandler) UpdateEntryConditions(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
-	item.Conditions = h.s.EnrichConditions(ctx, entityID, item.Conditions)
+	item.Conditions = h.s.ConditionsForDisplay(ctx, entityID, item.Conditions)
 	return c.JSON(http.StatusOK, response.Single(toEntryView(item)))
 }
 

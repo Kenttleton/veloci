@@ -56,7 +56,8 @@ const KEY_LABELS = {
 // Valid condition keys — anything else triggers a linter warning.
 const KNOWN_KEYS = new Set([
   ...PAYEE_KEYS, "label_matched", "account",
-  "entry_direction", "entry_type", "and", "or", "not",
+  "entry_direction", "entry_type", "recurrence_anchor",
+  "and", "or", "not",
 ])
 
 // ── Module-level caches (one fetch per page load) ──────────────────────────

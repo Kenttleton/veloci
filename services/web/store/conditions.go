@@ -5,19 +5,20 @@ import (
 	"encoding/json"
 )
 
-// EnrichConditions walks a conditions tree and replaces machine IDs with human-readable
-// names so the frontend can display and edit them without knowing UUIDs.
+// ConditionsForDisplay converts a conditions tree from engine Schema A format to the
+// editor-friendly Schema B format, replacing label UUIDs with human-readable names.
 //
-//	label: label_id → label name string
+// Schema A (DB/engine): {"op":"AND","children":[{"type":"payee_exact","value":"X"}]}
+// Schema B (editor):    {"and":[{"payee_exact":"X"}]}
 //
-// Nodes that cannot be resolved (missing from DB) are left with their ID intact.
-func (s *Store) EnrichConditions(ctx context.Context, entityID string, raw json.RawMessage) json.RawMessage {
+// Nodes already in Schema B (e.g. existing user-edited conditions) are passed through
+// with recursion so any nested Schema A nodes are still converted.
+func (s *Store) ConditionsForDisplay(ctx context.Context, entityID string, raw json.RawMessage) json.RawMessage {
 	if len(raw) == 0 {
 		return raw
 	}
 
 	labelsByID := map[string]string{}
-
 	if labels, err := s.ListLabels(ctx, entityID, 1000, ""); err == nil {
 		for _, l := range labels {
 			labelsByID[l.ID] = l.Name
@@ -26,44 +27,95 @@ func (s *Store) EnrichConditions(ctx context.Context, entityID string, raw json.
 
 	var enrichNode func(node map[string]any) map[string]any
 	enrichNode = func(node map[string]any) map[string]any {
-		// Logical node — recurse into children (and/or) or child (not).
-		if children, ok := node["children"]; ok {
-			if arr, ok := children.([]any); ok {
-				enriched := make([]any, len(arr))
-				for i, child := range arr {
-					if childMap, ok := child.(map[string]any); ok {
-						enriched[i] = enrichNode(childMap)
-					} else {
-						enriched[i] = child
+		// Schema A logical node: {"op": "AND|OR|NOT|XOR", "children": [...]}
+		if op, ok := node["op"].(string); ok {
+			switch op {
+			case "AND", "OR", "XOR":
+				if arr, ok := node["children"].([]any); ok {
+					enriched := make([]any, len(arr))
+					for i, child := range arr {
+						if childMap, ok := child.(map[string]any); ok {
+							enriched[i] = enrichNode(childMap)
+						} else {
+							enriched[i] = child
+						}
+					}
+					var key string
+					switch op {
+					case "AND":
+						key = "and"
+					case "OR":
+						key = "or"
+					case "XOR":
+						key = "xor"
+					}
+					return map[string]any{key: enriched}
+				}
+			case "NOT":
+				if arr, ok := node["children"].([]any); ok && len(arr) > 0 {
+					if childMap, ok := arr[0].(map[string]any); ok {
+						return map[string]any{"not": enrichNode(childMap)}
 					}
 				}
-				out := copyMap(node)
-				out["children"] = enriched
-				return out
-			}
-		}
-		if child, ok := node["child"]; ok {
-			if childMap, ok := child.(map[string]any); ok {
-				out := copyMap(node)
-				out["child"] = enrichNode(childMap)
-				return out
-			}
-		}
-
-		nodeType, _ := node["type"].(string)
-		out := copyMap(node)
-
-		switch nodeType {
-		case "label_matched":
-			if id, ok := node["label_id"].(string); ok {
-				if name, found := labelsByID[id]; found {
-					delete(out, "label_id")
-					out["label"] = name
+				if childMap, ok := node["child"].(map[string]any); ok {
+					return map[string]any{"not": enrichNode(childMap)}
 				}
 			}
-		case "account":
-			// account UUID-to-name enrichment is handled by the accounts store;
-			// no transformation applied here.
+		}
+
+		// Schema A leaf node: {"type": "<kind>", <field>: <value>}
+		if nodeType, ok := node["type"].(string); ok {
+			switch nodeType {
+			case "payee_exact", "payee_contains", "payee_starts_with",
+				"payee_ends_with", "payee_not_contains", "payee_regex":
+				value, _ := node["value"].(string)
+				return map[string]any{nodeType: value}
+			case "label_matched":
+				id, _ := node["label_id"].(string)
+				name := id
+				if n, found := labelsByID[id]; found {
+					name = n
+				}
+				return map[string]any{"label_matched": name}
+			case "entry_direction":
+				direction, _ := node["direction"].(string)
+				return map[string]any{"entry_direction": direction}
+			case "entry_type":
+				entryType, _ := node["entry_type"].(string)
+				return map[string]any{"entry_type": entryType}
+			case "account", "account_id":
+				id, _ := node["value"].(string)
+				return map[string]any{"account": id}
+			case "recurrence_anchor":
+				anchor, _ := node["recurrence_anchor"].(string)
+				return map[string]any{"recurrence_anchor": anchor}
+			}
+			// Unknown Schema A type — pass through as-is.
+			return node
+		}
+
+		// Schema B node (already in editor format) — recurse into logical containers
+		// in case any nested children are still in Schema A format.
+		out := copyMap(node)
+		for key, val := range node {
+			switch key {
+			case "and", "or", "xor":
+				if arr, ok := val.([]any); ok {
+					enriched := make([]any, len(arr))
+					for i, child := range arr {
+						if childMap, ok := child.(map[string]any); ok {
+							enriched[i] = enrichNode(childMap)
+						} else {
+							enriched[i] = child
+						}
+					}
+					out[key] = enriched
+				}
+			case "not":
+				if childMap, ok := val.(map[string]any); ok {
+					out[key] = enrichNode(childMap)
+				}
+			}
 		}
 		return out
 	}
@@ -75,11 +127,11 @@ func (s *Store) EnrichConditions(ctx context.Context, entityID string, raw json.
 	return raw
 }
 
-// ResolveConditions is the inverse of EnrichConditions: replaces human-readable names
-// with machine IDs before storing to the DB or passing to the engine.
+// ConditionsForStorage converts editor Schema B format back to engine Schema A format,
+// replacing label names with UUIDs (creating labels if needed).
 //
-// If a label name is not found, it is created before the ID is inserted.
-func (s *Store) ResolveConditions(ctx context.Context, entityID string, raw json.RawMessage) (json.RawMessage, error) {
+// Also handles Schema A input gracefully (pass-through) for legacy stored conditions.
+func (s *Store) ConditionsForStorage(ctx context.Context, entityID string, raw json.RawMessage) (json.RawMessage, error) {
 	if len(raw) == 0 {
 		return raw, nil
 	}
@@ -92,9 +144,9 @@ func (s *Store) ResolveConditions(ctx context.Context, entityID string, raw json
 			return node
 		}
 
-		// Logical node — recurse into children (and/or) or child (not).
-		if children, ok := node["children"]; ok {
-			if arr, ok := children.([]any); ok {
+		// Schema A passthrough — already in engine format; recurse for label resolution.
+		if _, hasOp := node["op"]; hasOp {
+			if arr, ok := node["children"].([]any); ok {
 				resolved := make([]any, len(arr))
 				for i, child := range arr {
 					if childMap, ok := child.(map[string]any); ok {
@@ -107,25 +159,54 @@ func (s *Store) ResolveConditions(ctx context.Context, entityID string, raw json
 				out["children"] = resolved
 				return out
 			}
-		}
-		if child, ok := node["child"]; ok {
-			if childMap, ok := child.(map[string]any); ok {
+			if childMap, ok := node["child"].(map[string]any); ok {
 				out := copyMap(node)
 				out["child"] = resolveNode(childMap)
 				return out
 			}
+			return node
+		}
+		if _, hasType := node["type"]; hasType {
+			// Schema A leaf — pass through (label_id is already resolved).
+			return node
 		}
 
-		nodeType, _ := node["type"].(string)
-		out := copyMap(node)
+		// Schema B logical nodes → Schema A.
+		for _, entry := range []struct{ key, op string }{
+			{"and", "AND"}, {"or", "OR"}, {"xor", "XOR"},
+		} {
+			if val, ok := node[entry.key]; ok {
+				if arr, ok := val.([]any); ok {
+					resolved := make([]any, len(arr))
+					for i, child := range arr {
+						if childMap, ok := child.(map[string]any); ok {
+							resolved[i] = resolveNode(childMap)
+						} else {
+							resolved[i] = child
+						}
+					}
+					return map[string]any{"op": entry.op, "children": resolved}
+				}
+			}
+		}
+		if not, ok := node["not"]; ok {
+			if childMap, ok := not.(map[string]any); ok {
+				return map[string]any{"op": "NOT", "children": []any{resolveNode(childMap)}}
+			}
+		}
 
-		switch nodeType {
-		case "label_matched":
-			if name, ok := node["label"].(string); ok && name != "" {
+		// Schema B leaf nodes → Schema A.
+		for key, val := range node {
+			switch key {
+			case "payee_exact", "payee_contains", "payee_starts_with",
+				"payee_ends_with", "payee_not_contains", "payee_regex":
+				return map[string]any{"type": key, "value": val}
+			case "label_matched":
+				name, _ := val.(string)
 				labels, err := s.ListLabels(ctx, entityID, 1000, "")
 				if err != nil {
 					resolveErr = err
-					return out
+					return node
 				}
 				var id string
 				for _, l := range labels {
@@ -138,15 +219,24 @@ func (s *Store) ResolveConditions(ctx context.Context, entityID string, raw json
 					created, err := s.CreateLabel(ctx, entityID, name)
 					if err != nil {
 						resolveErr = err
-						return out
+						return node
 					}
 					id = created.ID
 				}
-				delete(out, "label")
-				out["label_id"] = id
+				return map[string]any{"type": "label_matched", "label_id": id}
+			case "entry_direction":
+				return map[string]any{"type": "entry_direction", "direction": val}
+			case "entry_type":
+				return map[string]any{"type": "entry_type", "entry_type": val}
+			case "account":
+				return map[string]any{"type": "account_id", "value": val}
+			case "recurrence_anchor":
+				return map[string]any{"type": "recurrence_anchor", "recurrence_anchor": val}
 			}
 		}
-		return out
+
+		// Unknown node — pass through.
+		return node
 	}
 
 	resolved := enrichAny(raw, resolveNode)

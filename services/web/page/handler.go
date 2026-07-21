@@ -469,7 +469,7 @@ func (s *Server) Ledger(c echo.Context) error {
 	}
 
 	for i := range entries {
-		entries[i].Conditions = s.store.EnrichConditions(ctx, entityID, entries[i].Conditions)
+		entries[i].Conditions = s.store.ConditionsForDisplay(ctx, entityID, entries[i].Conditions)
 	}
 
 	// Resolve label name for the filter display badge.
