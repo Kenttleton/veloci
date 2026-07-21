@@ -208,6 +208,9 @@ pub fn compute_drift(actual: f64, projected: f64, direction: Direction) -> f64 {
     match direction {
         Direction::Expense => projected - actual,
         Direction::Income  => actual - projected,
+        // Mixed entries span both directions; use the Expense convention
+        // (under-spending relative to projection = positive drift).
+        Direction::Mixed   => projected - actual,
     }
 }
 

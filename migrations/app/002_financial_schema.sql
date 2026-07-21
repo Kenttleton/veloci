@@ -197,7 +197,7 @@ CREATE TABLE entries (
   id                     UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
   entity_id              UUID          NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
   label_id               UUID          REFERENCES labels(id) ON DELETE SET NULL,
-  direction              TEXT          NOT NULL CHECK (direction IN ('income', 'expense')),
+  direction              TEXT          NOT NULL CHECK (direction IN ('income', 'expense', 'mixed')),
   entry_type             TEXT          NOT NULL
                          CHECK (entry_type IN ('standing', 'variable', 'irregular')),
   period_days            INTEGER       NOT NULL DEFAULT 30,

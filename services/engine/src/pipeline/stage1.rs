@@ -43,7 +43,62 @@ use regex::Regex;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::pipeline::types::Stage1Output;
+use crate::pipeline::types::{Direction, EntryType, Stage1Output};
+
+// ---------------------------------------------------------------------------
+// Entry source — origin of an entry record
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum EntrySource {
+    User,
+    Engine,
+}
+
+impl EntrySource {
+    fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "user"   => Some(Self::User),
+            "engine" => Some(Self::Engine),
+            _        => None,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Confidence gate — inclusive range filter for a single confidence score
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone)]
+pub(crate) struct ConfidenceGate {
+    min: Option<f64>,
+    max: Option<f64>,
+}
+
+impl ConfidenceGate {
+    fn matches(&self, value: f64) -> bool {
+        self.min.map_or(true, |m| value >= m) && self.max.map_or(true, |m| value <= m)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Accumulated entry metadata — per-matched-entry context carried through passes
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone)]
+pub(crate) struct AccumulatedEntryMeta {
+    label_id:               Option<Uuid>,
+    direction:              Direction,
+    entry_type:             EntryType,
+    period_days:            i32,
+    source:                 EntrySource,
+    confidence:             Option<f64>,
+    merchant_confidence:    Option<f64>,
+    timing_confidence:      Option<f64>,
+    amount_confidence:      Option<f64>,
+    projected_rate_per_day: Option<f64>,
+    recurrence_anchor:      Option<String>,
+}
 
 // ---------------------------------------------------------------------------
 // Compiled entry tree
@@ -55,12 +110,23 @@ use crate::pipeline::types::Stage1Output;
 /// rayon worker threads with no cloning or locking.
 #[derive(Debug)]
 pub struct CompiledEntry {
-    pub entry_id:   Uuid,
+    pub entry_id:               Uuid,
     /// The label this entry applies to a matched transaction (`entries.label_id`).
     /// Accumulated per transaction during the two-pass evaluation.
-    pub label_id:   Option<Uuid>,
-    pub priority:   i32,
-    pub conditions: CompiledConditionTree,
+    pub label_id:               Option<Uuid>,
+    pub priority:               i32,
+    pub conditions:             CompiledConditionTree,
+    // Fields carried into Pass 2+ entry-target evaluation.
+    pub direction:              Direction,
+    pub entry_type:             EntryType,
+    pub period_days:            i32,
+    pub source:                 EntrySource,
+    pub confidence:             Option<f64>,
+    pub merchant_confidence:    Option<f64>,
+    pub timing_confidence:      Option<f64>,
+    pub amount_confidence:      Option<f64>,
+    pub projected_rate_per_day: Option<f64>,
+    pub recurrence_anchor:      Option<String>,
 }
 
 /// A compiled, recursively-evaluatable condition tree node.
@@ -72,13 +138,9 @@ pub struct CompiledEntry {
 /// `PayeeEndsWith`, `PayeeRegex`, `PayeeOneOf`, `AmountRange`,
 /// `DateDayOfMonth`, `DateRange`, `AccountId`.
 ///
-/// **Pass 2+ targets** (entry context — only valid in Pass 2+):
-/// `LabelMatched`.
-///
-/// SPEC QUESTION: The spec defines `entry_direction` and `entry_type` as Pass 2+
-/// entry targets, but they are not yet implemented as variants. When added,
-/// `tree_has_entry_targets` must return `true` for those variants, and `evaluate`
-/// must receive the direction/type of Pass 1 matched entries as additional context.
+/// **Pass 2+ targets** (entry context — evaluated against accumulated matched-entry
+/// metadata): `LabelMatched`, `EntryDirection`, `EntryType`, `EntryPeriod`,
+/// `EntrySource`, `EntryConfidence`, `EntryProjectedRate`, `EntryRecurrenceAnchor`.
 #[derive(Debug)]
 pub enum CompiledConditionTree {
     And(Vec<CompiledConditionTree>),
@@ -112,6 +174,31 @@ pub enum CompiledConditionTree {
     /// DB format (written by Go's ResolveConditions): `{ "type": "label_matched", "label_id": "<uuid>" }`.
     /// The `"label"` field (human-readable name) lives only in the enriched display layer.
     LabelMatched(Uuid),
+    /// Matches when any accumulated entry has the specified direction.
+    EntryDirection(Direction),
+    /// Matches when any accumulated entry has the specified entry type.
+    EntryType(EntryType),
+    /// Matches when any accumulated entry's period_days falls within [min_days, max_days].
+    EntryPeriod {
+        min_days: Option<i32>,
+        max_days: Option<i32>,
+    },
+    /// Matches when any accumulated entry has the specified source.
+    EntrySource(EntrySource),
+    /// Matches when any single accumulated entry satisfies ALL specified confidence gates.
+    EntryConfidence {
+        overall:  Option<ConfidenceGate>,
+        merchant: Option<ConfidenceGate>,
+        timing:   Option<ConfidenceGate>,
+        amount:   Option<ConfidenceGate>,
+    },
+    /// Matches when any accumulated entry's projected_rate_per_day falls within [min, max].
+    EntryProjectedRate {
+        min: Option<f64>,
+        max: Option<f64>,
+    },
+    /// Matches when any accumulated entry's recurrence_anchor equals the given string.
+    EntryRecurrenceAnchor(String),
 }
 
 // ---------------------------------------------------------------------------
@@ -119,10 +206,20 @@ pub enum CompiledConditionTree {
 // ---------------------------------------------------------------------------
 
 struct EntryRow {
-    id:         Uuid,
-    label_id:   Option<Uuid>,
-    priority:   i32,
-    conditions: serde_json::Value,
+    id:                     Uuid,
+    label_id:               Option<Uuid>,
+    priority:               i32,
+    conditions:             serde_json::Value,
+    direction:              String,
+    entry_type:             String,
+    period_days:            i32,
+    source:                 String,
+    confidence:             Option<f64>,
+    merchant_confidence:    Option<f64>,
+    timing_confidence:      Option<f64>,
+    amount_confidence:      Option<f64>,
+    projected_rate_per_day: Option<f64>,
+    recurrence_anchor:      Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -186,24 +283,39 @@ pub async fn run(entity_id: Uuid, pool: &PgPool) -> Result<Stage1Output> {
         .par_iter()
         .map(|txn| {
             let mut matched: Vec<Uuid> = Vec::new();
-            let mut labels: HashSet<Uuid> = HashSet::new();
+            let mut accumulated: Vec<AccumulatedEntryMeta> = Vec::new();
+            let mut label_index: HashSet<Uuid> = HashSet::new();
 
             // --- Pass 1: transaction-target entries ---
             // Evaluated against transaction fields only. Each match contributes
-            // its entry_id to `matched` and its label_id to `labels`.
+            // its entry_id to `matched`, its label_id to `label_index`, and its
+            // full metadata to `accumulated`.
             for entry in &txn_entries {
-                if evaluate(&entry.conditions, txn, &labels) {
+                if evaluate(&entry.conditions, txn, &label_index, &accumulated) {
                     matched.push(entry.entry_id);
                     if let Some(label_id) = entry.label_id {
-                        labels.insert(label_id);
+                        label_index.insert(label_id);
                     }
+                    accumulated.push(AccumulatedEntryMeta {
+                        label_id:               entry.label_id,
+                        direction:              entry.direction,
+                        entry_type:             entry.entry_type,
+                        period_days:            entry.period_days,
+                        source:                 entry.source,
+                        confidence:             entry.confidence,
+                        merchant_confidence:    entry.merchant_confidence,
+                        timing_confidence:      entry.timing_confidence,
+                        amount_confidence:      entry.amount_confidence,
+                        projected_rate_per_day: entry.projected_rate_per_day,
+                        recurrence_anchor:      entry.recurrence_anchor.clone(),
+                    });
                 }
             }
 
-            // --- Pass 2+: iterative label expansion ---
+            // --- Pass 2+: iterative expansion via entry-target conditions ---
             //
-            // Evaluate entry-target entries against the accumulated label set.
-            // Batched semantics: new labels earned in pass N become visible in
+            // Evaluate entry-target entries against the accumulated metadata.
+            // Batched semantics: metadata accumulated in pass N becomes visible in
             // pass N+1, not mid-pass. This prevents order-dependency within a
             // single iteration.
             //
@@ -214,9 +326,11 @@ pub async fn run(entity_id: Uuid, pool: &PgPool) -> Result<Stage1Output> {
                 HashSet::from_iter(matched.iter().copied());
 
             loop {
-                // Snapshot the label set at the start of this pass.
-                let pass_labels = labels.clone();
+                // Snapshot the accumulated state at the start of this pass.
+                let pass_accumulated = accumulated.clone();
+                let pass_label_index = label_index.clone();
                 let mut newly_matched: Vec<Uuid> = Vec::new();
+                let mut new_meta: Vec<AccumulatedEntryMeta> = Vec::new();
                 let mut new_labels: HashSet<Uuid> = HashSet::new();
                 let mut cycle_detected = false;
 
@@ -226,17 +340,13 @@ pub async fn run(entity_id: Uuid, pool: &PgPool) -> Result<Stage1Output> {
                         continue;
                     }
 
-                    if evaluate(&entry.conditions, txn, &pass_labels) {
+                    if evaluate(&entry.conditions, txn, &pass_label_index, &pass_accumulated) {
                         if let Some(label_id) = entry.label_id {
-                            if pass_labels.contains(&label_id) {
+                            if pass_label_index.contains(&label_id) {
                                 // Cycle: this entry would re-add a label already
                                 // in the accumulated set. Per spec, log and
                                 // terminate expansion for this transaction.
-                                //
-                                // SPEC QUESTION: The spec does not specify whether
-                                // matches collected *before* the cycle entry within
-                                // the same pass should be committed. We commit all
-                                // pre-cycle matches from this pass and then stop.
+                                // Pre-cycle matches from this pass are committed.
                                 tracing::info!(
                                     txn_id   = %txn.id,
                                     entry_id = %entry.entry_id,
@@ -249,6 +359,19 @@ pub async fn run(entity_id: Uuid, pool: &PgPool) -> Result<Stage1Output> {
                             new_labels.insert(label_id);
                         }
                         newly_matched.push(entry.entry_id);
+                        new_meta.push(AccumulatedEntryMeta {
+                            label_id:               entry.label_id,
+                            direction:              entry.direction,
+                            entry_type:             entry.entry_type,
+                            period_days:            entry.period_days,
+                            source:                 entry.source,
+                            confidence:             entry.confidence,
+                            merchant_confidence:    entry.merchant_confidence,
+                            timing_confidence:      entry.timing_confidence,
+                            amount_confidence:      entry.amount_confidence,
+                            projected_rate_per_day: entry.projected_rate_per_day,
+                            recurrence_anchor:      entry.recurrence_anchor.clone(),
+                        });
                     }
                 }
 
@@ -258,10 +381,11 @@ pub async fn run(entity_id: Uuid, pool: &PgPool) -> Result<Stage1Output> {
                         matched.push(entry_id);
                     }
                 }
-                labels.extend(new_labels);
+                label_index.extend(new_labels);
+                accumulated.extend(new_meta);
 
-                // Termination: cycle detected OR label set is stable (no growth).
-                if cycle_detected || labels.len() == pass_labels.len() {
+                // Termination: cycle detected OR accumulated set is stable (no growth).
+                if cycle_detected || accumulated.len() == pass_accumulated.len() {
                     break;
                 }
             }
@@ -304,14 +428,9 @@ pub async fn run(entity_id: Uuid, pool: &PgPool) -> Result<Stage1Output> {
 
 /// Returns `true` if the tree contains any entry-target leaf nodes.
 ///
-/// Entry-target nodes ([`CompiledConditionTree::LabelMatched`]) reference the
-/// accumulated label set for a transaction and can only be evaluated in Pass 2+.
-/// Entries whose trees return `true` here are partitioned into the Pass 2+ group
-/// and skipped during Pass 1.
-///
-/// SPEC QUESTION: `entry_direction` and `entry_type` are described in the spec as
-/// entry-target nodes but are not yet implemented as `CompiledConditionTree` variants.
-/// When added, this function must return `true` for those variants.
+/// Entry-target nodes reference the accumulated matched-entry metadata for a
+/// transaction and can only be evaluated in Pass 2+. Entries whose trees return
+/// `true` here are partitioned into the Pass 2+ group and skipped during Pass 1.
 fn tree_has_entry_targets(tree: &CompiledConditionTree) -> bool {
     match tree {
         CompiledConditionTree::And(children) | CompiledConditionTree::Or(children) => {
@@ -321,7 +440,14 @@ fn tree_has_entry_targets(tree: &CompiledConditionTree) -> bool {
         CompiledConditionTree::Xor(a, b) => {
             tree_has_entry_targets(a) || tree_has_entry_targets(b)
         }
-        CompiledConditionTree::LabelMatched(_) => true,
+        CompiledConditionTree::LabelMatched(_)
+        | CompiledConditionTree::EntryDirection(_)
+        | CompiledConditionTree::EntryType(_)
+        | CompiledConditionTree::EntryPeriod { .. }
+        | CompiledConditionTree::EntrySource(_)
+        | CompiledConditionTree::EntryConfidence { .. }
+        | CompiledConditionTree::EntryProjectedRate { .. }
+        | CompiledConditionTree::EntryRecurrenceAnchor(_) => true,
         _ => false,
     }
 }
@@ -336,6 +462,9 @@ fn tree_has_entry_targets(tree: &CompiledConditionTree) -> bool {
 /// prior passes. Pass an empty set during Pass 1; pass the accumulated set during
 /// Pass 2+ iterations to enable [`CompiledConditionTree::LabelMatched`] evaluation.
 ///
+/// `accumulated` carries the full metadata for every entry matched in prior passes,
+/// enabling Pass 2+ entry-target conditions (`EntryDirection`, `EntryType`, etc.).
+///
 /// All `payee_*` string comparisons (except [`CompiledConditionTree::PayeeRegex`])
 /// are case-insensitive. `PayeeRegex` case-sensitivity is user-controlled via
 /// inline flags (e.g., `(?i)NETFLIX` for case-insensitive).
@@ -343,25 +472,27 @@ pub fn evaluate_entry(
     tree:               &CompiledConditionTree,
     txn:                &TransactionRow,
     accumulated_labels: &HashSet<Uuid>,
+    accumulated:        &[AccumulatedEntryMeta],
 ) -> bool {
-    evaluate(tree, txn, accumulated_labels)
+    evaluate(tree, txn, accumulated_labels, accumulated)
 }
 
 fn evaluate(
-    node:               &CompiledConditionTree,
-    txn:                &TransactionRow,
-    accumulated_labels: &HashSet<Uuid>,
+    node:          &CompiledConditionTree,
+    txn:           &TransactionRow,
+    label_index:   &HashSet<Uuid>,
+    accumulated:   &[AccumulatedEntryMeta],
 ) -> bool {
     match node {
         CompiledConditionTree::And(children) => {
-            children.iter().all(|c| evaluate(c, txn, accumulated_labels))
+            children.iter().all(|c| evaluate(c, txn, label_index, accumulated))
         }
         CompiledConditionTree::Or(children) => {
-            children.iter().any(|c| evaluate(c, txn, accumulated_labels))
+            children.iter().any(|c| evaluate(c, txn, label_index, accumulated))
         }
-        CompiledConditionTree::Not(child) => !evaluate(child, txn, accumulated_labels),
+        CompiledConditionTree::Not(child) => !evaluate(child, txn, label_index, accumulated),
         CompiledConditionTree::Xor(a, b) => {
-            evaluate(a, txn, accumulated_labels) ^ evaluate(b, txn, accumulated_labels)
+            evaluate(a, txn, label_index, accumulated) ^ evaluate(b, txn, label_index, accumulated)
         }
 
         // --- Payee conditions (all case-insensitive except Regex) ---
@@ -413,12 +544,56 @@ fn evaluate(
 
         // --- Entry-target conditions (Pass 2+ only) ---
         //
-        // `LabelMatched` evaluates against the accumulated label set, which is
-        // empty in Pass 1 (always false there). In Pass 2+ it is populated from
-        // prior-pass matches.
-        CompiledConditionTree::LabelMatched(label_id) => {
-            accumulated_labels.contains(label_id)
+        // All of these evaluate against `accumulated`, the list of metadata for
+        // entries already matched in prior passes. They are always false in Pass 1
+        // (empty accumulated slice).
+        CompiledConditionTree::LabelMatched(label_id) => label_index.contains(label_id),
+
+        CompiledConditionTree::EntryDirection(dir) => {
+            accumulated.iter().any(|e| e.direction == *dir)
         }
+
+        CompiledConditionTree::EntryType(et) => {
+            accumulated.iter().any(|e| e.entry_type == *et)
+        }
+
+        CompiledConditionTree::EntryPeriod { min_days, max_days } => {
+            accumulated.iter().any(|e| {
+                min_days.map_or(true, |m| e.period_days >= m)
+                    && max_days.map_or(true, |m| e.period_days <= m)
+            })
+        }
+
+        CompiledConditionTree::EntrySource(src) => {
+            accumulated.iter().any(|e| e.source == *src)
+        }
+
+        // All specified gates must be satisfied by the SAME accumulated entry.
+        CompiledConditionTree::EntryConfidence { overall, merchant, timing, amount } => {
+            accumulated.iter().any(|e| {
+                overall.as_ref().map_or(true, |g| {
+                    e.confidence.map_or(false, |v| g.matches(v))
+                }) && merchant.as_ref().map_or(true, |g| {
+                    e.merchant_confidence.map_or(false, |v| g.matches(v))
+                }) && timing.as_ref().map_or(true, |g| {
+                    e.timing_confidence.map_or(false, |v| g.matches(v))
+                }) && amount.as_ref().map_or(true, |g| {
+                    e.amount_confidence.map_or(false, |v| g.matches(v))
+                })
+            })
+        }
+
+        CompiledConditionTree::EntryProjectedRate { min, max } => {
+            accumulated.iter().any(|e| {
+                e.projected_rate_per_day.map_or(false, |r| {
+                    min.map_or(true, |m| r >= m) && max.map_or(true, |m| r <= m)
+                })
+            })
+        }
+
+        CompiledConditionTree::EntryRecurrenceAnchor(anchor) => accumulated
+            .iter()
+            .any(|e| e.recurrence_anchor.as_deref() == Some(anchor.as_str())),
     }
 }
 
@@ -429,11 +604,26 @@ fn evaluate(
 fn compile_entry(row: EntryRow) -> Result<CompiledEntry> {
     let conditions = compile_tree(&row.conditions)
         .with_context(|| format!("failed to compile conditions for entry {}", row.id))?;
+    let direction = Direction::from_str(&row.direction)
+        .ok_or_else(|| anyhow::anyhow!("unknown direction: {}", row.direction))?;
+    let entry_type = EntryType::from_str(&row.entry_type)
+        .ok_or_else(|| anyhow::anyhow!("unknown entry_type: {}", row.entry_type))?;
+    let source = EntrySource::from_str(&row.source).unwrap_or(EntrySource::User);
     Ok(CompiledEntry {
-        entry_id:   row.id,
-        label_id:   row.label_id,
-        priority:   row.priority,
+        entry_id:               row.id,
+        label_id:               row.label_id,
+        priority:               row.priority,
         conditions,
+        direction,
+        entry_type,
+        period_days:            row.period_days,
+        source,
+        confidence:             row.confidence,
+        merchant_confidence:    row.merchant_confidence,
+        timing_confidence:      row.timing_confidence,
+        amount_confidence:      row.amount_confidence,
+        projected_rate_per_day: row.projected_rate_per_day,
+        recurrence_anchor:      row.recurrence_anchor,
     })
 }
 
@@ -459,11 +649,13 @@ fn compile_entry(row: EntryRow) -> Result<CompiledEntry> {
 ///
 /// **Entry-target leaves** — `"type"` field:
 /// - `"label_matched"` (field: `"label_id"`) → [`CompiledConditionTree::LabelMatched`]
-///
-/// SPEC QUESTION: The spec defines `"entry_direction"` and `"entry_type"` as
-/// entry-target leaf types, but they are not yet implemented as variants. Until
-/// they are, an entry containing those types will fail compilation and be skipped
-/// with a log warning. This is the safe-fallback behavior (undefined → skip entry).
+/// - `"entry_direction"` (field: `"direction"`) → [`CompiledConditionTree::EntryDirection`]
+/// - `"entry_type"` (field: `"entry_type"`) → [`CompiledConditionTree::EntryType`]
+/// - `"entry_period"` (fields: `"min_days"`, `"max_days"` — both optional) → [`CompiledConditionTree::EntryPeriod`]
+/// - `"entry_source"` (field: `"source"`) → [`CompiledConditionTree::EntrySource`]
+/// - `"entry_confidence"` (field: `"score"` object) → [`CompiledConditionTree::EntryConfidence`]
+/// - `"entry_projected_rate"` (fields: `"min"`, `"max"` — both optional) → [`CompiledConditionTree::EntryProjectedRate`]
+/// - `"entry_recurrence_anchor"` (field: `"recurrence_anchor"`) → [`CompiledConditionTree::EntryRecurrenceAnchor`]
 pub fn compile_tree(v: &serde_json::Value) -> Result<CompiledConditionTree> {
     if let Some(op) = v.get("op").and_then(|o| o.as_str()) {
         // Logical node.
@@ -594,6 +786,54 @@ pub fn compile_tree(v: &serde_json::Value) -> Result<CompiledConditionTree> {
                 .with_context(|| format!("invalid UUID in label_matched leaf: {id_str}"))?;
             Ok(CompiledConditionTree::LabelMatched(id))
         }
+        "entry_direction" => {
+            let s = string_value(v, "direction")?;
+            let dir = Direction::from_str(&s)
+                .ok_or_else(|| anyhow::anyhow!("unknown direction: {s}"))?;
+            Ok(CompiledConditionTree::EntryDirection(dir))
+        }
+        "entry_type" => {
+            let s = string_value(v, "entry_type")?;
+            let et = EntryType::from_str(&s)
+                .ok_or_else(|| anyhow::anyhow!("unknown entry_type: {s}"))?;
+            Ok(CompiledConditionTree::EntryType(et))
+        }
+        "entry_period" => {
+            let min_days = v.get("min_days").and_then(|v| v.as_i64()).map(|n| n as i32);
+            let max_days = v.get("max_days").and_then(|v| v.as_i64()).map(|n| n as i32);
+            Ok(CompiledConditionTree::EntryPeriod { min_days, max_days })
+        }
+        "entry_source" => {
+            let s = string_value(v, "source")?;
+            let src = EntrySource::from_str(&s)
+                .ok_or_else(|| anyhow::anyhow!("unknown source: {s}"))?;
+            Ok(CompiledConditionTree::EntrySource(src))
+        }
+        "entry_confidence" => {
+            let score_obj = v.get("score").and_then(|s| s.as_object());
+            let parse_gate = |key: &str| -> Option<ConfidenceGate> {
+                let obj = score_obj?.get(key)?.as_object()?;
+                Some(ConfidenceGate {
+                    min: obj.get("min").and_then(|v| v.as_f64()),
+                    max: obj.get("max").and_then(|v| v.as_f64()),
+                })
+            };
+            Ok(CompiledConditionTree::EntryConfidence {
+                overall:  parse_gate("overall"),
+                merchant: parse_gate("merchant"),
+                timing:   parse_gate("timing"),
+                amount:   parse_gate("amount"),
+            })
+        }
+        "entry_projected_rate" => {
+            let min = v.get("min").and_then(|v| v.as_f64());
+            let max = v.get("max").and_then(|v| v.as_f64());
+            Ok(CompiledConditionTree::EntryProjectedRate { min, max })
+        }
+        "entry_recurrence_anchor" => {
+            let anchor = string_value(v, "recurrence_anchor")?;
+            Ok(CompiledConditionTree::EntryRecurrenceAnchor(anchor))
+        }
         other => bail!("unknown leaf type: {other}"),
     }
 }
@@ -652,15 +892,28 @@ async fn load_transactions(entity_id: Uuid, pool: &PgPool) -> Result<Vec<Transac
 async fn load_entries(entity_id: Uuid, pool: &PgPool) -> Result<Vec<EntryRow>> {
     #[derive(sqlx::FromRow)]
     struct Row {
-        id:         Uuid,
-        label_id:   Option<Uuid>,
-        priority:   i32,
-        conditions: serde_json::Value,
+        id:                     Uuid,
+        label_id:               Option<Uuid>,
+        priority:               i32,
+        conditions:             serde_json::Value,
+        direction:              String,
+        entry_type:             String,
+        period_days:            i32,
+        source:                 String,
+        confidence:             Option<sqlx::types::BigDecimal>,
+        merchant_confidence:    Option<sqlx::types::BigDecimal>,
+        timing_confidence:      Option<sqlx::types::BigDecimal>,
+        amount_confidence:      Option<sqlx::types::BigDecimal>,
+        projected_rate_per_day: Option<sqlx::types::BigDecimal>,
+        recurrence_anchor:      Option<String>,
     }
 
     let rows: Vec<Row> = sqlx::query_as(
         r#"
-        SELECT id, label_id, priority, conditions
+        SELECT id, label_id, priority, conditions,
+               direction, entry_type, period_days, source,
+               confidence, merchant_confidence, timing_confidence, amount_confidence,
+               projected_rate_per_day, recurrence_anchor
         FROM entries
         WHERE entity_id = $1
           AND status IN ('active', 'pending_review')
@@ -677,10 +930,25 @@ async fn load_entries(entity_id: Uuid, pool: &PgPool) -> Result<Vec<EntryRow>> {
     Ok(rows
         .into_iter()
         .map(|r| EntryRow {
-            id:         r.id,
-            label_id:   r.label_id,
-            priority:   r.priority,
-            conditions: r.conditions,
+            id:                     r.id,
+            label_id:               r.label_id,
+            priority:               r.priority,
+            conditions:             r.conditions,
+            direction:              r.direction,
+            entry_type:             r.entry_type,
+            period_days:            r.period_days,
+            source:                 r.source,
+            confidence:             r.confidence
+                .and_then(|v| v.to_string().parse::<f64>().ok()),
+            merchant_confidence:    r.merchant_confidence
+                .and_then(|v| v.to_string().parse::<f64>().ok()),
+            timing_confidence:      r.timing_confidence
+                .and_then(|v| v.to_string().parse::<f64>().ok()),
+            amount_confidence:      r.amount_confidence
+                .and_then(|v| v.to_string().parse::<f64>().ok()),
+            projected_rate_per_day: r.projected_rate_per_day
+                .and_then(|v| v.to_string().parse::<f64>().ok()),
+            recurrence_anchor:      r.recurrence_anchor,
         })
         .collect())
 }
@@ -803,25 +1071,65 @@ mod tests {
         Uuid::nil()
     }
 
-    /// Compile a JSONB condition and evaluate with an empty label set.
+    /// Compile a JSONB condition and evaluate with empty accumulated state.
     ///
     /// Covers all transaction-target conditions (Pass 1 semantics). For
-    /// `LabelMatched` tests use `eval_with_labels`.
+    /// entry-target conditions use `eval_with_accumulated`.
     fn eval(json: serde_json::Value, txn: &TransactionRow) -> bool {
         let tree = compile_tree(&json).unwrap();
-        evaluate(&tree, txn, &HashSet::new())
+        evaluate(&tree, txn, &HashSet::new(), &[])
     }
 
-    /// Compile a JSONB condition and evaluate with the given accumulated label set.
+    /// Compile a JSONB condition and evaluate with the given accumulated label set
+    /// and an empty accumulated-metadata slice.
     ///
-    /// Used to test Pass 2+ `LabelMatched` conditions.
+    /// Used to test Pass 2+ `LabelMatched` conditions that need only the label index.
     fn eval_with_labels(
         json:   serde_json::Value,
         txn:    &TransactionRow,
         labels: &HashSet<Uuid>,
     ) -> bool {
         let tree = compile_tree(&json).unwrap();
-        evaluate(&tree, txn, labels)
+        evaluate(&tree, txn, labels, &[])
+    }
+
+    /// Compile a JSONB condition and evaluate with the given accumulated entry metadata.
+    ///
+    /// Used to test Pass 2+ entry-target conditions.
+    fn eval_with_accumulated(
+        json:        serde_json::Value,
+        txn:         &TransactionRow,
+        accumulated: &[AccumulatedEntryMeta],
+    ) -> bool {
+        let tree = compile_tree(&json).unwrap();
+        // Build label_index from accumulated.
+        let label_index: HashSet<Uuid> = accumulated
+            .iter()
+            .filter_map(|e| e.label_id)
+            .collect();
+        evaluate(&tree, txn, &label_index, accumulated)
+    }
+
+    /// Build a minimal `AccumulatedEntryMeta` for use in tests.
+    fn make_meta(
+        direction:   Direction,
+        entry_type:  EntryType,
+        period_days: i32,
+        source:      EntrySource,
+    ) -> AccumulatedEntryMeta {
+        AccumulatedEntryMeta {
+            label_id:               None,
+            direction,
+            entry_type,
+            period_days,
+            source,
+            confidence:             None,
+            merchant_confidence:    None,
+            timing_confidence:      None,
+            amount_confidence:      None,
+            projected_rate_per_day: None,
+            recurrence_anchor:      None,
+        }
     }
 
     #[test]
@@ -1023,19 +1331,25 @@ mod tests {
     // Entries sort by priority ascending — lower number runs first.
     #[test]
     fn entries_sort_by_priority() {
+        let base = || CompiledEntry {
+            entry_id:               Uuid::nil(),
+            label_id:               None,
+            priority:               100,
+            conditions:             CompiledConditionTree::And(vec![]),
+            direction:              Direction::Expense,
+            entry_type:             EntryType::Standing,
+            period_days:            30,
+            source:                 EntrySource::User,
+            confidence:             None,
+            merchant_confidence:    None,
+            timing_confidence:      None,
+            amount_confidence:      None,
+            projected_rate_per_day: None,
+            recurrence_anchor:      None,
+        };
         let mut entries = vec![
-            CompiledEntry {
-                entry_id:   Uuid::nil(),
-                label_id:   None,
-                priority:   200,
-                conditions: CompiledConditionTree::And(vec![]),
-            },
-            CompiledEntry {
-                entry_id:   Uuid::nil(),
-                label_id:   None,
-                priority:   10,
-                conditions: CompiledConditionTree::And(vec![]),
-            },
+            CompiledEntry { priority: 200, ..base() },
+            CompiledEntry { priority: 10,  ..base() },
         ];
         entries.sort_by_key(|e| e.priority);
         assert_eq!(entries[0].priority, 10);
@@ -1093,5 +1407,596 @@ mod tests {
         assert!(eval(json!({"type": "payee_exact",    "value": "NETFLIX.COM"}), &txn));
         assert!(eval(json!({"type": "payee_contains", "value": "NETFLIX"}),    &txn));
         assert!(eval(json!({"type": "payee_regex",    "value": "^NETFLIX"}),   &txn));
+    }
+
+    // -----------------------------------------------------------------------
+    // New entry-target condition tests
+    // -----------------------------------------------------------------------
+
+    fn any_txn() -> TransactionRow {
+        make_txn(any_uuid(), any_uuid(), "2026-03-01", -1000, "Test")
+    }
+
+    // --- compile_tree: happy-path parsing ---
+
+    #[test]
+    fn compile_entry_direction_expense() {
+        let tree = compile_tree(&json!({"type": "entry_direction", "direction": "expense"}));
+        assert!(tree.is_ok(), "should compile: {tree:?}");
+        assert!(matches!(
+            tree.unwrap(),
+            CompiledConditionTree::EntryDirection(Direction::Expense)
+        ));
+    }
+
+    #[test]
+    fn compile_entry_direction_mixed() {
+        let tree = compile_tree(&json!({"type": "entry_direction", "direction": "mixed"}));
+        assert!(tree.is_ok());
+        assert!(matches!(
+            tree.unwrap(),
+            CompiledConditionTree::EntryDirection(Direction::Mixed)
+        ));
+    }
+
+    #[test]
+    fn compile_entry_direction_missing_field_error() {
+        let result = compile_tree(&json!({"type": "entry_direction"}));
+        assert!(result.is_err(), "missing 'direction' field should fail");
+    }
+
+    #[test]
+    fn compile_entry_direction_unknown_value_error() {
+        let result = compile_tree(&json!({"type": "entry_direction", "direction": "sideways"}));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn compile_entry_type_standing() {
+        let tree = compile_tree(&json!({"type": "entry_type", "entry_type": "standing"}));
+        assert!(tree.is_ok());
+        assert!(matches!(
+            tree.unwrap(),
+            CompiledConditionTree::EntryType(EntryType::Standing)
+        ));
+    }
+
+    #[test]
+    fn compile_entry_type_missing_field_error() {
+        let result = compile_tree(&json!({"type": "entry_type"}));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn compile_entry_type_unknown_value_error() {
+        let result = compile_tree(&json!({"type": "entry_type", "entry_type": "once"}));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn compile_entry_period_both_bounds() {
+        let tree = compile_tree(&json!({"type": "entry_period", "min_days": 25, "max_days": 35}));
+        assert!(tree.is_ok());
+        assert!(matches!(
+            tree.unwrap(),
+            CompiledConditionTree::EntryPeriod { min_days: Some(25), max_days: Some(35) }
+        ));
+    }
+
+    #[test]
+    fn compile_entry_period_no_bounds() {
+        // Both bounds are optional — no fields still compiles.
+        let tree = compile_tree(&json!({"type": "entry_period"}));
+        assert!(tree.is_ok());
+        assert!(matches!(
+            tree.unwrap(),
+            CompiledConditionTree::EntryPeriod { min_days: None, max_days: None }
+        ));
+    }
+
+    #[test]
+    fn compile_entry_source_engine() {
+        let tree = compile_tree(&json!({"type": "entry_source", "source": "engine"}));
+        assert!(tree.is_ok());
+        assert!(matches!(
+            tree.unwrap(),
+            CompiledConditionTree::EntrySource(EntrySource::Engine)
+        ));
+    }
+
+    #[test]
+    fn compile_entry_source_missing_field_error() {
+        let result = compile_tree(&json!({"type": "entry_source"}));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn compile_entry_source_unknown_value_error() {
+        let result = compile_tree(&json!({"type": "entry_source", "source": "robot"}));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn compile_entry_confidence_with_score() {
+        let tree = compile_tree(&json!({
+            "type": "entry_confidence",
+            "score": {
+                "overall":  {"min": 0.8},
+                "merchant": {"min": 0.7, "max": 1.0}
+            }
+        }));
+        assert!(tree.is_ok(), "{tree:?}");
+        let CompiledConditionTree::EntryConfidence { overall, merchant, timing, amount } =
+            tree.unwrap()
+        else {
+            panic!("expected EntryConfidence variant");
+        };
+        let overall = overall.expect("overall should be Some");
+        assert!((overall.min.unwrap() - 0.8).abs() < 1e-9);
+        assert!(overall.max.is_none());
+        let merchant = merchant.expect("merchant should be Some");
+        assert!((merchant.min.unwrap() - 0.7).abs() < 1e-9);
+        assert!((merchant.max.unwrap() - 1.0).abs() < 1e-9);
+        assert!(timing.is_none());
+        assert!(amount.is_none());
+    }
+
+    #[test]
+    fn compile_entry_confidence_no_score_object() {
+        // Missing "score" — all gates None but still compiles (spec: score is optional).
+        let tree = compile_tree(&json!({"type": "entry_confidence"}));
+        assert!(tree.is_ok());
+        let CompiledConditionTree::EntryConfidence { overall, merchant, timing, amount } =
+            tree.unwrap()
+        else {
+            panic!("expected EntryConfidence");
+        };
+        assert!(overall.is_none() && merchant.is_none() && timing.is_none() && amount.is_none());
+    }
+
+    #[test]
+    fn compile_entry_projected_rate() {
+        let tree =
+            compile_tree(&json!({"type": "entry_projected_rate", "min": 1.5, "max": 5.0}));
+        assert!(tree.is_ok());
+        let CompiledConditionTree::EntryProjectedRate { min, max } = tree.unwrap() else {
+            panic!("expected EntryProjectedRate");
+        };
+        assert!((min.unwrap() - 1.5).abs() < 1e-9);
+        assert!((max.unwrap() - 5.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn compile_entry_projected_rate_no_bounds() {
+        let tree = compile_tree(&json!({"type": "entry_projected_rate"}));
+        assert!(tree.is_ok());
+        assert!(matches!(
+            tree.unwrap(),
+            CompiledConditionTree::EntryProjectedRate { min: None, max: None }
+        ));
+    }
+
+    #[test]
+    fn compile_entry_recurrence_anchor() {
+        let tree = compile_tree(
+            &json!({"type": "entry_recurrence_anchor", "recurrence_anchor": "dom:15"}),
+        );
+        assert!(tree.is_ok());
+        let CompiledConditionTree::EntryRecurrenceAnchor(anchor) = tree.unwrap() else {
+            panic!("expected EntryRecurrenceAnchor");
+        };
+        assert_eq!(anchor, "dom:15");
+    }
+
+    #[test]
+    fn compile_entry_recurrence_anchor_missing_field_error() {
+        let result = compile_tree(&json!({"type": "entry_recurrence_anchor"}));
+        assert!(result.is_err());
+    }
+
+    // --- evaluate: false with empty accumulated ---
+
+    #[test]
+    fn entry_direction_false_with_empty_accumulated() {
+        let txn = any_txn();
+        assert!(!eval_with_accumulated(
+            json!({"type": "entry_direction", "direction": "expense"}),
+            &txn,
+            &[]
+        ));
+    }
+
+    #[test]
+    fn entry_type_false_with_empty_accumulated() {
+        let txn = any_txn();
+        assert!(!eval_with_accumulated(
+            json!({"type": "entry_type", "entry_type": "standing"}),
+            &txn,
+            &[]
+        ));
+    }
+
+    #[test]
+    fn entry_period_false_with_empty_accumulated() {
+        let txn = any_txn();
+        assert!(!eval_with_accumulated(
+            json!({"type": "entry_period", "min_days": 25, "max_days": 35}),
+            &txn,
+            &[]
+        ));
+    }
+
+    #[test]
+    fn entry_source_false_with_empty_accumulated() {
+        let txn = any_txn();
+        assert!(!eval_with_accumulated(
+            json!({"type": "entry_source", "source": "engine"}),
+            &txn,
+            &[]
+        ));
+    }
+
+    #[test]
+    fn entry_confidence_false_with_empty_accumulated() {
+        let txn = any_txn();
+        assert!(!eval_with_accumulated(
+            json!({"type": "entry_confidence", "score": {"overall": {"min": 0.8}}}),
+            &txn,
+            &[]
+        ));
+    }
+
+    #[test]
+    fn entry_projected_rate_false_with_empty_accumulated() {
+        let txn = any_txn();
+        assert!(!eval_with_accumulated(
+            json!({"type": "entry_projected_rate", "min": 1.0}),
+            &txn,
+            &[]
+        ));
+    }
+
+    #[test]
+    fn entry_recurrence_anchor_false_with_empty_accumulated() {
+        let txn = any_txn();
+        assert!(!eval_with_accumulated(
+            json!({"type": "entry_recurrence_anchor", "recurrence_anchor": "dom:15"}),
+            &txn,
+            &[]
+        ));
+    }
+
+    // --- evaluate: true when a matching entry is in accumulated ---
+
+    #[test]
+    fn entry_direction_matches_when_present() {
+        let txn = any_txn();
+        let meta = make_meta(Direction::Expense, EntryType::Standing, 30, EntrySource::User);
+        assert!(eval_with_accumulated(
+            json!({"type": "entry_direction", "direction": "expense"}),
+            &txn,
+            &[meta]
+        ));
+    }
+
+    #[test]
+    fn entry_direction_no_match_wrong_direction() {
+        let txn = any_txn();
+        let meta = make_meta(Direction::Income, EntryType::Standing, 30, EntrySource::User);
+        assert!(!eval_with_accumulated(
+            json!({"type": "entry_direction", "direction": "expense"}),
+            &txn,
+            &[meta]
+        ));
+    }
+
+    #[test]
+    fn entry_direction_mixed_matches() {
+        let txn = any_txn();
+        let meta = make_meta(Direction::Mixed, EntryType::Irregular, 7, EntrySource::Engine);
+        assert!(eval_with_accumulated(
+            json!({"type": "entry_direction", "direction": "mixed"}),
+            &txn,
+            &[meta]
+        ));
+    }
+
+    #[test]
+    fn entry_type_matches_when_present() {
+        let txn = any_txn();
+        let meta = make_meta(Direction::Expense, EntryType::Variable, 30, EntrySource::User);
+        assert!(eval_with_accumulated(
+            json!({"type": "entry_type", "entry_type": "variable"}),
+            &txn,
+            &[meta]
+        ));
+    }
+
+    #[test]
+    fn entry_type_no_match_wrong_type() {
+        let txn = any_txn();
+        let meta = make_meta(Direction::Expense, EntryType::Irregular, 30, EntrySource::User);
+        assert!(!eval_with_accumulated(
+            json!({"type": "entry_type", "entry_type": "standing"}),
+            &txn,
+            &[meta]
+        ));
+    }
+
+    #[test]
+    fn entry_period_matches_exact() {
+        let txn = any_txn();
+        let meta = make_meta(Direction::Expense, EntryType::Standing, 30, EntrySource::User);
+        assert!(eval_with_accumulated(
+            json!({"type": "entry_period", "min_days": 25, "max_days": 35}),
+            &txn,
+            &[meta]
+        ));
+    }
+
+    #[test]
+    fn entry_period_no_match_out_of_range() {
+        let txn = any_txn();
+        let meta = make_meta(Direction::Expense, EntryType::Standing, 60, EntrySource::User);
+        assert!(!eval_with_accumulated(
+            json!({"type": "entry_period", "min_days": 25, "max_days": 35}),
+            &txn,
+            &[meta]
+        ));
+    }
+
+    #[test]
+    fn entry_period_open_bounds_match_all() {
+        let txn = any_txn();
+        let meta = make_meta(Direction::Expense, EntryType::Standing, 365, EntrySource::User);
+        assert!(eval_with_accumulated(
+            json!({"type": "entry_period"}),
+            &txn,
+            &[meta]
+        ));
+    }
+
+    #[test]
+    fn entry_source_matches_engine() {
+        let txn = any_txn();
+        let meta = make_meta(Direction::Expense, EntryType::Standing, 30, EntrySource::Engine);
+        assert!(eval_with_accumulated(
+            json!({"type": "entry_source", "source": "engine"}),
+            &txn,
+            &[meta]
+        ));
+    }
+
+    #[test]
+    fn entry_source_no_match_wrong_source() {
+        let txn = any_txn();
+        let meta = make_meta(Direction::Expense, EntryType::Standing, 30, EntrySource::User);
+        assert!(!eval_with_accumulated(
+            json!({"type": "entry_source", "source": "engine"}),
+            &txn,
+            &[meta]
+        ));
+    }
+
+    // --- entry_confidence gate semantics ---
+
+    fn make_meta_with_confidence(
+        confidence: Option<f64>,
+        merchant:   Option<f64>,
+        timing:     Option<f64>,
+        amount:     Option<f64>,
+    ) -> AccumulatedEntryMeta {
+        AccumulatedEntryMeta {
+            label_id:               None,
+            direction:              Direction::Expense,
+            entry_type:             EntryType::Standing,
+            period_days:            30,
+            source:                 EntrySource::Engine,
+            confidence,
+            merchant_confidence:    merchant,
+            timing_confidence:      timing,
+            amount_confidence:      amount,
+            projected_rate_per_day: None,
+            recurrence_anchor:      None,
+        }
+    }
+
+    #[test]
+    fn entry_confidence_matches_overall_above_min() {
+        let txn = any_txn();
+        let meta = make_meta_with_confidence(Some(0.9), None, None, None);
+        assert!(eval_with_accumulated(
+            json!({"type": "entry_confidence", "score": {"overall": {"min": 0.8}}}),
+            &txn,
+            &[meta]
+        ));
+    }
+
+    #[test]
+    fn entry_confidence_no_match_overall_below_min() {
+        let txn = any_txn();
+        let meta = make_meta_with_confidence(Some(0.7), None, None, None);
+        assert!(!eval_with_accumulated(
+            json!({"type": "entry_confidence", "score": {"overall": {"min": 0.8}}}),
+            &txn,
+            &[meta]
+        ));
+    }
+
+    #[test]
+    fn entry_confidence_no_match_when_score_is_null() {
+        // Gate specified but confidence field is None → no match.
+        let txn = any_txn();
+        let meta = make_meta_with_confidence(None, None, None, None);
+        assert!(!eval_with_accumulated(
+            json!({"type": "entry_confidence", "score": {"overall": {"min": 0.8}}}),
+            &txn,
+            &[meta]
+        ));
+    }
+
+    /// ALL gates must be satisfied by the SAME single entry — not different entries.
+    #[test]
+    fn entry_confidence_all_gates_must_be_same_entry() {
+        let txn = any_txn();
+        // entry A: overall=0.9 but merchant=0.5
+        // entry B: overall=0.5 but merchant=0.9
+        // Gate: overall >= 0.8 AND merchant >= 0.8
+        // Neither single entry satisfies both → false.
+        let entry_a = make_meta_with_confidence(Some(0.9), Some(0.5), None, None);
+        let entry_b = make_meta_with_confidence(Some(0.5), Some(0.9), None, None);
+        assert!(!eval_with_accumulated(
+            json!({
+                "type": "entry_confidence",
+                "score": {
+                    "overall":  {"min": 0.8},
+                    "merchant": {"min": 0.8}
+                }
+            }),
+            &txn,
+            &[entry_a, entry_b]
+        ));
+    }
+
+    #[test]
+    fn entry_confidence_single_entry_satisfies_all_gates() {
+        let txn = any_txn();
+        // Both overall and merchant meet their gates on entry A alone.
+        let entry_a = make_meta_with_confidence(Some(0.9), Some(0.85), None, None);
+        assert!(eval_with_accumulated(
+            json!({
+                "type": "entry_confidence",
+                "score": {
+                    "overall":  {"min": 0.8},
+                    "merchant": {"min": 0.8}
+                }
+            }),
+            &txn,
+            &[entry_a]
+        ));
+    }
+
+    #[test]
+    fn entry_projected_rate_matches_in_range() {
+        let txn = any_txn();
+        let mut meta = make_meta(Direction::Expense, EntryType::Standing, 30, EntrySource::User);
+        meta.projected_rate_per_day = Some(3.0);
+        assert!(eval_with_accumulated(
+            json!({"type": "entry_projected_rate", "min": 1.5, "max": 5.0}),
+            &txn,
+            &[meta]
+        ));
+    }
+
+    #[test]
+    fn entry_projected_rate_no_match_null_rate() {
+        // projected_rate_per_day is None → never matches a rate gate.
+        let txn = any_txn();
+        let meta = make_meta(Direction::Expense, EntryType::Standing, 30, EntrySource::User);
+        assert!(!eval_with_accumulated(
+            json!({"type": "entry_projected_rate", "min": 1.5}),
+            &txn,
+            &[meta]
+        ));
+    }
+
+    #[test]
+    fn entry_projected_rate_no_match_out_of_range() {
+        let txn = any_txn();
+        let mut meta = make_meta(Direction::Expense, EntryType::Standing, 30, EntrySource::User);
+        meta.projected_rate_per_day = Some(10.0);
+        assert!(!eval_with_accumulated(
+            json!({"type": "entry_projected_rate", "min": 1.5, "max": 5.0}),
+            &txn,
+            &[meta]
+        ));
+    }
+
+    #[test]
+    fn entry_recurrence_anchor_matches() {
+        let txn = any_txn();
+        let mut meta = make_meta(Direction::Expense, EntryType::Standing, 30, EntrySource::User);
+        meta.recurrence_anchor = Some("dom:15".to_string());
+        assert!(eval_with_accumulated(
+            json!({"type": "entry_recurrence_anchor", "recurrence_anchor": "dom:15"}),
+            &txn,
+            &[meta]
+        ));
+    }
+
+    #[test]
+    fn entry_recurrence_anchor_no_match_null() {
+        let txn = any_txn();
+        let meta = make_meta(Direction::Expense, EntryType::Standing, 30, EntrySource::User);
+        // recurrence_anchor is None → never matches.
+        assert!(!eval_with_accumulated(
+            json!({"type": "entry_recurrence_anchor", "recurrence_anchor": "dom:15"}),
+            &txn,
+            &[meta]
+        ));
+    }
+
+    #[test]
+    fn entry_recurrence_anchor_no_match_wrong_anchor() {
+        let txn = any_txn();
+        let mut meta = make_meta(Direction::Expense, EntryType::Standing, 30, EntrySource::User);
+        meta.recurrence_anchor = Some("dom:1".to_string());
+        assert!(!eval_with_accumulated(
+            json!({"type": "entry_recurrence_anchor", "recurrence_anchor": "dom:15"}),
+            &txn,
+            &[meta]
+        ));
+    }
+
+    // --- tree_has_entry_targets: all 7 new variants return true ---
+
+    #[test]
+    fn tree_has_entry_targets_all_new_variants() {
+        assert!(tree_has_entry_targets(&CompiledConditionTree::EntryDirection(
+            Direction::Expense
+        )));
+        assert!(tree_has_entry_targets(&CompiledConditionTree::EntryType(
+            EntryType::Standing
+        )));
+        assert!(tree_has_entry_targets(&CompiledConditionTree::EntryPeriod {
+            min_days: None,
+            max_days: None,
+        }));
+        assert!(tree_has_entry_targets(&CompiledConditionTree::EntrySource(
+            EntrySource::User
+        )));
+        assert!(tree_has_entry_targets(&CompiledConditionTree::EntryConfidence {
+            overall:  None,
+            merchant: None,
+            timing:   None,
+            amount:   None,
+        }));
+        assert!(tree_has_entry_targets(&CompiledConditionTree::EntryProjectedRate {
+            min: None,
+            max: None,
+        }));
+        assert!(tree_has_entry_targets(&CompiledConditionTree::EntryRecurrenceAnchor(
+            "dom:15".to_string()
+        )));
+    }
+
+    /// Transaction-only trees still return false (regression guard).
+    #[test]
+    fn tree_has_entry_targets_false_for_txn_only() {
+        let txn_only = CompiledConditionTree::And(vec![
+            CompiledConditionTree::PayeeExact("Netflix".into()),
+            CompiledConditionTree::AmountRange { min: None, max: None },
+        ]);
+        assert!(!tree_has_entry_targets(&txn_only));
+    }
+
+    /// New variants nested inside logical nodes are detected.
+    #[test]
+    fn tree_has_entry_targets_nested_detection() {
+        let nested = CompiledConditionTree::Or(vec![
+            CompiledConditionTree::PayeeContains("test".into()),
+            CompiledConditionTree::EntryDirection(Direction::Income),
+        ]);
+        assert!(tree_has_entry_targets(&nested));
     }
 }
