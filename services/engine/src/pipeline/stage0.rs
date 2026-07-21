@@ -569,7 +569,7 @@ async fn load_pending_import(id: Uuid, entity_id: Uuid, pool: &PgPool) -> Result
 }
 
 async fn load_institution_mapping(id: Uuid, pool: &PgPool) -> Result<InstitutionMapping> {
-    let row: (serde_json::Value, Option<i32>, Option<i32>, Option<f64>) =
+    let row: (Option<serde_json::Value>, Option<i32>, Option<i32>, Option<f64>) =
         sqlx::query_as(
             r#"
             SELECT mapping_config,
@@ -585,7 +585,15 @@ async fn load_institution_mapping(id: Uuid, pool: &PgPool) -> Result<Institution
         .await
         .context("institution_mapping not found")?;
 
-    let (cfg, settlement, dedup, tolerance) = row;
+    let (cfg_opt, settlement, dedup, tolerance) = row;
+    let cfg = cfg_opt.unwrap_or(serde_json::Value::Null);
+
+    if cfg.is_null() {
+        return Err(anyhow!(
+            "Mapping error: this institution has no column mapping configured. \
+             Upload a CSV and use the mapping dialog to set it up first."
+        ));
+    }
 
     let layout = cfg["layout"].as_str().unwrap_or("signed").to_string();
 

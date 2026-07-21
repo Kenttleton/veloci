@@ -21,7 +21,8 @@ CREATE TABLE institution_mappings (
   -- csv default: 0.5%; integration default: 2%
   amount_tolerance_pct   FLOAT8       NOT NULL DEFAULT 0.005,
   -- JSON config: { "layout": "signed"|"indicator"|"split", "fields": { field_key: col_name_or_enum } }
-  mapping_config         JSONB        NOT NULL,
+  -- NULL means no mapping configured yet (name-only institution, mapping set at first upload)
+  mapping_config         JSONB,
   created_at             TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   UNIQUE (entity_id, institution_name)
 );

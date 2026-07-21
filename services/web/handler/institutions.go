@@ -73,12 +73,12 @@ type mappingConfigBody struct {
 
 type createInstitutionInput struct {
 	Body struct {
-		InstitutionName      string            `json:"institution_name"       required:"true"`
-		SourceType           string            `json:"source_type"            required:"true"`
-		SettlementWindowDays int               `json:"settlement_window_days"`
-		DedupWindowDays      int               `json:"dedup_window_days"`
-		AmountTolerancePct   float64           `json:"amount_tolerance_pct"`
-		MappingConfig        mappingConfigBody  `json:"mapping_config"`
+		InstitutionName      string             `json:"institution_name"       required:"true"`
+		SourceType           string             `json:"source_type"            required:"true"`
+		SettlementWindowDays *int               `json:"settlement_window_days" required:"false"`
+		DedupWindowDays      *int               `json:"dedup_window_days"      required:"false"`
+		AmountTolerancePct   *float64           `json:"amount_tolerance_pct"   required:"false"`
+		MappingConfig        *mappingConfigBody `json:"mapping_config"         required:"false"`
 	}
 }
 
@@ -89,12 +89,12 @@ type createInstitutionOutput struct {
 type updateInstitutionInput struct {
 	PathID string `path:"id"`
 	Body   struct {
-		InstitutionName      string            `json:"institution_name"       required:"true"`
-		SourceType           string            `json:"source_type"            required:"true"`
-		SettlementWindowDays int               `json:"settlement_window_days"`
-		DedupWindowDays      int               `json:"dedup_window_days"`
-		AmountTolerancePct   float64           `json:"amount_tolerance_pct"`
-		MappingConfig        mappingConfigBody  `json:"mapping_config"`
+		InstitutionName      string             `json:"institution_name"       required:"true"`
+		SourceType           string             `json:"source_type"            required:"true"`
+		SettlementWindowDays *int               `json:"settlement_window_days" required:"false"`
+		DedupWindowDays      *int               `json:"dedup_window_days"      required:"false"`
+		AmountTolerancePct   *float64           `json:"amount_tolerance_pct"   required:"false"`
+		MappingConfig        *mappingConfigBody `json:"mapping_config"         required:"false"`
 	}
 }
 
@@ -135,31 +135,34 @@ type createInstitutionAccountOutput struct {
 func institutionFromInput(entityID string, b struct {
 	InstitutionName      string
 	SourceType           string
-	SettlementWindowDays int
-	DedupWindowDays      int
-	AmountTolerancePct   float64
-	MappingConfig        mappingConfigBody
+	SettlementWindowDays *int
+	DedupWindowDays      *int
+	AmountTolerancePct   *float64
+	MappingConfig        *mappingConfigBody
 }) (store.Institution, error) {
-	cfg := fieldregistry.MappingConfig{
-		Layout: b.MappingConfig.Layout,
-		Fields: b.MappingConfig.Fields,
+	var cfgJSON json.RawMessage
+	if b.MappingConfig != nil && b.MappingConfig.Layout != "" {
+		cfg := fieldregistry.MappingConfig{
+			Layout: b.MappingConfig.Layout,
+			Fields: b.MappingConfig.Fields,
+		}
+		if err := fieldregistry.ValidateConfig(b.SourceType, cfg); err != nil {
+			return store.Institution{}, err
+		}
+		cfgJSON, _ = json.Marshal(cfg)
 	}
-	if err := fieldregistry.ValidateConfig(b.SourceType, cfg); err != nil {
-		return store.Institution{}, err
-	}
-	cfgJSON, _ := json.Marshal(cfg)
 
-	settlement := b.SettlementWindowDays
-	if settlement == 0 {
-		settlement = 14
+	settlement := 14
+	if b.SettlementWindowDays != nil && *b.SettlementWindowDays != 0 {
+		settlement = *b.SettlementWindowDays
 	}
-	dedup := b.DedupWindowDays
-	if dedup == 0 {
-		dedup = 3
+	dedup := 3
+	if b.DedupWindowDays != nil && *b.DedupWindowDays != 0 {
+		dedup = *b.DedupWindowDays
 	}
-	tolerance := b.AmountTolerancePct
-	if tolerance == 0 {
-		tolerance = 0.005
+	tolerance := 0.005
+	if b.AmountTolerancePct != nil && *b.AmountTolerancePct != 0 {
+		tolerance = *b.AmountTolerancePct
 	}
 
 	return store.Institution{
@@ -216,10 +219,10 @@ func (h *InstitutionsHandler) CreateInstitution(ctx context.Context, input *crea
 	inst, err := institutionFromInput(entityID, struct {
 		InstitutionName      string
 		SourceType           string
-		SettlementWindowDays int
-		DedupWindowDays      int
-		AmountTolerancePct   float64
-		MappingConfig        mappingConfigBody
+		SettlementWindowDays *int
+		DedupWindowDays      *int
+		AmountTolerancePct   *float64
+		MappingConfig        *mappingConfigBody
 	}{
 		input.Body.InstitutionName, input.Body.SourceType,
 		input.Body.SettlementWindowDays, input.Body.DedupWindowDays, input.Body.AmountTolerancePct,
@@ -248,10 +251,10 @@ func (h *InstitutionsHandler) UpdateInstitution(ctx context.Context, input *upda
 	inst, err := institutionFromInput(entityID, struct {
 		InstitutionName      string
 		SourceType           string
-		SettlementWindowDays int
-		DedupWindowDays      int
-		AmountTolerancePct   float64
-		MappingConfig        mappingConfigBody
+		SettlementWindowDays *int
+		DedupWindowDays      *int
+		AmountTolerancePct   *float64
+		MappingConfig        *mappingConfigBody
 	}{
 		input.Body.InstitutionName, input.Body.SourceType,
 		input.Body.SettlementWindowDays, input.Body.DedupWindowDays, input.Body.AmountTolerancePct,
