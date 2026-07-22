@@ -137,9 +137,9 @@ func (s *Store) UpdateAccount(ctx context.Context, entityID, id string, in Accou
 			account_type = $4,
 			status = $5,
 			interest_rate = $6,
-			starting_balance_cents = $7,
-			balance_cents = $7 + COALESCE(
-				(SELECT SUM(amount_cents) FROM transactions WHERE account_id = $2::uuid), 0),
+			starting_balance_cents = $7::bigint,
+			balance_cents = $7::bigint + COALESCE(
+				(SELECT SUM(amount_cents) FROM transactions WHERE account_id = $2), 0::bigint),
 			credit_limit_cents = $8,
 			institution_id = COALESCE($9::uuid, institution_id)
 		WHERE entity_id = $1 AND id = $2

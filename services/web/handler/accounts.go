@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -165,6 +166,7 @@ func (h *AccountsHandler) UpdateAccount(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "not found")
 	}
 	if err != nil {
+		slog.ErrorContext(ctx, "UpdateAccount failed", "error", err, "account_id", id, "entity_id", entityID)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 

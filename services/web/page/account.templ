@@ -161,6 +161,7 @@ templ AccountPage(shell ShellData, data AccountData) {
 							placeholder="e.g. Chase"
 							style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:7px 10px;font-size:13px;color:var(--text);outline:none;font-family:inherit"
 						/>
+						<div id="upload-inst-hint" style="display:none;margin-top:5px;font-size:12px;color:var(--text2)"></div>
 					</div>
 					<details id="upload-advanced" open>
 						<summary style="display:flex;align-items:center;gap:4px;cursor:pointer;list-style:none;-webkit-appearance:none;color:var(--text2);font-size:12px;padding:4px 0;margin-bottom:8px">
@@ -366,6 +367,51 @@ templ AccountPage(shell ShellData, data AccountData) {
 
 				var parsedCsv = null;
 
+				var instHintEl = document.getElementById('upload-inst-hint');
+
+				// ─── Institution name conflict ─────────────────────────────────────────────
+				var uploadInstitutions = null;  // null = not yet fetched
+				var pendingInstitution = null;  // set when user accepts a conflict swap
+
+				function loadUploadInstitutions(cb) {
+					if (uploadInstitutions !== null) { cb(); return; }
+					fetch('/api/institutions')
+						.then(function(r) { return r.json(); })
+						.then(function(body) {
+							uploadInstitutions = Array.isArray(body.data) ? body.data : [];
+							cb();
+						})
+						.catch(function() { uploadInstitutions = []; cb(); });
+				}
+
+				function checkInstConflict() {
+					var name = instNameInput.value.trim().toLowerCase();
+					if (!name || !uploadInstitutions) { instHintEl.style.display = 'none'; return; }
+					var conflict = uploadInstitutions.find(function(i) {
+						return i.institution_name.toLowerCase() === name
+							&& (!institution || i.id !== institution.id);
+					});
+					if (conflict) {
+						instHintEl.innerHTML = '"' + conflict.institution_name + '" already exists — '
+							+ '<a href="#" id="upload-use-conflict-btn" style="color:var(--accent);text-decoration:none;font-weight:600">Use existing</a>';
+						instHintEl.style.display = '';
+						document.getElementById('upload-use-conflict-btn').addEventListener('click', function(e) {
+							e.preventDefault();
+							pendingInstitution = conflict;
+							instNameInput.value = conflict.institution_name;
+							populateAllColSelects(parsedCsv ? parsedCsv.headers : [], conflict);
+							instHintEl.style.display = 'none';
+						});
+					} else {
+						instHintEl.style.display = 'none';
+					}
+				}
+
+				instNameInput.addEventListener('input', function() {
+					pendingInstitution = null;
+					if (uploadInstitutions) checkInstConflict();
+				});
+
 				advDetails.addEventListener('toggle', function() {
 					advChevron.style.transform = advDetails.open ? 'rotate(90deg)' : '';
 				});
@@ -516,8 +562,11 @@ templ AccountPage(shell ShellData, data AccountData) {
 
 				// ─── Step 3: edit mapping ─────────────────────────────────────────────────
 				function goToStep3() {
+					pendingInstitution = null;
+					instHintEl.style.display = 'none';
 					instNameInput.value = institution ? institution.institution_name : (account ? account.name : '');
 					populateAllColSelects(parsedCsv.headers, institution);
+					loadUploadInstitutions(checkInstConflict);
 					if (!advDetails.open) advDetails.setAttribute('open', '');
 					advChevron.style.transform = 'rotate(90deg)';
 
@@ -618,10 +667,12 @@ templ AccountPage(shell ShellData, data AccountData) {
 						},
 					};
 
-					// Fork-or-update: same name as current institution → PUT, otherwise → POST
-					var isUpdate = institution && institution.institution_name === instName;
+					// Resolve target: conflict-swap → pending, same name → current, otherwise → new
+					var targetInst = pendingInstitution
+						|| (institution && institution.institution_name === instName ? institution : null);
+					var isUpdate = !!targetInst;
 					var instPromise = isUpdate
-						? fetch('/api/institutions/' + institution.id, {
+						? fetch('/api/institutions/' + targetInst.id, {
 							method: 'PUT',
 							headers: {'Content-Type': 'application/json'},
 							body: JSON.stringify(mappingBody),
@@ -638,9 +689,10 @@ templ AccountPage(shell ShellData, data AccountData) {
 							return r.json();
 						})
 						.then(function(body) {
-							var newInstId = body.data.id;
-							// If forked (new institution), relink account
-							if (!isUpdate && account) {
+							var finalInstId = body.data.id;
+							// Relink whenever the account has no institution or is linked to a different one
+							var needsRelink = !institution || institution.id !== finalInstId;
+							if (needsRelink && account) {
 								return fetch('/api/accounts/' + account.id, {
 									method: 'PUT',
 									headers: {'Content-Type': 'application/json'},
@@ -651,7 +703,7 @@ templ AccountPage(shell ShellData, data AccountData) {
 										interest_rate:          account.interest_rate,
 										starting_balance_cents: account.starting_balance_cents || 0,
 										credit_limit_cents:     account.credit_limit_cents,
-										institution_id:         newInstId,
+										institution_id:         finalInstId,
 									}),
 								}).then(function(r) {
 									if (!r.ok) return r.json().then(function(e) { throw new Error(e.detail || 'Failed to update account'); });
@@ -672,6 +724,8 @@ templ AccountPage(shell ShellData, data AccountData) {
 				function resetUpload() {
 					csvInput.value = '';
 					parsedCsv = null;
+					pendingInstitution = null;
+					instHintEl.style.display = 'none';
 					showStep(1);
 					useExistingBtn.disabled = false;
 					useExistingBtn.textContent = 'Use existing mapping';
