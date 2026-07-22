@@ -32,18 +32,10 @@ templ AccountPage(shell ShellData, data AccountData) {
 				</div>
 			</div>
 			<div style="display:flex;align-items:center;justify-content:space-between;padding:0 20px;height:36px;border-bottom:1px solid var(--border);flex-shrink:0">
-				if data.Account.InstitutionID != nil {
-					<button
-						id="upload-csv-btn"
-						style="background:none;border:1px solid var(--border);border-radius:4px;padding:3px 10px;cursor:pointer;font-size:12px;color:var(--text2);font-family:inherit"
-					>Upload CSV</button>
-				} else {
-					<button
-						disabled
-						title="Set an institution for this account before uploading"
-						style="background:none;border:1px solid var(--border);border-radius:4px;padding:3px 10px;cursor:not-allowed;font-size:12px;color:var(--text3);font-family:inherit;opacity:0.6"
-					>Upload CSV</button>
-				}
+				<button
+					id="upload-csv-btn"
+					style="background:none;border:1px solid var(--border);border-radius:4px;padding:3px 10px;cursor:pointer;font-size:12px;color:var(--text2);font-family:inherit"
+				>Upload CSV</button>
 				<button
 					id="delete-account-btn"
 					style="background:none;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:12px;color:var(--text3);font-family:inherit"
@@ -465,18 +457,59 @@ templ AccountPage(shell ShellData, data AccountData) {
 
 				// field input change listeners are registered in buildUploadFields
 
+				// ─── Auto-mapping detection preview ──────────────────────────────────────
+				function computeAutoMap(headers, layoutKey) {
+					var src = UP_FIELD_REGISTRY.find(function(s) { return s.key === 'csv'; });
+					if (!src) return [];
+					var layout = src.layouts.find(function(l) { return l.key === (layoutKey || 'signed'); });
+					if (!layout) return [];
+					var result = [];
+					layout.fields.forEach(function(field) {
+						if (field.kind !== 'column') return;
+						var matched = null;
+						headers.some(function(h) {
+							if (matchesAlias(h, field.aliases)) { matched = h; return true; }
+							return false;
+						});
+						result.push({ label: field.label, matched: matched, required: field.required });
+					});
+					return result;
+				}
+
+				function renderAutoMapPreview(headers, layoutKey) {
+					var mappings = computeAutoMap(headers, layoutKey);
+					if (!mappings.length) return '';
+					var rows = mappings.map(function(m) {
+						var valueHtml = m.matched
+							? '<span style="color:var(--text);font-weight:500">' + m.matched + '</span>'
+							: '<span style="color:var(--text3);font-style:italic">' + (m.required ? '⚠ not detected' : 'not detected') + '</span>';
+						return '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px">'
+							+ '<span style="color:var(--text3)">' + m.label + '</span>'
+							+ valueHtml + '</div>';
+					}).join('');
+					return '<div style="padding:12px;background:var(--surface2);border-radius:4px;border:1px solid var(--border)">' + rows + '</div>';
+				}
+
 				// ─── Step 2: choose mode ──────────────────────────────────────────────────
 				function goToStep2(csv) {
 					parsedCsv = csv;
 					fileInfoEl.textContent = csv.file.name + ' — ' + csv.headers.length + ' columns detected';
+					var layoutKey = institution && institution.mapping_config ? (institution.mapping_config.layout || 'signed') : 'signed';
+					var autoMapHtml = renderAutoMapPreview(csv.headers, layoutKey);
 					if (institution) {
 						mappingPreviewEl.innerHTML = '<div style="font-size:12px;color:var(--text3);margin-bottom:8px">Current mapping for '
-							+ institution.institution_name + ':</div>' + renderMappingPreview(institution);
+							+ institution.institution_name + ':</div>' + renderMappingPreview(institution)
+							+ '<div style="font-size:12px;color:var(--text3);margin-top:12px;margin-bottom:8px">Auto-detected from your CSV columns:</div>'
+							+ autoMapHtml;
 						useExistingBtn.style.display = '';
+						editMappingBtn.textContent = 'Edit mapping';
 					} else {
 						mappingPreviewEl.innerHTML = '<div style="font-size:12px;color:var(--text3);margin-bottom:8px">'
-							+ 'This account has no mapping yet — choose "Edit mapping" to set one up.</div>';
+							+ 'No institution configured yet. Based on your CSV columns, we detected:</div>'
+							+ autoMapHtml
+							+ '<div style="font-size:12px;color:var(--text3);margin-top:10px">Review and save the mapping below to continue.</div>';
 						useExistingBtn.style.display = 'none';
+						editMappingBtn.textContent = 'Configure mapping';
 					}
 					showStep(2);
 				}
@@ -647,9 +680,7 @@ templ AccountPage(shell ShellData, data AccountData) {
 					backBtn.disabled = false;
 				}
 
-				if (uploadBtn) {
-					uploadBtn.addEventListener('click', function() { resetUpload(); uploadDialog.showModal(); });
-				}
+				uploadBtn.addEventListener('click', function() { resetUpload(); uploadDialog.showModal(); });
 				uploadClose.addEventListener('click', function() { uploadDialog.close(); });
 				uploadDialog.addEventListener('click', function(e) { if (e.target === uploadDialog) uploadDialog.close(); });
 
