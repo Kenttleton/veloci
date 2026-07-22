@@ -231,7 +231,26 @@ templ ConfigurationPage(shell ShellData, data ConfigurationData) {
 										var empty = document.getElementById('labels-empty');
 										if (empty) empty.style.display = '';
 									}
-								} else { labelDelYes.disabled = false; }
+								} else {
+									labelDelYes.disabled = false;
+									var row = labelDelYes.closest('tr[data-label-id]');
+									if (row) {
+										var norm = row.querySelector('.js-label-actions-normal');
+										var conf = row.querySelector('.js-label-delete-confirm');
+										if (norm) norm.style.display = 'flex';
+										if (conf) conf.style.display = 'none';
+										if (r.status === 409) {
+											var errEl = norm.querySelector('.js-label-err');
+											if (!errEl) {
+												errEl = document.createElement('span');
+												errEl.className = 'js-label-err';
+												errEl.style.cssText = 'font-size:11px;color:var(--commit)';
+												norm.appendChild(errEl);
+											}
+											errEl.textContent = 'Label is in use — reassign entries first.';
+										}
+									}
+								}
 							})
 							.catch(function() { labelDelYes.disabled = false; });
 						return;

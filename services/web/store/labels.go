@@ -2,11 +2,15 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 )
+
+// ErrLabelInUse is returned when deleting a label that still has entry associations.
+var ErrLabelInUse = errors.New("label is in use by entries")
 
 // Label represents a row from the labels table.
 type Label struct {
@@ -86,8 +90,18 @@ func (s *Store) UpdateLabel(ctx context.Context, entityID, id, name string) (Lab
 	return pgx.CollectOneRow(rows, pgx.RowToStructByName[Label])
 }
 
-// DeleteLabel removes a label scoped to the entity.
+// DeleteLabel removes a label scoped to the entity. Returns ErrLabelInUse if
+// any entries still reference the label.
 func (s *Store) DeleteLabel(ctx context.Context, entityID, id string) error {
+	var count int
+	if err := s.pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM entries WHERE entity_id = $1 AND label_id = $2::uuid
+	`, entityID, id).Scan(&count); err != nil {
+		return err
+	}
+	if count > 0 {
+		return ErrLabelInUse
+	}
 	tag, err := s.pool.Exec(ctx, `
 		DELETE FROM labels WHERE entity_id = $1 AND id = $2
 	`, entityID, id)
@@ -98,6 +112,19 @@ func (s *Store) DeleteLabel(ctx context.Context, entityID, id string) error {
 		return pgx.ErrNoRows
 	}
 	return nil
+}
+
+// DeleteLabelIfOrphaned deletes the label only when no entries reference it.
+// Safe to call speculatively; ignores the case where the label no longer exists.
+func (s *Store) DeleteLabelIfOrphaned(ctx context.Context, entityID, labelID string) error {
+	_, err := s.pool.Exec(ctx, `
+		DELETE FROM labels
+		WHERE entity_id = $1 AND id = $2::uuid
+		AND NOT EXISTS (
+			SELECT 1 FROM entries WHERE entity_id = $1 AND label_id = $2::uuid
+		)
+	`, entityID, labelID)
+	return err
 }
 
 // LabelWithCount extends Label with the entry count for the entity.

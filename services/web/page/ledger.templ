@@ -333,20 +333,7 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 					loadTxPanel(txPanel, entryId, entryStatus);
 				}, true);
 
-				// ── Label input: existing-label hint + blur save ───────────────────────
-				document.addEventListener('input', function(e) {
-					var inp = e.target;
-					if (!inp.classList.contains('js-label-input')) return;
-					var hint = inp.parentNode.querySelector('.js-label-hint');
-					if (!hint) return;
-					var name = inp.value.trim();
-					if (!name) { hint.textContent = ''; return; }
-					fetchLabels(function(labels) {
-						var match = labels.find(function(l){ return l.name.toLowerCase() === name.toLowerCase(); });
-						hint.textContent = match ? '↩ Existing label — will be linked' : '';
-					});
-				});
-
+				// ── Label input: rename in place, conflict offers link ────────────────
 				document.addEventListener('focusout', function(e) {
 					var inp = e.target;
 					if (!inp.classList.contains('js-label-input')) return;
@@ -355,40 +342,97 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 					var entryId = panel.dataset.entryId;
 					var entry = JSON.parse(panel.dataset.entry);
 					var name = inp.value.trim();
-					// Skip if unchanged (compare against rendered label name).
+					var hint = inp.parentNode.querySelector('.js-label-hint');
 					var origName = (entry.label_name || '').toLowerCase();
 					if (name.toLowerCase() === origName) return;
+					if (hint) { hint.innerHTML = ''; }
 
-					function saveLabelId(labelId) {
-						var dirSel = panel.querySelector('.js-direction-sel');
-						var typeSel = panel.querySelector('.js-type-sel');
-						fetch('/api/entries/' + entryId, {
-							method: 'PUT',
-							headers: {'Content-Type':'application/json'},
-							credentials: 'same-origin',
-							body: JSON.stringify(Object.assign({}, entry, {
-								label_id: labelId,
-								direction: dirSel ? dirSel.value : entry.direction,
-								entry_type: typeSel ? typeSel.value : entry.entry_type,
-							})),
+					// No label assigned — only allow linking to an existing label.
+					if (!entry.label_id) {
+						if (!name) return;
+						fetchLabels(function(labels) {
+							var found = labels.find(function(l){ return l.name.toLowerCase() === name.toLowerCase(); });
+							if (found) {
+								linkEntryLabel(panel, entry, found.id, found.name, hint);
+							} else if (hint) {
+								hint.textContent = 'Create labels in Configuration, then assign here.';
+							}
 						});
+						return;
 					}
 
-					if (!name) { saveLabelId(null); return; }
-					fetchLabels(function(labels) {
-						var found = labels.find(function(l){ return l.name.toLowerCase() === name.toLowerCase(); });
-						if (found) { saveLabelId(found.id); return; }
-						// Create new label then save.
-						fetch('/api/labels', {method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin', body:JSON.stringify({name:name})})
-							.then(function(r){ return r.json(); })
-							.then(function(env){
-								if (env.data) {
-									_labelCache = null; // bust cache so new label appears in hints
-									saveLabelId(env.data.id);
-								}
+					// Label assigned — rename it, detect conflict.
+					fetch('/api/labels/' + entry.label_id, {
+						method: 'PUT',
+						headers: {'Content-Type': 'application/json'},
+						credentials: 'same-origin',
+						body: JSON.stringify({name: name}),
+					}).then(function(r) {
+						if (r.status === 409) {
+							// Another label already has this name — offer to link to it.
+							_labelCache = null;
+							fetchLabels(function(labels) {
+								var conflict = labels.find(function(l){ return l.name.toLowerCase() === name.toLowerCase(); });
+								if (!conflict || !hint) return;
+								var btn = document.createElement('button');
+								btn.className = 'js-label-link-btn';
+								btn.dataset.labelId = conflict.id;
+								btn.dataset.labelName = conflict.name;
+								btn.style.cssText = 'background:none;border:none;cursor:pointer;color:var(--accent);font-size:11px;font-family:inherit;padding:0;text-decoration:underline';
+								btn.textContent = 'Link to ‘' + conflict.name + '’ instead?';
+								hint.textContent = 'Name already taken. ';
+								hint.appendChild(btn);
 							});
+							return null;
+						}
+						if (!r.ok) {
+							if (hint) hint.textContent = 'Failed to rename.';
+							return null;
+						}
+						return r.json();
+					}).then(function(env) {
+						if (!env) return;
+						_labelCache = null;
+						panel.dataset.entry = JSON.stringify(Object.assign({}, entry, {label_name: env.data.name}));
+					}).catch(function() {
+						if (hint) hint.textContent = 'Failed to rename.';
 					});
 				});
+
+				// Link-instead button: re-associate entry with an existing label.
+				document.addEventListener('click', function(e) {
+					var btn = e.target.closest('.js-label-link-btn');
+					if (!btn) return;
+					var panel = btn.closest('.js-review-panel');
+					if (!panel) return;
+					var entry = JSON.parse(panel.dataset.entry);
+					var hint = btn.closest('.js-label-hint');
+					linkEntryLabel(panel, entry, btn.dataset.labelId, btn.dataset.labelName, hint);
+				});
+
+				function linkEntryLabel(panel, entry, newLabelId, newLabelName, hint) {
+					var dirSel = panel.querySelector('.js-direction-sel');
+					var typeSel = panel.querySelector('.js-type-sel');
+					fetch('/api/entries/' + panel.dataset.entryId, {
+						method: 'PUT',
+						headers: {'Content-Type': 'application/json'},
+						credentials: 'same-origin',
+						body: JSON.stringify(Object.assign({}, entry, {
+							label_id: newLabelId,
+							direction: dirSel ? dirSel.value : entry.direction,
+							entry_type: typeSel ? typeSel.value : entry.entry_type,
+						})),
+					}).then(function(r) {
+						if (!r.ok) { if (hint) hint.textContent = 'Failed to update label.'; return; }
+						var inp = panel.querySelector('.js-label-input');
+						if (inp) inp.value = newLabelName || '';
+						panel.dataset.entry = JSON.stringify(Object.assign({}, entry, {label_id: newLabelId, label_name: newLabelName}));
+						if (hint) hint.innerHTML = '';
+						_labelCache = null;
+					}).catch(function() {
+						if (hint) hint.textContent = 'Failed to update label.';
+					});
+				}
 
 				// ── Approve / Reject ───────────────────────────────────────────────────
 				document.addEventListener('click', function(e) {

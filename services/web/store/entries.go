@@ -238,8 +238,14 @@ type UpdateEntryInput struct {
 	EndDate             *time.Time
 }
 
-// UpdateEntry updates mutable fields on an entry.
+// UpdateEntry updates mutable fields on an entry. When label_id changes, the
+// previous label is cleaned up if it has no remaining entry associations.
 func (s *Store) UpdateEntry(ctx context.Context, entityID, id string, in UpdateEntryInput) (EntryRow, error) {
+	var oldLabelID *string
+	_ = s.pool.QueryRow(ctx, `
+		SELECT label_id::text FROM entries WHERE entity_id = $1 AND id = $2
+	`, entityID, id).Scan(&oldLabelID)
+
 	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
 		UPDATE entries SET
 			label_id = $3::uuid,
@@ -277,11 +283,28 @@ func (s *Store) UpdateEntry(ctx context.Context, entityID, id string, in UpdateE
 	if err != nil {
 		return EntryRow{}, err
 	}
-	return pgx.CollectOneRow(rows, pgx.RowToStructByName[EntryRow])
+	result, err := pgx.CollectOneRow(rows, pgx.RowToStructByName[EntryRow])
+	if err != nil {
+		return EntryRow{}, err
+	}
+	// Clean up the previous label if label_id changed and it is now orphaned.
+	if oldLabelID != nil {
+		newIsNil := in.LabelID == nil
+		changed := newIsNil || *in.LabelID != *oldLabelID
+		if changed {
+			_ = s.DeleteLabelIfOrphaned(ctx, entityID, *oldLabelID)
+		}
+	}
+	return result, nil
 }
 
-// DeleteEntry removes an entry row.
+// DeleteEntry removes an entry row and cleans up the label if it becomes orphaned.
 func (s *Store) DeleteEntry(ctx context.Context, entityID, id string) error {
+	var labelID *string
+	_ = s.pool.QueryRow(ctx, `
+		SELECT label_id::text FROM entries WHERE entity_id = $1 AND id = $2
+	`, entityID, id).Scan(&labelID)
+
 	tag, err := s.pool.Exec(ctx, `
 		DELETE FROM entries WHERE entity_id = $1 AND id = $2
 	`, entityID, id)
@@ -290,6 +313,9 @@ func (s *Store) DeleteEntry(ctx context.Context, entityID, id string) error {
 	}
 	if tag.RowsAffected() == 0 {
 		return pgx.ErrNoRows
+	}
+	if labelID != nil {
+		_ = s.DeleteLabelIfOrphaned(ctx, entityID, *labelID)
 	}
 	return nil
 }

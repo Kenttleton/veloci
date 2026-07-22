@@ -142,6 +142,9 @@ func (h *LabelsHandler) DeleteLabel(c echo.Context) error {
 	if errors.Is(err, pgx.ErrNoRows) {
 		return echo.NewHTTPError(http.StatusNotFound, "not found")
 	}
+	if errors.Is(err, store.ErrLabelInUse) {
+		return echo.NewHTTPError(http.StatusConflict, "label is in use by entries")
+	}
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
