@@ -88,11 +88,11 @@ func ReportsPage(shell ShellData, data ReportsData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = rptSummaryChip("Commitments", data.Summary.CommitmentsRate, "var(--commit)").Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = rptSummaryChip("Spend", data.Summary.SpendRate, "var(--commit)").Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = rptSummaryChipComputed("Margin", data.Summary.IncomeRate-data.Summary.CommitmentsRate).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = rptSummaryChipComputed("Margin", data.Summary.IncomeRate-data.Summary.SpendRate).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -110,7 +110,7 @@ func ReportsPage(shell ShellData, data ReportsData) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<table style=\"width:100%;border-collapse:collapse\"><thead><tr style=\"position:sticky;top:0;background:var(--surface);z-index:1;border-bottom:1px solid var(--border)\"><th style=\"padding:8px 20px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);width:100px\">Date</th><th style=\"padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:var(--text3)\">Income</th><th style=\"padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:var(--text3)\">Commitments</th><th style=\"padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:var(--text3)\">Margin</th><th style=\"padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:var(--text3)\">Balance</th><th style=\"padding:8px 12px;text-align:center;font-size:11px;font-weight:600;color:var(--text3);width:80px\">Status</th></tr></thead> <tbody>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<table style=\"width:100%;border-collapse:collapse\"><thead><tr style=\"position:sticky;top:0;background:var(--surface);z-index:1;border-bottom:1px solid var(--border)\"><th style=\"padding:8px 20px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);width:100px\">Date</th><th style=\"padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:var(--text3)\">Income</th><th style=\"padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:var(--text3)\">Spend</th><th style=\"padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:var(--text3)\">Margin</th><th style=\"padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:var(--text3)\">Balance</th><th style=\"padding:8px 12px;text-align:center;font-size:11px;font-weight:600;color:var(--text3);width:80px\">Status</th></tr></thead> <tbody>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -204,9 +204,9 @@ func rptProjectionRow(p store.Projection) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var8 string
-		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(rptFmtMo(p.CommitmentRatePerDay))
+		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(rptFmtMo(p.SpendRatePerDay))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 73, Col: 37}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 73, Col: 32}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 		if templ_7745c5c3_Err != nil {

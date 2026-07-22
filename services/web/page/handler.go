@@ -350,7 +350,7 @@ type LedgerData struct {
 	Filter          string // status filter: all | active | pending_review | inactive
 	LabelFilter     string // ?label=<uuid> — filter by label_id
 	LabelName       string // display name for active label filter
-	DirectionFilter string // ?direction=income|expense
+	DirectionFilter string // ?direction=income|spend
 	TypeFilter      string // ?entry_type=standing|variable|irregular
 	Sort            string // ?sort=start_date|rate|confidence|label
 }
@@ -616,12 +616,12 @@ func isAccountNegativeBalance(a store.Account) bool {
 	return a.AccountType == "credit" || a.AccountType == "loan" || a.AccountType == "mortgage"
 }
 
-// directionLabel returns "Income" or "Expense".
+// directionLabel returns "Income" or "Spend".
 func directionLabel(d string) string {
 	if d == "income" {
 		return "Income"
 	}
-	return "Expense"
+	return "Spend"
 }
 
 // entryTypeLabel returns a readable label for entry type.

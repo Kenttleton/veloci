@@ -205,7 +205,7 @@ function contextKeyCompleter(context) {
     { label: "label_matched",      detail: "transaction has this label",    apply: snippet('"label_matched": "${}"') },
     { label: "account",            detail: "from this account",             apply: snippet('"account": "${}"') },
     { label: "institution",        detail: "from this institution",         apply: snippet('"institution": "${}"') },
-    { label: "entry_direction",    detail: "income or expense",             apply: snippet('"entry_direction": "${expense}"') },
+    { label: "entry_direction",    detail: "income or spend",               apply: snippet('"entry_direction": "${spend}"') },
     { label: "entry_type",         detail: "standing, variable, irregular", apply: snippet('"entry_type": "${standing}"') },
     { label: "recurrence_anchor",  detail: "recurrence anchor date",        apply: snippet('"recurrence_anchor": "${}"') },
   ]
@@ -262,7 +262,7 @@ async function valueCompleter(context) {
   if (key === "entry_direction") {
     return {
       from: valueStart,
-      options: ["income", "expense"].map(v => ({ label: v, type: "enum", apply: makeApply(v) })),
+      options: ["income", "spend"].map(v => ({ label: v, type: "enum", apply: makeApply(v) })),
     }
   }
 
@@ -341,12 +341,12 @@ function conditionsLinter(view) {
         })
       }
 
-      if (key === "entry_direction" && !["income", "expense"].includes(val)) {
+      if (key === "entry_direction" && !["income", "spend"].includes(val)) {
         const pos = findValueRange(key, String(val))
         if (pos) diagnostics.push({
           ...pos,
           severity: "error",
-          message: 'entry_direction must be "income" or "expense".',
+          message: 'entry_direction must be "income" or "spend".',
         })
       }
 

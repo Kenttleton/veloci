@@ -16,7 +16,7 @@ type Projection struct {
 	JobID                 string    `db:"job_id"`
 	ProjectedDate         time.Time `db:"projected_date"`
 	IncomeRatePerDay      float64   `db:"income_rate_per_day"`
-	CommitmentRatePerDay  float64   `db:"commitment_rate_per_day"`
+	SpendRatePerDay       float64   `db:"spend_rate_per_day"`
 	MarginRatePerDay      float64   `db:"margin_rate_per_day"`
 	ProjectedBalanceCents *int64    `db:"projected_balance_cents"`
 	IsPinchPoint          bool      `db:"is_pinch_point"`
@@ -24,7 +24,7 @@ type Projection struct {
 
 const projectionCols = `
 	id::text, entity_id::text, account_id::text, job_id::text,
-	projected_date, income_rate_per_day, commitment_rate_per_day, margin_rate_per_day,
+	projected_date, income_rate_per_day, spend_rate_per_day, margin_rate_per_day,
 	projected_balance_cents, is_pinch_point
 `
 

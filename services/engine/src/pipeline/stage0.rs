@@ -1104,7 +1104,7 @@ mod tests {
         assert!(as_credit > 0, "inflow must be positive cents");
 
         let as_debit = apply_sign_convention(raw, "positive_is_debit");
-        assert!(as_debit < 0, "expense must be negative cents");
+        assert!(as_debit < 0, "spend must be negative cents");
     }
 
 }

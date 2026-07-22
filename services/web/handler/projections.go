@@ -27,7 +27,7 @@ type projectionView struct {
 	JobID                 string  `json:"job_id"`
 	ProjectedDate         string  `json:"projected_date"`
 	IncomeRatePerDay      float64 `json:"income_rate_per_day"`
-	CommitmentRatePerDay  float64 `json:"commitment_rate_per_day"`
+	SpendRatePerDay float64 `json:"spend_rate_per_day"`
 	MarginRatePerDay      float64 `json:"margin_rate_per_day"`
 	ProjectedBalanceCents *int64  `json:"projected_balance_cents"`
 	IsPinchPoint          bool    `json:"is_pinch_point"`
@@ -40,7 +40,7 @@ func toProjectionView(p store.Projection) projectionView {
 		JobID:                 p.JobID,
 		ProjectedDate:         p.ProjectedDate.Format("2006-01-02"),
 		IncomeRatePerDay:      p.IncomeRatePerDay,
-		CommitmentRatePerDay:  p.CommitmentRatePerDay,
+		SpendRatePerDay: p.SpendRatePerDay,
 		MarginRatePerDay:      p.MarginRatePerDay,
 		ProjectedBalanceCents: p.ProjectedBalanceCents,
 		IsPinchPoint:          p.IsPinchPoint,

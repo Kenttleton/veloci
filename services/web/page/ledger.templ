@@ -29,7 +29,7 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 				@ledgerPill("inactive", "Inactive", data, data.Counts.Inactive)
 				<div style="width:1px;height:16px;background:var(--border);margin:0 4px"></div>
 				@ledgerDirectionPill("income", "Income", data)
-				@ledgerDirectionPill("expense", "Expense", data)
+				@ledgerDirectionPill("spend", "Spend", data)
 				<div style="width:1px;height:16px;background:var(--border);margin:0 4px"></div>
 				@ledgerTypePill("standing", "Standing", data)
 				@ledgerTypePill("variable", "Variable", data)
@@ -108,7 +108,7 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 							style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit"
 						>
 							<option value="">— select —</option>
-							<option value="expense">Expense</option>
+							<option value="spend">Spend</option>
 							<option value="income">Income</option>
 						</select>
 					</div>
@@ -723,7 +723,7 @@ templ ledgerEntryRow(e store.EntryRow) {
 						style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:5px 8px;font-size:13px;color:var(--text);outline:none"
 					>
 						<option value="income" selected?={ e.Direction == "income" }>Income</option>
-						<option value="expense" selected?={ e.Direction == "expense" }>Expense</option>
+						<option value="spend" selected?={ e.Direction == "spend" }>Spend</option>
 					</select>
 					<select
 						class="js-type-sel"

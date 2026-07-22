@@ -139,7 +139,7 @@ CREATE TABLE import_batches (
 -- settlement_status is set once at insert time and never changed.
 -- Flux rows may be deleted and replaced during supersession (Stage 0 dedup);
 -- settled rows are never deleted.
--- positive amount_cents = inflow (income, credit); negative = outflow (expense, debit)
+-- positive amount_cents = inflow (income, credit); negative = outflow (spend, debit)
 
 CREATE TABLE transactions (
   id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -197,7 +197,7 @@ CREATE TABLE entries (
   id                     UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
   entity_id              UUID          NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
   label_id               UUID          REFERENCES labels(id) ON DELETE SET NULL,
-  direction              TEXT          NOT NULL CHECK (direction IN ('income', 'expense', 'mixed')),
+  direction              TEXT          NOT NULL CHECK (direction IN ('income', 'spend', 'mixed')),
   entry_type             TEXT          NOT NULL
                          CHECK (entry_type IN ('standing', 'variable', 'irregular')),
   period_days            INTEGER       NOT NULL DEFAULT 30,
@@ -310,7 +310,7 @@ CREATE INDEX ON snapshots (entity_id, node_id, snapshot_date DESC);
 -- account_id NULL = entity-level aggregate across all active accounts.
 -- Rates are the primary output; projected_balance_cents is derived (running
 -- integral of margin_rate_per_day) for bank account comparison only.
--- is_pinch_point = margin_rate_per_day < 0 (commitment signals exceed income
+-- is_pinch_point = margin_rate_per_day < 0 (spend signals exceed income
 -- signals at this phase offset).
 
 CREATE TABLE projections (
@@ -320,7 +320,7 @@ CREATE TABLE projections (
   job_id                   UUID          NOT NULL REFERENCES processing_jobs(id),
   projected_date           DATE          NOT NULL,
   income_rate_per_day      NUMERIC(12,4) NOT NULL DEFAULT 0,
-  commitment_rate_per_day  NUMERIC(12,4) NOT NULL DEFAULT 0,
+  spend_rate_per_day       NUMERIC(12,4) NOT NULL DEFAULT 0,
   margin_rate_per_day      NUMERIC(12,4) NOT NULL,
   projected_balance_cents  BIGINT        NOT NULL,
   is_pinch_point           BOOLEAN       NOT NULL DEFAULT FALSE,

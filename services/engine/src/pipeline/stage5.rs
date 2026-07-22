@@ -128,7 +128,7 @@ pub async fn run(
                 .get(node_id)
                 .map(|r| r.projected_rate_per_day)
                 .unwrap_or(0.0);
-            let direction = entry_direction.get(node_id).copied().unwrap_or(Direction::Expense);
+            let direction = entry_direction.get(node_id).copied().unwrap_or(Direction::Spend);
 
             let (slope, r_squared) = linear_regression_from_history(&history, snapshot_date, current_rate);
             let drift = compute_drift(current_rate, current_projected, direction);
@@ -162,7 +162,7 @@ pub async fn run(
                 .get(node_id)
                 .map(|l| l.projected_rate_per_day)
                 .unwrap_or(0.0);
-            let direction = label_direction.get(node_id).copied().unwrap_or(Direction::Expense);
+            let direction = label_direction.get(node_id).copied().unwrap_or(Direction::Spend);
 
             let (slope, r_squared) = linear_regression_from_history(&history, snapshot_date, current_rate);
             let drift = compute_drift(current_rate, current_projected, direction);
@@ -187,7 +187,7 @@ pub async fn run(
 /// Compute drift with direction-aware sign convention.
 ///
 /// Positive drift always means financially ahead of projection:
-/// - Expense: `projected - actual` (spent less = positive = ahead)
+/// - Spend: `projected - actual` (spent less = positive = ahead)
 /// - Income:  `actual - projected` (earned more = positive = ahead)
 ///
 /// # Examples
@@ -196,8 +196,8 @@ pub async fn run(
 /// use veloci_engine::pipeline::stage5::compute_drift;
 /// use veloci_engine::pipeline::types::Direction;
 ///
-/// // Expense: spent less than projected = positive drift
-/// let drift = compute_drift(80.0, 100.0, Direction::Expense);
+/// // Spend: spent less than projected = positive drift
+/// let drift = compute_drift(80.0, 100.0, Direction::Spend);
 /// assert!((drift - 20.0).abs() < 0.01);
 ///
 /// // Income: earned more than projected = positive drift
@@ -206,9 +206,9 @@ pub async fn run(
 /// ```
 pub fn compute_drift(actual: f64, projected: f64, direction: Direction) -> f64 {
     match direction {
-        Direction::Expense => projected - actual,
+        Direction::Spend => projected - actual,
         Direction::Income  => actual - projected,
-        // Mixed entries span both directions; use the Expense convention
+        // Mixed entries span both directions; use the Spend convention
         // (under-spending relative to projection = positive drift).
         Direction::Mixed   => projected - actual,
     }
@@ -436,17 +436,17 @@ mod tests {
 
     // Drift tests
     #[test]
-    fn drift_expense_spent_less_is_positive() {
-        // Actual < projected for expense → ahead → positive drift.
-        let drift = compute_drift(80.0, 100.0, Direction::Expense);
-        assert!((drift - 20.0).abs() < 0.01, "expense ahead drift should be +20, got {drift}");
+    fn drift_spend_less_is_positive() {
+        // Actual < projected for spend → ahead → positive drift.
+        let drift = compute_drift(80.0, 100.0, Direction::Spend);
+        assert!((drift - 20.0).abs() < 0.01, "spend ahead drift should be +20, got {drift}");
     }
 
     #[test]
-    fn drift_expense_spent_more_is_negative() {
-        // Actual > projected for expense → behind → negative drift.
-        let drift = compute_drift(120.0, 100.0, Direction::Expense);
-        assert!((drift + 20.0).abs() < 0.01, "expense behind drift should be -20, got {drift}");
+    fn drift_spend_more_is_negative() {
+        // Actual > projected for spend → behind → negative drift.
+        let drift = compute_drift(120.0, 100.0, Direction::Spend);
+        assert!((drift + 20.0).abs() < 0.01, "spend behind drift should be -20, got {drift}");
     }
 
     #[test]
@@ -465,7 +465,7 @@ mod tests {
 
     #[test]
     fn drift_on_target_is_zero() {
-        assert!((compute_drift(100.0, 100.0, Direction::Expense)).abs() < 0.001);
+        assert!((compute_drift(100.0, 100.0, Direction::Spend)).abs() < 0.001);
         assert!((compute_drift(100.0, 100.0, Direction::Income)).abs() < 0.001);
     }
 

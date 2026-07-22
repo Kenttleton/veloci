@@ -71,7 +71,7 @@ func (s *Store) ListSnapshots(ctx context.Context, entityID string, limit int, c
 // SnapshotSummary holds the aggregate across all nodes for the latest snapshot date.
 type SnapshotSummary struct {
 	IncomeRate      float64 `db:"income_rate"`
-	CommitmentsRate float64 `db:"commitments_rate"`
+	SpendRate float64 `db:"spend_rate"`
 	DriftRate       float64 `db:"drift_rate"`
 }
 
@@ -80,7 +80,7 @@ func (s *Store) GetSnapshotSummary(ctx context.Context, entityID string) (Snapsh
 	rows, err := s.pool.Query(ctx, `
 		SELECT
 			COALESCE(SUM(CASE WHEN e.direction = 'income' THEN s.actual_rate_per_day ELSE 0 END), 0) AS income_rate,
-			COALESCE(SUM(CASE WHEN e.direction = 'expense' THEN s.actual_rate_per_day ELSE 0 END), 0) AS commitments_rate,
+			COALESCE(SUM(CASE WHEN e.direction = 'spend' THEN s.actual_rate_per_day ELSE 0 END), 0) AS spend_rate,
 			COALESCE(SUM(s.drift_per_day), 0) AS drift_rate
 		FROM snapshots s
 		JOIN entries e ON e.id = s.node_id AND s.node_type = 'entry'

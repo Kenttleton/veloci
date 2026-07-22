@@ -20,8 +20,8 @@
 //!
 //! For each day D in [computed_as_of .. computed_as_of + 90]:
 //! 1. Sum income entries whose schedule window covers D.
-//! 2. Sum commitment entries whose schedule window covers D.
-//! 3. Compute margin_rate = income - commitments.
+//! 2. Sum spend entries whose schedule window covers D.
+//! 3. Compute margin_rate = income - spend.
 //! 4. Accumulate balance.
 //! 5. Mark pinch points where margin_rate < 0.
 //!
@@ -60,7 +60,7 @@ struct ProjectionRow {
     account_id:              Option<Uuid>,
     projected_date:          NaiveDate,
     income_rate_per_day:     i64,
-    commitment_rate_per_day: i64,
+    spend_rate_per_day: i64,
     margin_rate_per_day:     i64,
     projected_balance_cents: i64,
     is_pinch_point:          bool,
@@ -391,21 +391,21 @@ fn project_account(
             .map(|e| rate_for_day(e, snapshot_rates))
             .sum();
 
-        let commitment_rate: i64 = entries
+        let spend_rate: i64 = entries
             .iter()
-            .filter(|e| e.direction == "expense" && window_covers(e, day, computed_as_of))
+            .filter(|e| e.direction == "spend" && window_covers(e, day, computed_as_of))
             .map(|e| rate_for_day(e, snapshot_rates))
             .sum();
 
-        let margin_rate = income_rate - commitment_rate;
+        let margin_rate = income_rate - spend_rate;
         balance += margin_rate;
 
         rows.push(ProjectionRow {
             entity_id,
             account_id,
-            projected_date:          day,
-            income_rate_per_day:     income_rate,
-            commitment_rate_per_day: commitment_rate,
+            projected_date:      day,
+            income_rate_per_day: income_rate,
+            spend_rate_per_day:  spend_rate,
             margin_rate_per_day:     margin_rate,
             projected_balance_cents: balance,
             is_pinch_point:          margin_rate < 0,
@@ -549,7 +549,7 @@ async fn write_projections(
     let mut account_ids:  Vec<Option<Uuid>> = Vec::with_capacity(n);
     let mut proj_dates:   Vec<NaiveDate>    = Vec::with_capacity(n);
     let mut income_rates: Vec<i64>          = Vec::with_capacity(n);
-    let mut commit_rates: Vec<i64>          = Vec::with_capacity(n);
+    let mut spend_rates:  Vec<i64>          = Vec::with_capacity(n);
     let mut margin_rates: Vec<i64>          = Vec::with_capacity(n);
     let mut balances:     Vec<i64>          = Vec::with_capacity(n);
     let mut pinch_points: Vec<bool>         = Vec::with_capacity(n);
@@ -558,7 +558,7 @@ async fn write_projections(
         account_ids.push(row.account_id);
         proj_dates.push(row.projected_date);
         income_rates.push(row.income_rate_per_day);
-        commit_rates.push(row.commitment_rate_per_day);
+        spend_rates.push(row.spend_rate_per_day);
         margin_rates.push(row.margin_rate_per_day);
         balances.push(row.projected_balance_cents);
         pinch_points.push(row.is_pinch_point);
@@ -568,7 +568,7 @@ async fn write_projections(
         r#"
         INSERT INTO projections
           (entity_id, account_id, job_id, projected_date,
-           income_rate_per_day, commitment_rate_per_day, margin_rate_per_day,
+           income_rate_per_day, spend_rate_per_day, margin_rate_per_day,
            projected_balance_cents, is_pinch_point)
         SELECT $1, acct, $2, pd, ir, cr, mr, bal, pp
         FROM UNNEST(
@@ -583,7 +583,7 @@ async fn write_projections(
     .bind(&account_ids as &[Option<Uuid>])
     .bind(&proj_dates)
     .bind(&income_rates)
-    .bind(&commit_rates)
+    .bind(&spend_rates)
     .bind(&margin_rates)
     .bind(&balances)
     .bind(&pinch_points)
@@ -934,14 +934,14 @@ mod tests {
     // ── project_account integration ───────────────────────────────────────────
 
     #[test]
-    fn pinch_point_when_commitments_exceed_income() {
+    fn pinch_point_when_spend_exceeds_income() {
         let income  = make_entry(ENTRY_1, "income",  30, 10_000.0, Some("2026-03-01"), Some("interval:30"));
-        let expense = make_entry(ENTRY_2, "expense", 30, 20_000.0, Some("2026-03-01"), Some("interval:30"));
+        let spend = make_entry(ENTRY_2, "spend", 30, 20_000.0, Some("2026-03-01"), Some("interval:30"));
         let rates = std::collections::HashMap::new();
         let rows = project_account(
             Uuid::nil(),
             None,
-            &[&income, &expense],
+            &[&income, &spend],
             0,
             date("2026-03-01"),
             &rates,
@@ -951,14 +951,14 @@ mod tests {
     }
 
     #[test]
-    fn no_pinch_point_when_income_exceeds_commitments() {
+    fn no_pinch_point_when_income_exceeds_spend() {
         let income  = make_entry(ENTRY_1, "income",  30, 20_000.0, Some("2026-03-01"), Some("interval:30"));
-        let expense = make_entry(ENTRY_2, "expense", 30, 10_000.0, Some("2026-03-01"), Some("interval:30"));
+        let spend = make_entry(ENTRY_2, "spend", 30, 10_000.0, Some("2026-03-01"), Some("interval:30"));
         let rates = std::collections::HashMap::new();
         let rows = project_account(
             Uuid::nil(),
             None,
-            &[&income, &expense],
+            &[&income, &spend],
             0,
             date("2026-03-01"),
             &rates,

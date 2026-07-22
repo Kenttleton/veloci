@@ -1369,7 +1369,7 @@ mod tests {
             label_id:               None,
             priority:               100,
             conditions:             CompiledConditionTree::And(vec![]),
-            direction:              Direction::Expense,
+            direction:              Direction::Spend,
             entry_type:             EntryType::Standing,
             period_days:            30,
             source:                 EntrySource::User,
@@ -1453,12 +1453,12 @@ mod tests {
     // --- compile_tree: happy-path parsing ---
 
     #[test]
-    fn compile_entry_direction_expense() {
-        let tree = compile_tree(&json!({"type": "entry_direction", "direction": "expense"}));
+    fn compile_entry_direction_spend() {
+        let tree = compile_tree(&json!({"type": "entry_direction", "direction": "spend"}));
         assert!(tree.is_ok(), "should compile: {tree:?}");
         assert!(matches!(
             tree.unwrap(),
-            CompiledConditionTree::EntryDirection(Direction::Expense)
+            CompiledConditionTree::EntryDirection(Direction::Spend)
         ));
     }
 
@@ -1633,7 +1633,7 @@ mod tests {
     fn entry_direction_false_with_empty_accumulated() {
         let txn = any_txn();
         assert!(!eval_with_accumulated(
-            json!({"type": "entry_direction", "direction": "expense"}),
+            json!({"type": "entry_direction", "direction": "spend"}),
             &txn,
             &[]
         ));
@@ -1704,9 +1704,9 @@ mod tests {
     #[test]
     fn entry_direction_matches_when_present() {
         let txn = any_txn();
-        let meta = make_meta(Direction::Expense, EntryType::Standing, 30, EntrySource::User);
+        let meta = make_meta(Direction::Spend, EntryType::Standing, 30, EntrySource::User);
         assert!(eval_with_accumulated(
-            json!({"type": "entry_direction", "direction": "expense"}),
+            json!({"type": "entry_direction", "direction": "spend"}),
             &txn,
             &[meta]
         ));
@@ -1717,7 +1717,7 @@ mod tests {
         let txn = any_txn();
         let meta = make_meta(Direction::Income, EntryType::Standing, 30, EntrySource::User);
         assert!(!eval_with_accumulated(
-            json!({"type": "entry_direction", "direction": "expense"}),
+            json!({"type": "entry_direction", "direction": "spend"}),
             &txn,
             &[meta]
         ));
@@ -1737,7 +1737,7 @@ mod tests {
     #[test]
     fn entry_type_matches_when_present() {
         let txn = any_txn();
-        let meta = make_meta(Direction::Expense, EntryType::Variable, 30, EntrySource::User);
+        let meta = make_meta(Direction::Spend, EntryType::Variable, 30, EntrySource::User);
         assert!(eval_with_accumulated(
             json!({"type": "entry_type", "entry_type": "variable"}),
             &txn,
@@ -1748,7 +1748,7 @@ mod tests {
     #[test]
     fn entry_type_no_match_wrong_type() {
         let txn = any_txn();
-        let meta = make_meta(Direction::Expense, EntryType::Irregular, 30, EntrySource::User);
+        let meta = make_meta(Direction::Spend, EntryType::Irregular, 30, EntrySource::User);
         assert!(!eval_with_accumulated(
             json!({"type": "entry_type", "entry_type": "standing"}),
             &txn,
@@ -1759,7 +1759,7 @@ mod tests {
     #[test]
     fn entry_period_matches_exact() {
         let txn = any_txn();
-        let meta = make_meta(Direction::Expense, EntryType::Standing, 30, EntrySource::User);
+        let meta = make_meta(Direction::Spend, EntryType::Standing, 30, EntrySource::User);
         assert!(eval_with_accumulated(
             json!({"type": "entry_period", "min_days": 25, "max_days": 35}),
             &txn,
@@ -1770,7 +1770,7 @@ mod tests {
     #[test]
     fn entry_period_no_match_out_of_range() {
         let txn = any_txn();
-        let meta = make_meta(Direction::Expense, EntryType::Standing, 60, EntrySource::User);
+        let meta = make_meta(Direction::Spend, EntryType::Standing, 60, EntrySource::User);
         assert!(!eval_with_accumulated(
             json!({"type": "entry_period", "min_days": 25, "max_days": 35}),
             &txn,
@@ -1781,7 +1781,7 @@ mod tests {
     #[test]
     fn entry_period_open_bounds_match_all() {
         let txn = any_txn();
-        let meta = make_meta(Direction::Expense, EntryType::Standing, 365, EntrySource::User);
+        let meta = make_meta(Direction::Spend, EntryType::Standing, 365, EntrySource::User);
         assert!(eval_with_accumulated(
             json!({"type": "entry_period"}),
             &txn,
@@ -1792,7 +1792,7 @@ mod tests {
     #[test]
     fn entry_source_matches_engine() {
         let txn = any_txn();
-        let meta = make_meta(Direction::Expense, EntryType::Standing, 30, EntrySource::Engine);
+        let meta = make_meta(Direction::Spend, EntryType::Standing, 30, EntrySource::Engine);
         assert!(eval_with_accumulated(
             json!({"type": "entry_source", "source": "engine"}),
             &txn,
@@ -1803,7 +1803,7 @@ mod tests {
     #[test]
     fn entry_source_no_match_wrong_source() {
         let txn = any_txn();
-        let meta = make_meta(Direction::Expense, EntryType::Standing, 30, EntrySource::User);
+        let meta = make_meta(Direction::Spend, EntryType::Standing, 30, EntrySource::User);
         assert!(!eval_with_accumulated(
             json!({"type": "entry_source", "source": "engine"}),
             &txn,
@@ -1821,7 +1821,7 @@ mod tests {
     ) -> AccumulatedEntryMeta {
         AccumulatedEntryMeta {
             label_id:               None,
-            direction:              Direction::Expense,
+            direction:              Direction::Spend,
             entry_type:             EntryType::Standing,
             period_days:            30,
             source:                 EntrySource::Engine,
@@ -1912,7 +1912,7 @@ mod tests {
     #[test]
     fn entry_projected_rate_matches_in_range() {
         let txn = any_txn();
-        let mut meta = make_meta(Direction::Expense, EntryType::Standing, 30, EntrySource::User);
+        let mut meta = make_meta(Direction::Spend, EntryType::Standing, 30, EntrySource::User);
         meta.projected_rate_per_day = Some(3.0);
         assert!(eval_with_accumulated(
             json!({"type": "entry_projected_rate", "min": 1.5, "max": 5.0}),
@@ -1925,7 +1925,7 @@ mod tests {
     fn entry_projected_rate_no_match_null_rate() {
         // projected_rate_per_day is None → never matches a rate gate.
         let txn = any_txn();
-        let meta = make_meta(Direction::Expense, EntryType::Standing, 30, EntrySource::User);
+        let meta = make_meta(Direction::Spend, EntryType::Standing, 30, EntrySource::User);
         assert!(!eval_with_accumulated(
             json!({"type": "entry_projected_rate", "min": 1.5}),
             &txn,
@@ -1936,7 +1936,7 @@ mod tests {
     #[test]
     fn entry_projected_rate_no_match_out_of_range() {
         let txn = any_txn();
-        let mut meta = make_meta(Direction::Expense, EntryType::Standing, 30, EntrySource::User);
+        let mut meta = make_meta(Direction::Spend, EntryType::Standing, 30, EntrySource::User);
         meta.projected_rate_per_day = Some(10.0);
         assert!(!eval_with_accumulated(
             json!({"type": "entry_projected_rate", "min": 1.5, "max": 5.0}),
@@ -1948,7 +1948,7 @@ mod tests {
     #[test]
     fn entry_recurrence_anchor_matches() {
         let txn = any_txn();
-        let mut meta = make_meta(Direction::Expense, EntryType::Standing, 30, EntrySource::User);
+        let mut meta = make_meta(Direction::Spend, EntryType::Standing, 30, EntrySource::User);
         meta.recurrence_anchor = Some("dom:15".to_string());
         assert!(eval_with_accumulated(
             json!({"type": "entry_recurrence_anchor", "recurrence_anchor": "dom:15"}),
@@ -1960,7 +1960,7 @@ mod tests {
     #[test]
     fn entry_recurrence_anchor_no_match_null() {
         let txn = any_txn();
-        let meta = make_meta(Direction::Expense, EntryType::Standing, 30, EntrySource::User);
+        let meta = make_meta(Direction::Spend, EntryType::Standing, 30, EntrySource::User);
         // recurrence_anchor is None → never matches.
         assert!(!eval_with_accumulated(
             json!({"type": "entry_recurrence_anchor", "recurrence_anchor": "dom:15"}),
@@ -1972,7 +1972,7 @@ mod tests {
     #[test]
     fn entry_recurrence_anchor_no_match_wrong_anchor() {
         let txn = any_txn();
-        let mut meta = make_meta(Direction::Expense, EntryType::Standing, 30, EntrySource::User);
+        let mut meta = make_meta(Direction::Spend, EntryType::Standing, 30, EntrySource::User);
         meta.recurrence_anchor = Some("dom:1".to_string());
         assert!(!eval_with_accumulated(
             json!({"type": "entry_recurrence_anchor", "recurrence_anchor": "dom:15"}),
@@ -1986,7 +1986,7 @@ mod tests {
     #[test]
     fn tree_has_entry_targets_all_new_variants() {
         assert!(tree_has_entry_targets(&CompiledConditionTree::EntryDirection(
-            Direction::Expense
+            Direction::Spend
         )));
         assert!(tree_has_entry_targets(&CompiledConditionTree::EntryType(
             EntryType::Standing

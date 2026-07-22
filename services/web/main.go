@@ -227,6 +227,16 @@ func runMigrate(_ *cobra.Command, _ []string) error {
 
 	ctx := context.Background()
 
+	// Seed Labels
+	_, err = pool.Exec(ctx, `
+		INSERT INTO labels (id, name)
+		VALUES (gen_random_uuid(), 'Income'), (gen_random_uuid(), 'Spend')
+		ON CONFLICT (name) DO NOTHING
+	`)
+	if err != nil {
+		return fmt.Errorf("seed labels: %w", err)
+	}
+
 	// Seed roles.
 	_, err = pool.Exec(ctx, `
 		INSERT INTO roles (id, name)

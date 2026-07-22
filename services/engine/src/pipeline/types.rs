@@ -15,9 +15,9 @@ use uuid::Uuid;
 /// Entry type of an entry — determines rate computation semantics.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EntryType {
-    /// Recurring commitment with consistent timing and amount. Rate = amount / period_days.
+    /// Recurring spend with consistent timing and amount. Rate = amount / period_days.
     Standing,
-    /// Recurring commitment with variable amounts. Rate = rolling_window_total / window_days.
+    /// Recurring spend with variable amounts. Rate = rolling_window_total / window_days.
     Variable,
     /// No detectable cadence or consistent amount. Groups by merchant; amortized over period_days.
     Irregular,
@@ -57,8 +57,8 @@ impl VariableMethod {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Direction {
     Income,
-    Expense,
-    /// Both income and expense flows — used for entries that span both directions.
+    Spend,
+    /// Both income and spend flows — used for entries that span both directions.
     Mixed,
 }
 
@@ -66,7 +66,7 @@ impl Direction {
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "income"  => Some(Self::Income),
-            "expense" => Some(Self::Expense),
+            "spend" => Some(Self::Spend),
             "mixed"   => Some(Self::Mixed),
             _         => None,
         }
@@ -260,7 +260,7 @@ mod tests {
     #[test]
     fn direction_from_str() {
         assert_eq!(Direction::from_str("income"),  Some(Direction::Income));
-        assert_eq!(Direction::from_str("expense"), Some(Direction::Expense));
+        assert_eq!(Direction::from_str("spend"), Some(Direction::Spend));
         assert_eq!(Direction::from_str("mixed"),   Some(Direction::Mixed));
         assert_eq!(Direction::from_str(""),        None);
     }

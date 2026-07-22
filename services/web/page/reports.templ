@@ -27,8 +27,8 @@ templ ReportsPage(shell ShellData, data ReportsData) {
 			<!-- Summary strip -->
 			<div style="display:flex;align-items:center;gap:24px;padding:10px 20px;border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto">
 				@rptSummaryChip("Income", data.Summary.IncomeRate, "var(--income)")
-				@rptSummaryChip("Commitments", data.Summary.CommitmentsRate, "var(--commit)")
-				@rptSummaryChipComputed("Margin", data.Summary.IncomeRate-data.Summary.CommitmentsRate)
+				@rptSummaryChip("Spend", data.Summary.SpendRate, "var(--commit)")
+				@rptSummaryChipComputed("Margin", data.Summary.IncomeRate-data.Summary.SpendRate)
 				@rptSummaryChipDrift(data.Summary.DriftRate)
 			</div>
 			<!-- Projections table -->
@@ -43,7 +43,7 @@ templ ReportsPage(shell ShellData, data ReportsData) {
 							<tr style="position:sticky;top:0;background:var(--surface);z-index:1;border-bottom:1px solid var(--border)">
 								<th style="padding:8px 20px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);width:100px">Date</th>
 								<th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:var(--text3)">Income</th>
-								<th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:var(--text3)">Commitments</th>
+								<th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:var(--text3)">Spend</th>
 								<th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:var(--text3)">Margin</th>
 								<th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:var(--text3)">Balance</th>
 								<th style="padding:8px 12px;text-align:center;font-size:11px;font-weight:600;color:var(--text3);width:80px">Status</th>
@@ -70,7 +70,7 @@ templ rptProjectionRow(p store.Projection) {
 			{ rptFmtMo(p.IncomeRatePerDay) }
 		</td>
 		<td style="padding:8px 12px;text-align:right;font-size:13px;font-variant-numeric:tabular-nums;color:var(--commit)">
-			{ rptFmtMo(p.CommitmentRatePerDay) }
+			{ rptFmtMo(p.SpendRatePerDay) }
 		</td>
 		<td style={ "padding:8px 12px;text-align:right;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;" + rptMarginColor(p.MarginRatePerDay) }>
 			{ rptFmtMoSigned(p.MarginRatePerDay) }

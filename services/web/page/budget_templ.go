@@ -135,14 +135,14 @@ func budgetSummaryStrip(s store.SnapshotSummary) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</span></div><div style=\"font-size:11px;color:var(--text3);margin-top:2px\"><span class=\"js-gran-label\">/day</span> <span style=\"margin-left:4px;background:var(--surface2);border-radius:3px;padding:0 5px;font-size:10px;color:var(--text3)\">actual</span></div></div><!-- Minus operator --><div style=\"display:flex;align-items:center;color:var(--text3);font-size:18px;flex-shrink:0\">−</div><!-- Commitments cell --><div style=\"flex:1;padding:12px 16px;background:var(--surface);border-radius:6px;min-width:0\"><div style=\"font-size:11px;color:var(--text3);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em\">Commitments</div><div style=\"font-size:22px;font-weight:600;color:var(--text);line-height:1.2\"><span data-rate-per-day=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</span></div><div style=\"font-size:11px;color:var(--text3);margin-top:2px\"><span class=\"js-gran-label\">/day</span> <span style=\"margin-left:4px;background:var(--surface2);border-radius:3px;padding:0 5px;font-size:10px;color:var(--text3)\">actual</span></div></div><!-- Minus operator --><div style=\"display:flex;align-items:center;color:var(--text3);font-size:18px;flex-shrink:0\">−</div><!-- Spend cell --><div style=\"flex:1;padding:12px 16px;background:var(--surface);border-radius:6px;min-width:0\"><div style=\"font-size:11px;color:var(--text3);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em\">Spend</div><div style=\"font-size:22px;font-weight:600;color:var(--text);line-height:1.2\"><span data-rate-per-day=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var6 string
-		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(budgetRateAttr(s.CommitmentsRate))
+		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(budgetRateAttr(s.SpendRate))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 216, Col: 64}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 216, Col: 58}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
 		if templ_7745c5c3_Err != nil {
@@ -153,9 +153,9 @@ func budgetSummaryStrip(s store.SnapshotSummary) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var7 string
-		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(budgetFmtDay(s.CommitmentsRate))
+		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(budgetFmtDay(s.SpendRate))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 216, Col: 100}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/budget.templ`, Line: 216, Col: 88}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 		if templ_7745c5c3_Err != nil {
@@ -280,7 +280,7 @@ func budgetSummaryStrip(s store.SnapshotSummary) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "% commitments</span> <span style=\"font-size:11px;color:var(--text3)\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "% spend</span> <span style=\"font-size:11px;color:var(--text3)\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -821,14 +821,14 @@ func budgetEntryDetailRow(e store.EntryRow, labelKey string, totalIncomePerDay f
 // ── Go helpers ────────────────────────────────────────────────────────────────
 
 func budgetMarginRate(s store.SnapshotSummary) float64 {
-	return s.IncomeRate - s.CommitmentsRate
+	return s.IncomeRate - s.SpendRate
 }
 
 func budgetCommitPct(s store.SnapshotSummary) int {
 	if s.IncomeRate <= 0 {
 		return 0
 	}
-	pct := (s.CommitmentsRate / s.IncomeRate) * 100
+	pct := (s.SpendRate / s.IncomeRate) * 100
 	if pct > 100 {
 		return 100
 	}
@@ -847,7 +847,7 @@ func budgetMarginPct(s store.SnapshotSummary) int {
 }
 
 func budgetIsNegativeMargin(s store.SnapshotSummary) bool {
-	return s.IncomeRate < s.CommitmentsRate
+	return s.IncomeRate < s.SpendRate
 }
 
 func budgetMarginCellBg(s store.SnapshotSummary) string {

@@ -63,7 +63,7 @@ func toSnapshotView(s store.Snapshot) snapshotView {
 // snapshotSummaryView is the API representation of the aggregate summary.
 type snapshotSummaryView struct {
 	IncomeRate      float64 `json:"income_rate"`
-	CommitmentsRate float64 `json:"commitments_rate"`
+	SpendRate float64 `json:"spend_rate"`
 	MarginRate      float64 `json:"margin_rate"`
 	DriftRate       float64 `json:"drift_rate"`
 }
@@ -122,8 +122,8 @@ func (h *SnapshotsHandler) GetSnapshotSummary(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, response.Single(snapshotSummaryView{
 		IncomeRate:      summary.IncomeRate,
-		CommitmentsRate: summary.CommitmentsRate,
-		MarginRate:      summary.IncomeRate - summary.CommitmentsRate,
+		SpendRate:  summary.SpendRate,
+		MarginRate: summary.IncomeRate - summary.SpendRate,
 		DriftRate:       summary.DriftRate,
 	}))
 }

@@ -80,7 +80,7 @@ pub fn compute_label_rate(label_id: Uuid, rates: &[&EntryRate]) -> LabelRate {
     let direction = if rates.iter().any(|r| r.direction == Direction::Income) {
         Direction::Income
     } else {
-        Direction::Expense
+        Direction::Spend
     };
 
     LabelRate {
@@ -197,7 +197,7 @@ mod tests {
             entry_rate(
                 "00000000-0000-0000-0000-000000000001",
                 Some(LABEL_A),
-                Direction::Expense,
+                Direction::Spend,
                 100.0,
                 100.0,
                 30,
@@ -217,7 +217,7 @@ mod tests {
         let rates = vec![entry_rate(
             "00000000-0000-0000-0000-000000000001",
             None, // no label
-            Direction::Expense,
+            Direction::Spend,
             50.0,
             50.0,
             30,
@@ -236,12 +236,12 @@ mod tests {
 
     #[test]
     fn direction_income_short_circuits() {
-        // Mix of income + expense entries → income wins.
+        // Mix of income + spend entries → income wins.
         let rates = vec![
             entry_rate(
                 "00000000-0000-0000-0000-000000000001",
                 Some(LABEL_A),
-                Direction::Expense,
+                Direction::Spend,
                 100.0,
                 100.0,
                 30,
@@ -266,11 +266,11 @@ mod tests {
     }
 
     #[test]
-    fn all_expense_direction_is_expense() {
+    fn all_spend_direction_is_spend() {
         let rates = vec![entry_rate(
             "00000000-0000-0000-0000-000000000001",
             Some(LABEL_A),
-            Direction::Expense,
+            Direction::Spend,
             50.0,
             50.0,
             30,
@@ -279,7 +279,7 @@ mod tests {
         let label_id = Uuid::parse_str(LABEL_A).unwrap();
         let rate_refs: Vec<&EntryRate> = rates.iter().collect();
         let label = compute_label_rate(label_id, &rate_refs);
-        assert_eq!(label.direction, Direction::Expense);
+        assert_eq!(label.direction, Direction::Spend);
     }
 
     // Cycle detection tests

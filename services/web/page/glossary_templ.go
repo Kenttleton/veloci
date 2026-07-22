@@ -47,15 +47,15 @@ func GlossaryPage(data ShellData) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			templ_7745c5c3_Err = glossaryTerm("Margin",
-				"Income minus all commitments at the selected rate.",
-				"Margin is the money remaining after all your known commitments are subtracted from income. Positive margin means your income exceeds your commitments. Negative margin means you are spending more than you are earning at the current rate.",
-				"If your income is $8,625/mo and your commitments total $6,190/mo, your margin is $2,435/mo (28%).").Render(ctx, templ_7745c5c3_Buffer)
+				"Income minus all spend at the selected rate.",
+				"Margin is the money remaining after all your known spend is subtracted from income. Positive margin means your income exceeds your spend. Negative margin means you are spending more than you are earning at the current rate.",
+				"If your income is $8,625/mo and your spend totals $6,190/mo, your margin is $2,435/mo (28%).").Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			templ_7745c5c3_Err = glossaryTerm("Projection",
-				"Expected margin, calculated from known commitments amortized over time.",
-				"The projection is a smooth forward-looking estimate of your margin, calculated by amortizing all known commitments over time. It absorbs known future events (such as a loan payoff) gradually rather than showing discrete jumps. The projection curve extends past today into the future based on your current budget.",
+				"Expected margin, calculated from known spend amortized over time.",
+				"The projection is a smooth forward-looking estimate of your margin, calculated by amortizing all known spend over time. It absorbs known future events (such as a loan payoff) gradually rather than showing discrete jumps. The projection curve extends past today into the future based on your current budget.",
 				"").Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
@@ -82,22 +82,22 @@ func GlossaryPage(data ShellData) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			templ_7745c5c3_Err = glossaryTerm("Hit",
-				"An unexpected cost that pushed a commitment above its projected rate.",
-				"A Hit occurs when a commitment's actual spending exceeded the projected rate for the period. Hits are tagged with a red pill in the Stack panel and correspond to red candles on the Horizon. The API determines Hit classification — the UI renders the tag without applying threshold logic.",
+				"An unexpected cost that pushed a spend entry above its projected rate.",
+				"A Hit occurs when a spend entry's actual spending exceeded the projected rate for the period. Hits are tagged with a red pill in the Stack panel and correspond to red candles on the Horizon. The API determines Hit classification — the UI renders the tag without applying threshold logic.",
 				"A higher-than-usual electric bill in summer, or a one-time fee from a normally consistent subscription.").Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			templ_7745c5c3_Err = glossaryTerm("Boost",
-				"An unexpected positive — a commitment cost less, or income exceeded expectation.",
-				"A Boost occurs when a commitment's actual spending came in below projection, or when income exceeded expectations. Boosts are tagged with a green pill in the Stack panel and correspond to green candles on the Horizon.",
-				"A lower-than-expected utility bill, a refund, or a month where a variable expense was unusually low.").Render(ctx, templ_7745c5c3_Buffer)
+				"An unexpected positive — a spend entry cost less, or income exceeded expectation.",
+				"A Boost occurs when a spend entry's actual spending came in below projection, or when income exceeded expectations. Boosts are tagged with a green pill in the Stack panel and correspond to green candles on the Horizon.",
+				"A lower-than-expected utility bill, a refund, or a month where a variable spend entry was unusually low.").Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			templ_7745c5c3_Err = glossaryTerm("Stack",
-				"Waterfall breakdown of the Pulse period showing each commitment's rate and drift.",
-				"The Stack is the expandable panel below the Horizon graph. It shows each commitment's actual rate and drift for the selected Pulse period, organized by label group. The top row is the income anchor; the bottom row shows the remaining margin after all commitments.",
+				"Waterfall breakdown of the Pulse period showing each spend entry's rate and drift.",
+				"The Stack is the expandable panel below the Horizon graph. It shows each spend entry's actual rate and drift for the selected Pulse period, organized by label group. The top row is the income anchor; the bottom row shows the remaining margin after all spend.",
 				"").Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err

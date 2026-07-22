@@ -255,7 +255,7 @@ mod tests {
     fn label_snapshot_built_from_label_rate() {
         let label_rate = LabelRate {
             label_id:                 Uuid::nil(),
-            direction:                Direction::Expense,
+            direction:                Direction::Spend,
             period_days:              30,
             actual_rate_per_day:      100.0,
             projected_rate_per_day:   100.0,

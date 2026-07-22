@@ -108,7 +108,7 @@ pub(crate) fn compute_entry_rate(
     prior_projected_rate: Option<f64>,
 ) -> EntryRate {
     let entry_type = EntryType::from_str(&entry.entry_type).unwrap_or(EntryType::Standing);
-    let direction  = Direction::from_str(&entry.direction).unwrap_or(Direction::Expense);
+    let direction  = Direction::from_str(&entry.direction).unwrap_or(Direction::Spend);
     let period_days = entry.period_days;
 
     // Transactions where date <= snapshot_date (DB already filtered by start_date).
