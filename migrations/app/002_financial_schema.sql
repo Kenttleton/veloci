@@ -32,7 +32,7 @@ CREATE TABLE institution_mappings (
 CREATE TABLE accounts (
   id                 UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   entity_id          UUID        NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-  institution_id     UUID        REFERENCES institution_mappings(id),
+  institution_id     UUID        REFERENCES institution_mappings(id) ON DELETE SET NULL,
   name               TEXT        NOT NULL,
   account_type       TEXT        NOT NULL
                      CHECK (account_type IN ('checking', 'savings', 'credit', 'loan', 'mortgage', 'investment')),
@@ -102,8 +102,8 @@ FOR EACH ROW EXECUTE FUNCTION notify_job_status_change();
 CREATE TABLE pending_imports (
   id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   entity_id         UUID        NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-  account_id        UUID        NOT NULL REFERENCES accounts(id),
-  institution_id    UUID        REFERENCES institution_mappings(id),
+  account_id        UUID        NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  institution_id    UUID        REFERENCES institution_mappings(id) ON DELETE SET NULL,
   uploaded_by       UUID        NOT NULL REFERENCES users(id),
   uploaded_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   csv_bytes         BYTEA       NOT NULL,
@@ -121,9 +121,9 @@ CREATE TABLE pending_imports (
 
 CREATE TABLE import_batches (
   id                             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  pending_import_id              UUID        NOT NULL REFERENCES pending_imports(id),
+  pending_import_id              UUID        NOT NULL REFERENCES pending_imports(id) ON DELETE CASCADE,
   entity_id                      UUID        NOT NULL REFERENCES entities(id),
-  account_id                     UUID        NOT NULL REFERENCES accounts(id),
+  account_id                     UUID        NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
   processed_at                   TIMESTAMPTZ NOT NULL,
   date_range_start               DATE        NOT NULL,
   date_range_end                 DATE        NOT NULL,
@@ -144,8 +144,8 @@ CREATE TABLE import_batches (
 CREATE TABLE transactions (
   id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   entity_id           UUID        NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-  account_id          UUID        NOT NULL REFERENCES accounts(id),
-  import_batch_id     UUID        NOT NULL REFERENCES import_batches(id),
+  account_id          UUID        NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  import_batch_id     UUID        NOT NULL REFERENCES import_batches(id) ON DELETE CASCADE,
   date                DATE        NOT NULL,
   amount_cents        BIGINT      NOT NULL,
   imported_payee      TEXT        NOT NULL,
@@ -316,7 +316,7 @@ CREATE INDEX ON snapshots (entity_id, node_id, snapshot_date DESC);
 CREATE TABLE projections (
   id                       UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
   entity_id                UUID          NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-  account_id               UUID          REFERENCES accounts(id),
+  account_id               UUID          REFERENCES accounts(id) ON DELETE CASCADE,
   job_id                   UUID          NOT NULL REFERENCES processing_jobs(id),
   projected_date           DATE          NOT NULL,
   income_rate_per_day      NUMERIC(12,4) NOT NULL DEFAULT 0,
