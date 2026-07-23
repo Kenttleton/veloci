@@ -57,7 +57,7 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 					>
 						<option value="start_date" selected?={ data.Sort == "start_date" || data.Sort == "" }>Start date</option>
 						<option value="rate" selected?={ data.Sort == "rate" }>Rate/day</option>
-						<option value="confidence" selected?={ data.Sort == "confidence" }>Confidence</option>
+						<option value="fitness" selected?={ data.Sort == "fitness" }>Fitness</option>
 						<option value="label" selected?={ data.Sort == "label" }>Label name</option>
 					</select>
 				</div>
@@ -69,7 +69,7 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 				<div style="font-size:11px;font-weight:600;color:var(--text3)">Dir</div>
 				<div style="font-size:11px;font-weight:600;color:var(--text3);text-align:right">Rate/day</div>
 				<div style="font-size:11px;font-weight:600;color:var(--text3);text-align:center">Status</div>
-				<div style="font-size:11px;font-weight:600;color:var(--text3);text-align:right">Confidence</div>
+				<div style="font-size:11px;font-weight:600;color:var(--text3);text-align:right">Fitness</div>
 			</div>
 			<div style="flex:1;overflow:auto">
 				if len(data.Entries) == 0 {
@@ -693,7 +693,7 @@ templ ledgerEntryRow(e store.EntryRow) {
 			<span style={ "font-size:11px;font-weight:600;padding:2px 6px;border-radius:4px;display:inline-block;" + ledgerDirectionBadgeStyle(e.Direction) }>{ directionLabel(e.Direction) }</span>
 			<span style="font-size:12px;color:var(--text2);text-align:right;font-variant-numeric:tabular-nums">{ fmtRateDay(e.ProjectedRatePerDay) }</span>
 			<span style={ ledgerStatusBadgeStyle(e.Status) }>{ ledgerStatusLabel(e.Status) }</span>
-			<span style={ "font-size:12px;text-align:right;font-variant-numeric:tabular-nums;color:" + confColor(e.Confidence) }>{ confPct(e.Confidence) }</span>
+			<span style={ "font-size:12px;text-align:right;font-variant-numeric:tabular-nums;color:" + fitColor(e.Fitness) }>{ fitPct(e.Fitness) }</span>
 		</summary>
 		<div>
 			if e.Status == "pending_review" {
@@ -763,16 +763,16 @@ templ ledgerEntryRow(e store.EntryRow) {
 						</div>
 					}
 				</div>
-				if e.Confidence != nil {
+				if e.Fitness != nil {
 					<div class="js-conf-panel" data-expanded="true" style="width:230px;transition:width 0.2s;border-left:1px solid var(--border);padding:12px 16px;display:flex;flex-direction:column;gap:8px;overflow:hidden;flex-shrink:0">
 						<div style="display:flex;align-items:center;justify-content:space-between">
-							<span style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em">Confidence</span>
+							<span style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em">Fitness</span>
 							<button class="js-conf-toggle" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:11px;padding:0">◀</button>
 						</div>
-						@ledgerConfBar("Overall", e.Confidence)
-						@ledgerConfBar("Merchant", e.MerchantConfidence)
-						@ledgerConfBar("Timing", e.TimingConfidence)
-						@ledgerConfBar("Amount", e.AmountConfidence)
+						@ledgerConfBar("Overall", e.Fitness)
+						@ledgerConfBar("Merchant", e.MerchantFit)
+						@ledgerConfBar("Timing", e.TimingFit)
+						@ledgerConfBar("Amount", e.AmountFit)
 					</div>
 				}
 			</div>
@@ -794,7 +794,7 @@ templ ledgerConfBar(label string, f *float64) {
 		<div class="js-conf-bar" style="flex:1;background:var(--surface2);border-radius:3px;height:5px;overflow:hidden">
 			<div style={ ledgerConfBarFill(f) }></div>
 		</div>
-		<span style={ "font-size:11px;min-width:28px;text-align:right;color:" + confColor(f) }>{ confPct(f) }</span>
+		<span style={ "font-size:11px;min-width:28px;text-align:right;color:" + fitColor(f) }>{ fitPct(f) }</span>
 	</div>
 }
 
@@ -867,5 +867,5 @@ func ledgerConfBarFill(f *float64) string {
 	if f != nil {
 		pct = int(*f * 100)
 	}
-	return fmt.Sprintf("height:100%%;width:%d%%;background:%s;border-radius:3px", pct, confColor(f))
+	return fmt.Sprintf("height:100%%;width:%d%%;background:%s;border-radius:3px", pct, fitColor(f))
 }

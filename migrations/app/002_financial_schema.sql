@@ -122,7 +122,7 @@ CREATE TABLE pending_imports (
 CREATE TABLE import_batches (
   id                             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   pending_import_id              UUID        NOT NULL REFERENCES pending_imports(id) ON DELETE CASCADE,
-  entity_id                      UUID        NOT NULL REFERENCES entities(id),
+  entity_id                      UUID        NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
   account_id                     UUID        NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
   processed_at                   TIMESTAMPTZ NOT NULL,
   date_range_start               DATE        NOT NULL,
@@ -151,16 +151,13 @@ CREATE TABLE transactions (
   imported_payee      TEXT        NOT NULL,
   merchant_normalized TEXT        NOT NULL,
   imported_id         TEXT,
-  -- set at insert time: 'settled' if date < uploaded_at - settlement_window_days,
-  -- 'flux' otherwise. never changed after insert.
-  -- effective settlement status is derived lazily at query time:
-  --   flux rows where NOW() - imported_at > settlement_window_days are
-  --   treated as effectively settled without any row mutation.
+  -- set at insert time based on the latest date in the import batch (computed_as_of):
+  --   'settled' if date < computed_as_of - settlement_window_days
+  --   'flux'    otherwise
+  -- never changed after insert.
   settlement_status   TEXT        NOT NULL DEFAULT 'flux'
                       CHECK (settlement_status IN ('flux', 'settled')),
-  -- wall-clock insert time; used by Stage 0 to compute effective settlement
-  -- status at query time. intentional exception to the engine determinism
-  -- invariant — this is an import audit field, not a financial calculation input.
+  -- audit field only — records when the row was inserted. never used in calculations.
   imported_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -227,10 +224,10 @@ CREATE TABLE entries (
   -- Engine review metadata (populated by Stage 2; NULL on user-created entries).
   -- alert_type: 'new' = first detection, 'drift' = rate changed, 'ended' = signal gone.
   alert_type                TEXT          CHECK (alert_type IN ('new', 'drift', 'ended')),
-  confidence                NUMERIC(4,3),
-  merchant_confidence       NUMERIC(4,3),
-  timing_confidence         NUMERIC(4,3),
-  amount_confidence         NUMERIC(4,3),
+  fitness                   NUMERIC(4,3),
+  merchant_fit              NUMERIC(4,3),
+  timing_fit                NUMERIC(4,3),
+  amount_fit                NUMERIC(4,3),
   sample_merchants          TEXT[],
   matched_transaction_count INTEGER,
   reviewed_by               UUID          REFERENCES users(id),
@@ -244,12 +241,12 @@ CREATE INDEX ON entries (entity_id, label_id);
 
 -- ── TRANSACTION ENTRY ASSIGNMENTS ────────────────────────────────────────────
 -- Many-to-many. A transaction may match multiple entries.
--- confidence = 1.0 for user entries, 0.0–1.0 for engine-generated entries.
+-- fit = 1.0 for Stage 1 condition matches; 0.0–1.0 for Stage 2 engine-detected entries.
 
 CREATE TABLE transaction_entry_assignments (
   transaction_id UUID         NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
   entry_id       UUID         NOT NULL REFERENCES entries(id) ON DELETE CASCADE,
-  confidence     NUMERIC(4,3) NOT NULL DEFAULT 1.0,
+  fit            NUMERIC(4,3) NOT NULL DEFAULT 1.0,
   PRIMARY KEY (transaction_id, entry_id)
 );
 

@@ -352,7 +352,7 @@ type LedgerData struct {
 	LabelName       string // display name for active label filter
 	DirectionFilter string // ?direction=income|spend
 	TypeFilter      string // ?entry_type=standing|variable|irregular
-	Sort            string // ?sort=start_date|rate|confidence|label
+	Sort            string // ?sort=start_date|rate|fitness|label
 }
 
 // ledgerFilterURL builds a ledger URL that preserves all current filter params
@@ -441,9 +441,9 @@ func (s *Server) Ledger(c echo.Context) error {
 			}
 			return *ri > *rj
 		})
-	case "confidence":
+	case "fitness":
 		sort.SliceStable(entries, func(i, j int) bool {
-			ci, cj := entries[i].Confidence, entries[j].Confidence
+			ci, cj := entries[i].Fitness, entries[j].Fitness
 			if ci == nil && cj == nil {
 				return false
 			}
@@ -691,16 +691,16 @@ func fmtRateYr(r *float64) string {
 	return fmt.Sprintf("$%.2f/yr", v)
 }
 
-// confPct formats a confidence float as a percentage string.
-func confPct(f *float64) string {
+// fitPct formats a fitness/fit float as a percentage string.
+func fitPct(f *float64) string {
 	if f == nil {
 		return "—"
 	}
 	return fmt.Sprintf("%.0f%%", *f*100)
 }
 
-// confColor returns a CSS color variable for a confidence value.
-func confColor(f *float64) string {
+// fitColor returns a CSS color variable for a fitness/fit value.
+func fitColor(f *float64) string {
 	if f == nil {
 		return "var(--text3)"
 	}

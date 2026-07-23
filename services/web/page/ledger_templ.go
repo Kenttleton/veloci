@@ -159,17 +159,17 @@ func LedgerPage(shell ShellData, data LedgerData) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, ">Rate/day</option> <option value=\"confidence\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, ">Rate/day</option> <option value=\"fitness\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			if data.Sort == "confidence" {
+			if data.Sort == "fitness" {
 				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, " selected")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, ">Confidence</option> <option value=\"label\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, ">Fitness</option> <option value=\"label\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -179,7 +179,7 @@ func LedgerPage(shell ShellData, data LedgerData) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, ">Label name</option></select></div></div><div style=\"display:grid;grid-template-columns:28px 1fr 80px 70px 90px 110px 140px;padding:5px 20px;border-bottom:1px solid var(--border);flex-shrink:0\"><div></div><div style=\"font-size:11px;font-weight:600;color:var(--text3)\">Entry</div><div style=\"font-size:11px;font-weight:600;color:var(--text3)\">Type</div><div style=\"font-size:11px;font-weight:600;color:var(--text3)\">Dir</div><div style=\"font-size:11px;font-weight:600;color:var(--text3);text-align:right\">Rate/day</div><div style=\"font-size:11px;font-weight:600;color:var(--text3);text-align:center\">Status</div><div style=\"font-size:11px;font-weight:600;color:var(--text3);text-align:right\">Confidence</div></div><div style=\"flex:1;overflow:auto\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, ">Label name</option></select></div></div><div style=\"display:grid;grid-template-columns:28px 1fr 80px 70px 90px 110px 140px;padding:5px 20px;border-bottom:1px solid var(--border);flex-shrink:0\"><div></div><div style=\"font-size:11px;font-weight:600;color:var(--text3)\">Entry</div><div style=\"font-size:11px;font-weight:600;color:var(--text3)\">Type</div><div style=\"font-size:11px;font-weight:600;color:var(--text3)\">Dir</div><div style=\"font-size:11px;font-weight:600;color:var(--text3);text-align:right\">Rate/day</div><div style=\"font-size:11px;font-weight:600;color:var(--text3);text-align:center\">Status</div><div style=\"font-size:11px;font-weight:600;color:var(--text3);text-align:right\">Fitness</div></div><div style=\"flex:1;overflow:auto\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -623,9 +623,9 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var30 string
-		templ_7745c5c3_Var30, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("font-size:12px;text-align:right;font-variant-numeric:tabular-nums;color:" + confColor(e.Confidence))
+		templ_7745c5c3_Var30, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("font-size:12px;text-align:right;font-variant-numeric:tabular-nums;color:" + fitColor(e.Fitness))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 696, Col: 117}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 696, Col: 113}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
 		if templ_7745c5c3_Err != nil {
@@ -636,9 +636,9 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var31 string
-		templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(confPct(e.Confidence))
+		templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(fitPct(e.Fitness))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 696, Col: 143}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 696, Col: 135}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
 		if templ_7745c5c3_Err != nil {
@@ -801,24 +801,24 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		if e.Confidence != nil {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 70, "<div class=\"js-conf-panel\" data-expanded=\"true\" style=\"width:230px;transition:width 0.2s;border-left:1px solid var(--border);padding:12px 16px;display:flex;flex-direction:column;gap:8px;overflow:hidden;flex-shrink:0\"><div style=\"display:flex;align-items:center;justify-content:space-between\"><span style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em\">Confidence</span> <button class=\"js-conf-toggle\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:11px;padding:0\">◀</button></div>")
+		if e.Fitness != nil {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 70, "<div class=\"js-conf-panel\" data-expanded=\"true\" style=\"width:230px;transition:width 0.2s;border-left:1px solid var(--border);padding:12px 16px;display:flex;flex-direction:column;gap:8px;overflow:hidden;flex-shrink:0\"><div style=\"display:flex;align-items:center;justify-content:space-between\"><span style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em\">Fitness</span> <button class=\"js-conf-toggle\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:11px;padding:0\">◀</button></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = ledgerConfBar("Overall", e.Confidence).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ledgerConfBar("Overall", e.Fitness).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = ledgerConfBar("Merchant", e.MerchantConfidence).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ledgerConfBar("Merchant", e.MerchantFit).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = ledgerConfBar("Timing", e.TimingConfidence).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ledgerConfBar("Timing", e.TimingFit).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = ledgerConfBar("Amount", e.AmountConfidence).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ledgerConfBar("Amount", e.AmountFit).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -900,9 +900,9 @@ func ledgerConfBar(label string, f *float64) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var42 string
-		templ_7745c5c3_Var42, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("font-size:11px;min-width:28px;text-align:right;color:" + confColor(f))
+		templ_7745c5c3_Var42, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("font-size:11px;min-width:28px;text-align:right;color:" + fitColor(f))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 797, Col: 86}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 797, Col: 85}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
 		if templ_7745c5c3_Err != nil {
@@ -913,9 +913,9 @@ func ledgerConfBar(label string, f *float64) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var43 string
-		templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(confPct(f))
+		templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(fitPct(f))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 797, Col: 101}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 797, Col: 99}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
 		if templ_7745c5c3_Err != nil {
@@ -998,7 +998,7 @@ func ledgerConfBarFill(f *float64) string {
 	if f != nil {
 		pct = int(*f * 100)
 	}
-	return fmt.Sprintf("height:100%%;width:%d%%;background:%s;border-radius:3px", pct, confColor(f))
+	return fmt.Sprintf("height:100%%;width:%d%%;background:%s;border-radius:3px", pct, fitColor(f))
 }
 
 var _ = templruntime.GeneratedTemplate

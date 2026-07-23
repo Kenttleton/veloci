@@ -29,8 +29,8 @@ use crate::pipeline::types::Stage2Output;
 // Classification constants
 // ---------------------------------------------------------------------------
 
-/// Clusters below this confidence are not surfaced to the user.
-const MIN_CONFIDENCE: f64 = 0.3;
+/// Clusters below this fitness are not surfaced to the user.
+const MIN_FITNESS: f64 = 0.3;
 
 /// Amount variance threshold for standing classification.
 /// All transactions must be within ±2% of the cluster median.
@@ -49,17 +49,17 @@ const TIMING_VARIANCE_THRESHOLD_DAYS: f64 = 5.0;
 // Variable requires: regular timing, amounts may vary.
 // irregular: fallthrough — no periodic cadence detected.
 
-/// Minimum timing_confidence required to classify as Standing.
+/// Minimum timing_fit required to classify as Standing.
 const STANDING_TIMING_GATE: f64 = 0.75;
 
-/// Minimum amount_confidence required to classify as Standing.
+/// Minimum amount_fit required to classify as Standing.
 const STANDING_AMOUNT_GATE: f64 = 0.80;
 
 /// Minimum observations needed for Standing. 2 transactions produce 1 interval
 /// with std_dev = 0, which would always pass the timing gate.
 const STANDING_MIN_OBSERVATIONS: usize = 3;
 
-/// Minimum timing_confidence required to classify as Variable.
+/// Minimum timing_fit required to classify as Variable.
 const VARIABLE_TIMING_GATE: f64 = 0.45;
 
 // ---------------------------------------------------------------------------
@@ -85,19 +85,19 @@ pub(crate) struct Cluster {
 /// Score computed for a cluster.
 ///
 /// The three component scores answer distinct questions shown to the user:
-/// - `merchant_confidence`: are all transactions from the same business?
-/// - `timing_confidence`: is there a consistent cadence?
-/// - `amount_confidence`: are amounts similar across transactions?
+/// - `merchant_fit`: are all transactions from the same business?
+/// - `timing_fit`: is there a consistent cadence?
+/// - `amount_fit`: are amounts similar across transactions?
 ///
-/// `confidence` is a type-weighted blend of the three components used for gating.
+/// `fitness` is a type-weighted blend of the three components used for gating.
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct ClusterScore {
     pub entry_type:           &'static str,
-    pub confidence:           f64,
-    pub merchant_confidence:  f64,
-    pub timing_confidence:    f64,
-    pub amount_confidence:    f64,
+    pub fitness:              f64,
+    pub merchant_fit:         f64,
+    pub timing_fit:           f64,
+    pub amount_fit:           f64,
     pub suggested_name:       String,
     pub median_amount_cents:  i64,
     pub sample_merchants:     Vec<String>,
@@ -138,7 +138,7 @@ pub async fn run(entity_id: Uuid, unmatched_tx_ids: &[Uuid], pool: &PgPool) -> R
 
     let mut clusters_created = 0u32;
     for (cluster, score) in scored {
-        if score.confidence < MIN_CONFIDENCE {
+        if score.fitness < MIN_FITNESS {
             continue;
         }
         persist_cluster(entity_id, &cluster, &score, pool).await?;
@@ -167,11 +167,11 @@ pub async fn run(entity_id: Uuid, unmatched_tx_ids: &[Uuid], pool: &PgPool) -> R
 
 
 // ---------------------------------------------------------------------------
-// Amount confidence (pure — used by score_cluster)
+// Amount fit (pure — used by score_cluster)
 // ---------------------------------------------------------------------------
 
 /// How consistent amounts are within the cluster (1.0 = identical, decays toward 0).
-fn compute_amount_confidence(txns: &[UnmatchedTxn], median: i64) -> f64 {
+fn compute_amount_fit(txns: &[UnmatchedTxn], median: i64) -> f64 {
     if txns.len() == 1 || median == 0 { return 1.0; }
     let denom = median.unsigned_abs() as f64;
     let max_dev = txns.iter()
@@ -211,12 +211,12 @@ pub fn score_cluster(cluster: &Cluster) -> ClusterScore {
 
     let median_amount_cents = median_amount(&cluster.transactions);
 
-    let merchant_confidence = 1.0_f64;
-    let amount_confidence   = compute_amount_confidence(&cluster.transactions, median_amount_cents);
+    let merchant_fit = 1.0_f64;
+    let amount_fit   = compute_amount_fit(&cluster.transactions, median_amount_cents);
 
-    // timing_confidence: 1.0 when interval std dev ≤ threshold, decays as
+    // timing_fit: 1.0 when interval std dev ≤ threshold, decays as
     // threshold/std_dev. Zero for single-transaction clusters (no interval).
-    let (timing_confidence, mean_interval_days): (f64, Option<f64>) = if n < 2 {
+    let (timing_fit, mean_interval_days): (f64, Option<f64>) = if n < 2 {
         (0.0, None)
     } else {
         let mut dates: Vec<NaiveDate> = cluster.transactions.iter().map(|t| t.date).collect();
@@ -240,33 +240,33 @@ pub fn score_cluster(cluster: &Cluster) -> ClusterScore {
     // Classification: gates on component thresholds, not a composite gate.
     // Standing requires tight timing AND tight amounts AND ≥ 3 observations
     // (2 transactions give 1 interval with std_dev=0, always passing timing).
-    let (entry_type, confidence) =
+    let (entry_type, fitness) =
         if n >= STANDING_MIN_OBSERVATIONS
-            && timing_confidence >= STANDING_TIMING_GATE
-            && amount_confidence >= STANDING_AMOUNT_GATE
+            && timing_fit >= STANDING_TIMING_GATE
+            && amount_fit >= STANDING_AMOUNT_GATE
         {
-            let c = (merchant_confidence * 0.20
-                   + timing_confidence  * 0.40
-                   + amount_confidence  * 0.40).clamp(0.0, 1.0);
+            let c = (merchant_fit * 0.20
+                   + timing_fit  * 0.40
+                   + amount_fit  * 0.40).clamp(0.0, 1.0);
             ("standing", c)
-        } else if n >= 2 && timing_confidence >= VARIABLE_TIMING_GATE {
-            let c = (merchant_confidence * 0.30
-                   + timing_confidence  * 0.55
-                   + amount_confidence  * 0.15).clamp(0.0, 1.0);
+        } else if n >= 2 && timing_fit >= VARIABLE_TIMING_GATE {
+            let c = (merchant_fit * 0.30
+                   + timing_fit  * 0.55
+                   + amount_fit  * 0.15).clamp(0.0, 1.0);
             ("variable", c)
         } else {
-            let c = (merchant_confidence * 0.60
-                   + timing_confidence  * 0.20
-                   + amount_confidence  * 0.20).clamp(0.0, 1.0);
+            let c = (merchant_fit * 0.60
+                   + timing_fit  * 0.20
+                   + amount_fit  * 0.20).clamp(0.0, 1.0);
             ("irregular", c)
         };
 
     ClusterScore {
         entry_type,
-        confidence,
-        merchant_confidence,
-        timing_confidence,
-        amount_confidence,
+        fitness,
+        merchant_fit,
+        timing_fit,
+        amount_fit,
         suggested_name,
         median_amount_cents,
         sample_merchants,
@@ -589,8 +589,8 @@ async fn persist_cluster(
                direction = $2, entry_type = $3, period_days = $4, next_due_date = $5,
                recurrence_anchor = $6, conditions = $7, projected_rate_per_day = $8,
                start_date = $9, alert_type = 'new',
-               confidence = $10, merchant_confidence = $11, timing_confidence = $12,
-               amount_confidence = $13, sample_merchants = $14, matched_transaction_count = $15
+               fitness = $10, merchant_fit = $11, timing_fit = $12,
+               amount_fit = $13, sample_merchants = $14, matched_transaction_count = $15
              WHERE id = $1",
         )
         .bind(id)
@@ -602,10 +602,10 @@ async fn persist_cluster(
         .bind(&conditions)
         .bind(rate_per_day)
         .bind(start_date)
-        .bind(score.confidence)
-        .bind(score.merchant_confidence)
-        .bind(score.timing_confidence)
-        .bind(score.amount_confidence)
+        .bind(score.fitness)
+        .bind(score.merchant_fit)
+        .bind(score.timing_fit)
+        .bind(score.amount_fit)
         .bind(&score.sample_merchants)
         .bind(cluster.transactions.len() as i32)
         .execute(pool)
@@ -618,7 +618,7 @@ async fn persist_cluster(
                entity_id, label_id, direction, entry_type, period_days, next_due_date,
                recurrence_anchor, conditions, projected_rate_per_day,
                status, source, project_tentatively, start_date,
-               alert_type, confidence, merchant_confidence, timing_confidence, amount_confidence,
+               alert_type, fitness, merchant_fit, timing_fit, amount_fit,
                sample_merchants, matched_transaction_count
              ) VALUES (
                $1, $2, $3, $4, $5, $6,
@@ -639,10 +639,10 @@ async fn persist_cluster(
         .bind(&conditions)
         .bind(rate_per_day)
         .bind(start_date)
-        .bind(score.confidence)
-        .bind(score.merchant_confidence)
-        .bind(score.timing_confidence)
-        .bind(score.amount_confidence)
+        .bind(score.fitness)
+        .bind(score.merchant_fit)
+        .bind(score.timing_fit)
+        .bind(score.amount_fit)
         .bind(&score.sample_merchants)
         .bind(cluster.transactions.len() as i32)
         .fetch_one(pool)
@@ -653,17 +653,17 @@ async fn persist_cluster(
 
     let tx_ids: Vec<Uuid> = cluster.transactions.iter().map(|t| t.id).collect();
     let entry_ids: Vec<Uuid> = vec![entry_id; tx_ids.len()];
-    let confidences: Vec<f64> = vec![score.confidence; tx_ids.len()];
+    let fit_scores: Vec<f64> = vec![score.fitness; tx_ids.len()];
 
     sqlx::query(
-        "INSERT INTO transaction_entry_assignments (transaction_id, entry_id, confidence)
+        "INSERT INTO transaction_entry_assignments (transaction_id, entry_id, fit)
          SELECT t, e, c
          FROM UNNEST($1::uuid[], $2::uuid[], $3::float8[]) AS u(t, e, c)
-         ON CONFLICT (transaction_id, entry_id) DO UPDATE SET confidence = EXCLUDED.confidence",
+         ON CONFLICT (transaction_id, entry_id) DO UPDATE SET fit = EXCLUDED.fit",
     )
     .bind(&tx_ids)
     .bind(&entry_ids)
-    .bind(&confidences)
+    .bind(&fit_scores)
     .execute(pool)
     .await
     .context("failed to upsert stage 2 entry assignments")?;
@@ -931,11 +931,11 @@ mod tests {
         let score = score_cluster(&cluster);
         assert_eq!(score.entry_type, "irregular");
         // Irregular observation: merchant=1.0, timing=0.0 (no cadence), amount=1.0
-        // → confidence = 1.0*0.60 + 0.0*0.20 + 1.0*0.20 = 0.80.
+        // → fitness = 1.0*0.60 + 0.0*0.20 + 1.0*0.20 = 0.80.
         // timing=0.0 is the honest signal — no cadence data yet.
-        assert!(score.confidence >= MIN_CONFIDENCE, "irregular observation dropped below creation threshold: {}", score.confidence);
-        assert_eq!(score.timing_confidence, 0.0, "irregular txn must have timing=0.0 (no cadence)");
-        assert_eq!(score.merchant_confidence, 1.0, "irregular txn must have merchant=1.0");
+        assert!(score.fitness >= MIN_FITNESS, "irregular observation dropped below creation threshold: {}", score.fitness);
+        assert_eq!(score.timing_fit, 0.0, "irregular txn must have timing=0.0 (no cadence)");
+        assert_eq!(score.merchant_fit, 1.0, "irregular txn must have merchant=1.0");
     }
 
     #[test]
@@ -951,7 +951,7 @@ mod tests {
         };
         let score = score_cluster(&cluster);
         assert_eq!(score.entry_type, "standing");
-        assert!(score.confidence > MIN_CONFIDENCE);
+        assert!(score.fitness > MIN_FITNESS);
     }
 
     #[test]
@@ -1041,7 +1041,7 @@ mod tests {
                 .collect(),
         };
         let score = score_cluster(&cluster);
-        assert!(score.confidence >= 0.0 && score.confidence <= 1.0);
+        assert!(score.fitness >= 0.0 && score.fitness <= 1.0);
     }
 
     // ── normalize_dom ─────────────────────────────────────────────────────────

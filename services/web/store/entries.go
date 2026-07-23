@@ -35,10 +35,10 @@ type EntryRow struct {
 	CreatedAt           time.Time       `db:"created_at"`
 	// Engine review metadata (NULL for user-created entries)
 	AlertType                *string    `db:"alert_type"`
-	Confidence               *float64   `db:"confidence"`
-	MerchantConfidence       *float64   `db:"merchant_confidence"`
-	TimingConfidence         *float64   `db:"timing_confidence"`
-	AmountConfidence         *float64   `db:"amount_confidence"`
+	Fitness                  *float64   `db:"fitness"`
+	MerchantFit              *float64   `db:"merchant_fit"`
+	TimingFit                *float64   `db:"timing_fit"`
+	AmountFit                *float64   `db:"amount_fit"`
 	SampleMerchants          []string   `db:"sample_merchants"`
 	MatchedTransactionCount  *int       `db:"matched_transaction_count"`
 	ReviewedBy               *string    `db:"reviewed_by"`
@@ -55,8 +55,8 @@ const entryCols = `
 	e.recurrence_anchor, e.next_due_date, e.project_tentatively,
 	e.pending_amount_cents, e.pending_effective_date,
 	e.start_date, e.end_date, e.created_at,
-	e.alert_type, e.confidence, e.merchant_confidence, e.timing_confidence,
-	e.amount_confidence, e.sample_merchants, e.matched_transaction_count,
+	e.alert_type, e.fitness, e.merchant_fit, e.timing_fit,
+	e.amount_fit, e.sample_merchants, e.matched_transaction_count,
 	e.reviewed_by::text, e.reviewed_at,
 	s.actual_rate_per_day, s.drift_per_day
 `
@@ -199,9 +199,9 @@ func (s *Store) CreateEntry(ctx context.Context, entityID string, in CreateEntry
 			'pending_review', $10, $11, $12, $13, NOW()
 		)
 		RETURNING %s,
-		NULL::text AS alert_type, NULL::numeric AS confidence,
-		NULL::numeric AS merchant_confidence, NULL::numeric AS timing_confidence,
-		NULL::numeric AS amount_confidence, NULL::text[] AS sample_merchants,
+		NULL::text AS alert_type, NULL::numeric AS fitness,
+		NULL::numeric AS merchant_fit, NULL::numeric AS timing_fit,
+		NULL::numeric AS amount_fit, NULL::text[] AS sample_merchants,
 		NULL::int AS matched_transaction_count, NULL::text AS reviewed_by, NULL::timestamptz AS reviewed_at,
 		NULL::float8 AS actual_rate_per_day, NULL::float8 AS drift_per_day
 	`, `
@@ -262,9 +262,9 @@ func (s *Store) UpdateEntry(ctx context.Context, entityID, id string, in UpdateE
 			end_date = $14
 		WHERE entity_id = $1 AND id = $2
 		RETURNING %s,
-		NULL::text AS alert_type, NULL::numeric AS confidence,
-		NULL::numeric AS merchant_confidence, NULL::numeric AS timing_confidence,
-		NULL::numeric AS amount_confidence, NULL::text[] AS sample_merchants,
+		NULL::text AS alert_type, NULL::numeric AS fitness,
+		NULL::numeric AS merchant_fit, NULL::numeric AS timing_fit,
+		NULL::numeric AS amount_fit, NULL::text[] AS sample_merchants,
 		NULL::int AS matched_transaction_count, NULL::text AS reviewed_by, NULL::timestamptz AS reviewed_at,
 		NULL::float8 AS actual_rate_per_day, NULL::float8 AS drift_per_day
 	`, `

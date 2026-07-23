@@ -58,7 +58,7 @@ templ GlossaryPage(data ShellData) {
 						"")
 					@glossaryTerm("Confidence",
 						"How certain the engine is that a detected pattern is real. Score from 0 to 1.",
-						"Confidence is a composite score from 0 to 1 that indicates how reliably the engine detected a pattern. It is composed of three sub-scores: merchant (consistency of the business name), timing (regularity of the cadence), and amount (consistency of the charge amount). Scores above 0.7 indicate high confidence.",
+						"Fitness is a composite score from 0 to 1 measuring how well an entry's configured metadata (type, anchor, period) matches the transactions captured by its conditions. It is composed of three sub-scores: merchant (consistency of the business name), timing (regularity of the cadence), and amount (consistency of the charge amount). Scores above 0.7 indicate high fitness.",
 						"")
 					@glossaryTerm("Pending",
 						"An entry detected by the engine but not yet reviewed. Pending entries are excluded from your budget until approved.",

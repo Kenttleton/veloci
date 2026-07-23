@@ -70,12 +70,12 @@ impl EntrySource {
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone)]
-pub(crate) struct ConfidenceGate {
+pub(crate) struct FitnessGate {
     min: Option<f64>,
     max: Option<f64>,
 }
 
-impl ConfidenceGate {
+impl FitnessGate {
     fn matches(&self, value: f64) -> bool {
         self.min.map_or(true, |m| value >= m) && self.max.map_or(true, |m| value <= m)
     }
@@ -92,10 +92,10 @@ pub(crate) struct AccumulatedEntryMeta {
     entry_type:             EntryType,
     period_days:            i32,
     source:                 EntrySource,
-    confidence:             Option<f64>,
-    merchant_confidence:    Option<f64>,
-    timing_confidence:      Option<f64>,
-    amount_confidence:      Option<f64>,
+    fitness:             Option<f64>,
+    merchant_fit:        Option<f64>,
+    timing_fit:          Option<f64>,
+    amount_fit:          Option<f64>,
     projected_rate_per_day: Option<f64>,
     recurrence_anchor:      Option<String>,
 }
@@ -121,10 +121,10 @@ pub struct CompiledEntry {
     pub entry_type:             EntryType,
     pub period_days:            i32,
     pub source:                 EntrySource,
-    pub confidence:             Option<f64>,
-    pub merchant_confidence:    Option<f64>,
-    pub timing_confidence:      Option<f64>,
-    pub amount_confidence:      Option<f64>,
+    pub fitness:             Option<f64>,
+    pub merchant_fit:        Option<f64>,
+    pub timing_fit:          Option<f64>,
+    pub amount_fit:          Option<f64>,
     pub projected_rate_per_day: Option<f64>,
     pub recurrence_anchor:      Option<String>,
 }
@@ -140,7 +140,7 @@ pub struct CompiledEntry {
 ///
 /// **Pass 2+ targets** (entry context — evaluated against accumulated matched-entry
 /// metadata): `LabelMatched`, `EntryDirection`, `EntryType`, `EntryPeriod`,
-/// `EntrySource`, `EntryConfidence`, `EntryProjectedRate`, `EntryRecurrenceAnchor`.
+/// `EntrySource`, `EntryFitness`, `EntryProjectedRate`, `EntryRecurrenceAnchor`.
 #[derive(Debug)]
 pub enum CompiledConditionTree {
     And(Vec<CompiledConditionTree>),
@@ -186,12 +186,12 @@ pub enum CompiledConditionTree {
     },
     /// Matches when any accumulated entry has the specified source.
     EntrySource(EntrySource),
-    /// Matches when any single accumulated entry satisfies ALL specified confidence gates.
-    EntryConfidence {
-        overall:  Option<ConfidenceGate>,
-        merchant: Option<ConfidenceGate>,
-        timing:   Option<ConfidenceGate>,
-        amount:   Option<ConfidenceGate>,
+    /// Matches when any single accumulated entry satisfies ALL specified fitness gates.
+    EntryFitness {
+        overall:  Option<FitnessGate>,
+        merchant: Option<FitnessGate>,
+        timing:   Option<FitnessGate>,
+        amount:   Option<FitnessGate>,
     },
     /// Matches when any accumulated entry's projected_rate_per_day falls within [min, max].
     EntryProjectedRate {
@@ -215,10 +215,10 @@ struct EntryRow {
     entry_type:             String,
     period_days:            i32,
     source:                 String,
-    confidence:             Option<f64>,
-    merchant_confidence:    Option<f64>,
-    timing_confidence:      Option<f64>,
-    amount_confidence:      Option<f64>,
+    fitness:             Option<f64>,
+    merchant_fit:        Option<f64>,
+    timing_fit:          Option<f64>,
+    amount_fit:          Option<f64>,
     projected_rate_per_day: Option<f64>,
     recurrence_anchor:      Option<String>,
 }
@@ -304,10 +304,10 @@ pub async fn run(entity_id: Uuid, pool: &PgPool) -> Result<Stage1Output> {
                         entry_type:             entry.entry_type,
                         period_days:            entry.period_days,
                         source:                 entry.source,
-                        confidence:             entry.confidence,
-                        merchant_confidence:    entry.merchant_confidence,
-                        timing_confidence:      entry.timing_confidence,
-                        amount_confidence:      entry.amount_confidence,
+                        fitness:             entry.fitness,
+                        merchant_fit:        entry.merchant_fit,
+                        timing_fit:          entry.timing_fit,
+                        amount_fit:          entry.amount_fit,
                         projected_rate_per_day: entry.projected_rate_per_day,
                         recurrence_anchor:      entry.recurrence_anchor.clone(),
                     });
@@ -367,10 +367,10 @@ pub async fn run(entity_id: Uuid, pool: &PgPool) -> Result<Stage1Output> {
                             entry_type:             entry.entry_type,
                             period_days:            entry.period_days,
                             source:                 entry.source,
-                            confidence:             entry.confidence,
-                            merchant_confidence:    entry.merchant_confidence,
-                            timing_confidence:      entry.timing_confidence,
-                            amount_confidence:      entry.amount_confidence,
+                            fitness:             entry.fitness,
+                            merchant_fit:        entry.merchant_fit,
+                            timing_fit:          entry.timing_fit,
+                            amount_fit:          entry.amount_fit,
                             projected_rate_per_day: entry.projected_rate_per_day,
                             recurrence_anchor:      entry.recurrence_anchor.clone(),
                         });
@@ -447,7 +447,7 @@ fn tree_has_entry_targets(tree: &CompiledConditionTree) -> bool {
         | CompiledConditionTree::EntryType(_)
         | CompiledConditionTree::EntryPeriod { .. }
         | CompiledConditionTree::EntrySource(_)
-        | CompiledConditionTree::EntryConfidence { .. }
+        | CompiledConditionTree::EntryFitness { .. }
         | CompiledConditionTree::EntryProjectedRate { .. }
         | CompiledConditionTree::EntryRecurrenceAnchor(_) => true,
         _ => false,
@@ -574,16 +574,16 @@ fn evaluate(
         }
 
         // All specified gates must be satisfied by the SAME accumulated entry.
-        CompiledConditionTree::EntryConfidence { overall, merchant, timing, amount } => {
+        CompiledConditionTree::EntryFitness { overall, merchant, timing, amount } => {
             accumulated.iter().any(|e| {
                 overall.as_ref().map_or(true, |g| {
-                    e.confidence.map_or(false, |v| g.matches(v))
+                    e.fitness.map_or(false, |v| g.matches(v))
                 }) && merchant.as_ref().map_or(true, |g| {
-                    e.merchant_confidence.map_or(false, |v| g.matches(v))
+                    e.merchant_fit.map_or(false, |v| g.matches(v))
                 }) && timing.as_ref().map_or(true, |g| {
-                    e.timing_confidence.map_or(false, |v| g.matches(v))
+                    e.timing_fit.map_or(false, |v| g.matches(v))
                 }) && amount.as_ref().map_or(true, |g| {
-                    e.amount_confidence.map_or(false, |v| g.matches(v))
+                    e.amount_fit.map_or(false, |v| g.matches(v))
                 })
             })
         }
@@ -623,10 +623,10 @@ fn compile_entry(row: EntryRow) -> Result<CompiledEntry> {
         entry_type,
         period_days:            row.period_days,
         source,
-        confidence:             row.confidence,
-        merchant_confidence:    row.merchant_confidence,
-        timing_confidence:      row.timing_confidence,
-        amount_confidence:      row.amount_confidence,
+        fitness:             row.fitness,
+        merchant_fit:        row.merchant_fit,
+        timing_fit:          row.timing_fit,
+        amount_fit:          row.amount_fit,
         projected_rate_per_day: row.projected_rate_per_day,
         recurrence_anchor:      row.recurrence_anchor,
     })
@@ -821,16 +821,16 @@ pub fn compile_tree(v: &serde_json::Value) -> Result<CompiledConditionTree> {
                 .ok_or_else(|| anyhow::anyhow!("unknown source: {s}"))?;
             Ok(CompiledConditionTree::EntrySource(src))
         }
-        "entry_confidence" => {
+        "entry_fitness" => {
             let score_obj = v.get("score").and_then(|s| s.as_object());
-            let parse_gate = |key: &str| -> Option<ConfidenceGate> {
+            let parse_gate = |key: &str| -> Option<FitnessGate> {
                 let obj = score_obj?.get(key)?.as_object()?;
-                Some(ConfidenceGate {
+                Some(FitnessGate {
                     min: obj.get("min").and_then(|v| v.as_f64()),
                     max: obj.get("max").and_then(|v| v.as_f64()),
                 })
             };
-            Ok(CompiledConditionTree::EntryConfidence {
+            Ok(CompiledConditionTree::EntryFitness {
                 overall:  parse_gate("overall"),
                 merchant: parse_gate("merchant"),
                 timing:   parse_gate("timing"),
@@ -916,10 +916,10 @@ async fn load_entries(entity_id: Uuid, pool: &PgPool) -> Result<Vec<EntryRow>> {
         entry_type:             String,
         period_days:            i32,
         source:                 String,
-        confidence:             Option<sqlx::types::BigDecimal>,
-        merchant_confidence:    Option<sqlx::types::BigDecimal>,
-        timing_confidence:      Option<sqlx::types::BigDecimal>,
-        amount_confidence:      Option<sqlx::types::BigDecimal>,
+        fitness:             Option<sqlx::types::BigDecimal>,
+        merchant_fit:        Option<sqlx::types::BigDecimal>,
+        timing_fit:          Option<sqlx::types::BigDecimal>,
+        amount_fit:          Option<sqlx::types::BigDecimal>,
         projected_rate_per_day: Option<sqlx::types::BigDecimal>,
         recurrence_anchor:      Option<String>,
     }
@@ -928,7 +928,7 @@ async fn load_entries(entity_id: Uuid, pool: &PgPool) -> Result<Vec<EntryRow>> {
         r#"
         SELECT id, label_id, priority, conditions,
                direction, entry_type, period_days, source,
-               confidence, merchant_confidence, timing_confidence, amount_confidence,
+               fitness, merchant_fit, timing_fit, amount_fit,
                projected_rate_per_day, recurrence_anchor
         FROM entries
         WHERE entity_id = $1
@@ -954,13 +954,13 @@ async fn load_entries(entity_id: Uuid, pool: &PgPool) -> Result<Vec<EntryRow>> {
             entry_type:             r.entry_type,
             period_days:            r.period_days,
             source:                 r.source,
-            confidence:             r.confidence
+            fitness:             r.fitness
                 .and_then(|v| v.to_string().parse::<f64>().ok()),
-            merchant_confidence:    r.merchant_confidence
+            merchant_fit:        r.merchant_fit
                 .and_then(|v| v.to_string().parse::<f64>().ok()),
-            timing_confidence:      r.timing_confidence
+            timing_fit:          r.timing_fit
                 .and_then(|v| v.to_string().parse::<f64>().ok()),
-            amount_confidence:      r.amount_confidence
+            amount_fit:          r.amount_fit
                 .and_then(|v| v.to_string().parse::<f64>().ok()),
             projected_rate_per_day: r.projected_rate_per_day
                 .and_then(|v| v.to_string().parse::<f64>().ok()),
@@ -1010,7 +1010,7 @@ async fn persist_assignments(
 
     sqlx::query(
         r#"
-        INSERT INTO transaction_entry_assignments (transaction_id, entry_id, confidence)
+        INSERT INTO transaction_entry_assignments (transaction_id, entry_id, fit)
         SELECT t, e, 1.0
         FROM UNNEST($1::uuid[], $2::uuid[]) AS u(t, e)
         ON CONFLICT (transaction_id, entry_id) DO NOTHING
@@ -1140,10 +1140,10 @@ mod tests {
             entry_type,
             period_days,
             source,
-            confidence:             None,
-            merchant_confidence:    None,
-            timing_confidence:      None,
-            amount_confidence:      None,
+            fitness:             None,
+            merchant_fit:        None,
+            timing_fit:          None,
+            amount_fit:          None,
             projected_rate_per_day: None,
             recurrence_anchor:      None,
         }
@@ -1373,10 +1373,10 @@ mod tests {
             entry_type:             EntryType::Standing,
             period_days:            30,
             source:                 EntrySource::User,
-            confidence:             None,
-            merchant_confidence:    None,
-            timing_confidence:      None,
-            amount_confidence:      None,
+            fitness:             None,
+            merchant_fit:        None,
+            timing_fit:          None,
+            amount_fit:          None,
             projected_rate_per_day: None,
             recurrence_anchor:      None,
         };
@@ -1550,19 +1550,19 @@ mod tests {
     }
 
     #[test]
-    fn compile_entry_confidence_with_score() {
+    fn compile_entry_fitness_with_score() {
         let tree = compile_tree(&json!({
-            "type": "entry_confidence",
+            "type": "entry_fitness",
             "score": {
                 "overall":  {"min": 0.8},
                 "merchant": {"min": 0.7, "max": 1.0}
             }
         }));
         assert!(tree.is_ok(), "{tree:?}");
-        let CompiledConditionTree::EntryConfidence { overall, merchant, timing, amount } =
+        let CompiledConditionTree::EntryFitness { overall, merchant, timing, amount } =
             tree.unwrap()
         else {
-            panic!("expected EntryConfidence variant");
+            panic!("expected EntryFitness variant");
         };
         let overall = overall.expect("overall should be Some");
         assert!((overall.min.unwrap() - 0.8).abs() < 1e-9);
@@ -1575,14 +1575,14 @@ mod tests {
     }
 
     #[test]
-    fn compile_entry_confidence_no_score_object() {
+    fn compile_entry_fitness_no_score_object() {
         // Missing "score" — all gates None but still compiles (spec: score is optional).
         let tree = compile_tree(&json!({"type": "entry_confidence"}));
         assert!(tree.is_ok());
-        let CompiledConditionTree::EntryConfidence { overall, merchant, timing, amount } =
+        let CompiledConditionTree::EntryFitness { overall, merchant, timing, amount } =
             tree.unwrap()
         else {
-            panic!("expected EntryConfidence");
+            panic!("expected EntryFitness");
         };
         assert!(overall.is_none() && merchant.is_none() && timing.is_none() && amount.is_none());
     }
@@ -1670,7 +1670,7 @@ mod tests {
     }
 
     #[test]
-    fn entry_confidence_false_with_empty_accumulated() {
+    fn entry_fitness_false_with_empty_accumulated() {
         let txn = any_txn();
         assert!(!eval_with_accumulated(
             json!({"type": "entry_confidence", "score": {"overall": {"min": 0.8}}}),
@@ -1813,8 +1813,8 @@ mod tests {
 
     // --- entry_confidence gate semantics ---
 
-    fn make_meta_with_confidence(
-        confidence: Option<f64>,
+    fn make_meta_with_fitness(
+        fitness: Option<f64>,
         merchant:   Option<f64>,
         timing:     Option<f64>,
         amount:     Option<f64>,
@@ -1825,19 +1825,19 @@ mod tests {
             entry_type:             EntryType::Standing,
             period_days:            30,
             source:                 EntrySource::Engine,
-            confidence,
-            merchant_confidence:    merchant,
-            timing_confidence:      timing,
-            amount_confidence:      amount,
+            fitness,
+            merchant_fit:    merchant,
+            timing_fit:      timing,
+            amount_fit:      amount,
             projected_rate_per_day: None,
             recurrence_anchor:      None,
         }
     }
 
     #[test]
-    fn entry_confidence_matches_overall_above_min() {
+    fn entry_fitness_matches_overall_above_min() {
         let txn = any_txn();
-        let meta = make_meta_with_confidence(Some(0.9), None, None, None);
+        let meta = make_meta_with_fitness(Some(0.9), None, None, None);
         assert!(eval_with_accumulated(
             json!({"type": "entry_confidence", "score": {"overall": {"min": 0.8}}}),
             &txn,
@@ -1846,9 +1846,9 @@ mod tests {
     }
 
     #[test]
-    fn entry_confidence_no_match_overall_below_min() {
+    fn entry_fitness_no_match_overall_below_min() {
         let txn = any_txn();
-        let meta = make_meta_with_confidence(Some(0.7), None, None, None);
+        let meta = make_meta_with_fitness(Some(0.7), None, None, None);
         assert!(!eval_with_accumulated(
             json!({"type": "entry_confidence", "score": {"overall": {"min": 0.8}}}),
             &txn,
@@ -1857,10 +1857,10 @@ mod tests {
     }
 
     #[test]
-    fn entry_confidence_no_match_when_score_is_null() {
-        // Gate specified but confidence field is None → no match.
+    fn entry_fitness_no_match_when_score_is_null() {
+        // Gate specified but fitness field is None → no match.
         let txn = any_txn();
-        let meta = make_meta_with_confidence(None, None, None, None);
+        let meta = make_meta_with_fitness(None, None, None, None);
         assert!(!eval_with_accumulated(
             json!({"type": "entry_confidence", "score": {"overall": {"min": 0.8}}}),
             &txn,
@@ -1870,17 +1870,17 @@ mod tests {
 
     /// ALL gates must be satisfied by the SAME single entry — not different entries.
     #[test]
-    fn entry_confidence_all_gates_must_be_same_entry() {
+    fn entry_fitness_all_gates_must_be_same_entry() {
         let txn = any_txn();
         // entry A: overall=0.9 but merchant=0.5
         // entry B: overall=0.5 but merchant=0.9
         // Gate: overall >= 0.8 AND merchant >= 0.8
         // Neither single entry satisfies both → false.
-        let entry_a = make_meta_with_confidence(Some(0.9), Some(0.5), None, None);
-        let entry_b = make_meta_with_confidence(Some(0.5), Some(0.9), None, None);
+        let entry_a = make_meta_with_fitness(Some(0.9), Some(0.5), None, None);
+        let entry_b = make_meta_with_fitness(Some(0.5), Some(0.9), None, None);
         assert!(!eval_with_accumulated(
             json!({
-                "type": "entry_confidence",
+                "type": "entry_fitness",
                 "score": {
                     "overall":  {"min": 0.8},
                     "merchant": {"min": 0.8}
@@ -1892,13 +1892,13 @@ mod tests {
     }
 
     #[test]
-    fn entry_confidence_single_entry_satisfies_all_gates() {
+    fn entry_fitness_single_entry_satisfies_all_gates() {
         let txn = any_txn();
         // Both overall and merchant meet their gates on entry A alone.
-        let entry_a = make_meta_with_confidence(Some(0.9), Some(0.85), None, None);
+        let entry_a = make_meta_with_fitness(Some(0.9), Some(0.85), None, None);
         assert!(eval_with_accumulated(
             json!({
-                "type": "entry_confidence",
+                "type": "entry_fitness",
                 "score": {
                     "overall":  {"min": 0.8},
                     "merchant": {"min": 0.8}

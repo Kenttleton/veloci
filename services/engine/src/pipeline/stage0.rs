@@ -23,7 +23,7 @@
 //! All Stage 0 DB access uses the write pool.
 
 use anyhow::{anyhow, bail, Context, Result};
-use chrono::{NaiveDate, Utc};
+use chrono::NaiveDate;
 use futures::StreamExt;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -71,7 +71,6 @@ pub async fn run(
         pending.account_id,
         &mapping,
         existing_boundary,
-        pending.uploaded_at,
         import_concurrency,
         pool,
     )
@@ -116,8 +115,6 @@ pub async fn run(
         pending.account_id,
         batch_id,
         &imported,
-        pending.uploaded_at,
-        mapping.settlement_window_days,
         pool,
     )
     .await?;
@@ -339,7 +336,6 @@ pub fn apply_sign_convention(cents: i64, convention: &str) -> i64 {
 struct PendingImport {
     account_id:       Uuid,
     institution_id:   Uuid,
-    uploaded_at:      chrono::DateTime<Utc>,
     csv_bytes:        Vec<u8>,
     date_range_start: NaiveDate,
     date_range_end:   NaiveDate,
@@ -399,10 +395,10 @@ struct ClassifiedCandidate {
 // ---------------------------------------------------------------------------
 
 async fn load_pending_import(id: Uuid, entity_id: Uuid, pool: &PgPool) -> Result<PendingImport> {
-    let row: (Uuid, Option<Uuid>, chrono::DateTime<Utc>, Vec<u8>, NaiveDate, NaiveDate) =
+    let row: (Uuid, Option<Uuid>, Vec<u8>, NaiveDate, NaiveDate) =
         sqlx::query_as(
             r#"
-            SELECT account_id, institution_id, uploaded_at, csv_bytes,
+            SELECT account_id, institution_id, csv_bytes,
                    date_range_start, date_range_end
             FROM pending_imports
             WHERE id = $1 AND entity_id = $2
@@ -417,10 +413,9 @@ async fn load_pending_import(id: Uuid, entity_id: Uuid, pool: &PgPool) -> Result
     Ok(PendingImport {
         account_id:       row.0,
         institution_id:   row.1.ok_or_else(|| anyhow!("pending_import.institution_id is null"))?,
-        uploaded_at:      row.2,
-        csv_bytes:        row.3,
-        date_range_start: row.4,
-        date_range_end:   row.5,
+        csv_bytes:        row.2,
+        date_range_start: row.3,
+        date_range_end:   row.4,
     })
 }
 
@@ -688,13 +683,24 @@ async fn classify_candidates(
     account_id: Uuid,
     mapping: &InstitutionMapping,
     existing_boundary: Option<NaiveDate>,
-    uploaded_at: chrono::DateTime<Utc>,
     import_concurrency: usize,
     pool: &PgPool,
 ) -> Result<Vec<ClassifiedCandidate>> {
     let settlement_window = chrono::Duration::days(i64::from(mapping.settlement_window_days));
     let dedup_window      = chrono::Duration::days(i64::from(mapping.dedup_window_days));
     let tolerance_pct     = mapping.amount_tolerance_pct;
+
+    // Anchor settlement to the latest date in the data, not wall-clock upload time.
+    // This keeps classification deterministic: re-running with the same CSV always
+    // produces the same result regardless of when the import runs.
+    // Fallback (empty CSV): use existing boundary or epoch — no candidates means nothing
+    // is inserted, so the anchor value doesn't affect any stored row.
+    let settlement_anchor = candidates
+        .iter()
+        .map(|c| c.date)
+        .max()
+        .or(existing_boundary)
+        .unwrap_or(NaiveDate::from_ymd_opt(1970, 1, 1).unwrap());
 
     let results: Vec<Result<ClassifiedCandidate>> = futures::stream::iter(candidates)
         .map(|candidate| {
@@ -705,7 +711,7 @@ async fn classify_candidates(
                     entity_id,
                     account_id,
                     existing_boundary,
-                    uploaded_at,
+                    settlement_anchor,
                     settlement_window,
                     dedup_window,
                     tolerance_pct,
@@ -724,21 +730,24 @@ async fn classify_candidates(
 #[derive(sqlx::FromRow)]
 struct ExistingRowDb {
     id:                  Uuid,
+    date:                NaiveDate,
     merchant_normalized: String,
     amount_cents:        i64,
     settlement_status:   String,
-    imported_at:         chrono::DateTime<Utc>,
 }
 
+// Determine whether an existing row can be superseded by a new import.
+// Uses the data-derived settlement anchor (MAX candidate date), not wall-clock time.
 fn effective_status(
     row: &ExistingRowDb,
-    now: chrono::DateTime<Utc>,
+    settlement_anchor: NaiveDate,
     settlement_window: chrono::Duration,
 ) -> &'static str {
     if row.settlement_status == "settled" {
         return "settled";
     }
-    if now - row.imported_at > settlement_window {
+    let window_days = settlement_window.num_days();
+    if row.date < settlement_anchor - chrono::Duration::days(window_days) {
         "aged_flux"
     } else {
         "young_flux"
@@ -750,16 +759,16 @@ async fn classify_one(
     entity_id: Uuid,
     account_id: Uuid,
     existing_boundary: Option<NaiveDate>,
-    uploaded_at: chrono::DateTime<Utc>,
+    settlement_anchor: NaiveDate,
     settlement_window: chrono::Duration,
     dedup_window: chrono::Duration,
     tolerance_pct: f64,
     pool: &PgPool,
 ) -> Result<ClassifiedCandidate> {
-    let now = uploaded_at;
-
+    // Settled = this transaction's date is older than the settlement window
+    // relative to the latest date in the import data (settlement_anchor).
     let settlement_status: &'static str =
-        if candidate.date < (uploaded_at.date_naive() - settlement_window) {
+        if candidate.date < (settlement_anchor - settlement_window) {
             "settled"
         } else {
             "flux"
@@ -769,7 +778,7 @@ async fn classify_one(
     if let Some(ref iid) = candidate.imported_id {
         let existing: Option<ExistingRowDb> = sqlx::query_as(
             r#"
-            SELECT id, merchant_normalized, amount_cents, settlement_status, imported_at
+            SELECT id, date, merchant_normalized, amount_cents, settlement_status
             FROM transactions
             WHERE entity_id = $1 AND account_id = $2 AND imported_id = $3
             LIMIT 1
@@ -782,7 +791,7 @@ async fn classify_one(
         .await?;
 
         if let Some(row) = existing {
-            let eff = effective_status(&row, now, settlement_window);
+            let eff = effective_status(&row, settlement_anchor, settlement_window);
             let action = if eff == "young_flux" {
                 DedupAction::Supersede(row.id)
             } else {
@@ -815,7 +824,7 @@ async fn classify_one(
     // -- Pass 3: Volatility-aware exact merchant match --
     let exact_match: Option<ExistingRowDb> = sqlx::query_as(
         r#"
-        SELECT id, merchant_normalized, amount_cents, settlement_status, imported_at
+        SELECT id, date, merchant_normalized, amount_cents, settlement_status
         FROM transactions
         WHERE entity_id = $1
           AND account_id = $2
@@ -837,7 +846,7 @@ async fn classify_one(
     .await?;
 
     if let Some(row) = exact_match {
-        let eff = effective_status(&row, now, settlement_window);
+        let eff = effective_status(&row, settlement_anchor, settlement_window);
         let action = if eff == "young_flux" {
             DedupAction::Supersede(row.id)
         } else {
@@ -849,7 +858,7 @@ async fn classify_one(
     // -- Pass 4: Volatility-aware fuzzy LCS merchant match --
     let fuzzy_candidates: Vec<ExistingRowDb> = sqlx::query_as(
         r#"
-        SELECT id, merchant_normalized, amount_cents, settlement_status, imported_at
+        SELECT id, date, merchant_normalized, amount_cents, settlement_status
         FROM transactions
         WHERE entity_id = $1
           AND account_id = $2
@@ -872,7 +881,7 @@ async fn classify_one(
     });
 
     if let Some(row) = fuzzy_match {
-        let eff = effective_status(&row, now, settlement_window);
+        let eff = effective_status(&row, settlement_anchor, settlement_window);
         let action = if eff == "young_flux" {
             DedupAction::Supersede(row.id)
         } else {
@@ -898,8 +907,6 @@ async fn batch_insert(
     account_id: Uuid,
     batch_id: Uuid,
     classified: &[&ClassifiedCandidate],
-    _uploaded_at: chrono::DateTime<Utc>,
-    _settlement_window_days: i32,
     pool: &PgPool,
 ) -> Result<()> {
     if classified.is_empty() {
