@@ -56,8 +56,8 @@ templ GlossaryPage(data ShellData) {
 						"A named group that one or more entries output to. Labels are the categories you see in the Stack.",
 						"Labels are named groupings that entries output to. Each entry is associated with exactly one label. Labels are the category headers in the Stack panel. You can create new labels during Review or in Settings > Labels. Labels are global — renaming a label requires no recalculation, only a UI refresh. The name can be changed at any time.",
 						"")
-					@glossaryTerm("Confidence",
-						"How certain the engine is that a detected pattern is real. Score from 0 to 1.",
+					@glossaryTerm("Fitness",
+						"How well an entry's metadata matches its captured transactions. Score from 0 to 1.",
 						"Fitness is a composite score from 0 to 1 measuring how well an entry's configured metadata (type, anchor, period) matches the transactions captured by its conditions. It is composed of three sub-scores: merchant (consistency of the business name), timing (regularity of the cadence), and amount (consistency of the charge amount). Scores above 0.7 indicate high fitness.",
 						"")
 					@glossaryTerm("Pending",

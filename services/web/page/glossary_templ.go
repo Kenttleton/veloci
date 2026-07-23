@@ -123,8 +123,8 @@ func GlossaryPage(data ShellData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = glossaryTerm("Confidence",
-				"How certain the engine is that a detected pattern is real. Score from 0 to 1.",
+			templ_7745c5c3_Err = glossaryTerm("Fitness",
+				"How well an entry's metadata matches its captured transactions. Score from 0 to 1.",
 				"Fitness is a composite score from 0 to 1 measuring how well an entry's configured metadata (type, anchor, period) matches the transactions captured by its conditions. It is composed of three sub-scores: merchant (consistency of the business name), timing (regularity of the cadence), and amount (consistency of the charge amount). Scores above 0.7 indicate high fitness.",
 				"").Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
