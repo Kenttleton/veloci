@@ -280,21 +280,21 @@ pub async fn run(entity_id: Uuid, pool: &PgPool) -> Result<Stage1Output> {
         compiled_entries.iter().partition(|e| !tree_has_entry_targets(&e.conditions));
 
     // Parallel two-pass evaluation — each transaction is fully independent.
-    // Returns (txn_id, matched_entry_ids, was_unmatched) per transaction.
-    let results: Vec<(Uuid, Vec<Uuid>, bool)> = txns
+    // Returns (txn_id, matched_entries_with_fit, was_unmatched) per transaction.
+    let results: Vec<(Uuid, Vec<(Uuid, f64)>, bool)> = txns
         .par_iter()
         .map(|txn| {
-            let mut matched: Vec<Uuid> = Vec::new();
+            let mut matched: Vec<(Uuid, f64)> = Vec::new();
             let mut accumulated: Vec<AccumulatedEntryMeta> = Vec::new();
             let mut label_index: HashSet<Uuid> = HashSet::new();
 
             // --- Pass 1: transaction-target entries ---
             // Evaluated against transaction fields only. Each match contributes
-            // its entry_id to `matched`, its label_id to `label_index`, and its
-            // full metadata to `accumulated`.
+            // (entry_id, fit) to `matched`, label_id to `label_index`, and full
+            // metadata to `accumulated`.
             for entry in &txn_entries {
-                if evaluate(&entry.conditions, txn, &label_index, &accumulated) {
-                    matched.push(entry.entry_id);
+                if let Some(fit) = evaluate(&entry.conditions, txn, &label_index, &accumulated) {
+                    matched.push((entry.entry_id, fit));
                     if let Some(label_id) = entry.label_id {
                         label_index.insert(label_id);
                     }
@@ -325,13 +325,13 @@ pub async fn run(entity_id: Uuid, pool: &PgPool) -> Result<Stage1Output> {
             // prevent duplicate assignments when an entry's conditions remain
             // satisfied in subsequent iterations.
             let mut matched_set: HashSet<Uuid> =
-                HashSet::from_iter(matched.iter().copied());
+                HashSet::from_iter(matched.iter().map(|(id, _)| *id));
 
             loop {
                 // Snapshot the accumulated state at the start of this pass.
                 let pass_accumulated = accumulated.clone();
                 let pass_label_index = label_index.clone();
-                let mut newly_matched: Vec<Uuid> = Vec::new();
+                let mut newly_matched: Vec<(Uuid, f64)> = Vec::new();
                 let mut new_meta: Vec<AccumulatedEntryMeta> = Vec::new();
                 let mut new_labels: HashSet<Uuid> = HashSet::new();
                 let mut cycle_detected = false;
@@ -342,7 +342,7 @@ pub async fn run(entity_id: Uuid, pool: &PgPool) -> Result<Stage1Output> {
                         continue;
                     }
 
-                    if evaluate(&entry.conditions, txn, &pass_label_index, &pass_accumulated) {
+                    if let Some(fit) = evaluate(&entry.conditions, txn, &pass_label_index, &pass_accumulated) {
                         if let Some(label_id) = entry.label_id {
                             if pass_label_index.contains(&label_id) {
                                 // Cycle: this entry would re-add a label already
@@ -360,7 +360,7 @@ pub async fn run(entity_id: Uuid, pool: &PgPool) -> Result<Stage1Output> {
                             }
                             new_labels.insert(label_id);
                         }
-                        newly_matched.push(entry.entry_id);
+                        newly_matched.push((entry.entry_id, fit));
                         new_meta.push(AccumulatedEntryMeta {
                             label_id:               entry.label_id,
                             direction:              entry.direction,
@@ -378,9 +378,9 @@ pub async fn run(entity_id: Uuid, pool: &PgPool) -> Result<Stage1Output> {
                 }
 
                 // Commit newly matched entries from this pass.
-                for entry_id in newly_matched {
+                for (entry_id, fit) in newly_matched {
                     if matched_set.insert(entry_id) {
-                        matched.push(entry_id);
+                        matched.push((entry_id, fit));
                     }
                 }
                 label_index.extend(new_labels);
@@ -412,7 +412,7 @@ pub async fn run(entity_id: Uuid, pool: &PgPool) -> Result<Stage1Output> {
     // by the SQL WHERE clause in update_next_due_dates.
     let matched_entry_ids: Vec<Uuid> = results
         .iter()
-        .flat_map(|(_, entry_ids, _)| entry_ids.iter().copied())
+        .flat_map(|(_, entries, _)| entries.iter().map(|(id, _)| *id))
         .collect::<std::collections::HashSet<_>>()
         .into_iter()
         .collect();
@@ -475,107 +475,183 @@ pub fn evaluate_entry(
     txn:                &TransactionRow,
     accumulated_labels: &HashSet<Uuid>,
     accumulated:        &[AccumulatedEntryMeta],
-) -> bool {
+) -> Option<f64> {
     evaluate(tree, txn, accumulated_labels, accumulated)
 }
 
+/// Evaluate a condition tree against a transaction.
+///
+/// Returns `Some(fit)` when the conditions match, where `fit` is a score in
+/// [0.0, 1.0] representing match quality. Returns `None` when the conditions
+/// do not match.
+///
+/// Payee-string conditions produce graded scores based on match coverage.
+/// All other conditions (amount, date, account, entry-target) are binary gates
+/// that return `Some(1.0)` on a match.
+///
+/// Logical operators propagate fit:
+/// - AND → `min` of child fits (fails fast on first None)
+/// - OR  → `max` of matching child fits
+/// - NOT → inverts presence (None→Some(1.0), Some(f)→None)
+/// - XOR → matched child's fit when exactly one child matches
 fn evaluate(
     node:          &CompiledConditionTree,
     txn:           &TransactionRow,
     label_index:   &HashSet<Uuid>,
     accumulated:   &[AccumulatedEntryMeta],
-) -> bool {
+) -> Option<f64> {
     match node {
         CompiledConditionTree::And(children) => {
-            children.iter().all(|c| evaluate(c, txn, label_index, accumulated))
+            let mut min_fit = f64::MAX;
+            for c in children {
+                match evaluate(c, txn, label_index, accumulated) {
+                    None    => return None,
+                    Some(f) => min_fit = min_fit.min(f),
+                }
+            }
+            Some(if min_fit == f64::MAX { 1.0 } else { min_fit })
         }
         CompiledConditionTree::Or(children) => {
-            children.iter().any(|c| evaluate(c, txn, label_index, accumulated))
+            let mut max_fit: Option<f64> = None;
+            for c in children {
+                if let Some(f) = evaluate(c, txn, label_index, accumulated) {
+                    max_fit = Some(max_fit.map_or(f, |m: f64| m.max(f)));
+                }
+            }
+            max_fit
         }
-        CompiledConditionTree::Not(child) => !evaluate(child, txn, label_index, accumulated),
+        CompiledConditionTree::Not(child) => {
+            match evaluate(child, txn, label_index, accumulated) {
+                None    => Some(1.0),
+                Some(_) => None,
+            }
+        }
         CompiledConditionTree::Xor(a, b) => {
-            evaluate(a, txn, label_index, accumulated) ^ evaluate(b, txn, label_index, accumulated)
+            let fa = evaluate(a, txn, label_index, accumulated);
+            let fb = evaluate(b, txn, label_index, accumulated);
+            match (fa, fb) {
+                (Some(f), None) => Some(f),
+                (None, Some(f)) => Some(f),
+                _               => None,
+            }
         }
 
         // --- Payee conditions (all case-insensitive except Regex) ---
+        //
+        // Exact match → 1.0 (full fit).
+        // Starts-with and ends-with → 0.85 + 0.15 × coverage (string-length ratio).
+        // Contains → 0.75 + 0.15 × coverage.
+        // Other payee gates (not-contains, regex, one-of) → binary 1.0.
         CompiledConditionTree::PayeeExact(s) => {
-            txn.merchant_normalized.eq_ignore_ascii_case(s)
+            if txn.merchant_normalized.eq_ignore_ascii_case(s) { Some(1.0) } else { None }
         }
-        CompiledConditionTree::PayeeContains(s) => txn
-            .merchant_normalized
-            .to_ascii_lowercase()
-            .contains(&s.to_ascii_lowercase()),
-        CompiledConditionTree::PayeeNotContains(s) => !txn
-            .merchant_normalized
-            .to_ascii_lowercase()
-            .contains(&s.to_ascii_lowercase()),
-        CompiledConditionTree::PayeeStartsWith(s) => txn
-            .merchant_normalized
-            .to_ascii_lowercase()
-            .starts_with(&s.to_ascii_lowercase()),
-        CompiledConditionTree::PayeeEndsWith(s) => txn
-            .merchant_normalized
-            .to_ascii_lowercase()
-            .ends_with(&s.to_ascii_lowercase()),
-        CompiledConditionTree::PayeeRegex(re) => re.is_match(&txn.merchant_normalized),
-        CompiledConditionTree::PayeeOneOf(list) => list
-            .iter()
-            .any(|s| txn.merchant_normalized.eq_ignore_ascii_case(s)),
+        CompiledConditionTree::PayeeContains(s) => {
+            let haystack = txn.merchant_normalized.to_ascii_lowercase();
+            let needle   = s.to_ascii_lowercase();
+            if haystack.contains(&needle) {
+                let coverage = needle.len() as f64 / haystack.len().max(1) as f64;
+                Some((0.75 + 0.15 * coverage).min(1.0))
+            } else {
+                None
+            }
+        }
+        CompiledConditionTree::PayeeNotContains(s) => {
+            let haystack = txn.merchant_normalized.to_ascii_lowercase();
+            if !haystack.contains(&s.to_ascii_lowercase()) { Some(1.0) } else { None }
+        }
+        CompiledConditionTree::PayeeStartsWith(s) => {
+            let haystack = txn.merchant_normalized.to_ascii_lowercase();
+            let needle   = s.to_ascii_lowercase();
+            if haystack.starts_with(&needle) {
+                let coverage = needle.len() as f64 / haystack.len().max(1) as f64;
+                Some((0.85 + 0.15 * coverage).min(1.0))
+            } else {
+                None
+            }
+        }
+        CompiledConditionTree::PayeeEndsWith(s) => {
+            let haystack = txn.merchant_normalized.to_ascii_lowercase();
+            let needle   = s.to_ascii_lowercase();
+            if haystack.ends_with(&needle) {
+                let coverage = needle.len() as f64 / haystack.len().max(1) as f64;
+                Some((0.85 + 0.15 * coverage).min(1.0))
+            } else {
+                None
+            }
+        }
+        CompiledConditionTree::PayeeRegex(re) => {
+            if re.is_match(&txn.merchant_normalized) { Some(1.0) } else { None }
+        }
+        CompiledConditionTree::PayeeOneOf(list) => {
+            if list.iter().any(|s| txn.merchant_normalized.eq_ignore_ascii_case(s)) {
+                Some(1.0)
+            } else {
+                None
+            }
+        }
 
-        // --- Amount conditions ---
+        // --- Amount conditions (binary gate) ---
         CompiledConditionTree::AmountRange { min, max } => {
             let a = txn.amount_cents;
-            min.map_or(true, |m| a >= m) && max.map_or(true, |m| a <= m)
+            if min.map_or(true, |m| a >= m) && max.map_or(true, |m| a <= m) {
+                Some(1.0)
+            } else {
+                None
+            }
         }
 
-        // --- Date conditions ---
+        // --- Date conditions (binary gates) ---
         CompiledConditionTree::DateDayOfMonth { day, tolerance_days } => {
             let txn_day = txn.date.day() as i32;
             let target  = i32::from(*day);
             let tol     = i32::from(*tolerance_days);
             // Wrap-around month end is not handled (naive — sufficient for matching).
-            let diff = (txn_day - target).abs();
-            diff <= tol
+            if (txn_day - target).abs() <= tol { Some(1.0) } else { None }
         }
         CompiledConditionTree::DateRange { start, end } => {
-            txn.date >= *start && txn.date <= *end
+            if txn.date >= *start && txn.date <= *end { Some(1.0) } else { None }
         }
 
-        // --- Account / institution conditions ---
-        CompiledConditionTree::AccountId(id) => txn.account_id == *id,
+        // --- Account / institution conditions (binary gates) ---
+        CompiledConditionTree::AccountId(id) => {
+            if txn.account_id == *id { Some(1.0) } else { None }
+        }
         CompiledConditionTree::InstitutionId(id) => {
-            txn.institution_id.map_or(false, |iid| iid == *id)
+            if txn.institution_id.map_or(false, |iid| iid == *id) { Some(1.0) } else { None }
         }
 
-        // --- Entry-target conditions (Pass 2+ only) ---
+        // --- Entry-target conditions (Pass 2+ only, binary gates) ---
         //
         // All of these evaluate against `accumulated`, the list of metadata for
-        // entries already matched in prior passes. They are always false in Pass 1
+        // entries already matched in prior passes. They are always None in Pass 1
         // (empty accumulated slice).
-        CompiledConditionTree::LabelMatched(label_id) => label_index.contains(label_id),
+        CompiledConditionTree::LabelMatched(label_id) => {
+            if label_index.contains(label_id) { Some(1.0) } else { None }
+        }
 
         CompiledConditionTree::EntryDirection(dir) => {
-            accumulated.iter().any(|e| e.direction == *dir)
+            if accumulated.iter().any(|e| e.direction == *dir) { Some(1.0) } else { None }
         }
 
         CompiledConditionTree::EntryType(et) => {
-            accumulated.iter().any(|e| e.entry_type == *et)
+            if accumulated.iter().any(|e| e.entry_type == *et) { Some(1.0) } else { None }
         }
 
         CompiledConditionTree::EntryPeriod { min_days, max_days } => {
-            accumulated.iter().any(|e| {
+            let matched = accumulated.iter().any(|e| {
                 min_days.map_or(true, |m| e.period_days >= m)
                     && max_days.map_or(true, |m| e.period_days <= m)
-            })
+            });
+            if matched { Some(1.0) } else { None }
         }
 
         CompiledConditionTree::EntrySource(src) => {
-            accumulated.iter().any(|e| e.source == *src)
+            if accumulated.iter().any(|e| e.source == *src) { Some(1.0) } else { None }
         }
 
         // All specified gates must be satisfied by the SAME accumulated entry.
         CompiledConditionTree::EntryFitness { overall, merchant, timing, amount } => {
-            accumulated.iter().any(|e| {
+            let matched = accumulated.iter().any(|e| {
                 overall.as_ref().map_or(true, |g| {
                     e.fitness.map_or(false, |v| g.matches(v))
                 }) && merchant.as_ref().map_or(true, |g| {
@@ -585,20 +661,25 @@ fn evaluate(
                 }) && amount.as_ref().map_or(true, |g| {
                     e.amount_fit.map_or(false, |v| g.matches(v))
                 })
-            })
+            });
+            if matched { Some(1.0) } else { None }
         }
 
         CompiledConditionTree::EntryProjectedRate { min, max } => {
-            accumulated.iter().any(|e| {
+            let matched = accumulated.iter().any(|e| {
                 e.projected_rate_per_day.map_or(false, |r| {
                     min.map_or(true, |m| r >= m) && max.map_or(true, |m| r <= m)
                 })
-            })
+            });
+            if matched { Some(1.0) } else { None }
         }
 
-        CompiledConditionTree::EntryRecurrenceAnchor(anchor) => accumulated
-            .iter()
-            .any(|e| e.recurrence_anchor.as_deref() == Some(anchor.as_str())),
+        CompiledConditionTree::EntryRecurrenceAnchor(anchor) => {
+            let matched = accumulated
+                .iter()
+                .any(|e| e.recurrence_anchor.as_deref() == Some(anchor.as_str()));
+            if matched { Some(1.0) } else { None }
+        }
     }
 }
 
@@ -658,7 +739,7 @@ fn compile_entry(row: EntryRow) -> Result<CompiledEntry> {
 /// - `"entry_type"` (field: `"entry_type"`) → [`CompiledConditionTree::EntryType`]
 /// - `"entry_period"` (fields: `"min_days"`, `"max_days"` — both optional) → [`CompiledConditionTree::EntryPeriod`]
 /// - `"entry_source"` (field: `"source"`) → [`CompiledConditionTree::EntrySource`]
-/// - `"entry_confidence"` (field: `"score"` object) → [`CompiledConditionTree::EntryConfidence`]
+/// - `"entry_fitness"` (field: `"score"` object) → [`CompiledConditionTree::EntryFitness`]
 /// - `"entry_projected_rate"` (fields: `"min"`, `"max"` — both optional) → [`CompiledConditionTree::EntryProjectedRate`]
 /// - `"entry_recurrence_anchor"` (field: `"recurrence_anchor"`) → [`CompiledConditionTree::EntryRecurrenceAnchor`]
 pub fn compile_tree(v: &serde_json::Value) -> Result<CompiledConditionTree> {
@@ -975,7 +1056,7 @@ async fn load_entries(entity_id: Uuid, pool: &PgPool) -> Result<Vec<EntryRow>> {
 
 async fn persist_assignments(
     entity_id: Uuid,
-    results: &[(Uuid, Vec<Uuid>, bool)],
+    results: &[(Uuid, Vec<(Uuid, f64)>, bool)],
     pool: &PgPool,
 ) -> Result<()> {
     // Delete all existing assignments for transactions of this entity.
@@ -993,14 +1074,16 @@ async fn persist_assignments(
     .await
     .context("failed to delete existing assignments")?;
 
-    // Collect all (transaction_id, entry_id) pairs.
-    let mut txn_ids:   Vec<Uuid> = Vec::new();
-    let mut entry_ids: Vec<Uuid> = Vec::new();
+    // Collect all (transaction_id, entry_id, fit) triples.
+    let mut txn_ids:    Vec<Uuid> = Vec::new();
+    let mut entry_ids:  Vec<Uuid> = Vec::new();
+    let mut fit_scores: Vec<f64>  = Vec::new();
 
     for (txn_id, matched_entries, _) in results {
-        for entry_id in matched_entries {
+        for (entry_id, fit) in matched_entries {
             txn_ids.push(*txn_id);
             entry_ids.push(*entry_id);
+            fit_scores.push(*fit);
         }
     }
 
@@ -1011,13 +1094,14 @@ async fn persist_assignments(
     sqlx::query(
         r#"
         INSERT INTO transaction_entry_assignments (transaction_id, entry_id, fit)
-        SELECT t, e, 1.0
-        FROM UNNEST($1::uuid[], $2::uuid[]) AS u(t, e)
-        ON CONFLICT (transaction_id, entry_id) DO NOTHING
+        SELECT t, e, f
+        FROM UNNEST($1::uuid[], $2::uuid[], $3::float8[]) AS u(t, e, f)
+        ON CONFLICT (transaction_id, entry_id) DO UPDATE SET fit = EXCLUDED.fit
         "#,
     )
     .bind(&txn_ids)
     .bind(&entry_ids)
+    .bind(&fit_scores)
     .execute(pool)
     .await
     .context("failed to insert entry assignments")?;
@@ -1094,6 +1178,12 @@ mod tests {
     /// entry-target conditions use `eval_with_accumulated`.
     fn eval(json: serde_json::Value, txn: &TransactionRow) -> bool {
         let tree = compile_tree(&json).unwrap();
+        evaluate(&tree, txn, &HashSet::new(), &[]).is_some()
+    }
+
+    /// Like `eval` but returns the raw fit score for assertions on graded conditions.
+    fn eval_fit(json: serde_json::Value, txn: &TransactionRow) -> Option<f64> {
+        let tree = compile_tree(&json).unwrap();
         evaluate(&tree, txn, &HashSet::new(), &[])
     }
 
@@ -1107,7 +1197,7 @@ mod tests {
         labels: &HashSet<Uuid>,
     ) -> bool {
         let tree = compile_tree(&json).unwrap();
-        evaluate(&tree, txn, labels, &[])
+        evaluate(&tree, txn, labels, &[]).is_some()
     }
 
     /// Compile a JSONB condition and evaluate with the given accumulated entry metadata.
@@ -1124,7 +1214,7 @@ mod tests {
             .iter()
             .filter_map(|e| e.label_id)
             .collect();
-        evaluate(&tree, txn, &label_index, accumulated)
+        evaluate(&tree, txn, &label_index, accumulated).is_some()
     }
 
     /// Build a minimal `AccumulatedEntryMeta` for use in tests.
@@ -1577,7 +1667,7 @@ mod tests {
     #[test]
     fn compile_entry_fitness_no_score_object() {
         // Missing "score" — all gates None but still compiles (spec: score is optional).
-        let tree = compile_tree(&json!({"type": "entry_confidence"}));
+        let tree = compile_tree(&json!({"type": "entry_fitness"}));
         assert!(tree.is_ok());
         let CompiledConditionTree::EntryFitness { overall, merchant, timing, amount } =
             tree.unwrap()
@@ -1673,7 +1763,7 @@ mod tests {
     fn entry_fitness_false_with_empty_accumulated() {
         let txn = any_txn();
         assert!(!eval_with_accumulated(
-            json!({"type": "entry_confidence", "score": {"overall": {"min": 0.8}}}),
+            json!({"type": "entry_fitness", "score": {"overall": {"min": 0.8}}}),
             &txn,
             &[]
         ));
@@ -1811,7 +1901,7 @@ mod tests {
         ));
     }
 
-    // --- entry_confidence gate semantics ---
+    // --- entry_fitness gate semantics ---
 
     fn make_meta_with_fitness(
         fitness: Option<f64>,
@@ -1839,7 +1929,7 @@ mod tests {
         let txn = any_txn();
         let meta = make_meta_with_fitness(Some(0.9), None, None, None);
         assert!(eval_with_accumulated(
-            json!({"type": "entry_confidence", "score": {"overall": {"min": 0.8}}}),
+            json!({"type": "entry_fitness", "score": {"overall": {"min": 0.8}}}),
             &txn,
             &[meta]
         ));
@@ -1850,7 +1940,7 @@ mod tests {
         let txn = any_txn();
         let meta = make_meta_with_fitness(Some(0.7), None, None, None);
         assert!(!eval_with_accumulated(
-            json!({"type": "entry_confidence", "score": {"overall": {"min": 0.8}}}),
+            json!({"type": "entry_fitness", "score": {"overall": {"min": 0.8}}}),
             &txn,
             &[meta]
         ));
@@ -1862,7 +1952,7 @@ mod tests {
         let txn = any_txn();
         let meta = make_meta_with_fitness(None, None, None, None);
         assert!(!eval_with_accumulated(
-            json!({"type": "entry_confidence", "score": {"overall": {"min": 0.8}}}),
+            json!({"type": "entry_fitness", "score": {"overall": {"min": 0.8}}}),
             &txn,
             &[meta]
         ));
@@ -1998,7 +2088,7 @@ mod tests {
         assert!(tree_has_entry_targets(&CompiledConditionTree::EntrySource(
             EntrySource::User
         )));
-        assert!(tree_has_entry_targets(&CompiledConditionTree::EntryConfidence {
+        assert!(tree_has_entry_targets(&CompiledConditionTree::EntryFitness {
             overall:  None,
             merchant: None,
             timing:   None,

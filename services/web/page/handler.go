@@ -368,10 +368,10 @@ func ledgerFilterURL(d LedgerData, key, value string) string {
 	set("label", d.LabelFilter, "")
 	set("direction", d.DirectionFilter, "")
 	set("entry_type", d.TypeFilter, "")
-	set("sort", d.Sort, "start_date")
+	set("sort", d.Sort, "label")
 	if value == "" {
 		q.Del(key)
-	} else if (key == "filter" && value == "all") || (key == "sort" && value == "start_date") {
+	} else if (key == "filter" && value == "all") || (key == "sort" && value == "label") {
 		q.Del(key)
 	} else {
 		q.Set(key, value)
@@ -395,7 +395,7 @@ func (s *Server) Ledger(c echo.Context) error {
 	typeFilter := c.QueryParam("entry_type")
 	srt := c.QueryParam("sort")
 	if srt == "" {
-		srt = "start_date"
+		srt = "label"
 	}
 
 	counts, _ := s.store.CountEntriesByStatus(ctx, entityID)

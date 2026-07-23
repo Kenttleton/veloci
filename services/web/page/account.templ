@@ -806,13 +806,13 @@ templ AccountPage(shell ShellData, data AccountData) {
 						var stBg = t.settlement_status === 'settled'
 							? 'color-mix(in srgb,var(--surface2) 80%,var(--income) 20%)' : 'var(--surface2)';
 						var stColor = t.settlement_status === 'settled' ? 'var(--income)' : 'var(--text3)';
-						var merch = t.merchant_normalized
-							? esc(t.merchant_normalized)
+						var payee = t.imported_payee
+							? esc(t.imported_payee)
 							: '<span style="color:var(--text3)">—</span>';
 						tr.innerHTML =
 							'<td style="padding:8px 12px;font-size:13px;color:var(--text2);white-space:nowrap">'+esc(fmtDate(t.date))+'</td>'
-							+'<td style="padding:8px 12px;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:0">'+merch+'</td>'
-							+'<td style="padding:8px 12px;font-size:12px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:0">'+esc(t.imported_payee||'')+'</td>'
+							+'<td style="padding:8px 12px;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:0">'+payee+'</td>'
+							+'<td style="padding:8px 12px;font-size:12px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:0">'+esc(t.merchant_normalized||'')+'</td>'
 							+'<td style="padding:8px 12px;text-align:right"><span style="color:'+amtColor+';font-variant-numeric:tabular-nums">'+esc(fmtCents(t.amount_cents))+'</span></td>'
 							+'<td style="padding:8px 12px"><span style="font-size:11px;padding:2px 6px;border-radius:4px;background:'+stBg+';color:'+stColor+'">'+esc(t.settlement_status)+'</span></td>';
 						return tr;
@@ -1165,14 +1165,14 @@ templ txRow(t store.Transaction) {
 			{ t.Date.Format("Jan 2, 2006") }
 		</td>
 		<td style="padding:8px 12px;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:0">
-			if t.MerchantNormalized != "" {
-				{ t.MerchantNormalized }
+			if t.ImportedPayee != "" {
+				{ t.ImportedPayee }
 			} else {
 				<span style="color:var(--text3)">—</span>
 			}
 		</td>
 		<td style="padding:8px 12px;font-size:12px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:0">
-			{ t.ImportedPayee }
+			{ t.MerchantNormalized }
 		</td>
 		<td style="padding:8px 12px;text-align:right">
 			<span style={ txnAmountStyle(t.AmountCents) }>{ formatCents(t.AmountCents) }</span>

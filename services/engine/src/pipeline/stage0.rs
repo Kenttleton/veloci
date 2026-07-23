@@ -153,9 +153,10 @@ pub async fn query_computed_as_of(entity_id: Uuid, pool: &PgPool) -> Result<Naiv
 /// Normalize a raw bank payee string.
 ///
 /// Steps:
-/// 1. Strip leading and trailing whitespace.
-/// 2. Collapse internal whitespace runs to a single space.
-/// 3. Strip punctuation except hyphens `-` and ampersands `&`.
+/// 1. Replace separator punctuation (`.`, `*`, `/`) with a space so they
+///    tokenize correctly ("AMAZON.COM" → "AMAZON COM", not "AMAZONCOM").
+/// 2. Strip leading and trailing whitespace, then collapse internal runs.
+/// 3. Strip remaining punctuation except hyphens `-` and ampersands `&`.
 /// 4. Title-case the result.
 ///
 /// The raw string is preserved as `imported_payee`; this function returns
@@ -165,8 +166,10 @@ pub async fn query_computed_as_of(entity_id: Uuid, pool: &PgPool) -> Result<Naiv
 ///
 /// ```
 /// use veloci_engine::pipeline::stage0::normalize_merchant;
-/// // Dots are stripped (not hyphens or ampersands)
-/// assert_eq!(normalize_merchant("NETFLIX.COM"), "Netflixcom");
+/// // Dots become word separators
+/// assert_eq!(normalize_merchant("NETFLIX.COM"), "Netflix Com");
+/// // Stars become word separators
+/// assert_eq!(normalize_merchant("AMAZON.COM*MK7AMZN.COM"), "Amazon Com Mk7amzn Com");
 /// // Ampersands kept
 /// assert_eq!(normalize_merchant("JOHNSON & JOHNSON"), "Johnson & Johnson");
 /// // Hyphens kept
@@ -175,8 +178,14 @@ pub async fn query_computed_as_of(entity_id: Uuid, pool: &PgPool) -> Result<Naiv
 /// assert_eq!(normalize_merchant("AMAZON   PRIME"), "Amazon Prime");
 /// ```
 pub fn normalize_merchant(raw: &str) -> String {
+    // Replace separator punctuation with spaces before stripping.
+    let with_spaces: String = raw.chars().map(|c| match c {
+        '.' | '*' | '/' => ' ',
+        other => other,
+    }).collect();
+
     // Strip leading/trailing whitespace, then collapse internal runs.
-    let collapsed: String = raw
+    let collapsed: String = with_spaces
         .trim()
         .split_whitespace()
         .collect::<Vec<_>>()
@@ -997,7 +1006,9 @@ mod tests {
     fn normalize_strips_punctuation_keeps_hyphen_ampersand() {
         assert_eq!(normalize_merchant("JOHNSON & JOHNSON"), "Johnson & Johnson");
         assert_eq!(normalize_merchant("WALK-IN CLINIC"), "Walk-In Clinic");
-        assert_eq!(normalize_merchant("NETFLIX.COM"), "Netflixcom");
+        // Dots and stars are now word separators, not stripped inline.
+        assert_eq!(normalize_merchant("NETFLIX.COM"), "Netflix Com");
+        assert_eq!(normalize_merchant("AMAZON.COM*MK7AMZN.COM"), "Amazon Com Mk7amzn Com");
     }
 
     #[test]

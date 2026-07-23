@@ -9,10 +9,11 @@
 //! ## Algorithm
 //!
 //! 1. Load the full unmatched transaction rows.
-//! 2. Group by `merchant_normalized` exact string — each distinct value becomes
-//!    one cluster.
-//! 3. `rayon::par_iter` over clusters for confidence scoring.
-//! 4. Clusters above 0.3 confidence produce one `entries` row (with review
+//! 2. Extract a canonical brand name from each `merchant_normalized` string by
+//!    stripping noise words (Com, Store, Supercenter, etc.) and numeric tokens.
+//! 3. Group by canonical brand — each distinct canonical becomes one cluster.
+//! 4. `rayon::par_iter` over clusters for confidence scoring.
+//! 5. Clusters above 0.3 confidence produce one `entries` row (with review
 //!    metadata) and `transaction_entry_assignments` rows with the cluster
 //!    confidence score.
 
@@ -74,10 +75,10 @@ pub(crate) struct UnmatchedTxn {
     merchant_normalized: String,
 }
 
-/// A group of unmatched transactions sharing the same `merchant_normalized` value.
+/// A group of unmatched transactions sharing the same canonical brand name.
 #[derive(Debug)]
 pub(crate) struct Cluster {
-    /// The `merchant_normalized` string shared by all transactions in this cluster.
+    /// The canonical brand name (derived from `extract_canonical`).
     merchant:     String,
     transactions: Vec<UnmatchedTxn>,
 }
@@ -107,6 +108,49 @@ pub struct ClusterScore {
 }
 
 // ---------------------------------------------------------------------------
+// Canonical brand extraction
+// ---------------------------------------------------------------------------
+
+/// Extract a canonical brand name from a `merchant_normalized` string.
+///
+/// Strips noise words (generic suffixes, TLDs, marketplace shorthands, legal
+/// entity types) and pure-numeric tokens, then title-cases the result.
+/// Falls back to the original string when all tokens are noise.
+///
+/// This is a runtime-only computation — the result is never stored on the
+/// transaction row.
+pub(crate) fn extract_canonical(merchant: &str) -> String {
+    const NOISE: &[&str] = &[
+        // TLDs and online variants
+        "com", "net", "org",
+        // Amazon marketplace codes
+        "mktp",
+        // Walmart-specific store type suffixes
+        "supercenter", "neighborhood",
+        // Legal entity suffixes
+        "inc", "llc", "corp", "ltd",
+        // Country abbreviations appended to merchant names
+        "us", "usa",
+    ];
+
+    // Filter tokens that are not noise words and not pure digits.
+    // Reconstruct from original casing (merchant is already title-cased).
+    let filtered: Vec<&str> = merchant
+        .split_whitespace()
+        .filter(|w| {
+            let lw = w.to_ascii_lowercase();
+            !NOISE.contains(&lw.as_str()) && !lw.chars().all(|c| c.is_ascii_digit())
+        })
+        .collect();
+
+    if filtered.is_empty() {
+        merchant.to_string()
+    } else {
+        filtered.join(" ")
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Public entry point
 // ---------------------------------------------------------------------------
 
@@ -118,10 +162,12 @@ pub async fn run(entity_id: Uuid, unmatched_tx_ids: &[Uuid], pool: &PgPool) -> R
 
     let txns = load_unmatched(entity_id, unmatched_tx_ids, pool).await?;
 
-    // Group by merchant_normalized — each distinct value becomes one cluster.
+    // Group by canonical brand name — folds store variants and online vs.
+    // brick-and-mortar into one cluster per merchant.
     let mut groups: HashMap<String, Vec<UnmatchedTxn>> = HashMap::new();
     for txn in txns {
-        groups.entry(txn.merchant_normalized.clone()).or_default().push(txn);
+        let canonical = extract_canonical(&txn.merchant_normalized);
+        groups.entry(canonical).or_default().push(txn);
     }
     let clusters: Vec<Cluster> = groups
         .into_iter()
@@ -523,10 +569,18 @@ async fn persist_cluster(
     score: &ClusterScore,
     pool: &PgPool,
 ) -> Result<Uuid> {
-    // Conditions use payee_exact so Stage 1 can match against merchant_normalized.
+    // Determine condition type by checking whether all merchant_normalized values
+    // in the cluster start with the canonical brand name.
+    // payee_starts_with  → higher fit score (0.85–1.0) when canonical is a prefix.
+    // payee_contains     → lower fit score (0.75–0.90) for broader matching.
+    let canonical_lower = cluster.merchant.to_ascii_lowercase();
+    let all_start_with = cluster.transactions.iter().all(|t| {
+        t.merchant_normalized.to_ascii_lowercase().starts_with(&canonical_lower)
+    });
+    let condition_type = if all_start_with { "payee_starts_with" } else { "payee_contains" };
     let conditions = serde_json::json!({
         "op": "AND",
-        "children": [{"type": "payee_exact", "value": &cluster.merchant}]
+        "children": [{"type": condition_type, "value": &cluster.merchant}]
     });
 
     // Use the detected interval as period_days; fall back to 30 for single-
@@ -705,19 +759,33 @@ mod tests {
     // ── Grouping ──────────────────────────────────────────────────────────────
 
     #[test]
-    fn group_by_merchant_normalized_groups_correctly() {
+    fn group_by_canonical_groups_correctly() {
         let txns = vec![
             make_unmatched_txn("2026-01-07", -1499, "Netflix"),
-            make_unmatched_txn("2026-02-07", -1499, "Netflix"),
+            make_unmatched_txn("2026-02-07", -1499, "Netflix Com"),
             make_unmatched_txn("2026-01-15", -899,  "Spotify"),
         ];
         let mut groups: HashMap<String, Vec<UnmatchedTxn>> = HashMap::new();
         for txn in txns {
-            groups.entry(txn.merchant_normalized.clone()).or_default().push(txn);
+            let canonical = extract_canonical(&txn.merchant_normalized);
+            groups.entry(canonical).or_default().push(txn);
         }
+        // "Netflix" and "Netflix Com" both canonicalize to "Netflix"
         assert_eq!(groups.len(), 2);
         assert_eq!(groups["Netflix"].len(), 2);
         assert_eq!(groups["Spotify"].len(), 1);
+    }
+
+    #[test]
+    fn extract_canonical_strips_noise_words() {
+        assert_eq!(extract_canonical("Walmart Supercenter"), "Walmart");
+        assert_eq!(extract_canonical("Netflix Com"), "Netflix");
+        assert_eq!(extract_canonical("Amazon Mktp"), "Amazon");
+        assert_eq!(extract_canonical("Target Store"), "Target Store"); // "Store" not in noise list
+        assert_eq!(extract_canonical("Home Depot"), "Home Depot");     // "Depot" not in noise list
+        assert_eq!(extract_canonical("Trader Joes"), "Trader Joes");
+        // All-noise fallback returns original
+        assert_eq!(extract_canonical("Com Org"), "Com Org");
     }
 
     // ── detect_anchor ─────────────────────────────────────────────────────────

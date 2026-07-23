@@ -55,10 +55,10 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 						id="ledger-sort"
 						style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:12px;color:var(--text);outline:none;cursor:pointer;font-family:inherit"
 					>
-						<option value="start_date" selected?={ data.Sort == "start_date" || data.Sort == "" }>Start date</option>
+						<option value="label" selected?={ data.Sort == "label" || data.Sort == "" }>Label name</option>
+						<option value="start_date" selected?={ data.Sort == "start_date" }>Start date</option>
 						<option value="rate" selected?={ data.Sort == "rate" }>Rate/day</option>
 						<option value="fitness" selected?={ data.Sort == "fitness" }>Fitness</option>
-						<option value="label" selected?={ data.Sort == "label" }>Label name</option>
 					</select>
 				</div>
 			</div>
@@ -250,7 +250,7 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 				if (sortSel) {
 					sortSel.addEventListener('change', function() {
 						var url = new URL(window.location.href);
-						if (sortSel.value === 'start_date') {
+						if (sortSel.value === 'label') {
 							url.searchParams.delete('sort');
 						} else {
 							url.searchParams.set('sort', sortSel.value);

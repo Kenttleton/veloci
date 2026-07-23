@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/labstack/echo/v4"
 	"github.com/veloci/veloci/authclient"
 	"github.com/veloci/veloci/middleware"
 )
@@ -35,6 +36,11 @@ func mockAuthServer(claims map[string]any) *httptest.Server {
 	}))
 }
 
+func echoContext(req *http.Request, rec *httptest.ResponseRecorder) echo.Context {
+	e := echo.New()
+	return e.NewContext(req, rec)
+}
+
 func TestAuthMiddlewareInjectsClaims(t *testing.T) {
 	srv := mockAuthServer(map[string]any{
 		"sub": "user-1", "entity_id": "ent-1",
@@ -45,19 +51,23 @@ func TestAuthMiddlewareInjectsClaims(t *testing.T) {
 	client := mustAuthClient(t, srv.URL)
 	var gotEntityID, gotEntityRole string
 
-	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotEntityID = middleware.EntityID(r.Context())
-		gotEntityRole = middleware.EntityRole(r.Context())
-		w.WriteHeader(http.StatusOK)
-	})
+	next := func(c echo.Context) error {
+		gotEntityID = middleware.EntityID(c.Request().Context())
+		gotEntityRole = middleware.EntityRole(c.Request().Context())
+		return c.NoContent(http.StatusOK)
+	}
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("Authorization", "Bearer sometoken")
-	w := httptest.NewRecorder()
-	middleware.Authenticate(client)(next).ServeHTTP(w, req)
+	rec := httptest.NewRecorder()
+	c := echoContext(req, rec)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("status: got %d want 200", w.Code)
+	err := middleware.Authenticate(client)(next)(c)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d want 200", rec.Code)
 	}
 	if gotEntityID != "ent-1" {
 		t.Errorf("entity_id: got %q", gotEntityID)
@@ -69,12 +79,16 @@ func TestAuthMiddlewareInjectsClaims(t *testing.T) {
 
 func TestAuthMiddlewareRejectsMissingToken(t *testing.T) {
 	client := mustAuthClient(t, "http://unused")
-	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
+	next := func(c echo.Context) error { return c.NoContent(http.StatusOK) }
+
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	w := httptest.NewRecorder()
-	middleware.Authenticate(client)(next).ServeHTTP(w, req)
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("status: got %d want 401", w.Code)
+	rec := httptest.NewRecorder()
+	c := echoContext(req, rec)
+
+	err := middleware.Authenticate(client)(next)(c)
+	he, ok := err.(*echo.HTTPError)
+	if !ok || he.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 HTTPError, got %v", err)
 	}
 }
 
@@ -91,13 +105,17 @@ func TestAuthMiddlewareRejectsInvalidToken(t *testing.T) {
 	defer srv.Close()
 
 	client := mustAuthClient(t, srv.URL)
-	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
+	next := func(c echo.Context) error { return c.NoContent(http.StatusOK) }
+
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("Authorization", "Bearer badtoken")
-	w := httptest.NewRecorder()
-	middleware.Authenticate(client)(next).ServeHTTP(w, req)
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("status: got %d want 401", w.Code)
+	rec := httptest.NewRecorder()
+	c := echoContext(req, rec)
+
+	err := middleware.Authenticate(client)(next)(c)
+	he, ok := err.(*echo.HTTPError)
+	if !ok || he.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 HTTPError, got %v", err)
 	}
 }
 
@@ -112,12 +130,16 @@ func TestAuthMiddlewareRejectsInviteToken(t *testing.T) {
 	defer srv.Close()
 
 	client := mustAuthClient(t, srv.URL)
-	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
+	next := func(c echo.Context) error { return c.NoContent(http.StatusOK) }
+
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("Authorization", "Bearer invitetoken")
-	w := httptest.NewRecorder()
-	middleware.Authenticate(client)(next).ServeHTTP(w, req)
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("invite token: got %d want 401", w.Code)
+	rec := httptest.NewRecorder()
+	c := echoContext(req, rec)
+
+	err := middleware.Authenticate(client)(next)(c)
+	he, ok := err.(*echo.HTTPError)
+	if !ok || he.Code != http.StatusUnauthorized {
+		t.Errorf("invite token: expected 401 HTTPError, got %v", err)
 	}
 }
