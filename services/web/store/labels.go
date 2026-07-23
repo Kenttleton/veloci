@@ -9,18 +9,19 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// ErrLabelInUse is returned when deleting a label that still has entry associations.
-var ErrLabelInUse = errors.New("label is in use by entries")
+var ErrLabelInUse  = errors.New("label is in use by entries")
+var ErrSystemLabel = errors.New("system label cannot be modified")
 
 // Label represents a row from the labels table.
 type Label struct {
 	ID        string    `db:"id"`
 	EntityID  string    `db:"entity_id"`
 	Name      string    `db:"name"`
+	Scope     *string   `db:"scope"`
 	CreatedAt time.Time `db:"created_at"`
 }
 
-const labelCols = `id::text, entity_id::text, name, created_at`
+const labelCols = `id::text, entity_id::text, name, scope, created_at`
 
 // GetLabel fetches a single label by id scoped to the entity.
 func (s *Store) GetLabel(ctx context.Context, entityID, id string) (Label, error) {
@@ -78,21 +79,39 @@ func (s *Store) CreateLabel(ctx context.Context, entityID, name string) (Label, 
 	return pgx.CollectOneRow(rows, pgx.RowToStructByName[Label])
 }
 
-// UpdateLabel renames a label scoped to the entity.
+// UpdateLabel renames a label. Returns ErrSystemLabel for system-scoped labels.
 func (s *Store) UpdateLabel(ctx context.Context, entityID, id, name string) (Label, error) {
 	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
-		UPDATE labels SET name = $3 WHERE entity_id = $1 AND id = $2
+		UPDATE labels SET name = $3
+		WHERE entity_id = $1 AND id = $2 AND scope IS DISTINCT FROM 'system'
 		RETURNING %s
 	`, labelCols), entityID, id, name)
 	if err != nil {
 		return Label{}, err
 	}
-	return pgx.CollectOneRow(rows, pgx.RowToStructByName[Label])
+	label, err := pgx.CollectOneRow(rows, pgx.RowToStructByName[Label])
+	if errors.Is(err, pgx.ErrNoRows) {
+		if exists, _ := s.labelExists(ctx, entityID, id); exists {
+			return Label{}, ErrSystemLabel
+		}
+	}
+	return label, err
 }
 
-// DeleteLabel removes a label scoped to the entity. Returns ErrLabelInUse if
-// any entries still reference the label.
+// DeleteLabel removes a label. Returns ErrSystemLabel for system-scoped labels,
+// ErrLabelInUse if any entries still reference it.
 func (s *Store) DeleteLabel(ctx context.Context, entityID, id string) error {
+	label, err := s.GetLabel(ctx, entityID, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return pgx.ErrNoRows
+	}
+	if err != nil {
+		return err
+	}
+	if label.Scope != nil && *label.Scope == "system" {
+		return ErrSystemLabel
+	}
+
 	var count int
 	if err := s.pool.QueryRow(ctx, `
 		SELECT COUNT(*) FROM entries WHERE entity_id = $1 AND label_id = $2::uuid
@@ -115,16 +134,38 @@ func (s *Store) DeleteLabel(ctx context.Context, entityID, id string) error {
 }
 
 // DeleteLabelIfOrphaned deletes the label only when no entries reference it.
-// Safe to call speculatively; ignores the case where the label no longer exists.
+// Skips system-scoped labels. Safe to call speculatively.
 func (s *Store) DeleteLabelIfOrphaned(ctx context.Context, entityID, labelID string) error {
 	_, err := s.pool.Exec(ctx, `
 		DELETE FROM labels
 		WHERE entity_id = $1 AND id = $2::uuid
-		AND NOT EXISTS (
+		  AND scope IS NULL
+		  AND NOT EXISTS (
 			SELECT 1 FROM entries WHERE entity_id = $1 AND label_id = $2::uuid
-		)
+		  )
 	`, entityID, labelID)
 	return err
+}
+
+// EnsureSystemLabels creates the Income and Spend system labels for the entity
+// if they do not already exist. Safe to call on every startup.
+func (s *Store) EnsureSystemLabels(ctx context.Context, entityID string) error {
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO labels (id, entity_id, name, scope, created_at)
+		VALUES
+			(gen_random_uuid(), $1::uuid, 'Income', 'system', NOW()),
+			(gen_random_uuid(), $1::uuid, 'Spend',  'system', NOW())
+		ON CONFLICT (entity_id, name) DO UPDATE SET scope = 'system'
+	`, entityID)
+	return err
+}
+
+func (s *Store) labelExists(ctx context.Context, entityID, id string) (bool, error) {
+	var exists bool
+	err := s.pool.QueryRow(ctx, `
+		SELECT EXISTS(SELECT 1 FROM labels WHERE entity_id = $1 AND id = $2)
+	`, entityID, id).Scan(&exists)
+	return exists, err
 }
 
 // LabelWithCount extends Label with the entry count for the entity.
@@ -137,12 +178,12 @@ type LabelWithCount struct {
 // with the count of entries that reference each label.
 func (s *Store) ListLabelsWithEntryCount(ctx context.Context, entityID string) ([]LabelWithCount, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT l.id::text, l.entity_id::text, l.name, l.created_at,
+		SELECT l.id::text, l.entity_id::text, l.name, l.scope, l.created_at,
 		       COUNT(e.id)::int AS entry_count
 		FROM labels l
 		LEFT JOIN entries e ON e.label_id = l.id AND e.entity_id = l.entity_id
-		WHERE l.entity_id = $1
-		GROUP BY l.id, l.entity_id, l.name, l.created_at
+		WHERE l.entity_id = $1 AND l.scope IS DISTINCT FROM 'system'
+		GROUP BY l.id, l.entity_id, l.name, l.scope, l.created_at
 		ORDER BY l.created_at DESC, l.id DESC
 	`, entityID)
 	if err != nil {

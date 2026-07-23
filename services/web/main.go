@@ -227,16 +227,6 @@ func runMigrate(_ *cobra.Command, _ []string) error {
 
 	ctx := context.Background()
 
-	// Seed Labels
-	_, err = pool.Exec(ctx, `
-		INSERT INTO labels (id, name)
-		VALUES (gen_random_uuid(), 'Income'), (gen_random_uuid(), 'Spend')
-		ON CONFLICT (name) DO NOTHING
-	`)
-	if err != nil {
-		return fmt.Errorf("seed labels: %w", err)
-	}
-
 	// Seed roles.
 	_, err = pool.Exec(ctx, `
 		INSERT INTO roles (id, name)
@@ -336,6 +326,10 @@ func syncAdminUser(ctx context.Context, authClient *authclient.Client, s *store.
 
 	if err := s.EnsureEntityUser(ctx, userID, entityID, "entity_admin"); err != nil {
 		return fmt.Errorf("ensure entity membership: %w", err)
+	}
+
+	if err := s.EnsureSystemLabels(ctx, entityID); err != nil {
+		return fmt.Errorf("ensure system labels: %w", err)
 	}
 
 	log.Printf("sync: admin user ready (id=%s, entity_id=%s)", userID, entityID)

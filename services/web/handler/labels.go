@@ -25,15 +25,17 @@ func NewLabelsHandler(s *store.Store) *LabelsHandler {
 
 // labelView is the API representation of a label.
 type labelView struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	CreatedAt string `json:"created_at"`
+	ID        string  `json:"id"`
+	Name      string  `json:"name"`
+	Scope     *string `json:"scope"`
+	CreatedAt string  `json:"created_at"`
 }
 
 func toLabelView(l store.Label) labelView {
 	return labelView{
 		ID:        l.ID,
 		Name:      l.Name,
+		Scope:     l.Scope,
 		CreatedAt: l.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
 }
@@ -124,6 +126,9 @@ func (h *LabelsHandler) UpdateLabel(c echo.Context) error {
 	if errors.Is(err, pgx.ErrNoRows) {
 		return echo.NewHTTPError(http.StatusNotFound, "not found")
 	}
+	if errors.Is(err, store.ErrSystemLabel) {
+		return echo.NewHTTPError(http.StatusForbidden, "system label cannot be modified")
+	}
 	if err != nil {
 		if strings.Contains(err.Error(), "unique") || strings.Contains(err.Error(), "duplicate") {
 			return echo.NewHTTPError(http.StatusConflict, "label name already exists")
@@ -141,6 +146,9 @@ func (h *LabelsHandler) DeleteLabel(c echo.Context) error {
 	err := h.s.DeleteLabel(ctx, entityID, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return echo.NewHTTPError(http.StatusNotFound, "not found")
+	}
+	if errors.Is(err, store.ErrSystemLabel) {
+		return echo.NewHTTPError(http.StatusForbidden, "system label cannot be modified")
 	}
 	if errors.Is(err, store.ErrLabelInUse) {
 		return echo.NewHTTPError(http.StatusConflict, "label is in use by entries")

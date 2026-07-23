@@ -178,6 +178,7 @@ CREATE TABLE labels (
   id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   entity_id  UUID        NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
   name       TEXT        NOT NULL,
+  scope      TEXT        CHECK (scope IN ('system')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (entity_id, name)
 );
