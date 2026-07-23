@@ -2,7 +2,7 @@
 
 *Personal Financial Velocity*
 
-Veloci is a local-first personal finance app built around a single idea: every financial commitment and income source expressed as a daily rate. Not a monthly budget snapshot — a continuous rate, like a speedometer for money.
+Veloci is a local-first personal finance app built around a single idea: every income source and spend expressed as a daily rate. Not a monthly budget snapshot — a continuous rate, like a speedometer for money.
 
 > A $20/month Netflix subscription costs $0.66/day. You work 1.3 hours a month to pay for it. Neither fact is hidden — they just aren't shown. Veloci shows them.
 
@@ -10,11 +10,11 @@ Veloci is a local-first personal finance app built around a single idea: every f
 
 ## How it works
 
-Every income source and expense lives as a **/day rate**. Monthly, quarterly, and yearly figures are just that rate scaled — the model never changes units. Your true daily position is income rate minus all committed expense rates, continuously.
+Every income source and spend lives as a **/day rate**. Monthly, quarterly, and yearly figures are just that rate scaled — the model never changes units. Your true daily position is income rate minus all spend rates, continuously.
 
 Two lanes run in parallel:
 
-- **Projection** — the expected rate from known commitments and estimated income
+- **Projection** — the expected rate from known spend and estimated income
 - **Actual** — the real rate from imported transaction data
 
 **Drift** is the delta between them — the primary diagnostic signal.
@@ -38,22 +38,22 @@ Most people have fewer than 50 true recurring items. After two or three import c
 ## Views
 
 **Pulse** — where you are right now  
-Rate snapshot dashboard. Income at the top, all expenses cascading below, Margin at the bottom. Every figure leads with the /day rate.
+Rate snapshot dashboard. Income at the top, all spend cascading below, Margin at the bottom. Every figure leads with the /day rate.
 
 **Stack** — why your Margin is what it is  
-Waterfall cascade showing how income is consumed by each expense in sequence. Thin bars at the bottom are the gut-punch insight moment.
+Waterfall cascade showing how income is consumed by each spend entry in sequence. Thin bars at the bottom are the gut-punch insight moment.
 
 **Horizon** — where you are going  
 Line graph of Projection vs. Actual over time, with Drift shaded between them. Supports passive account overlays (debt payoff curves, savings projections) without affecting the core budget picture.
 
 ---
 
-## Expense types
+## Spend types
 
 | Type | Description |
 |------|-------------|
-| **Standing** | Recurring commitment — rent, subscriptions, loan minimums. Rate is exact. Treated as a savings goal for payoff day. |
-| **Variable** | Recurring commitment with fluctuating amounts — groceries, utilities. Rate by average or maximum. Treated as a savings goal for payoff day. |
+| **Standing** | Recurring spend — rent, subscriptions, loan minimums. Rate is exact. Treated as a savings goal for payoff day. |
+| **Variable** | Recurring spend with fluctuating amounts — groceries, utilities. Rate by average or maximum. Treated as a savings goal for payoff day. |
 | **Hit** | Unexpected negative event. Smoothed as debt to be paid off short-term (30 days default). |
 | **Boost** | Unexpected positive event — refund, gift, bonus. Smoothed forward short-term (30 days). |
 
@@ -206,7 +206,7 @@ Veloci is currently in active development toward **v1**.
 
 Checking and savings accounts as the core account types. The full /day rate model, import/detect/review cycle, and Pulse/Stack/Horizon views. All accounts in v1 are Active. A HYSA can be added as an Active account — interest payments appear as Boost events, but there is no dedicated interest modeling yet.
 
-### v1.1 — Interest on commitments
+### v1.1 — Interest on debt
 
 Debt accounts: credit cards, personal loans, auto loans, and mortgages. Adds three calculations not available on standard accounts:
 
@@ -218,7 +218,7 @@ Debt accounts: credit cards, personal loans, auto loans, and mortgages. Adds thr
 
 ### v1.2 — Interest on accrual
 
-Dedicated modeling for high-yield savings and other interest-bearing accounts. Yield expressed as a /day rate directly comparable to expenses and debt costs.
+Dedicated modeling for high-yield savings and other interest-bearing accounts. Yield expressed as a /day rate directly comparable to spend and debt costs.
 
 ### v1.3 — Market-based accounts
 

@@ -11,7 +11,7 @@ Version 0.1 — June 2026
 
 # 1. Product Vision
 
-Veloci is a local-first personal finance application built around the concept of financial velocity — the rate at which money moves into and out of your life. Rather than treating finances as static snapshots of account balances, Veloci expresses every financial commitment and income source as a daily rate, making the true cost of subscriptions, debt, and obligations immediately comparable and viscerally understandable.
+Veloci is a local-first personal finance application built around the concept of financial velocity — the rate at which money moves into and out of your life. Rather than treating finances as static snapshots of account balances, Veloci expresses every income source and spend as a daily rate, making the true cost of subscriptions, debt, and obligations immediately comparable and viscerally understandable.
 
 We live in a subscription economy layered on top of persistent debt. Car manufacturers charge monthly fees to unlock features already installed in your vehicle. Streaming services multiply quietly. Minimum payments obscure the true cost of borrowing. Veloci exists to make these dynamics visible — not by lecturing users about their choices, but by showing the numbers in a form that connects to how people actually experience money.
 
@@ -39,17 +39,17 @@ We live in a subscription economy layered on top of persistent debt. Car manufac
 
 # 2. Financial Model
 
-The financial model is the foundation of Veloci. All calculations derive from a single atomic unit: the daily rate (/day). Every income source, expense, debt payment, and one-time event is expressed as a rate per day. Display layers scale this unit to monthly, quarterly, or yearly figures, but the underlying model never changes units.
+The financial model is the foundation of Veloci. All calculations derive from a single atomic unit: the daily rate (/day). Every income source, spend entry, debt payment, and one-time event is expressed as a rate per day. Display layers scale this unit to monthly, quarterly, or yearly figures, but the underlying model never changes units.
 
 ## 2.1 The Daily Rate as an Atomic Unit
 
 Storing everything as a /day rate gives the model three properties that make it powerful:
 
-- Universal comparability — a weekly expense and an annual expense become directly comparable
+- Universal comparability — a weekly spend and an annual spend become directly comparable
 
 - Simple scaling — monthly = rate × 30.44, quarterly = rate × 91.31, yearly = rate × 365
 
-- Honest arithmetic — your true position is income rate minus all committed expense rates, continuously
+- Honest arithmetic — your true position is income rate minus all spend rates, continuously
 
 ## 2.2 Two Lanes: Projection and Actual
 
@@ -57,33 +57,40 @@ Every financial event exists in two lanes simultaneously. The gap between them i
 
 | **Lane** | **Description** |
 | --- | --- |
-| **Projection** | The expected rate derived from known commitments and estimated income. This is your budget, built automatically from detected patterns rather than manual entry. |
+| **Projection** | The expected rate derived from known spend and estimated income. This is your budget, built automatically from detected patterns rather than manual entry. |
 | **Actual** | The real rate derived from imported transaction data. This is what happened. |
-| **Drift** | The delta between Projection and Actual, expressed as a /day rate. Positive drift means you are ahead of projection. Negative drift means commitments are outpacing expectations. |
+| **Drift** | The delta between Projection and Actual, expressed as a /day rate. Positive drift means you are ahead of projection. Negative drift means spend is outpacing expectations. |
 
 ## 2.3 Entry Types
 
-Every entry has a signal type. The type tells the engine how to detect recurrence and compute a rate — it applies equally to income and expense entries.
+Every entry has a signal type. The type tells the engine how to detect recurrence and set `period_days` — it does not change the rate formula. All entry types use the same rolling window rate calculation; the type classification affects only pattern detection and how `period_days` is inferred.
 
 | **Type** | **Description** |
 | --- | --- |
-| **Standing** | Regular cadence, consistent amount. Rent, subscriptions, loan payments, salary. The engine detects the interval and amount; rate = amount ÷ period_days. |
-| **Variable** | Regular cadence, inconsistent amount. Groceries, utilities, fuel. The engine detects the interval; rate is computed as the rolling average or maximum over the window, per the entry's setting. |
+| **Standing** | Regular cadence, consistent amount. Rent, subscriptions, loan payments, salary. The engine detects the interval and sets `period_days` from the recurrence pattern. |
+| **Variable** | Regular cadence, inconsistent amount. Groceries, utilities, fuel. The engine detects the interval; `period_days` is set from the recurrence pattern. `variable_method` controls whether the rate window uses average or maximum. |
 | **Irregular** | No regular cadence — timing confidence falls below the thresholds required for Standing or Variable. The engine groups matching transactions by merchant and sets `period_days` from the mean observed interval if more than one transaction is found; defaults to 30 with only one data point. Car repairs, gas stations, freelance income, annual insurance. |
 
-## 2.4 Smoothing
+## 2.4 Rate Calculation
 
-Smoothing converts raw transaction amounts into a stable /day rate using a window called `period_days`. Without smoothing, a $500 car repair would appear as $500/day on the day it posts and $0 afterward. With a 30-day window, it spreads to $16.67/day — which is the honest answer to "what does maintaining a car actually cost per day."
+All entries use a unified rolling window formula:
 
-The rate the user sees is always the smoothed rate: rolling transaction total ÷ period_days.
+```text
+actual_rate_per_day(t) = Σ amount_i for transactions in [t − W, t] / W
+```
+
+`W` is the rolling window width in days. For named entries `W = period_days`; for system entries `W` is an entity-level configuration value. Without this formula, a $500 car repair would appear as $500/day on the day it posts and $0 afterward. With W=30, it spreads to $16.67/day across the window — the honest answer to "what does maintaining a car actually cost per day."
+
+This formula is uniform across all entry types. Entry types (Standing, Variable, Irregular) determine how `period_days` is detected and what default `W` applies — they do not change the formula itself.
+
+One-time events spike on the day they hit and amortize naturally over the window as they age out. Recurring transactions produce a stable rate once the window captures a representative sample. Cancellations cause the rate to decay naturally to zero as old transactions exit the window without replacements arriving.
 
 `period_days` is set by the engine from detected recurrence and can be overridden per entry:
 
-- **Standing and Variable entries**: `period_days` is detected automatically from the transaction pattern — 30 for a monthly subscription, 7 for a weekly grocery run, 91 for a quarterly payment. The engine updates this as new data arrives.
+- **Standing and Variable entries**: detected automatically from the transaction pattern — 30 for a monthly subscription, 7 for a weekly grocery run, 91 for a quarterly payment.
+- **Irregular entries**: set from the mean observed interval when 2 or more transactions are available; defaults to 30 when only one exists. Users can override — for example, setting 365 for a known annual spend like insurance or registration.
 
-- **Irregular entries**: `period_days` is set from the mean observed interval when 2 or more transactions are available; defaults to 30 when only one exists. Users can override — for example, setting 365 for a known annual expense like insurance or registration.
-
-> Smoothing is a per-entry setting, not a category. The rate displayed is always the smoothed figure; users can inspect and override `period_days` in the entry editor.
+> `period_days` is a per-entry setting. Users can inspect and override it in the entry editor.
 
 ## 2.5 Household and Multi-Account Model
 
@@ -125,25 +132,26 @@ The core data model is intentionally minimal. All insight, reporting, and projec
 
 ## 3.2 Entry
 
-An Entry is the atomic unit of the financial model. Every income source and expense is an Entry. Multiple entries may share one label — a label names a financial signal across its entire lifecycle, while each entry represents one continuous rate instance of that signal.
+An Entry is the atomic unit of the financial model. Every income source and spend entry is an Entry. Multiple entries may share one label — a label names a financial signal across its entire lifecycle, while each entry represents one continuous rate instance of that signal.
 
 | **Field** | **Description** |
 | --- | --- |
 | **id** | Unique identifier |
 | **entity_id** | Owning entity (household or individual) |
-| **label_id** | Reference to the global label naming this signal — nullable for user-created entries without auto-matching |
-| **direction** | `income` · `expense` |
+| **label_id** | Reference to the label naming this signal — every entry must have a label |
+| **direction** | `income` · `spend` |
 | **entry_type** | `standing` · `variable` · `irregular` |
-| **period_days** | Amortization window in days. Default 30. Drives rate and smoothing calculations |
+| **scope** | NULL = user-created or engine-detected; `system` = built-in (Income, Spend) |
+| **period_days** | Rolling window width W in days. Default 30. Drives rate calculation and projection timing |
 | **variable_method** | `avg` · `max` — applicable to Variable entries only |
 | **projected_rate_per_day** | Expected /day rate — set by the engine from pattern detection or by the user |
 | **conditions** | JSONB matching rules for transaction auto-assignment — nullable for manual entries |
 | **priority** | Lower value = matched first when multiple entries compete for a transaction |
-| **status** | `pending_review` · `active` · `inactive` |
+| **status** | `pending` · `live` · `ended` |
 | **source** | `user` · `engine` — indicates whether this entry was created manually or detected |
 | **recurrence_anchor** | Expected day-of-month or cron-style anchor for recurring entries |
 | **next_due_date** | Engine-computed date of the next expected transaction |
-| **project_tentatively** | When TRUE, Stage 7 includes this pending_review entry in projections |
+| **project_tentatively** | When TRUE, Stage 7 includes this pending entry in projections |
 | **pending_amount_cents** | Forward-versioned amount — applied when `computed_as_of` reaches `pending_effective_date` |
 | **pending_effective_date** | Date on which `pending_amount_cents` becomes the active rate |
 | **start_date** | First date this entry instance was active — set to the earliest matching transaction date |
@@ -151,7 +159,7 @@ An Entry is the atomic unit of the financial model. Every income source and expe
 
 ## 3.3 Transaction
 
-Transactions are immutable once inserted. Financial columns (date, amount_cents, imported_payee) never change. Positive `amount_cents` = inflow (income, credit); negative = outflow (expense, debit).
+Transactions are immutable once inserted. Financial columns (date, amount_cents, imported_payee) never change. Positive `amount_cents` = inflow (income, credit); negative = outflow (spend, debit).
 
 | **Field** | **Description** |
 | --- | --- |
@@ -181,7 +189,7 @@ Some values are computed by the engine and stored in `snapshots` or `projections
 
 | **Value** | **Field** | **Description** |
 | --- | --- | --- |
-| **Committed rate** | `commitment_rate_per_day` | Sum of all active expense projected rates at a given date |
+| **Committed rate** | `spend_rate_per_day` | Sum of all active spend projected rates at a given date |
 | **Margin** | `margin_rate_per_day` | Income rate minus committed rate — the /day surplus or deficit |
 | **Pinch point** | `is_pinch_point` | TRUE on any projected date where margin drops below zero |
 
@@ -219,7 +227,7 @@ Unmatched transactions are clustered by normalized merchant name and scored acro
 - **Timing** — how regular the intervals between occurrences are
 - **Amount** — how consistent the transaction amounts are
 
-The scores determine entry type: clusters with tight timing and tight amounts are classified as Standing; tight timing with variable amounts as Variable; everything else as Irregular. Each cluster that clears a minimum confidence threshold produces a `pending_review` entry in the `entries` table.
+The scores determine entry type: clusters with tight timing and tight amounts are classified as Standing; tight timing with variable amounts as Variable; everything else as Irregular. Each cluster that clears a minimum confidence threshold produces a `pending` entry in the `entries` table.
 
 ## 4.5 User Review
 
@@ -243,9 +251,9 @@ The Pulse view is the primary budget dashboard. It reads the latest snapshot rat
 
 - Income entries at the top with rate and scale translation
 
-- Expense entries below, each showing name, label, /day rate, and percentage of Income
+- Spend entries below, each showing name, label, /day rate, and percentage of Income
 
-- Entries grouped by label with group subtotals; classifications apply additional grouping
+- Entries grouped by label with group subtotals
 
 - Margin at the bottom with /day rate and discretionary percentage
 
@@ -255,11 +263,11 @@ The Pulse view is the primary budget dashboard. It reads the latest snapshot rat
 
 Answers: Why is my Margin what it is?
 
-The Stack view is a waterfall cascade showing how Income rate is consumed by each Expense entry in sequence, arriving at Margin. Each row removes a proportional slice from the remaining bar until only Margin remains. The visual makes the weight of each commitment immediately apparent without requiring the user to do any arithmetic.
+The Stack view is a waterfall cascade showing how Income rate is consumed by each Spend entry in sequence, arriving at Margin. Each row removes a proportional slice from the remaining bar until only Margin remains. The visual makes the weight of each spend entry immediately apparent without requiring the user to do any arithmetic.
 
 - Income bar shown at full width as the starting point
 
-- Each Expense entry removes its proportional slice from the right
+- Each Spend entry removes its proportional slice from the right
 
 - Label groupings collapse multiple entries into a single band with expand option
 
@@ -290,8 +298,8 @@ Veloci uses a consistent naming system across all surfaces. Terms are plain noun
 | **Term** | **Definition** |
 | --- | --- |
 | **Income** | The rate at which money enters your budget from all Active sources combined |
-| **Expense** | The rate at which money leaves your budget across all committed Active outflows |
-| **Margin** | Your surplus rate — Income minus Expense. The /day capacity you have for new commitments or wealth generation |
+| **Spend** | The rate at which money leaves your budget across all active outflows |
+| **Margin** | Your surplus rate — Income minus Spend. The /day capacity you have for new spending or wealth generation |
 | **Drift** | The delta between your Projection and your Actual rate. The primary diagnostic signal in Veloci |
 | **/day** | The universal rate unit. Never named — always displayed as a suffix. All figures derive from this unit |
 
@@ -299,29 +307,29 @@ Veloci uses a consistent naming system across all surfaces. Terms are plain noun
 
 | **Term** | **Definition** |
 | --- | --- |
-| **Standing** | Regular cadence, consistent amount. Rate = amount ÷ period_days |
-| **Variable** | Regular cadence, inconsistent amount. Rate = rolling window total ÷ period_days, using average or maximum |
-| **Irregular** | No detectable cadence, inconsistent amount. Grouped by merchant; rate = most recent amount ÷ period_days |
+| **Standing** | Regular cadence, consistent amount. Engine detects interval; sets `period_days` from recurrence |
+| **Variable** | Regular cadence, inconsistent amount. Engine detects interval; `variable_method` controls avg vs max within the window |
+| **Irregular** | No detectable cadence. Engine sets `period_days` from mean observed interval; defaults to 30 |
 
 ## 6.3 Account Status
 
 | **Term** | **Definition** |
 | --- | --- |
-| **Active** | This account participates in the budget. Its flows contribute to Income, Expense, and Margin calculations |
+| **Active** | This account participates in the budget. Its flows contribute to Income, Spend, and Margin calculations |
 | **Passive** | This account is tracked and projected but does not affect Margin. Used for debt accounts, investment accounts, or savings viewed as separate from the operating budget |
 
 ## 6.4 Budget Lanes
 
 | **Term** | **Definition** |
 | --- | --- |
-| **Projection** | The expected lane — what your budget anticipates based on known commitments and estimated income |
+| **Projection** | The expected lane — what your budget anticipates based on known spend and estimated income |
 | **Actual** | The real lane — what transaction data shows actually happened |
 
 ## 6.5 Controls and Settings
 
 | **Term** | **Definition** |
 | --- | --- |
-| **Smoothing** | The amortization window (`period_days`) on an entry. Engine-detected for Standing and Variable; user-configured for Irregular. The rate displayed is always the smoothed figure |
+| **Smoothing** | The rolling window (`period_days`) on an entry. Engine-detected for Standing and Variable; user-configured for Irregular. The actual rate is always the rolling window total ÷ `period_days` |
 
 ## 6.6 Views
 
@@ -339,7 +347,7 @@ Every financial figure in Veloci leads with the /day rate. Monthly, quarterly, a
 
 ## 7.2 Show Impact at the Moment of Approval
 
-When a user approves a new `pending_review` entry from the Ledger, that is the highest-value insight moment in the product. The Margin change should be shown immediately and in context — not as a notification, but as a live update to the Pulse view. The user should feel the app respond to their confirmation with genuine, personalized insight.
+When a user approves a new `pending` entry from the Ledger, that is the highest-value insight moment in the product. The Margin change should be shown immediately and in context — not as a notification, but as a live update to the Pulse view. The user should feel the app respond to their confirmation with genuine, personalized insight.
 
 ## 7.3 Never Editorialize
 
@@ -444,12 +452,14 @@ Four tables implement role-based access control:
 
 ### labels
 
-Global name registry. No `entity_id` — labels are shared across all entities. Renaming a label requires no recalculation.
+Entity-scoped name registry. Labels are unique per entity — renaming a label requires no recalculation because the engine operates on label IDs, never names.
 
 | Column | Type | Notes |
 | --- | --- | --- |
 | id | UUID | PK |
-| name | TEXT | UNIQUE — one canonical name per signal |
+| entity_id | UUID | FK → entities |
+| name | TEXT | UNIQUE per entity |
+| scope | TEXT | NULL = user-created; `system` = built-in (Income, Spend) |
 | created_at | TIMESTAMPTZ | |
 
 ## 9.4 Accounts and Institutions
@@ -525,25 +535,39 @@ Source of truth for all financial calculations. Financial columns are immutable 
 | settlement_status | TEXT | `flux` · `settled` — set at insert, never changed |
 | imported_at | TIMESTAMPTZ | Wall-clock insert time for effective settlement derivation |
 
-## 9.6 Financial Model
+## 9.6 Entity Configuration
+
+### entity_config
+
+One row per entity. Stores entity-level tunable parameters. Created with defaults on first entity setup.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| entity_id | UUID | PK, FK → entities |
+| system_window_days | INTEGER | Rolling window W for system entries (Income, Spend). Default 90 |
+| created_at | TIMESTAMPTZ | |
+| updated_at | TIMESTAMPTZ | |
+
+## 9.7 Financial Model
 
 ### entries
 
-One row per continuous rate signal instance. Absorbs the prior `rules` and `rule_epochs` tables into a single unified structure.
+One row per continuous rate signal instance.
 
 | Column | Type | Notes |
 | --- | --- | --- |
 | id | UUID | PK |
 | entity_id | UUID | FK → entities |
-| label_id | UUID | FK → labels — nullable |
-| direction | TEXT | `income` · `expense` |
+| label_id | UUID | FK → labels — every entry must have a label |
+| direction | TEXT | `income` · `spend` |
 | entry_type | TEXT | `standing` · `variable` · `irregular` |
-| period_days | INTEGER | Amortization window. Default 30 |
+| scope | TEXT | NULL = user or engine; `system` = built-in (Income, Spend) |
+| period_days | INTEGER | Rolling window width W in days. Default 30 |
 | variable_method | TEXT | `avg` · `max` — variable entries only |
 | projected_rate_per_day | NUMERIC(12,4) | Engine or user-set expected /day rate |
 | conditions | JSONB | Auto-match rules — nullable for manual entries |
 | priority | INTEGER | Lower = matched first. Default 100 |
-| status | TEXT | `pending_review` · `active` · `inactive` |
+| status | TEXT | `pending` · `live` · `ended` |
 | source | TEXT | `user` · `engine` |
 | recurrence_anchor | TEXT | Expected recurrence day/pattern |
 | next_due_date | DATE | Engine-computed next expected transaction date |
@@ -553,18 +577,19 @@ One row per continuous rate signal instance. Absorbs the prior `rules` and `rule
 | start_date | DATE | First transaction date for this instance |
 | end_date | DATE | Closure date — NULL = currently active |
 
-### classifications
+### System Entries
 
-User-defined post-stage rules that apply labels to groups of entries. Do not affect rate calculations — display and grouping only. Conditions reference label UUIDs, enabling aggregate labels built from leaf labels without a separate membership table. The API enforces cycle detection at write time.
+Two entries are created automatically per entity alongside the system labels: **Income** and **Spend**. These have `scope = 'system'` and cannot be edited or deleted by users.
 
-| Column | Type | Notes |
+| Property | Income entry | Spend entry |
 | --- | --- | --- |
-| id | UUID | PK |
-| entity_id | UUID | FK → entities |
-| label_id | UUID | FK → labels — label this classification assigns |
-| conditions | JSONB | Matching conditions referencing entry attributes and label UUIDs |
-| priority | INTEGER | Evaluation order. Default 100 |
-| status | TEXT | `active` · `inactive` |
+| label | Income (system label) | Spend (system label) |
+| direction | `income` | `spend` |
+| conditions | `{"entry_direction": "income"}` | `{"entry_direction": "spend"}` |
+| period_days | — (uses `system_window_days` from `entity_config`) | — |
+| status | `live` | `live` |
+
+System entries match all transactions of their direction. Their rate is the rolling sum of all matched transaction amounts over `system_window_days`. This gives the total income and spend rate for the entity at any point in time, including transactions not matched to any named entry. They are the root nodes of the label DAG — every income or spend transaction flows through them.
 
 ### transaction_entry_assignments
 
@@ -574,10 +599,9 @@ Many-to-many join between transactions and entries. A transaction may match mult
 
 ### snapshots
 
-Rebuildable engine output. One row per calendar day per node. Safe to truncate and recompute at any time.
+Rebuildable engine output. One row per label per calendar day. Safe to truncate and recompute at any time.
 
-`node_type = 'entry'` → Stage 3 entry-level rate signal
-`node_type = 'classification'` → Stage 4 classification-level aggregate
+Entries are signals that come and go over the timeline — each entry describes a rate with a start and end. Snapshots are daily samples of those signals, grouped at the label level. The label is the pivot point: `node_id` references a label, and from there the chain is Label → Entry/Entries → Transactions. This implicit DAG means the same label can aggregate across multiple entry instances (e.g. a subscription that changed price) without any structural change to the snapshot.
 
 `snapshot_date` is the calendar day this row represents. `computed_as_of` is `MAX(transactions.date)` from the import run that wrote this row — separate from `snapshot_date` so an import covering a historical window correctly records its horizon.
 
@@ -585,8 +609,8 @@ OHLC candlestick high/low are not stored — the API computes `MAX/MIN(actual_ra
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| node_id | UUID | FK → entries.id or labels.id |
-| node_type | TEXT | `entry` · `classification` |
+| node_id | UUID | FK → labels.id |
+| node_type | TEXT | `label` |
 | snapshot_date | DATE | Calendar day this row represents |
 | computed_as_of | DATE | MAX transaction date from the import run |
 | actual_rate_per_day | NUMERIC(12,4) | Observed rate for this day |
@@ -609,8 +633,8 @@ Forward-looking signal superposition timeline produced by Stage 7. One row per (
 | job_id | UUID | FK → processing_jobs |
 | projected_date | DATE | Forward date |
 | income_rate_per_day | NUMERIC(12,4) | |
-| commitment_rate_per_day | NUMERIC(12,4) | |
-| margin_rate_per_day | NUMERIC(12,4) | Income minus commitment |
+| spend_rate_per_day | NUMERIC(12,4) | |
+| margin_rate_per_day | NUMERIC(12,4) | Income minus spend |
 | projected_balance_cents | BIGINT | Running integral of margin — for bank comparison only |
 | is_pinch_point | BOOLEAN | TRUE when margin < 0 at this date |
 
@@ -623,7 +647,7 @@ The processing engine is a Rust service (`services/engine`) using `sqlx` for asy
 | **Job type** | **Stages** | **Trigger** |
 | --- | --- | --- |
 | `import.process` | 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 | CSV upload |
-| `entries.reprocess` | 1 → 2 → 3 → 4 → 5 → 6 → 7 | Entry edited or approved (from `pending_review` status) |
+| `entries.reprocess` | 1 → 2 → 3 → 4 → 5 → 6 → 7 | Entry edited or approved (from `pending` status) |
 | `account.analyze` | 3 → 4 → 5 → 6 → 7 | Account balance updated |
 | `balance.project` | 7 | Balance-only refresh |
 
@@ -658,18 +682,18 @@ Reads the institution mapping to resolve column positions and sign convention. P
 **Input:** Entity ID, `transactions`
 **Output:** Rows in `transaction_entry_assignments`; `Stage1Output.unmatched_tx_ids`
 
-Loads all active entries (`status = 'active'` AND `end_date IS NULL`) that have conditions. Evaluates each entry's JSONB conditions against every transaction using merchant normalization, amount bands, and timing rules. Entries are evaluated in ascending `priority` order — lower priority value matches first. Writes matched pairs to `transaction_entry_assignments`. Updates `next_due_date` on entries where new matches advance the expected recurrence date. Returns the IDs of transactions that matched no entry — these become Stage 2's input.
+Loads all active entries (`status = 'live'` AND `end_date IS NULL`) that have conditions. Evaluates each entry's JSONB conditions against every transaction using merchant normalization, amount bands, and timing rules. Entries are evaluated in ascending `priority` order — lower priority value matches first. Writes matched pairs to `transaction_entry_assignments`. Updates `next_due_date` on entries where new matches advance the expected recurrence date. Returns the IDs of transactions that matched no entry — these become Stage 2's input.
 
 ---
 
 ### Stage 2 — Pattern Detection
 
 **Input:** Unmatched transaction IDs from Stage 1
-**Output:** New rows in `entries` (status `pending_review`) with review metadata
+**Output:** New rows in `entries` (status `pending`) with review metadata
 
 Clusters unmatched transactions by merchant name similarity, amount consistency, and timing regularity. Scores each cluster across three components: merchant confidence (brand extraction and normalization quality), timing confidence (regularity of intervals), and amount confidence (variance in transaction amounts). The composite confidence score determines whether a cluster is surfaced as `new` or silently discarded below a threshold.
 
-For each accepted cluster: upserts a label (by name, global UNIQUE), creates an entry with `source = 'engine'`, `alert_type = 'new'`, and `start_date` set to the earliest transaction in the cluster. Review metadata (confidence scores, sample merchants, matched transaction count) is written directly to the `entries` row — there is no separate review table. Sets `next_due_date` and `project_tentatively = TRUE` when the recurrence pattern is clear enough to project before user approval.
+For each accepted cluster: upserts a label (by name, unique per entity), creates an entry with `source = 'engine'`, `alert_type = 'new'`, and `start_date` set to the earliest transaction in the cluster. Review metadata (confidence scores, sample merchants, matched transaction count) is written directly to the `entries` row — there is no separate review table. Sets `next_due_date` and `project_tentatively = TRUE` when the recurrence pattern is clear enough to project before user approval.
 
 Entry type assignment: `standing` for clusters with regular timing and consistent amounts (≥3 observations); `variable` for clusters with regular timing and variable amounts; `irregular` as the fallthrough when timing confidence is below the gates. For irregular clusters, `period_days` is set to the mean observed interval when 2+ transactions are present, or 30 for a single-transaction cluster.
 
@@ -682,11 +706,13 @@ Entry type assignment: `standing` for clusters with regular timing and consisten
 
 Pure calculation — no writes. Runs once per day in the flux window.
 
-Loads all active entries (`status = 'active'` AND `end_date IS NULL`). For each entry, collects all assigned transactions where `t.date >= e.start_date`. Computes `actual_rate_per_day` using the entry's `period_days` window:
+Loads all live entries (`status = 'live'` AND `end_date IS NULL`). For each entry, collects all assigned transactions where `t.date >= e.start_date`. Computes `actual_rate_per_day` using a unified rolling window formula:
 
-- **Standing**: `amount / period_days` for the most recent matching transaction
-- **Variable**: rolling window total over `period_days` divided by `period_days`, using `avg` or `max` per entry's `variable_method`
-- **Irregular**: amortizes the most recent transaction amount over `period_days`
+```text
+actual_rate_per_day(t) = Σ |amount_i| for t_i in [t − W, t] / W
+```
+
+`W` is `period_days` for named entries. For `scope = 'system'` entries, `W` is the entity's configured system window (stored in `entity_config`). The formula is identical across all entry types — entry type affects only how `period_days` was detected, not the rate calculation itself.
 
 Loads the prior snapshot for each entry and uses it to set `projected_rate_per_day`. Emits one `EntryRate` per entry containing actual rate, projected rate, transaction count, window days used, and rolling window total.
 
@@ -697,16 +723,16 @@ Loads the prior snapshot for each entry and uses it to set `projected_rate_per_d
 **Input:** `entry_rates` from Stage 3
 **Output:** `Stage4Output.label_rates` — one `LabelRate` per label
 
-Groups entry rates by `label_id`. For each label, sums actual and projected rates across all entries referencing that label. Records `contributing_entry_count`. Entries without a `label_id` are skipped. The result drives classification-level snapshot rows in Stage 6.
+Groups entry rates by `label_id`. For each label, sums actual and projected rates across all entries referencing that label. Records `contributing_entry_count`. The result feeds Stage 6 as the label-level snapshot input.
 
 ---
 
 ### Stage 5 — Trend Regression
 
-**Input:** Stage 3 and Stage 4 outputs; snapshot history from `snapshots`
-**Output:** `Stage5Output.entry_trends` and `Stage5Output.classification_trends`
+**Input:** Stage 4 output; snapshot history from `snapshots`
+**Output:** `Stage5Output.label_trends`
 
-Bulk-loads recent snapshot history for all nodes (entries and classifications). Runs a linear regression on each node's `actual_rate_per_day` time series to compute:
+Bulk-loads recent snapshot history for all labels. Runs a linear regression on each label's `actual_rate_per_day` time series to compute:
 
 - `slope_per_day` — the rate of change of the actual rate over the history window
 - `r_squared` — regression fit quality (how regular the trend is)
@@ -723,10 +749,7 @@ Regression runs in parallel across nodes using `rayon`. Nodes with insufficient 
 
 Builds all snapshot rows in parallel using `rayon`, then writes them in a single atomic Postgres transaction. The UPSERT pattern (`ON CONFLICT (entity_id, node_id, snapshot_date) DO UPDATE`) makes Stage 6 fully idempotent — re-running the same job produces identical rows. Partial writes are impossible: either all snapshots for this day commit or none do.
 
-Produces two snapshot types per day:
-
-- **Entry snapshots** (`node_type = 'entry'`): one per `EntryRate` from Stage 3
-- **Classification snapshots** (`node_type = 'classification'`): one per `LabelRate` from Stage 4
+Produces one label snapshot per day per label (`node_type = 'label'`), one per `LabelRate` from Stage 4. Entry rates from Stage 3 are intermediate — they are not persisted directly.
 
 ---
 
@@ -735,11 +758,11 @@ Produces two snapshot types per day:
 **Input:** Entity ID, `computed_as_of`, active entries + their recurrence schedules, latest snapshots
 **Output:** Rows in `projections`; `alert_type = 'ended'` written to `entries` for missed expected transactions
 
-Runs once after the day-crawl completes. Loads eligible entries: `status = 'active'` entries and `status = 'pending_review'` entries where `project_tentatively = TRUE`. Loads the latest snapshot rate for each eligible entry to use as the projected rate. Deletes all existing projections for this entity/job and rebuilds them for 90 days forward.
+Runs once after the day-crawl completes. Loads eligible entries: `status = 'live'` entries and `status = 'pending'` entries where `project_tentatively = TRUE`. Loads the latest snapshot rate for each eligible entry to use as the projected rate. Deletes all existing projections for this entity/job and rebuilds them for 90 days forward.
 
-For each projected day, superposes all eligible entry rates using their `recurrence_anchor` and `next_due_date` to phase each signal correctly across the timeline. Produces one row per `(entity_id, account_id, projected_date)` containing income rate, commitment rate, margin rate, running projected balance, and whether the day is a pinch point (margin < 0).
+For each projected day, superposes all eligible entry rates using their `recurrence_anchor` and `next_due_date` to phase each signal correctly across the timeline. Produces one row per `(entity_id, account_id, projected_date)` containing income rate, spend rate, margin rate, running projected balance, and whether the day is a pinch point (margin < 0).
 
-Also sets `alert_type = 'ended'` and `status = 'pending_review'` on active entries whose `next_due_date` has passed without a matching transaction — surfacing them in the Ledger for user review.
+Also sets `alert_type = 'ended'` and `status = 'pending'` on active entries whose `next_due_date` has passed without a matching transaction — surfacing them in the Ledger for user review.
 
 ## 10.4 Pipeline Invariants
 
