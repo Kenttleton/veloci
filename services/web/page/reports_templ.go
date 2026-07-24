@@ -10,7 +10,6 @@ import templruntime "github.com/a-h/templ/runtime"
 
 import (
 	"fmt"
-
 	"github.com/veloci/veloci/store"
 )
 
@@ -47,7 +46,76 @@ func ReportsPage(shell ShellData, data ReportsData) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div style=\"display:flex;flex-direction:column;height:100%;overflow:hidden\"><!-- Summary strip --><div style=\"display:flex;align-items:center;gap:24px;padding:10px 20px;border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div style=\"display:flex;flex-direction:column;height:100%;overflow:hidden\"><!-- Exports panel --><div style=\"padding:10px 20px;border-bottom:1px solid var(--border);flex-shrink:0\"><div style=\"display:flex;align-items:center;gap:12px;margin-bottom:8px\"><span style=\"font-size:11px;font-weight:600;color:var(--text3);letter-spacing:0.04em;text-transform:uppercase\">Exports</span> ")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if data.CanExport {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<button id=\"rpt-export-btn\" style=\"font-size:11px;padding:2px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;color:var(--text2);font-family:inherit;cursor:pointer;margin-left:auto\">Generate Report</button>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if len(data.Exports) == 0 {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<div id=\"exp-empty\" style=\"font-size:12px;color:var(--text3);padding:4px 0\">No exports yet.</div>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			} else {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<div id=\"exp-empty\" style=\"display:none;font-size:12px;color:var(--text3);padding:4px 0\">No exports yet.</div>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<table id=\"exp-table\" style=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var3 string
+			templ_7745c5c3_Var3, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("width:100%;border-collapse:collapse;" + ifStr(len(data.Exports) == 0, "display:none", ""))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 28, Col: 122}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\"><thead><tr style=\"border-bottom:1px solid var(--border)\"><th style=\"padding:4px 8px 4px 0;text-align:left;font-size:10px;font-weight:600;color:var(--text3)\">Filename</th><th style=\"padding:4px 8px;text-align:left;font-size:10px;font-weight:600;color:var(--text3)\">Type</th><th style=\"padding:4px 8px;text-align:left;font-size:10px;font-weight:600;color:var(--text3)\">Size</th><th style=\"padding:4px 8px;text-align:left;font-size:10px;font-weight:600;color:var(--text3)\">Created</th><th style=\"padding:4px 8px;text-align:left;font-size:10px;font-weight:600;color:var(--text3)\">Expires</th><th style=\"padding:4px 8px;text-align:left;font-size:10px;font-weight:600;color:var(--text3)\"></th></tr></thead> <tbody id=\"exp-tbody\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			for _, exp := range data.Exports {
+				templ_7745c5c3_Err = exportRow(exp).Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</tbody></table><!-- Filter bar for generating an export -->")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if data.CanExport {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<div id=\"rpt-filter-bar\" style=\"display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap\"><label style=\"font-size:12px;color:var(--text3)\">From</label> <input id=\"rpt-date-from\" type=\"date\" style=\"font-size:12px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:3px 7px;color:var(--text);font-family:inherit;outline:none\"> <label style=\"font-size:12px;color:var(--text3)\">To</label> <input id=\"rpt-date-to\" type=\"date\" style=\"font-size:12px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:3px 7px;color:var(--text);font-family:inherit;outline:none\"> <label style=\"font-size:12px;color:var(--text3)\">Filename</label> <input id=\"rpt-filename\" type=\"text\" placeholder=\"auto-generated\" style=\"font-size:12px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:3px 7px;color:var(--text);font-family:inherit;outline:none;width:200px\"></div>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			} else {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<!-- read-only users still use the filter for the history view --> <div id=\"rpt-filter-bar\" style=\"display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap\"><label style=\"font-size:12px;color:var(--text3)\">From</label> <input id=\"rpt-date-from\" type=\"date\" style=\"font-size:12px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:3px 7px;color:var(--text);font-family:inherit;outline:none\"> <label style=\"font-size:12px;color:var(--text3)\">To</label> <input id=\"rpt-date-to\" type=\"date\" style=\"font-size:12px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:3px 7px;color:var(--text);font-family:inherit;outline:none\"> <button id=\"rpt-filter-btn\" style=\"font-size:12px;padding:3px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;color:var(--text2);font-family:inherit;cursor:pointer\">Filter</button></div>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			if data.CanExport {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<div style=\"display:flex;align-items:center;gap:8px;margin-top:6px\"><button id=\"rpt-filter-btn\" style=\"font-size:12px;padding:3px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;color:var(--text2);font-family:inherit;cursor:pointer\">Filter</button></div>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</div><!-- Summary strip --><div style=\"display:flex;align-items:center;gap:24px;padding:10px 20px;border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -67,63 +135,64 @@ func ReportsPage(shell ShellData, data ReportsData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			if data.PinchCount > 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<div style=\"margin-left:auto;display:flex;align-items:center;gap:6px;padding:4px 12px;background:color-mix(in srgb,var(--surface2) 60%,var(--commit) 40%);border:1px solid var(--commit);border-radius:20px;flex-shrink:0\"><span style=\"width:6px;height:6px;border-radius:50%;background:var(--commit);display:inline-block\"></span> <span style=\"font-size:12px;font-weight:600;color:var(--commit)\">")
+			if !data.Summary.ComputedAsOf.IsZero() {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "<div style=\"margin-left:auto;font-size:11px;color:var(--text3);flex-shrink:0\">as of ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				if data.PinchCount == 1 {
-					var templ_7745c5c3_Var3 string
-					templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d pinch point", data.PinchCount))
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 23, Col: 56}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-				} else {
-					var templ_7745c5c3_Var4 string
-					templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d pinch points", data.PinchCount))
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 25, Col: 57}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
+				var templ_7745c5c3_Var4 string
+				templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(data.Summary.ComputedAsOf.Format("Jan 2, 2006"))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 79, Col: 61}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</span></div>")
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</div><!-- Projections table --><div style=\"flex:1;overflow:auto\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</div><!-- History table --><div id=\"rpt-section\" style=\"flex:1;overflow:auto\" data-next-cursor=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			if len(data.Projections) == 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<div style=\"padding:48px 20px;text-align:center;color:var(--text3);font-size:13px\">No projections yet. Run the engine on the Ledger page to generate a forecast.</div>")
+			var templ_7745c5c3_Var5 string
+			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.NextCursor)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 84, Col: 88}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if len(data.History) == 0 {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<div id=\"rpt-empty\" style=\"padding:48px 20px;text-align:center;color:var(--text3);font-size:13px\">No snapshot data yet. Upload transactions and run the engine to generate a report.</div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<table style=\"width:100%;border-collapse:collapse\"><thead><tr style=\"position:sticky;top:0;background:var(--surface);z-index:1;border-bottom:1px solid var(--border)\"><th style=\"padding:8px 20px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);width:100px\">Date</th><th style=\"padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:var(--text3)\">Income</th><th style=\"padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:var(--text3)\">Spend</th><th style=\"padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:var(--text3)\">Margin</th><th style=\"padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:var(--text3)\">Balance</th><th style=\"padding:8px 12px;text-align:center;font-size:11px;font-weight:600;color:var(--text3);width:80px\">Status</th></tr></thead> <tbody>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<table style=\"width:100%;border-collapse:collapse\"><thead><tr style=\"position:sticky;top:0;background:var(--surface);z-index:1;border-bottom:1px solid var(--border)\"><th style=\"padding:8px 20px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);width:120px\">Date</th><th style=\"padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:var(--text3)\">Income</th><th style=\"padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:var(--text3)\">Spend</th><th style=\"padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:var(--text3)\">Margin</th><th style=\"padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:var(--text3)\">Drift</th></tr></thead> <tbody id=\"rpt-tbody\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				for _, p := range data.Projections {
-					templ_7745c5c3_Err = rptProjectionRow(p).Render(ctx, templ_7745c5c3_Buffer)
+				for _, row := range data.History {
+					templ_7745c5c3_Err = rptHistoryRow(row).Render(ctx, templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "</tbody></table>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "</tbody></table><div id=\"rpt-sentinel\" style=\"height:1px\"></div><div id=\"rpt-loading\" style=\"display:none;padding:12px 20px;font-size:12px;color:var(--text3);text-align:center\">Loading…</div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</div></div><script>\n\t\t\t(function () {\n\t\t\t\tvar activeGran = localStorage.getItem('veloci-gran') || 'day';\n\n\t\t\t\tfunction updateRateDisplays() {\n\t\t\t\t\tvar attr = activeGran === 'day' ? 'fmtDay' : activeGran === 'year' ? 'fmtYr' : 'fmtMo';\n\t\t\t\t\tdocument.querySelectorAll('[data-fmt-day]').forEach(function (el) {\n\t\t\t\t\t\tel.textContent = el.dataset[attr] || el.dataset.fmtDay;\n\t\t\t\t\t});\n\t\t\t\t\tvar label = activeGran === 'day' ? '/day' : activeGran === 'year' ? '/yr' : '/mo';\n\t\t\t\t\tdocument.querySelectorAll('.js-gran-label').forEach(function (el) {\n\t\t\t\t\t\tel.textContent = label;\n\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\tfunction applyGran(gran) {\n\t\t\t\t\tactiveGran = gran;\n\t\t\t\t\tlocalStorage.setItem('veloci-gran', activeGran);\n\t\t\t\t\tdocument.querySelectorAll('.js-gran').forEach(function (b) {\n\t\t\t\t\t\tvar on   = b.dataset.gran === activeGran;\n\t\t\t\t\t\tb.style.background = on ? 'var(--accent)' : 'var(--surface2)';\n\t\t\t\t\t\tb.style.color      = on ? '#fff' : 'var(--text2)';\n\t\t\t\t\t\tb.style.border     = on ? 'none' : '1px solid var(--border)';\n\t\t\t\t\t});\n\t\t\t\t\tupdateRateDisplays();\n\t\t\t\t}\n\n\t\t\t\tdocument.addEventListener('click', function (e) {\n\t\t\t\t\tvar btn = e.target.closest('.js-gran');\n\t\t\t\t\tif (!btn) return;\n\t\t\t\t\tapplyGran(btn.dataset.gran);\n\t\t\t\t});\n\n\t\t\t\tapplyGran(activeGran);\n\t\t\t})();\n\t\t</script>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "</div></div><script>\n\t\t\t(function () {\n\t\t\t\t// ─── Gran toggle ─────────────────────────────────────────────────\n\t\t\t\tvar activeGran = localStorage.getItem('veloci-gran') || 'day';\n\n\t\t\t\tfunction updateRateDisplays() {\n\t\t\t\t\tvar attr = activeGran === 'day' ? 'fmtDay' : activeGran === 'year' ? 'fmtYr' : 'fmtMo';\n\t\t\t\t\tdocument.querySelectorAll('[data-fmt-day]').forEach(function (el) {\n\t\t\t\t\t\tel.textContent = el.dataset[attr] || el.dataset.fmtDay;\n\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\tfunction applyGran(gran) {\n\t\t\t\t\tactiveGran = gran;\n\t\t\t\t\tlocalStorage.setItem('veloci-gran', activeGran);\n\t\t\t\t\tdocument.querySelectorAll('.js-gran').forEach(function (b) {\n\t\t\t\t\t\tvar on = b.dataset.gran === activeGran;\n\t\t\t\t\t\tb.style.background = on ? 'var(--accent)' : 'var(--surface2)';\n\t\t\t\t\t\tb.style.color      = on ? '#fff' : 'var(--text2)';\n\t\t\t\t\t\tb.style.border     = on ? 'none' : '1px solid var(--border)';\n\t\t\t\t\t});\n\t\t\t\t\tupdateRateDisplays();\n\t\t\t\t}\n\n\t\t\t\tdocument.addEventListener('click', function (e) {\n\t\t\t\t\tvar btn = e.target.closest('.js-gran');\n\t\t\t\t\tif (btn) applyGran(btn.dataset.gran);\n\t\t\t\t});\n\n\t\t\t\tapplyGran(activeGran);\n\n\t\t\t\t// ─── Rate formatters ─────────────────────────────────────────────\n\t\t\t\tfunction fmtAbs(cpd, suffix) {\n\t\t\t\t\tvar v = Math.abs(cpd) / 100;\n\t\t\t\t\treturn '$' + v.toFixed(2) + suffix;\n\t\t\t\t}\n\t\t\t\tfunction fmtSgn(cpd, suffix) {\n\t\t\t\t\tvar v = cpd / 100;\n\t\t\t\t\tif (v > 0) return '+$' + v.toFixed(2) + suffix;\n\t\t\t\t\tif (v < 0) return '−$' + Math.abs(v).toFixed(2) + suffix;\n\t\t\t\t\treturn '$0.00' + suffix;\n\t\t\t\t}\n\t\t\t\tfunction fmtRow(cpd, signed) {\n\t\t\t\t\tvar mo = (signed ? fmtSgn : fmtAbs)(cpd * 30.44, '/mo');\n\t\t\t\t\tvar day = (signed ? fmtSgn : fmtAbs)(cpd, '/day');\n\t\t\t\t\tvar yr = (signed ? fmtSgn : fmtAbs)(cpd * 365, '/yr');\n\t\t\t\t\treturn { mo: mo, day: day, yr: yr };\n\t\t\t\t}\n\t\t\t\tfunction signColor(cpd) {\n\t\t\t\t\tif (cpd > 0) return 'var(--income)';\n\t\t\t\t\tif (cpd < 0) return 'var(--commit)';\n\t\t\t\t\treturn 'var(--text2)';\n\t\t\t\t}\n\t\t\t\tfunction fmtDate(iso) {\n\t\t\t\t\tvar p = iso.split('-');\n\t\t\t\t\tvar months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];\n\t\t\t\t\treturn months[parseInt(p[1],10)-1] + ' ' + parseInt(p[2],10) + ', ' + p[0];\n\t\t\t\t}\n\n\t\t\t\tfunction makeRow(r) {\n\t\t\t\t\tvar tr = document.createElement('tr');\n\t\t\t\t\ttr.style.borderBottom = '1px solid var(--border)';\n\t\t\t\t\tvar inc = fmtRow(r.income_rate, false);\n\t\t\t\t\tvar spd = fmtRow(r.spend_rate, false);\n\t\t\t\t\tvar mgn = fmtRow(r.margin_rate, true);\n\t\t\t\t\tvar dft = fmtRow(r.drift_rate, true);\n\t\t\t\t\tvar attr = activeGran === 'day' ? 'day' : activeGran === 'year' ? 'yr' : 'mo';\n\t\t\t\t\ttr.innerHTML =\n\t\t\t\t\t\t'<td style=\"padding:8px 20px;font-size:13px;color:var(--text2);white-space:nowrap;font-variant-numeric:tabular-nums\">'+fmtDate(r.date)+'</td>'\n\t\t\t\t\t\t+'<td style=\"padding:8px 12px;text-align:right;font-size:13px;font-variant-numeric:tabular-nums;color:var(--income)\"><span data-fmt-day=\"'+inc.day+'\" data-fmt-mo=\"'+inc.mo+'\" data-fmt-yr=\"'+inc.yr+'\">'+inc[attr]+'</span></td>'\n\t\t\t\t\t\t+'<td style=\"padding:8px 12px;text-align:right;font-size:13px;font-variant-numeric:tabular-nums;color:var(--commit)\"><span data-fmt-day=\"'+spd.day+'\" data-fmt-mo=\"'+spd.mo+'\" data-fmt-yr=\"'+spd.yr+'\">'+spd[attr]+'</span></td>'\n\t\t\t\t\t\t+'<td style=\"padding:8px 12px;text-align:right;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;color:'+signColor(r.margin_rate)+'\"><span data-fmt-day=\"'+mgn.day+'\" data-fmt-mo=\"'+mgn.mo+'\" data-fmt-yr=\"'+mgn.yr+'\">'+mgn[attr]+'</span></td>'\n\t\t\t\t\t\t+'<td style=\"padding:8px 12px;text-align:right;font-size:13px;font-variant-numeric:tabular-nums;color:'+signColor(r.drift_rate)+'\"><span data-fmt-day=\"'+dft.day+'\" data-fmt-mo=\"'+dft.mo+'\" data-fmt-yr=\"'+dft.yr+'\">'+dft[attr]+'</span></td>';\n\t\t\t\t\treturn tr;\n\t\t\t\t}\n\n\t\t\t\t// ─── Infinite scroll ─────────────────────────────────────────────\n\t\t\t\t(function () {\n\t\t\t\t\tvar section = document.getElementById('rpt-section');\n\t\t\t\t\tif (!section) return;\n\t\t\t\t\tvar tbody     = document.getElementById('rpt-tbody');\n\t\t\t\t\tvar sentinel  = document.getElementById('rpt-sentinel');\n\t\t\t\t\tvar loadingEl = document.getElementById('rpt-loading');\n\t\t\t\t\tif (!tbody || !sentinel) return;\n\n\t\t\t\t\tvar nextCursor = section.dataset.nextCursor || null;\n\t\t\t\t\tvar loading    = false;\n\t\t\t\t\tvar observer   = null;\n\n\t\t\t\t\tfunction buildURL(cursor) {\n\t\t\t\t\t\tvar u = '/api/snapshots/report?limit=60';\n\t\t\t\t\t\tif (cursor) u += '&cursor=' + encodeURIComponent(cursor);\n\t\t\t\t\t\tvar from = document.getElementById('rpt-date-from');\n\t\t\t\t\t\tvar to   = document.getElementById('rpt-date-to');\n\t\t\t\t\t\tif (from && from.value) u += '&date_from=' + encodeURIComponent(from.value);\n\t\t\t\t\t\tif (to && to.value)     u += '&date_to='   + encodeURIComponent(to.value);\n\t\t\t\t\t\treturn u;\n\t\t\t\t\t}\n\n\t\t\t\t\tfunction loadMore() {\n\t\t\t\t\t\tif (loading || !nextCursor) return;\n\t\t\t\t\t\tloading = true;\n\t\t\t\t\t\tif (loadingEl) loadingEl.style.display = '';\n\t\t\t\t\t\tfetch(buildURL(nextCursor))\n\t\t\t\t\t\t\t.then(function (r) { return r.json(); })\n\t\t\t\t\t\t\t.then(function (body) {\n\t\t\t\t\t\t\t\t(body.data || []).forEach(function (r) { tbody.appendChild(makeRow(r)); });\n\t\t\t\t\t\t\t\tnextCursor = (body.meta && body.meta.next_cursor) || null;\n\t\t\t\t\t\t\t\tloading = false;\n\t\t\t\t\t\t\t\tif (loadingEl) loadingEl.style.display = 'none';\n\t\t\t\t\t\t\t\tif (!nextCursor && observer) observer.disconnect();\n\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t.catch(function () {\n\t\t\t\t\t\t\t\tloading = false;\n\t\t\t\t\t\t\t\tif (loadingEl) loadingEl.style.display = 'none';\n\t\t\t\t\t\t\t});\n\t\t\t\t\t}\n\n\t\t\t\t\tif (nextCursor) {\n\t\t\t\t\t\tobserver = new IntersectionObserver(function (entries) {\n\t\t\t\t\t\t\tif (entries[0].isIntersecting) loadMore();\n\t\t\t\t\t\t}, { rootMargin: '200px' });\n\t\t\t\t\t\tobserver.observe(sentinel);\n\t\t\t\t\t}\n\n\t\t\t\t\t// ─── Filter button ─────────────────────────────────────────\n\t\t\t\t\tvar filterBtn = document.getElementById('rpt-filter-btn');\n\t\t\t\t\tif (filterBtn) {\n\t\t\t\t\t\tfilterBtn.addEventListener('click', function () {\n\t\t\t\t\t\t\ttbody.innerHTML = '';\n\t\t\t\t\t\t\tnextCursor = null;\n\t\t\t\t\t\t\tloading = false;\n\t\t\t\t\t\t\tif (observer) observer.disconnect();\n\t\t\t\t\t\t\tfetch(buildURL(null))\n\t\t\t\t\t\t\t\t.then(function (r) { return r.json(); })\n\t\t\t\t\t\t\t\t.then(function (body) {\n\t\t\t\t\t\t\t\t\t(body.data || []).forEach(function (r) { tbody.appendChild(makeRow(r)); });\n\t\t\t\t\t\t\t\t\tnextCursor = (body.meta && body.meta.next_cursor) || null;\n\t\t\t\t\t\t\t\t\tif (nextCursor) {\n\t\t\t\t\t\t\t\t\t\tobserver = new IntersectionObserver(function (entries) {\n\t\t\t\t\t\t\t\t\t\t\tif (entries[0].isIntersecting) loadMore();\n\t\t\t\t\t\t\t\t\t\t}, { rootMargin: '200px' });\n\t\t\t\t\t\t\t\t\t\tobserver.observe(sentinel);\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t\t.catch(function () {});\n\t\t\t\t\t\t});\n\t\t\t\t\t}\n\t\t\t\t})();\n\n\t\t\t\t// ─── Exports table helpers ───────────────────────────────────────\n\t\t\t\tvar expTbody = document.getElementById('exp-tbody');\n\t\t\t\tvar expTable = document.getElementById('exp-table');\n\t\t\t\tvar expEmpty = document.getElementById('exp-empty');\n\n\t\t\t\tfunction fmtBytes(n) {\n\t\t\t\t\tif (!n) return '—';\n\t\t\t\t\tif (n < 1024) return n + ' B';\n\t\t\t\t\tif (n < 1048576) return (n / 1024).toFixed(1) + ' KB';\n\t\t\t\t\treturn (n / 1048576).toFixed(1) + ' MB';\n\t\t\t\t}\n\t\t\t\tfunction fmtRelTime(iso) {\n\t\t\t\t\tif (!iso) return '—';\n\t\t\t\t\tvar d = new Date(iso);\n\t\t\t\t\tvar now = new Date();\n\t\t\t\t\tvar diff = Math.round((d - now) / 1000);\n\t\t\t\t\tif (diff < 0) return 'expired';\n\t\t\t\t\tif (diff < 60) return 'in ' + diff + 's';\n\t\t\t\t\tif (diff < 3600) return 'in ' + Math.round(diff/60) + 'm';\n\t\t\t\t\treturn 'in ' + Math.round(diff/3600) + 'h';\n\t\t\t\t}\n\t\t\t\tfunction fmtCreated(iso) {\n\t\t\t\t\tif (!iso) return '—';\n\t\t\t\t\tvar d = new Date(iso);\n\t\t\t\t\treturn d.toLocaleString();\n\t\t\t\t}\n\n\t\t\t\tfunction makeExportRow(exp, status) {\n\t\t\t\t\tvar tr = document.createElement('tr');\n\t\t\t\t\ttr.dataset.jobId = exp.job_id;\n\t\t\t\t\ttr.style.borderBottom = '1px solid var(--border)';\n\t\t\t\t\tvar dlCell = status === 'complete'\n\t\t\t\t\t\t? '<a href=\"/api/exports/'+exp.job_id+'/download\" style=\"font-size:11px;color:var(--accent);text-decoration:none\">Download</a>'\n\t\t\t\t\t\t: '<span style=\"font-size:11px;color:var(--text3)\">' + (status === 'failed' ? 'Failed' : 'Generating…') + '</span>';\n\t\t\t\t\ttr.innerHTML =\n\t\t\t\t\t\t'<td style=\"padding:4px 0;font-size:12px;color:var(--text2);max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap\">'+\n\t\t\t\t\t\t\t(exp.filename || '—')+'</td>'+\n\t\t\t\t\t\t'<td style=\"padding:4px 8px;font-size:12px;color:var(--text3)\">'+\n\t\t\t\t\t\t\t(exp.export_type || '—') + ' / ' + (exp.format || '—') +'</td>'+\n\t\t\t\t\t\t'<td style=\"padding:4px 8px;font-size:12px;color:var(--text3)\">'+fmtBytes(exp.size_bytes)+'</td>'+\n\t\t\t\t\t\t'<td style=\"padding:4px 8px;font-size:12px;color:var(--text3)\">'+fmtCreated(exp.created_at)+'</td>'+\n\t\t\t\t\t\t'<td style=\"padding:4px 8px;font-size:12px;color:var(--text3)\">'+fmtRelTime(exp.expires_at)+'</td>'+\n\t\t\t\t\t\t'<td style=\"padding:4px 8px\">'+dlCell+'</td>';\n\t\t\t\t\treturn tr;\n\t\t\t\t}\n\n\t\t\t\tfunction prependExport(exp, status) {\n\t\t\t\t\tvar existing = expTbody ? expTbody.querySelector('[data-job-id=\"'+exp.job_id+'\"]') : null;\n\t\t\t\t\tif (existing) {\n\t\t\t\t\t\texisting.replaceWith(makeExportRow(exp, status));\n\t\t\t\t\t} else {\n\t\t\t\t\t\tif (expTbody) expTbody.prepend(makeExportRow(exp, status));\n\t\t\t\t\t}\n\t\t\t\t\tif (expTable) expTable.style.display = '';\n\t\t\t\t\tif (expEmpty) expEmpty.style.display = 'none';\n\t\t\t\t}\n\n\t\t\t\t// ─── Async export trigger ────────────────────────────────────────\n\t\t\t\tvar exportBtn = document.getElementById('rpt-export-btn');\n\t\t\t\tif (exportBtn) {\n\t\t\t\t\texportBtn.addEventListener('click', function () {\n\t\t\t\t\t\tvar from     = document.getElementById('rpt-date-from');\n\t\t\t\t\t\tvar to       = document.getElementById('rpt-date-to');\n\t\t\t\t\t\tvar filename = document.getElementById('rpt-filename');\n\t\t\t\t\t\tvar params   = {};\n\t\t\t\t\t\tif (from && from.value) params.date_from = from.value;\n\t\t\t\t\t\tif (to && to.value)     params.date_to   = to.value;\n\n\t\t\t\t\t\tvar body = {\n\t\t\t\t\t\t\texport_type: 'report',\n\t\t\t\t\t\t\tformat:      'csv',\n\t\t\t\t\t\t\tparameters:  params\n\t\t\t\t\t\t};\n\t\t\t\t\t\tif (filename && filename.value) body.filename = filename.value;\n\n\t\t\t\t\t\texportBtn.textContent = 'Queuing…';\n\t\t\t\t\t\texportBtn.disabled = true;\n\n\t\t\t\t\t\tfetch('/api/exports', {\n\t\t\t\t\t\t\tmethod:  'POST',\n\t\t\t\t\t\t\theaders: { 'Content-Type': 'application/json' },\n\t\t\t\t\t\t\tbody:    JSON.stringify(body)\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.then(function (r) { return r.json(); })\n\t\t\t\t\t\t.then(function (resp) {\n\t\t\t\t\t\t\tvar jobId = resp.data && resp.data.job_id;\n\t\t\t\t\t\t\tif (jobId) {\n\t\t\t\t\t\t\t\t// Show a pending placeholder row immediately\n\t\t\t\t\t\t\t\tprependExport({ job_id: jobId, export_type: 'report', format: 'csv',\n\t\t\t\t\t\t\t\t\tfilename: (filename && filename.value) || 'generating…',\n\t\t\t\t\t\t\t\t\tsize_bytes: null, created_at: new Date().toISOString(), expires_at: null\n\t\t\t\t\t\t\t\t}, 'queued');\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function () {})\n\t\t\t\t\t\t.finally(function () {\n\t\t\t\t\t\t\texportBtn.textContent = 'Generate Report';\n\t\t\t\t\t\t\texportBtn.disabled = false;\n\t\t\t\t\t\t});\n\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\t// ─── SSE job completion → refresh export row ─────────────────────\n\t\t\t\t// The shell broadcasts all SSE job events as 'veloci:job' CustomEvents.\n\t\t\t\t// Listen here to update the exports table without touching the EventSource.\n\t\t\t\tdocument.addEventListener('veloci:job', function (e) {\n\t\t\t\t\tvar evt = e.detail;\n\t\t\t\t\tif (evt.job_type !== 'export.report') return;\n\n\t\t\t\t\tif (evt.status === 'complete') {\n\t\t\t\t\t\t// Refresh the exports list to pick up the completed artifact with\n\t\t\t\t\t\t// its real filename and size.\n\t\t\t\t\t\tfetch('/api/exports?limit=10')\n\t\t\t\t\t\t\t.then(function (r) { return r.json(); })\n\t\t\t\t\t\t\t.then(function (body) {\n\t\t\t\t\t\t\t\t(body.data || []).forEach(function (exp) {\n\t\t\t\t\t\t\t\t\tprependExport(exp, 'complete');\n\t\t\t\t\t\t\t\t});\n\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t.catch(function () {});\n\t\t\t\t\t} else if (evt.status === 'failed') {\n\t\t\t\t\t\tvar tr = expTbody && expTbody.querySelector('[data-job-id=\"'+evt.job_id+'\"]');\n\t\t\t\t\t\tif (tr) {\n\t\t\t\t\t\t\tvar cell = tr.querySelector('td:last-child');\n\t\t\t\t\t\t\tif (cell) cell.innerHTML = '<span style=\"font-size:11px;color:var(--commit)\">Failed</span>';\n\t\t\t\t\t\t}\n\t\t\t\t\t}\n\t\t\t\t});\n\t\t\t})();\n\t\t</script>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -137,7 +206,7 @@ func ReportsPage(shell ShellData, data ReportsData) templ.Component {
 	})
 }
 
-func rptProjectionRow(p store.Projection) templ.Component {
+func exportRow(exp store.Export) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -153,237 +222,392 @@ func rptProjectionRow(p store.Projection) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var5 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var5 == nil {
-			templ_7745c5c3_Var5 = templ.NopComponent
+		templ_7745c5c3_Var6 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var6 == nil {
+			templ_7745c5c3_Var6 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<tr style=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var6 string
-		templ_7745c5c3_Var6, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(rptRowStyle(p.IsPinchPoint))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 98, Col: 40}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\"><td style=\"padding:8px 20px;font-size:13px;color:var(--text2);white-space:nowrap;font-variant-numeric:tabular-nums\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<tr data-job-id=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var7 string
-		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(p.ProjectedDate.Format("Jan 2, 2006"))
+		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.ResolveAttributeValue(exp.JobID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 100, Col: 42}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 395, Col: 28}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</td><td style=\"padding:8px 12px;text-align:right;font-size:13px;font-variant-numeric:tabular-nums;color:var(--income)\"><span data-fmt-day=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "\" style=\"border-bottom:1px solid var(--border)\"><td style=\"padding:4px 0;font-size:12px;color:var(--text2);max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var8 string
-		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateDay(&p.IncomeRatePerDay))
+		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(exp.Filename)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 104, Col: 50}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 397, Col: 17}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "\" data-fmt-mo=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "</td><td style=\"padding:4px 8px;font-size:12px;color:var(--text3)\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var9 string
-		templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateMo(&p.IncomeRatePerDay))
+		templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(exp.ExportType)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 105, Col: 48}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 400, Col: 19}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var9)
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "\" data-fmt-yr=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, " / ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var10 string
-		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateYr(&p.IncomeRatePerDay))
+		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(exp.Format)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 106, Col: 48}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 400, Col: 36}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "</td><td style=\"padding:4px 8px;font-size:12px;color:var(--text3)\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var11 string
-		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(fmtRateMo(&p.IncomeRatePerDay))
+		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(fmtExportSize(exp.SizeBytes))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 107, Col: 36}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 403, Col: 33}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</span></td><td style=\"padding:8px 12px;text-align:right;font-size:13px;font-variant-numeric:tabular-nums;color:var(--commit)\"><span data-fmt-day=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "</td><td style=\"padding:4px 8px;font-size:12px;color:var(--text3)\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var12 string
-		templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateDay(&p.SpendRatePerDay))
+		templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(exp.CreatedAt.Format("Jan 2, 2006 15:04"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 111, Col: 49}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 406, Col: 46}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var12)
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "\" data-fmt-mo=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "</td><td style=\"padding:4px 8px;font-size:12px;color:var(--text3)\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var13 string
-		templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateMo(&p.SpendRatePerDay))
+		templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(exp.ExpiresAt.Format("Jan 2, 15:04"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 112, Col: 47}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 409, Col: 41}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var13)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "\" data-fmt-yr=\"")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var14 string
-		templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateYr(&p.SpendRatePerDay))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 113, Col: 47}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var14)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "</td><td style=\"padding:4px 8px\"><a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "\">")
+		var templ_7745c5c3_Var14 templ.SafeURL
+		templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/api/exports/" + exp.JobID + "/download"))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 412, Col: 69}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var15 string
-		templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(fmtRateMo(&p.SpendRatePerDay))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 114, Col: 35}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "\" style=\"font-size:11px;color:var(--accent);text-decoration:none\">Download</a></td></tr>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "</span></td><td style=\"")
+		return nil
+	})
+}
+
+func rptHistoryRow(row store.SnapshotDaySummary) templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var15 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var15 == nil {
+			templ_7745c5c3_Var15 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "<tr style=\"border-bottom:1px solid var(--border)\"><td style=\"padding:8px 20px;font-size:13px;color:var(--text2);white-space:nowrap;font-variant-numeric:tabular-nums\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var16 string
-		templ_7745c5c3_Var16, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("padding:8px 12px;text-align:right;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;" + rptMarginColor(p.MarginRatePerDay))
+		templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(row.SnapshotDate.Format("Jan 2, 2006"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 116, Col: 152}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 420, Col: 43}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "\"><span data-fmt-day=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "</td><td style=\"padding:8px 12px;text-align:right;font-size:13px;font-variant-numeric:tabular-nums;color:var(--income)\"><span data-fmt-day=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var17 string
-		templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateDaySigned(&p.MarginRatePerDay))
+		templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateDay(&row.IncomeRate))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 118, Col: 56}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 424, Col: 46}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var17)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "\" data-fmt-mo=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "\" data-fmt-mo=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var18 string
-		templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateMoSigned(&p.MarginRatePerDay))
+		templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateMo(&row.IncomeRate))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 119, Col: 54}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 425, Col: 44}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var18)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "\" data-fmt-yr=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "\" data-fmt-yr=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var19 string
-		templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateYrSigned(&p.MarginRatePerDay))
+		templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateYr(&row.IncomeRate))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 120, Col: 54}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 426, Col: 44}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var19)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var20 string
-		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(fmtRateMoSigned(&p.MarginRatePerDay))
+		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(fmtRateMo(&row.IncomeRate))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 121, Col: 42}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 427, Col: 32}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "</span></td><td style=\"padding:8px 12px;text-align:right;font-size:13px;font-variant-numeric:tabular-nums;color:var(--text2)\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "</span></td><td style=\"padding:8px 12px;text-align:right;font-size:13px;font-variant-numeric:tabular-nums;color:var(--commit)\"><span data-fmt-day=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		if p.ProjectedBalanceCents != nil {
-			var templ_7745c5c3_Var21 string
-			templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(FormatBalance(p.ProjectedBalanceCents))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 125, Col: 44}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "<span style=\"color:var(--text3)\">—</span>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
+		var templ_7745c5c3_Var21 string
+		templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateDay(&row.SpendRate))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 431, Col: 45}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "</td><td style=\"padding:8px 12px;text-align:center\">")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var21)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		if p.IsPinchPoint {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "<span style=\"font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:color-mix(in srgb,var(--surface2) 60%,var(--commit) 40%);color:var(--commit)\">Pinch</span>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "\" data-fmt-mo=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "</td></tr>")
+		var templ_7745c5c3_Var22 string
+		templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateMo(&row.SpendRate))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 432, Col: 43}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var22)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "\" data-fmt-yr=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var23 string
+		templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateYr(&row.SpendRate))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 433, Col: 43}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var23)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var24 string
+		templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(fmtRateMo(&row.SpendRate))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 434, Col: 31}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "</span></td><td style=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var25 string
+		templ_7745c5c3_Var25, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("padding:8px 12px;text-align:right;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;" + rptSignColor(&row.MarginRate))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 436, Col: 147}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "\"><span data-fmt-day=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var26 string
+		templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateDaySigned(&row.MarginRate))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 438, Col: 52}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var26)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "\" data-fmt-mo=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var27 string
+		templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateMoSigned(&row.MarginRate))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 439, Col: 50}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var27)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "\" data-fmt-yr=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var28 string
+		templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateYrSigned(&row.MarginRate))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 440, Col: 50}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var28)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var29 string
+		templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(fmtRateMoSigned(&row.MarginRate))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 441, Col: 38}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "</span></td><td style=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var30 string
+		templ_7745c5c3_Var30, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("padding:8px 12px;text-align:right;font-size:13px;font-variant-numeric:tabular-nums;" + rptSignColor(&row.DriftRate))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 443, Col: 130}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "\"><span data-fmt-day=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var31 string
+		templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateDaySigned(&row.DriftRate))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 445, Col: 51}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var31)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "\" data-fmt-mo=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var32 string
+		templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateMoSigned(&row.DriftRate))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 446, Col: 49}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var32)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "\" data-fmt-yr=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var33 string
+		templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateYrSigned(&row.DriftRate))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 447, Col: 49}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var33)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var34 string
+		templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinStringErrs(fmtRateMoSigned(&row.DriftRate))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 448, Col: 37}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "</span></td></tr>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -407,90 +631,90 @@ func rptSummaryChip(label string, r *float64, color string) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var22 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var22 == nil {
-			templ_7745c5c3_Var22 = templ.NopComponent
+		templ_7745c5c3_Var35 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var35 == nil {
+			templ_7745c5c3_Var35 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<div style=\"flex-shrink:0\"><div style=\"font-size:10px;font-weight:600;color:var(--text3);letter-spacing:0.04em;text-transform:uppercase;margin-bottom:2px\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "<div style=\"flex-shrink:0\"><div style=\"font-size:10px;font-weight:600;color:var(--text3);letter-spacing:0.04em;text-transform:uppercase;margin-bottom:2px\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var23 string
-		templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(label)
+		var templ_7745c5c3_Var36 string
+		templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 140, Col: 137}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 455, Col: 137}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "</div><div style=\"")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var36))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var24 string
-		templ_7745c5c3_Var24, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;color:" + color)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 141, Col: 96}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "</div><div style=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "\"><span data-fmt-day=\"")
+		var templ_7745c5c3_Var37 string
+		templ_7745c5c3_Var37, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;color:" + color)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 456, Col: 96}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var37))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var25 string
-		templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateDay(r))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 143, Col: 32}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var25)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "\"><span data-fmt-day=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "\" data-fmt-mo=\"")
+		var templ_7745c5c3_Var38 string
+		templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateDay(r))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 458, Col: 32}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var38)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var26 string
-		templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateMo(r))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 144, Col: 30}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var26)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, "\" data-fmt-mo=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "\" data-fmt-yr=\"")
+		var templ_7745c5c3_Var39 string
+		templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateMo(r))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 459, Col: 30}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var39)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var27 string
-		templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateYr(r))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 145, Col: 30}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var27)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "\" data-fmt-yr=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "\">")
+		var templ_7745c5c3_Var40 string
+		templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateYr(r))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 460, Col: 30}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var40)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var28 string
-		templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(fmtRateMo(r))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 146, Col: 18}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "</span></div></div>")
+		var templ_7745c5c3_Var41 string
+		templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(fmtRateMo(r))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 461, Col: 18}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "</span></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -514,90 +738,90 @@ func rptSummaryChipSigned(label string, r *float64) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var29 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var29 == nil {
-			templ_7745c5c3_Var29 = templ.NopComponent
+		templ_7745c5c3_Var42 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var42 == nil {
+			templ_7745c5c3_Var42 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "<div style=\"flex-shrink:0\"><div style=\"font-size:10px;font-weight:600;color:var(--text3);letter-spacing:0.04em;text-transform:uppercase;margin-bottom:2px\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 57, "<div style=\"flex-shrink:0\"><div style=\"font-size:10px;font-weight:600;color:var(--text3);letter-spacing:0.04em;text-transform:uppercase;margin-bottom:2px\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var30 string
-		templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(label)
+		var templ_7745c5c3_Var43 string
+		templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 153, Col: 137}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 468, Col: 137}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "</div><div style=\"")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var31 string
-		templ_7745c5c3_Var31, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;" + rptSignColor(r))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 154, Col: 100}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "</div><div style=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "\"><span data-fmt-day=\"")
+		var templ_7745c5c3_Var44 string
+		templ_7745c5c3_Var44, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;" + rptSignColor(r))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 469, Col: 100}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var44))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var32 string
-		templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateDaySigned(r))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 156, Col: 38}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var32)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "\"><span data-fmt-day=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "\" data-fmt-mo=\"")
+		var templ_7745c5c3_Var45 string
+		templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateDaySigned(r))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 471, Col: 38}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var45)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var33 string
-		templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateMoSigned(r))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 157, Col: 36}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var33)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 60, "\" data-fmt-mo=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "\" data-fmt-yr=\"")
+		var templ_7745c5c3_Var46 string
+		templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateMoSigned(r))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 472, Col: 36}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var46)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var34 string
-		templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateYrSigned(r))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 158, Col: 36}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var34)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 61, "\" data-fmt-yr=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "\">")
+		var templ_7745c5c3_Var47 string
+		templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateYrSigned(r))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 473, Col: 36}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var47)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var35 string
-		templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.JoinStringErrs(fmtRateMoSigned(r))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 159, Col: 24}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var35))
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 62, "\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "</span></div></div>")
+		var templ_7745c5c3_Var48 string
+		templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.JoinStringErrs(fmtRateMoSigned(r))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/reports.templ`, Line: 474, Col: 24}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var48))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 63, "</span></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -618,6 +842,34 @@ func rptSignColor(r *float64) string {
 	return "color:var(--text2)"
 }
 
+func fmtExportSize(b *int64) string {
+	if b == nil {
+		return "—"
+	}
+	n := *b
+	if n < 1024 {
+		return fmt.Sprintf("%d B", n)
+	}
+	if n < 1048576 {
+		return fmt.Sprintf("%.1f KB", float64(n)/1024)
+	}
+	return fmt.Sprintf("%.1f MB", float64(n)/1048576)
+}
+
+func ifStr(cond bool, a, b string) string {
+	if cond {
+		return a
+	}
+	return b
+}
+
+func rptRowStyle(isPinch bool) string {
+	if isPinch {
+		return "border-bottom:1px solid var(--border);background:color-mix(in srgb,var(--surface) 80%,var(--commit) 20%)"
+	}
+	return "border-bottom:1px solid var(--border)"
+}
+
 func rptMarginColor(ratePerDay float64) string {
 	if ratePerDay > 0 {
 		return "color:var(--income)"
@@ -626,14 +878,6 @@ func rptMarginColor(ratePerDay float64) string {
 		return "color:var(--commit)"
 	}
 	return "color:var(--text2)"
-}
-
-func rptRowStyle(isPinch bool) string {
-	base := "border-bottom:1px solid var(--border)"
-	if isPinch {
-		return base + ";background:color-mix(in srgb,var(--surface) 80%,var(--commit) 20%)"
-	}
-	return base
 }
 
 var _ = templruntime.GeneratedTemplate

@@ -70,9 +70,10 @@ func (s *Store) ListSnapshots(ctx context.Context, entityID string, limit int, c
 
 // SnapshotSummary holds the aggregate across all nodes for the latest snapshot date.
 type SnapshotSummary struct {
-	IncomeRate      float64 `db:"income_rate"`
-	SpendRate float64 `db:"spend_rate"`
-	DriftRate       float64 `db:"drift_rate"`
+	IncomeRate   float64   `db:"income_rate"`
+	SpendRate    float64   `db:"spend_rate"`
+	DriftRate    float64   `db:"drift_rate"`
+	ComputedAsOf time.Time `db:"computed_as_of"`
 }
 
 // GetSnapshotSummary returns aggregated rates for the latest snapshot date.
@@ -81,7 +82,8 @@ func (s *Store) GetSnapshotSummary(ctx context.Context, entityID string) (Snapsh
 		SELECT
 			COALESCE(SUM(CASE WHEN e.direction = 'income' THEN s.actual_rate_per_day ELSE 0 END), 0) AS income_rate,
 			COALESCE(SUM(CASE WHEN e.direction = 'spend' THEN s.actual_rate_per_day ELSE 0 END), 0) AS spend_rate,
-			COALESCE(SUM(s.drift_per_day), 0) AS drift_rate
+			COALESCE(SUM(s.drift_per_day), 0) AS drift_rate,
+			COALESCE(MAX(s.computed_as_of), NOW()::date) AS computed_as_of
 		FROM snapshots s
 		JOIN entries e ON e.id = s.node_id AND s.node_type = 'entry'
 		WHERE s.entity_id = $1
@@ -93,6 +95,60 @@ func (s *Store) GetSnapshotSummary(ctx context.Context, entityID string) (Snapsh
 		return SnapshotSummary{}, err
 	}
 	return pgx.CollectOneRow(rows, pgx.RowToStructByName[SnapshotSummary])
+}
+
+// SnapshotDaySummary is one calendar day of aggregated income/spend/margin across all entries.
+type SnapshotDaySummary struct {
+	SnapshotDate time.Time `db:"snapshot_date"`
+	IncomeRate   float64   `db:"income_rate"`
+	SpendRate    float64   `db:"spend_rate"`
+	MarginRate   float64   `db:"margin_rate"`
+	DriftRate    float64   `db:"drift_rate"`
+}
+
+// ListSnapshotDaySummaries returns per-day aggregate rates for an entity,
+// ordered newest-first. before, dateFrom, and dateTo are optional filters.
+// Pass limit+1 to detect whether more pages exist.
+func (s *Store) ListSnapshotDaySummaries(ctx context.Context, entityID string, limit int, before, dateFrom, dateTo *time.Time) ([]SnapshotDaySummary, error) {
+	const base = `
+		SELECT
+			s.snapshot_date,
+			COALESCE(SUM(CASE WHEN e.direction = 'income' THEN s.actual_rate_per_day ELSE 0 END), 0) AS income_rate,
+			COALESCE(SUM(CASE WHEN e.direction = 'spend'  THEN s.actual_rate_per_day ELSE 0 END), 0) AS spend_rate,
+			COALESCE(SUM(CASE WHEN e.direction = 'income' THEN s.actual_rate_per_day ELSE -s.actual_rate_per_day END), 0) AS margin_rate,
+			COALESCE(SUM(s.drift_per_day), 0) AS drift_rate
+		FROM snapshots s
+		JOIN entries e ON e.id = s.node_id AND s.node_type = 'entry'
+		WHERE s.entity_id = $1`
+
+	args := []any{entityID}
+	extra := ""
+	add := func(cond string, v any) {
+		args = append(args, v)
+		extra += fmt.Sprintf(" AND %s $%d", cond, len(args))
+	}
+	if before != nil {
+		add("s.snapshot_date <", *before)
+	}
+	if dateFrom != nil {
+		add("s.snapshot_date >=", *dateFrom)
+	}
+	if dateTo != nil {
+		add("s.snapshot_date <=", *dateTo)
+	}
+	var q string
+	if limit > 0 {
+		args = append(args, limit)
+		q = fmt.Sprintf("%s%s GROUP BY s.snapshot_date ORDER BY s.snapshot_date DESC LIMIT $%d", base, extra, len(args))
+	} else {
+		q = fmt.Sprintf("%s%s GROUP BY s.snapshot_date ORDER BY s.snapshot_date DESC", base, extra)
+	}
+
+	dbrows, err := s.pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(dbrows, pgx.RowToStructByName[SnapshotDaySummary])
 }
 
 // SnapshotHistoryRow is a snapshot history entry, potentially OHLC-aggregated.

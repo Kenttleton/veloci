@@ -21,6 +21,9 @@ use uuid::Uuid;
 
 use crate::{db::Pools, pipeline};
 
+mod export;
+pub use export::ExportMeta;
+
 // ---------------------------------------------------------------------------
 // Wire types
 // ---------------------------------------------------------------------------
@@ -46,17 +49,20 @@ pub enum JobType {
     AccountAnalyze,
     /// Stage 7 only. Triggered on manual balance update.
     BalanceProject,
+    /// Export artifact generation. Bypasses the pipeline entirely.
+    ExportReport,
 }
 
 impl JobType {
     /// Parse from the wire string representation.
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
-            "import.process"   => Some(Self::ImportProcess),
+            "import.process"    => Some(Self::ImportProcess),
             "entries.reprocess" => Some(Self::EntriesReprocess),
-            "account.analyze"  => Some(Self::AccountAnalyze),
-            "balance.project"  => Some(Self::BalanceProject),
-            _                  => None,
+            "account.analyze"   => Some(Self::AccountAnalyze),
+            "balance.project"   => Some(Self::BalanceProject),
+            "export.report"     => Some(Self::ExportReport),
+            _                   => None,
         }
     }
 }
@@ -108,6 +114,12 @@ pub async fn dispatch(
         JobType::BalanceProject => {
             pipeline::run_balance_project(entity_id, job_id, pools).await
         }
+
+        JobType::ExportReport => {
+            let meta: ExportMeta = serde_json::from_value(metadata)
+                .map_err(|e| anyhow::anyhow!("invalid export.report metadata: {e}"))?;
+            export::run(entity_id, job_id, meta, pools).await
+        }
     }
 }
 
@@ -122,10 +134,11 @@ mod tests {
 
     #[test]
     fn job_type_from_str_known() {
-        assert_eq!(JobType::from_str("import.process"),  Some(JobType::ImportProcess));
+        assert_eq!(JobType::from_str("import.process"),    Some(JobType::ImportProcess));
         assert_eq!(JobType::from_str("entries.reprocess"), Some(JobType::EntriesReprocess));
-        assert_eq!(JobType::from_str("account.analyze"), Some(JobType::AccountAnalyze));
-        assert_eq!(JobType::from_str("balance.project"), Some(JobType::BalanceProject));
+        assert_eq!(JobType::from_str("account.analyze"),   Some(JobType::AccountAnalyze));
+        assert_eq!(JobType::from_str("balance.project"),   Some(JobType::BalanceProject));
+        assert_eq!(JobType::from_str("export.report"),     Some(JobType::ExportReport));
     }
 
     #[test]

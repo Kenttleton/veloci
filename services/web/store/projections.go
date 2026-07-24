@@ -28,6 +28,30 @@ const projectionCols = `
 	projected_balance_cents, is_pinch_point
 `
 
+// ListLatestProjections returns entity-level projections from the most recent
+// completed engine run, ordered ascending by projected_date.
+func (s *Store) ListLatestProjections(ctx context.Context, entityID string, limit int) ([]Projection, error) {
+	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
+		SELECT %s FROM projections
+		WHERE entity_id = $1
+		  AND account_id IS NULL
+		  AND job_id = (
+			SELECT id FROM processing_jobs
+			WHERE entity_id = $1
+			  AND job_type IN ('import.process', 'entries.reprocess', 'balance.project')
+			  AND status = 'complete'
+			ORDER BY completed_at DESC
+			LIMIT 1
+		  )
+		ORDER BY projected_date ASC
+		LIMIT $2
+	`, projectionCols), entityID, limit)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowToStructByName[Projection])
+}
+
 // ListProjections returns a paginated list of projections for an entity.
 func (s *Store) ListProjections(ctx context.Context, entityID string, limit int, cursor string) ([]Projection, error) {
 	if cursor == "" {

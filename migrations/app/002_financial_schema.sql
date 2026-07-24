@@ -55,7 +55,7 @@ CREATE TABLE processing_jobs (
   id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   entity_id    UUID        NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
   job_type     TEXT        NOT NULL
-               CHECK (job_type IN ('import.process', 'entries.reprocess', 'account.analyze', 'balance.project')),
+               CHECK (job_type IN ('import.process', 'entries.reprocess', 'account.analyze', 'balance.project', 'export.report')),
   triggered_by UUID        NOT NULL REFERENCES users(id),
   status       TEXT        NOT NULL DEFAULT 'queued'
                CHECK (status IN ('queued', 'processing', 'complete', 'failed')),
@@ -329,6 +329,33 @@ CREATE TABLE projections (
 );
 
 CREATE INDEX ON projections (entity_id, account_id, projected_date);
+
+-- ── EXPORTS ───────────────────────────────────────────────────────────────────
+-- Generic export artifacts produced by the engine. Supports inline storage now;
+-- storage_type='object' with storage_ref enables future S3/object-storage swap
+-- without a schema change. parameters JSONB carries the full generation inputs,
+-- enabling reruns with the same config against fresher data.
+
+CREATE TABLE exports (
+  id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  entity_id    UUID        NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+  job_id       UUID        NOT NULL REFERENCES processing_jobs(id) ON DELETE CASCADE,
+  created_by   UUID        REFERENCES users(id) ON DELETE SET NULL,
+  export_type  TEXT        NOT NULL,
+  format       TEXT        NOT NULL DEFAULT 'csv',
+  parameters   JSONB       NOT NULL DEFAULT '{}',
+  storage_type TEXT        NOT NULL DEFAULT 'inline',
+  storage_ref  TEXT,
+  data         BYTEA,
+  size_bytes   BIGINT,
+  filename     TEXT        NOT NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
+  expires_at   TIMESTAMPTZ NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC' + INTERVAL '24 hours')
+);
+
+CREATE INDEX exports_entity_job  ON exports (entity_id, job_id);
+CREATE INDEX exports_expires_at  ON exports (expires_at);
+CREATE INDEX exports_entity_type ON exports (entity_id, export_type, created_at DESC);
 
 -- ── ENTITY CONFIG ─────────────────────────────────────────────────────────────
 -- Per-entity configuration. One row per entity, created with defaults on setup.

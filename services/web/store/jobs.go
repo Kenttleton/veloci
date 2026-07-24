@@ -86,6 +86,20 @@ func (s *Store) CreateJob(ctx context.Context, entityID, jobType, triggeredBy st
 	return pgx.CollectOneRow(rows, pgx.RowToStructByName[ProcessingJob])
 }
 
+// UpdateJobStatus transitions a processing_jobs row to the given status.
+// started_at is set on 'processing'; completed_at is set on 'complete' or 'failed'.
+func (s *Store) UpdateJobStatus(ctx context.Context, jobID, status string, errMsg *string) error {
+	_, err := s.pool.Exec(ctx, `
+		UPDATE processing_jobs SET
+			status       = $1,
+			started_at   = CASE WHEN $1 = 'processing' THEN NOW() ELSE started_at END,
+			completed_at = CASE WHEN $1 IN ('complete', 'failed') THEN NOW() ELSE NULL END,
+			error        = $3
+		WHERE id = $2
+	`, status, jobID, errMsg)
+	return err
+}
+
 // ListActiveJobs returns all queued or processing jobs for an entity (for SSE initial state).
 func (s *Store) ListActiveJobs(ctx context.Context, entityID string) ([]ProcessingJob, error) {
 	rows, err := s.pool.Query(ctx, fmt.Sprintf(`

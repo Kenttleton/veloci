@@ -162,6 +162,8 @@ templ jobStream() {
 				if (evt.status === 'complete' && TX_JOBS[evt.job_type]) {
 					refreshTransactions();
 				}
+				// Broadcast to any page that wants to react to job events.
+				document.dispatchEvent(new CustomEvent('veloci:job', { detail: evt }));
 			}
 
 			function connect() {

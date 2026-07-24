@@ -2,61 +2,115 @@ package page
 
 import (
 	"fmt"
-
 	"github.com/veloci/veloci/store"
 )
 
 templ ReportsPage(shell ShellData, data ReportsData) {
 	@Shell(shell) {
 		<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
+			<!-- Exports panel -->
+			<div style="padding:10px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
+				<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+					<span style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:0.04em;text-transform:uppercase">Exports</span>
+					if data.CanExport {
+						<button id="rpt-export-btn" style="font-size:11px;padding:2px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;color:var(--text2);font-family:inherit;cursor:pointer;margin-left:auto">
+							Generate Report
+						</button>
+					}
+				</div>
+				if len(data.Exports) == 0 {
+					<div id="exp-empty" style="font-size:12px;color:var(--text3);padding:4px 0">
+						No exports yet.
+					</div>
+				} else {
+					<div id="exp-empty" style="display:none;font-size:12px;color:var(--text3);padding:4px 0">No exports yet.</div>
+				}
+				<table id="exp-table" style={ "width:100%;border-collapse:collapse;" + ifStr(len(data.Exports)==0, "display:none", "") }>
+					<thead>
+						<tr style="border-bottom:1px solid var(--border)">
+							<th style="padding:4px 8px 4px 0;text-align:left;font-size:10px;font-weight:600;color:var(--text3)">Filename</th>
+							<th style="padding:4px 8px;text-align:left;font-size:10px;font-weight:600;color:var(--text3)">Type</th>
+							<th style="padding:4px 8px;text-align:left;font-size:10px;font-weight:600;color:var(--text3)">Size</th>
+							<th style="padding:4px 8px;text-align:left;font-size:10px;font-weight:600;color:var(--text3)">Created</th>
+							<th style="padding:4px 8px;text-align:left;font-size:10px;font-weight:600;color:var(--text3)">Expires</th>
+							<th style="padding:4px 8px;text-align:left;font-size:10px;font-weight:600;color:var(--text3)"></th>
+						</tr>
+					</thead>
+					<tbody id="exp-tbody">
+						for _, exp := range data.Exports {
+							@exportRow(exp)
+						}
+					</tbody>
+				</table>
+				<!-- Filter bar for generating an export -->
+				if data.CanExport {
+					<div id="rpt-filter-bar" style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap">
+						<label style="font-size:12px;color:var(--text3)">From</label>
+						<input id="rpt-date-from" type="date" style="font-size:12px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:3px 7px;color:var(--text);font-family:inherit;outline:none"/>
+						<label style="font-size:12px;color:var(--text3)">To</label>
+						<input id="rpt-date-to" type="date" style="font-size:12px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:3px 7px;color:var(--text);font-family:inherit;outline:none"/>
+						<label style="font-size:12px;color:var(--text3)">Filename</label>
+						<input id="rpt-filename" type="text" placeholder="auto-generated" style="font-size:12px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:3px 7px;color:var(--text);font-family:inherit;outline:none;width:200px"/>
+					</div>
+				} else {
+					<!-- read-only users still use the filter for the history view -->
+					<div id="rpt-filter-bar" style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap">
+						<label style="font-size:12px;color:var(--text3)">From</label>
+						<input id="rpt-date-from" type="date" style="font-size:12px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:3px 7px;color:var(--text);font-family:inherit;outline:none"/>
+						<label style="font-size:12px;color:var(--text3)">To</label>
+						<input id="rpt-date-to" type="date" style="font-size:12px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:3px 7px;color:var(--text);font-family:inherit;outline:none"/>
+						<button id="rpt-filter-btn" style="font-size:12px;padding:3px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;color:var(--text2);font-family:inherit;cursor:pointer">Filter</button>
+					</div>
+				}
+				if data.CanExport {
+					<div style="display:flex;align-items:center;gap:8px;margin-top:6px">
+						<button id="rpt-filter-btn" style="font-size:12px;padding:3px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;color:var(--text2);font-family:inherit;cursor:pointer">Filter</button>
+					</div>
+				}
+			</div>
 			<!-- Summary strip -->
 			<div style="display:flex;align-items:center;gap:24px;padding:10px 20px;border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto">
 				@rptSummaryChip("Income", &data.Summary.IncomeRate, "var(--income)")
 				@rptSummaryChip("Spend", &data.Summary.SpendRate, "var(--commit)")
 				@rptSummaryChipSigned("Margin", &data.MarginRate)
 				@rptSummaryChipSigned("Drift", &data.Summary.DriftRate)
-				if data.PinchCount > 0 {
-					<div style="margin-left:auto;display:flex;align-items:center;gap:6px;padding:4px 12px;background:color-mix(in srgb,var(--surface2) 60%,var(--commit) 40%);border:1px solid var(--commit);border-radius:20px;flex-shrink:0">
-						<span style="width:6px;height:6px;border-radius:50%;background:var(--commit);display:inline-block"></span>
-						<span style="font-size:12px;font-weight:600;color:var(--commit)">
-							if data.PinchCount == 1 {
-								{ fmt.Sprintf("%d pinch point", data.PinchCount) }
-							} else {
-								{ fmt.Sprintf("%d pinch points", data.PinchCount) }
-							}
-						</span>
+				if !data.Summary.ComputedAsOf.IsZero() {
+					<div style="margin-left:auto;font-size:11px;color:var(--text3);flex-shrink:0">
+						as of { data.Summary.ComputedAsOf.Format("Jan 2, 2006") }
 					</div>
 				}
 			</div>
-			<!-- Projections table -->
-			<div style="flex:1;overflow:auto">
-				if len(data.Projections) == 0 {
-					<div style="padding:48px 20px;text-align:center;color:var(--text3);font-size:13px">
-						No projections yet. Run the engine on the Ledger page to generate a forecast.
+			<!-- History table -->
+			<div id="rpt-section" style="flex:1;overflow:auto" data-next-cursor={ data.NextCursor }>
+				if len(data.History) == 0 {
+					<div id="rpt-empty" style="padding:48px 20px;text-align:center;color:var(--text3);font-size:13px">
+						No snapshot data yet. Upload transactions and run the engine to generate a report.
 					</div>
 				} else {
 					<table style="width:100%;border-collapse:collapse">
 						<thead>
 							<tr style="position:sticky;top:0;background:var(--surface);z-index:1;border-bottom:1px solid var(--border)">
-								<th style="padding:8px 20px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);width:100px">Date</th>
+								<th style="padding:8px 20px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);width:120px">Date</th>
 								<th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:var(--text3)">Income</th>
 								<th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:var(--text3)">Spend</th>
 								<th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:var(--text3)">Margin</th>
-								<th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:var(--text3)">Balance</th>
-								<th style="padding:8px 12px;text-align:center;font-size:11px;font-weight:600;color:var(--text3);width:80px">Status</th>
+								<th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:var(--text3)">Drift</th>
 							</tr>
 						</thead>
-						<tbody>
-							for _, p := range data.Projections {
-								@rptProjectionRow(p)
+						<tbody id="rpt-tbody">
+							for _, row := range data.History {
+								@rptHistoryRow(row)
 							}
 						</tbody>
 					</table>
+					<div id="rpt-sentinel" style="height:1px"></div>
+					<div id="rpt-loading" style="display:none;padding:12px 20px;font-size:12px;color:var(--text3);text-align:center">Loading…</div>
 				}
 			</div>
 		</div>
 		<script>
 			(function () {
+				// ─── Gran toggle ─────────────────────────────────────────────────
 				var activeGran = localStorage.getItem('veloci-gran') || 'day';
 
 				function updateRateDisplays() {
@@ -64,17 +118,13 @@ templ ReportsPage(shell ShellData, data ReportsData) {
 					document.querySelectorAll('[data-fmt-day]').forEach(function (el) {
 						el.textContent = el.dataset[attr] || el.dataset.fmtDay;
 					});
-					var label = activeGran === 'day' ? '/day' : activeGran === 'year' ? '/yr' : '/mo';
-					document.querySelectorAll('.js-gran-label').forEach(function (el) {
-						el.textContent = label;
-					});
 				}
 
 				function applyGran(gran) {
 					activeGran = gran;
 					localStorage.setItem('veloci-gran', activeGran);
 					document.querySelectorAll('.js-gran').forEach(function (b) {
-						var on   = b.dataset.gran === activeGran;
+						var on = b.dataset.gran === activeGran;
 						b.style.background = on ? 'var(--accent)' : 'var(--surface2)';
 						b.style.color      = on ? '#fff' : 'var(--text2)';
 						b.style.border     = on ? 'none' : '1px solid var(--border)';
@@ -84,53 +134,318 @@ templ ReportsPage(shell ShellData, data ReportsData) {
 
 				document.addEventListener('click', function (e) {
 					var btn = e.target.closest('.js-gran');
-					if (!btn) return;
-					applyGran(btn.dataset.gran);
+					if (btn) applyGran(btn.dataset.gran);
 				});
 
 				applyGran(activeGran);
+
+				// ─── Rate formatters ─────────────────────────────────────────────
+				function fmtAbs(cpd, suffix) {
+					var v = Math.abs(cpd) / 100;
+					return '$' + v.toFixed(2) + suffix;
+				}
+				function fmtSgn(cpd, suffix) {
+					var v = cpd / 100;
+					if (v > 0) return '+$' + v.toFixed(2) + suffix;
+					if (v < 0) return '−$' + Math.abs(v).toFixed(2) + suffix;
+					return '$0.00' + suffix;
+				}
+				function fmtRow(cpd, signed) {
+					var mo = (signed ? fmtSgn : fmtAbs)(cpd * 30.44, '/mo');
+					var day = (signed ? fmtSgn : fmtAbs)(cpd, '/day');
+					var yr = (signed ? fmtSgn : fmtAbs)(cpd * 365, '/yr');
+					return { mo: mo, day: day, yr: yr };
+				}
+				function signColor(cpd) {
+					if (cpd > 0) return 'var(--income)';
+					if (cpd < 0) return 'var(--commit)';
+					return 'var(--text2)';
+				}
+				function fmtDate(iso) {
+					var p = iso.split('-');
+					var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+					return months[parseInt(p[1],10)-1] + ' ' + parseInt(p[2],10) + ', ' + p[0];
+				}
+
+				function makeRow(r) {
+					var tr = document.createElement('tr');
+					tr.style.borderBottom = '1px solid var(--border)';
+					var inc = fmtRow(r.income_rate, false);
+					var spd = fmtRow(r.spend_rate, false);
+					var mgn = fmtRow(r.margin_rate, true);
+					var dft = fmtRow(r.drift_rate, true);
+					var attr = activeGran === 'day' ? 'day' : activeGran === 'year' ? 'yr' : 'mo';
+					tr.innerHTML =
+						'<td style="padding:8px 20px;font-size:13px;color:var(--text2);white-space:nowrap;font-variant-numeric:tabular-nums">'+fmtDate(r.date)+'</td>'
+						+'<td style="padding:8px 12px;text-align:right;font-size:13px;font-variant-numeric:tabular-nums;color:var(--income)"><span data-fmt-day="'+inc.day+'" data-fmt-mo="'+inc.mo+'" data-fmt-yr="'+inc.yr+'">'+inc[attr]+'</span></td>'
+						+'<td style="padding:8px 12px;text-align:right;font-size:13px;font-variant-numeric:tabular-nums;color:var(--commit)"><span data-fmt-day="'+spd.day+'" data-fmt-mo="'+spd.mo+'" data-fmt-yr="'+spd.yr+'">'+spd[attr]+'</span></td>'
+						+'<td style="padding:8px 12px;text-align:right;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;color:'+signColor(r.margin_rate)+'"><span data-fmt-day="'+mgn.day+'" data-fmt-mo="'+mgn.mo+'" data-fmt-yr="'+mgn.yr+'">'+mgn[attr]+'</span></td>'
+						+'<td style="padding:8px 12px;text-align:right;font-size:13px;font-variant-numeric:tabular-nums;color:'+signColor(r.drift_rate)+'"><span data-fmt-day="'+dft.day+'" data-fmt-mo="'+dft.mo+'" data-fmt-yr="'+dft.yr+'">'+dft[attr]+'</span></td>';
+					return tr;
+				}
+
+				// ─── Infinite scroll ─────────────────────────────────────────────
+				(function () {
+					var section = document.getElementById('rpt-section');
+					if (!section) return;
+					var tbody     = document.getElementById('rpt-tbody');
+					var sentinel  = document.getElementById('rpt-sentinel');
+					var loadingEl = document.getElementById('rpt-loading');
+					if (!tbody || !sentinel) return;
+
+					var nextCursor = section.dataset.nextCursor || null;
+					var loading    = false;
+					var observer   = null;
+
+					function buildURL(cursor) {
+						var u = '/api/snapshots/report?limit=60';
+						if (cursor) u += '&cursor=' + encodeURIComponent(cursor);
+						var from = document.getElementById('rpt-date-from');
+						var to   = document.getElementById('rpt-date-to');
+						if (from && from.value) u += '&date_from=' + encodeURIComponent(from.value);
+						if (to && to.value)     u += '&date_to='   + encodeURIComponent(to.value);
+						return u;
+					}
+
+					function loadMore() {
+						if (loading || !nextCursor) return;
+						loading = true;
+						if (loadingEl) loadingEl.style.display = '';
+						fetch(buildURL(nextCursor))
+							.then(function (r) { return r.json(); })
+							.then(function (body) {
+								(body.data || []).forEach(function (r) { tbody.appendChild(makeRow(r)); });
+								nextCursor = (body.meta && body.meta.next_cursor) || null;
+								loading = false;
+								if (loadingEl) loadingEl.style.display = 'none';
+								if (!nextCursor && observer) observer.disconnect();
+							})
+							.catch(function () {
+								loading = false;
+								if (loadingEl) loadingEl.style.display = 'none';
+							});
+					}
+
+					if (nextCursor) {
+						observer = new IntersectionObserver(function (entries) {
+							if (entries[0].isIntersecting) loadMore();
+						}, { rootMargin: '200px' });
+						observer.observe(sentinel);
+					}
+
+					// ─── Filter button ─────────────────────────────────────────
+					var filterBtn = document.getElementById('rpt-filter-btn');
+					if (filterBtn) {
+						filterBtn.addEventListener('click', function () {
+							tbody.innerHTML = '';
+							nextCursor = null;
+							loading = false;
+							if (observer) observer.disconnect();
+							fetch(buildURL(null))
+								.then(function (r) { return r.json(); })
+								.then(function (body) {
+									(body.data || []).forEach(function (r) { tbody.appendChild(makeRow(r)); });
+									nextCursor = (body.meta && body.meta.next_cursor) || null;
+									if (nextCursor) {
+										observer = new IntersectionObserver(function (entries) {
+											if (entries[0].isIntersecting) loadMore();
+										}, { rootMargin: '200px' });
+										observer.observe(sentinel);
+									}
+								})
+								.catch(function () {});
+						});
+					}
+				})();
+
+				// ─── Exports table helpers ───────────────────────────────────────
+				var expTbody = document.getElementById('exp-tbody');
+				var expTable = document.getElementById('exp-table');
+				var expEmpty = document.getElementById('exp-empty');
+
+				function fmtBytes(n) {
+					if (!n) return '—';
+					if (n < 1024) return n + ' B';
+					if (n < 1048576) return (n / 1024).toFixed(1) + ' KB';
+					return (n / 1048576).toFixed(1) + ' MB';
+				}
+				function fmtRelTime(iso) {
+					if (!iso) return '—';
+					var d = new Date(iso);
+					var now = new Date();
+					var diff = Math.round((d - now) / 1000);
+					if (diff < 0) return 'expired';
+					if (diff < 60) return 'in ' + diff + 's';
+					if (diff < 3600) return 'in ' + Math.round(diff/60) + 'm';
+					return 'in ' + Math.round(diff/3600) + 'h';
+				}
+				function fmtCreated(iso) {
+					if (!iso) return '—';
+					var d = new Date(iso);
+					return d.toLocaleString();
+				}
+
+				function makeExportRow(exp, status) {
+					var tr = document.createElement('tr');
+					tr.dataset.jobId = exp.job_id;
+					tr.style.borderBottom = '1px solid var(--border)';
+					var dlCell = status === 'complete'
+						? '<a href="/api/exports/'+exp.job_id+'/download" style="font-size:11px;color:var(--accent);text-decoration:none">Download</a>'
+						: '<span style="font-size:11px;color:var(--text3)">' + (status === 'failed' ? 'Failed' : 'Generating…') + '</span>';
+					tr.innerHTML =
+						'<td style="padding:4px 0;font-size:12px;color:var(--text2);max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+
+							(exp.filename || '—')+'</td>'+
+						'<td style="padding:4px 8px;font-size:12px;color:var(--text3)">'+
+							(exp.export_type || '—') + ' / ' + (exp.format || '—') +'</td>'+
+						'<td style="padding:4px 8px;font-size:12px;color:var(--text3)">'+fmtBytes(exp.size_bytes)+'</td>'+
+						'<td style="padding:4px 8px;font-size:12px;color:var(--text3)">'+fmtCreated(exp.created_at)+'</td>'+
+						'<td style="padding:4px 8px;font-size:12px;color:var(--text3)">'+fmtRelTime(exp.expires_at)+'</td>'+
+						'<td style="padding:4px 8px">'+dlCell+'</td>';
+					return tr;
+				}
+
+				function prependExport(exp, status) {
+					var existing = expTbody ? expTbody.querySelector('[data-job-id="'+exp.job_id+'"]') : null;
+					if (existing) {
+						existing.replaceWith(makeExportRow(exp, status));
+					} else {
+						if (expTbody) expTbody.prepend(makeExportRow(exp, status));
+					}
+					if (expTable) expTable.style.display = '';
+					if (expEmpty) expEmpty.style.display = 'none';
+				}
+
+				// ─── Async export trigger ────────────────────────────────────────
+				var exportBtn = document.getElementById('rpt-export-btn');
+				if (exportBtn) {
+					exportBtn.addEventListener('click', function () {
+						var from     = document.getElementById('rpt-date-from');
+						var to       = document.getElementById('rpt-date-to');
+						var filename = document.getElementById('rpt-filename');
+						var params   = {};
+						if (from && from.value) params.date_from = from.value;
+						if (to && to.value)     params.date_to   = to.value;
+
+						var body = {
+							export_type: 'report',
+							format:      'csv',
+							parameters:  params
+						};
+						if (filename && filename.value) body.filename = filename.value;
+
+						exportBtn.textContent = 'Queuing…';
+						exportBtn.disabled = true;
+
+						fetch('/api/exports', {
+							method:  'POST',
+							headers: { 'Content-Type': 'application/json' },
+							body:    JSON.stringify(body)
+						})
+						.then(function (r) { return r.json(); })
+						.then(function (resp) {
+							var jobId = resp.data && resp.data.job_id;
+							if (jobId) {
+								// Show a pending placeholder row immediately
+								prependExport({ job_id: jobId, export_type: 'report', format: 'csv',
+									filename: (filename && filename.value) || 'generating…',
+									size_bytes: null, created_at: new Date().toISOString(), expires_at: null
+								}, 'queued');
+							}
+						})
+						.catch(function () {})
+						.finally(function () {
+							exportBtn.textContent = 'Generate Report';
+							exportBtn.disabled = false;
+						});
+					});
+				}
+
+				// ─── SSE job completion → refresh export row ─────────────────────
+				// The shell broadcasts all SSE job events as 'veloci:job' CustomEvents.
+				// Listen here to update the exports table without touching the EventSource.
+				document.addEventListener('veloci:job', function (e) {
+					var evt = e.detail;
+					if (evt.job_type !== 'export.report') return;
+
+					if (evt.status === 'complete') {
+						// Refresh the exports list to pick up the completed artifact with
+						// its real filename and size.
+						fetch('/api/exports?limit=10')
+							.then(function (r) { return r.json(); })
+							.then(function (body) {
+								(body.data || []).forEach(function (exp) {
+									prependExport(exp, 'complete');
+								});
+							})
+							.catch(function () {});
+					} else if (evt.status === 'failed') {
+						var tr = expTbody && expTbody.querySelector('[data-job-id="'+evt.job_id+'"]');
+						if (tr) {
+							var cell = tr.querySelector('td:last-child');
+							if (cell) cell.innerHTML = '<span style="font-size:11px;color:var(--commit)">Failed</span>';
+						}
+					}
+				});
 			})();
 		</script>
 	}
 }
 
-templ rptProjectionRow(p store.Projection) {
-	<tr style={ rptRowStyle(p.IsPinchPoint) }>
+templ exportRow(exp store.Export) {
+	<tr data-job-id={ exp.JobID } style="border-bottom:1px solid var(--border)">
+		<td style="padding:4px 0;font-size:12px;color:var(--text2);max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+			{ exp.Filename }
+		</td>
+		<td style="padding:4px 8px;font-size:12px;color:var(--text3)">
+			{ exp.ExportType } / { exp.Format }
+		</td>
+		<td style="padding:4px 8px;font-size:12px;color:var(--text3)">
+			{ fmtExportSize(exp.SizeBytes) }
+		</td>
+		<td style="padding:4px 8px;font-size:12px;color:var(--text3)">
+			{ exp.CreatedAt.Format("Jan 2, 2006 15:04") }
+		</td>
+		<td style="padding:4px 8px;font-size:12px;color:var(--text3)">
+			{ exp.ExpiresAt.Format("Jan 2, 15:04") }
+		</td>
+		<td style="padding:4px 8px">
+			<a href={ templ.SafeURL("/api/exports/" + exp.JobID + "/download") } style="font-size:11px;color:var(--accent);text-decoration:none">Download</a>
+		</td>
+	</tr>
+}
+
+templ rptHistoryRow(row store.SnapshotDaySummary) {
+	<tr style="border-bottom:1px solid var(--border)">
 		<td style="padding:8px 20px;font-size:13px;color:var(--text2);white-space:nowrap;font-variant-numeric:tabular-nums">
-			{ p.ProjectedDate.Format("Jan 2, 2006") }
+			{ row.SnapshotDate.Format("Jan 2, 2006") }
 		</td>
 		<td style="padding:8px 12px;text-align:right;font-size:13px;font-variant-numeric:tabular-nums;color:var(--income)">
 			<span
-				data-fmt-day={ fmtRateDay(&p.IncomeRatePerDay) }
-				data-fmt-mo={ fmtRateMo(&p.IncomeRatePerDay) }
-				data-fmt-yr={ fmtRateYr(&p.IncomeRatePerDay) }
-			>{ fmtRateMo(&p.IncomeRatePerDay) }</span>
+				data-fmt-day={ fmtRateDay(&row.IncomeRate) }
+				data-fmt-mo={ fmtRateMo(&row.IncomeRate) }
+				data-fmt-yr={ fmtRateYr(&row.IncomeRate) }
+			>{ fmtRateMo(&row.IncomeRate) }</span>
 		</td>
 		<td style="padding:8px 12px;text-align:right;font-size:13px;font-variant-numeric:tabular-nums;color:var(--commit)">
 			<span
-				data-fmt-day={ fmtRateDay(&p.SpendRatePerDay) }
-				data-fmt-mo={ fmtRateMo(&p.SpendRatePerDay) }
-				data-fmt-yr={ fmtRateYr(&p.SpendRatePerDay) }
-			>{ fmtRateMo(&p.SpendRatePerDay) }</span>
+				data-fmt-day={ fmtRateDay(&row.SpendRate) }
+				data-fmt-mo={ fmtRateMo(&row.SpendRate) }
+				data-fmt-yr={ fmtRateYr(&row.SpendRate) }
+			>{ fmtRateMo(&row.SpendRate) }</span>
 		</td>
-		<td style={ "padding:8px 12px;text-align:right;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;" + rptMarginColor(p.MarginRatePerDay) }>
+		<td style={ "padding:8px 12px;text-align:right;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;" + rptSignColor(&row.MarginRate) }>
 			<span
-				data-fmt-day={ fmtRateDaySigned(&p.MarginRatePerDay) }
-				data-fmt-mo={ fmtRateMoSigned(&p.MarginRatePerDay) }
-				data-fmt-yr={ fmtRateYrSigned(&p.MarginRatePerDay) }
-			>{ fmtRateMoSigned(&p.MarginRatePerDay) }</span>
+				data-fmt-day={ fmtRateDaySigned(&row.MarginRate) }
+				data-fmt-mo={ fmtRateMoSigned(&row.MarginRate) }
+				data-fmt-yr={ fmtRateYrSigned(&row.MarginRate) }
+			>{ fmtRateMoSigned(&row.MarginRate) }</span>
 		</td>
-		<td style="padding:8px 12px;text-align:right;font-size:13px;font-variant-numeric:tabular-nums;color:var(--text2)">
-			if p.ProjectedBalanceCents != nil {
-				{ FormatBalance(p.ProjectedBalanceCents) }
-			} else {
-				<span style="color:var(--text3)">—</span>
-			}
-		</td>
-		<td style="padding:8px 12px;text-align:center">
-			if p.IsPinchPoint {
-				<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:color-mix(in srgb,var(--surface2) 60%,var(--commit) 40%);color:var(--commit)">Pinch</span>
-			}
+		<td style={ "padding:8px 12px;text-align:right;font-size:13px;font-variant-numeric:tabular-nums;" + rptSignColor(&row.DriftRate) }>
+			<span
+				data-fmt-day={ fmtRateDaySigned(&row.DriftRate) }
+				data-fmt-mo={ fmtRateMoSigned(&row.DriftRate) }
+				data-fmt-yr={ fmtRateYrSigned(&row.DriftRate) }
+			>{ fmtRateMoSigned(&row.DriftRate) }</span>
 		</td>
 	</tr>
 }
@@ -174,6 +489,34 @@ func rptSignColor(r *float64) string {
 	return "color:var(--text2)"
 }
 
+func fmtExportSize(b *int64) string {
+	if b == nil {
+		return "—"
+	}
+	n := *b
+	if n < 1024 {
+		return fmt.Sprintf("%d B", n)
+	}
+	if n < 1048576 {
+		return fmt.Sprintf("%.1f KB", float64(n)/1024)
+	}
+	return fmt.Sprintf("%.1f MB", float64(n)/1048576)
+}
+
+func ifStr(cond bool, a, b string) string {
+	if cond {
+		return a
+	}
+	return b
+}
+
+func rptRowStyle(isPinch bool) string {
+	if isPinch {
+		return "border-bottom:1px solid var(--border);background:color-mix(in srgb,var(--surface) 80%,var(--commit) 20%)"
+	}
+	return "border-bottom:1px solid var(--border)"
+}
+
 func rptMarginColor(ratePerDay float64) string {
 	if ratePerDay > 0 {
 		return "color:var(--income)"
@@ -182,12 +525,4 @@ func rptMarginColor(ratePerDay float64) string {
 		return "color:var(--commit)"
 	}
 	return "color:var(--text2)"
-}
-
-func rptRowStyle(isPinch bool) string {
-	base := "border-bottom:1px solid var(--border)"
-	if isPinch {
-		return base + ";background:color-mix(in srgb,var(--surface) 80%,var(--commit) 20%)"
-	}
-	return base
 }

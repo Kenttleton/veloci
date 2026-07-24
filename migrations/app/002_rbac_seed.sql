@@ -10,6 +10,7 @@ INSERT INTO permissions (name) VALUES
   ('entries:write'),
   ('classifications:write'),
   ('reports:read'),
+  ('reports:write'),
   ('users:manage'),
   ('entity:configure');
 
@@ -21,5 +22,5 @@ WHERE r.name = 'entity_admin';
 -- entity_user gets read + labels + reports
 INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id FROM roles r
-JOIN permissions p ON p.name IN ('accounts:read', 'labels:write', 'reports:read')
+JOIN permissions p ON p.name IN ('accounts:read', 'labels:write', 'reports:read', 'reports:write')
 WHERE r.name = 'entity_user';

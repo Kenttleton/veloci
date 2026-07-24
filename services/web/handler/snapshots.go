@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"encoding/csv"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -177,6 +179,101 @@ func (h *SnapshotsHandler) GetSnapshotHistory(c echo.Context) error {
 	return c.JSON(http.StatusOK, response.Single(views))
 }
 
+// snapshotReportRow is the JSON/CSV representation of one day in the report.
+type snapshotReportRow struct {
+	Date       string  `json:"date"`
+	IncomeRate float64 `json:"income_rate"`
+	SpendRate  float64 `json:"spend_rate"`
+	MarginRate float64 `json:"margin_rate"`
+	DriftRate  float64 `json:"drift_rate"`
+}
+
+// GetSnapshotReport returns per-day aggregate rates for the entity.
+// Supports keyset pagination via ?cursor=YYYY-MM-DD and optional date range
+// via ?date_from=YYYY-MM-DD&date_to=YYYY-MM-DD. Pass ?format=csv to download.
+func (h *SnapshotsHandler) GetSnapshotReport(c echo.Context) error {
+	ctx := c.Request().Context()
+	entityID := middleware.EntityID(ctx)
+
+	limit, err := strconv.Atoi(c.QueryParam("limit"))
+	if err != nil || limit <= 0 || limit > 500 {
+		limit = 60
+	}
+
+	var before, dateFrom, dateTo *time.Time
+	if v := c.QueryParam("cursor"); v != "" {
+		t, err := time.Parse("2006-01-02", v)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusUnprocessableEntity, "invalid cursor date")
+		}
+		before = &t
+	}
+	if v := c.QueryParam("date_from"); v != "" {
+		t, err := time.Parse("2006-01-02", v)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusUnprocessableEntity, "invalid date_from")
+		}
+		dateFrom = &t
+	}
+	if v := c.QueryParam("date_to"); v != "" {
+		t, err := time.Parse("2006-01-02", v)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusUnprocessableEntity, "invalid date_to")
+		}
+		dateTo = &t
+	}
+
+	if c.QueryParam("format") == "csv" {
+		// limit=0 → no LIMIT clause; streams all matching rows.
+		rows, err := h.s.ListSnapshotDaySummaries(ctx, entityID, 0, nil, dateFrom, dateTo)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
+		}
+		c.Response().Header().Set("Content-Type", "text/csv; charset=utf-8")
+		c.Response().Header().Set("Content-Disposition", `attachment; filename="veloci-report.csv"`)
+		w := csv.NewWriter(c.Response())
+		_ = w.Write([]string{"Date", "Income/mo", "Spend/mo", "Margin/mo", "Drift/mo"})
+		for _, row := range rows {
+			_ = w.Write([]string{
+				row.SnapshotDate.Format("2006-01-02"),
+				fmt.Sprintf("%.2f", row.IncomeRate/100*30.44),
+				fmt.Sprintf("%.2f", row.SpendRate/100*30.44),
+				fmt.Sprintf("%.2f", row.MarginRate/100*30.44),
+				fmt.Sprintf("%.2f", row.DriftRate/100*30.44),
+			})
+		}
+		w.Flush()
+		return nil
+	}
+
+	items, err := h.s.ListSnapshotDaySummaries(ctx, entityID, limit+1, before, dateFrom, dateTo)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
+	}
+
+	hasMore := len(items) > limit
+	if hasMore {
+		items = items[:limit]
+	}
+	var nextCursor *string
+	if hasMore && len(items) > 0 {
+		v := items[len(items)-1].SnapshotDate.Format("2006-01-02")
+		nextCursor = &v
+	}
+
+	views := make([]snapshotReportRow, len(items))
+	for i, item := range items {
+		views[i] = snapshotReportRow{
+			Date:       item.SnapshotDate.Format("2006-01-02"),
+			IncomeRate: item.IncomeRate,
+			SpendRate:  item.SpendRate,
+			MarginRate: item.MarginRate,
+			DriftRate:  item.DriftRate,
+		}
+	}
+	return c.JSON(http.StatusOK, response.Page(views, nextCursor, limit, hasMore))
+}
+
 // RegisterSnapshotsRoutes registers snapshot endpoints on the given Echo group.
 func RegisterSnapshotsRoutes(g *echo.Group, s *store.Store, perms middleware.PermissionCache) {
 	h := NewSnapshotsHandler(s)
@@ -185,4 +282,5 @@ func RegisterSnapshotsRoutes(g *echo.Group, s *store.Store, perms middleware.Per
 	read.GET("/snapshots", h.ListSnapshots)
 	read.GET("/snapshots/summary", h.GetSnapshotSummary)
 	read.GET("/snapshots/:node_id/history", h.GetSnapshotHistory)
+	read.GET("/snapshots/report", h.GetSnapshotReport)
 }

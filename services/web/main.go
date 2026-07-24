@@ -145,7 +145,7 @@ func runServe(_ *cobra.Command, _ []string) error {
 		perms = make(middleware.PermissionCache)
 	}
 
-	pages := page.NewServer(s, authClient, pool)
+	pages := page.NewServer(s, authClient, pool, perms)
 	jobsHandler := handler.NewJobsHandler(s, pub, pool)
 
 	e := echo.New()
@@ -208,9 +208,24 @@ func runServe(_ *cobra.Command, _ []string) error {
 	handler.RegisterJobsRoutes(api, jobsHandler, perms)
 	handler.RegisterAutocompleteRoutes(api, s, perms)
 	handler.RegisterEntityConfigRoutes(api, s, perms)
+	handler.RegisterExportsRoutes(api, s, pub, perms)
 
 	// Multipart upload — same API group auth already applied
 	api.POST("/imports", handler.NewImportsHandler(s, pub).UploadImport)
+
+	// Periodic cleanup of expired export artifacts.
+	go func() {
+		t := time.NewTicker(24 * time.Hour)
+		defer t.Stop()
+		for range t.C {
+			n, err := s.DeleteExpiredExports(context.Background())
+			if err != nil {
+				log.Printf("export cleanup error: %v", err)
+			} else if n > 0 {
+				log.Printf("export cleanup: deleted %d expired artifacts", n)
+			}
+		}
+	}()
 
 	port := viper.GetInt("veloci.port")
 	log.Printf("veloci listening on :%d", port)

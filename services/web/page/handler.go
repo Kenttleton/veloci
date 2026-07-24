@@ -134,11 +134,12 @@ type Server struct {
 	store *store.Store
 	auth  *authclient.Client
 	pool  *pgxpool.Pool
+	perms middleware.PermissionCache
 }
 
 // NewServer creates a page Server.
-func NewServer(s *store.Store, auth *authclient.Client, pool *pgxpool.Pool) *Server {
-	return &Server{store: s, auth: auth, pool: pool}
+func NewServer(s *store.Store, auth *authclient.Client, pool *pgxpool.Pool, perms middleware.PermissionCache) *Server {
+	return &Server{store: s, auth: auth, pool: pool, perms: perms}
 }
 
 func (s *Server) render(c echo.Context, comp templ.Component) error {
@@ -982,48 +983,40 @@ func (s *Server) Glossary(c echo.Context) error {
 	return s.render(c, GlossaryPage(titled(s.buildShellData(c.Request()), "Glossary")))
 }
 
+const reportsPageSize = 60
+
 // ReportsData is passed to the Reports page template.
 type ReportsData struct {
-	Summary     store.SnapshotSummary
-	MarginRate  float64
-	Projections []store.Projection
-	PinchCount  int
+	Summary      store.SnapshotSummary
+	MarginRate   float64
+	History      []store.SnapshotDaySummary
+	NextCursor   string // date string "YYYY-MM-DD", empty when no further pages
+	Exports      []store.Export
+	CanExport    bool // reports:write permission
 }
 
 func (s *Server) Reports(c echo.Context) error {
 	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
+	role := middleware.EntityRole(ctx)
 
 	summary, _ := s.store.GetSnapshotSummary(ctx, entityID)
+	history, _ := s.store.ListSnapshotDaySummaries(ctx, entityID, reportsPageSize+1, nil, nil, nil)
+	exports, _ := s.store.ListExports(ctx, entityID, 10, "")
 
-	// Fetch up to 180 projections (DESC from store), then reverse to ascending.
-	all, _ := s.store.ListProjections(ctx, entityID, 180, "")
-
-	// Keep only entity-level rows (account_id IS NULL = aggregate projection).
-	projections := all[:0]
-	for _, p := range all {
-		if p.AccountID == nil {
-			projections = append(projections, p)
-		}
-	}
-
-	// Reverse to ascending (soonest date first).
-	for i, j := 0, len(projections)-1; i < j; i, j = i+1, j-1 {
-		projections[i], projections[j] = projections[j], projections[i]
-	}
-
-	pinchCount := 0
-	for _, p := range projections {
-		if p.IsPinchPoint {
-			pinchCount++
-		}
+	var nextCursor string
+	if len(history) > reportsPageSize {
+		history = history[:reportsPageSize]
+		nextCursor = history[len(history)-1].SnapshotDate.Format("2006-01-02")
 	}
 
 	return s.render(c, ReportsPage(titled(s.buildShellData(c.Request()), "Reports"), ReportsData{
-		Summary:     summary,
-		MarginRate:  summary.IncomeRate - summary.SpendRate,
-		Projections: projections,
-		PinchCount:  pinchCount,
+		Summary:    summary,
+		MarginRate: summary.IncomeRate - summary.SpendRate,
+		History:    history,
+		NextCursor: nextCursor,
+		Exports:    exports,
+		CanExport:  s.perms.Has(role, "reports:write"),
 	}))
 }
 
