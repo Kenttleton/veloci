@@ -62,12 +62,32 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 					</select>
 				</div>
 			</div>
+			<!-- Granularity toggle row -->
+			<div style="display:flex;align-items:center;padding:0 20px;height:36px;border-bottom:1px solid var(--border);flex-shrink:0">
+				<div style="display:flex;gap:4px">
+					<button
+						class="js-gran"
+						data-gran="day"
+						style="background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:5px;padding:3px 10px;cursor:pointer;font-size:12px;font-weight:500;font-family:inherit"
+					>/day</button>
+					<button
+						class="js-gran"
+						data-gran="month"
+						style="background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:5px;padding:3px 10px;cursor:pointer;font-size:12px;font-weight:500;font-family:inherit"
+					>/mo</button>
+					<button
+						class="js-gran"
+						data-gran="year"
+						style="background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:5px;padding:3px 10px;cursor:pointer;font-size:12px;font-weight:500;font-family:inherit"
+					>/yr</button>
+				</div>
+			</div>
 			<div style="display:grid;grid-template-columns:28px 1fr 80px 70px 90px 110px 140px;padding:5px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
 				<div></div>
 				<div style="font-size:11px;font-weight:600;color:var(--text3)">Entry</div>
 				<div style="font-size:11px;font-weight:600;color:var(--text3)">Type</div>
 				<div style="font-size:11px;font-weight:600;color:var(--text3)">Dir</div>
-				<div style="font-size:11px;font-weight:600;color:var(--text3);text-align:right">Rate/day</div>
+				<div style="font-size:11px;font-weight:600;color:var(--text3);text-align:right">Rate/<span class="js-gran-label">day</span></div>
 				<div style="font-size:11px;font-weight:600;color:var(--text3);text-align:center">Status</div>
 				<div style="font-size:11px;font-weight:600;color:var(--text3);text-align:right">Fitness</div>
 			</div>
@@ -172,6 +192,36 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 		</dialog>
 		<script>
 			(function() {
+				// ── Granularity toggle ─────────────────────────────────────────────────────
+				var activeGran = localStorage.getItem('veloci-gran') || 'day';
+				function updateRateDisplays() {
+					var attr = activeGran === 'day' ? 'fmtDay' : activeGran === 'year' ? 'fmtYr' : 'fmtMo';
+					document.querySelectorAll('[data-fmt-day]').forEach(function (el) {
+						el.textContent = el.dataset[attr] || el.dataset.fmtDay;
+					});
+					var label = activeGran === 'day' ? 'day' : activeGran === 'year' ? 'yr' : 'mo';
+					document.querySelectorAll('.js-gran-label').forEach(function (el) {
+						el.textContent = label;
+					});
+				}
+				function applyGran(gran) {
+					activeGran = gran;
+					localStorage.setItem('veloci-gran', activeGran);
+					document.querySelectorAll('.js-gran').forEach(function (b) {
+						var on   = b.dataset.gran === activeGran;
+						b.style.background = on ? 'var(--accent)' : 'var(--surface2)';
+						b.style.color      = on ? '#fff' : 'var(--text2)';
+						b.style.border     = on ? 'none' : '1px solid var(--border)';
+					});
+					updateRateDisplays();
+				}
+				document.addEventListener('click', function (e) {
+					var btn = e.target.closest('.js-gran');
+					if (!btn) return;
+					applyGran(btn.dataset.gran);
+				});
+				applyGran(activeGran);
+
 				// ── Dirty state ───────────────────────────────────────────────────────────
 				var _dirty = false;
 				function markDirty() {
@@ -289,16 +339,22 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 							var entry = env.data;
 							if (!entry) return;
 
-							// Rate/day: prefer projected_rate_per_day (set by engine for system entries).
+							// Rate: prefer projected_rate_per_day (set by engine for system entries).
 							var rateEl = det.querySelector('.js-entry-rate');
 							if (rateEl) {
 								var rate = entry.projected_rate_per_day;
 								if (rate == null) {
-									rateEl.textContent = '—';
+									rateEl.dataset.fmtDay = '—';
+									rateEl.dataset.fmtMo  = '—';
+									rateEl.dataset.fmtYr  = '—';
 								} else {
-									var v = Math.abs(rate / 100);
-									rateEl.textContent = '$' + v.toFixed(2) + '/day';
+									var d = Math.abs(rate / 100);
+									rateEl.dataset.fmtDay = '$' + d.toFixed(2) + '/day';
+									rateEl.dataset.fmtMo  = '$' + Math.round(d * 30.44) + '/mo';
+									rateEl.dataset.fmtYr  = '$' + Math.round(d * 365.25) + '/yr';
 								}
+								var attr = activeGran === 'day' ? 'fmtDay' : activeGran === 'year' ? 'fmtYr' : 'fmtMo';
+								rateEl.textContent = rateEl.dataset[attr] || rateEl.dataset.fmtDay;
 							}
 
 							// Fitness %.
@@ -737,7 +793,13 @@ templ ledgerEntryRow(e store.EntryRow) {
 			</span>
 			<span style="font-size:12px;color:var(--text3)">{ entryTypeLabel(e.EntryType) }</span>
 			<span style={ "font-size:11px;font-weight:600;padding:2px 6px;border-radius:4px;display:inline-block;" + ledgerDirectionBadgeStyle(e.Direction) }>{ directionLabel(e.Direction) }</span>
-			<span class="js-entry-rate" style="font-size:12px;color:var(--text2);text-align:right;font-variant-numeric:tabular-nums">{ fmtRateDay(e.ProjectedRatePerDay) }</span>
+			<span
+				class="js-entry-rate"
+				data-fmt-day={ fmtRateDay(e.ProjectedRatePerDay) }
+				data-fmt-mo={ fmtRateMo(e.ProjectedRatePerDay) }
+				data-fmt-yr={ fmtRateYr(e.ProjectedRatePerDay) }
+				style="font-size:12px;color:var(--text2);text-align:right;font-variant-numeric:tabular-nums"
+			>{ fmtRateDay(e.ProjectedRatePerDay) }</span>
 			<span style={ ledgerStatusBadgeStyle(e.Status) }>{ ledgerStatusLabel(e.Status) }</span>
 			<span class="js-entry-fitness" style={ "font-size:12px;text-align:right;font-variant-numeric:tabular-nums;color:" + fitColor(e.Fitness) }>{ fitPct(e.Fitness) }</span>
 		</summary>
