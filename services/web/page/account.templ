@@ -32,10 +32,16 @@ templ AccountPage(shell ShellData, data AccountData) {
 				</div>
 			</div>
 			<div style="display:flex;align-items:center;justify-content:space-between;padding:0 20px;height:36px;border-bottom:1px solid var(--border);flex-shrink:0">
-				<button
-					id="upload-csv-btn"
-					style="background:none;border:1px solid var(--border);border-radius:4px;padding:3px 10px;cursor:pointer;font-size:12px;color:var(--text2);font-family:inherit"
-				>Upload CSV</button>
+				<div style="display:flex;align-items:center;gap:8px">
+					<button
+						id="upload-csv-btn"
+						style="background:none;border:1px solid var(--border);border-radius:4px;padding:3px 10px;cursor:pointer;font-size:12px;color:var(--text2);font-family:inherit"
+					>Upload CSV</button>
+					<button
+						id="delete-selected-btn"
+						style="display:none;background:none;border:1px solid var(--commit);border-radius:4px;padding:3px 10px;cursor:pointer;font-size:12px;color:var(--commit);font-family:inherit"
+					>Delete selected</button>
+				</div>
 				<button
 					id="delete-account-btn"
 					style="background:none;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:12px;color:var(--text3);font-family:inherit"
@@ -88,6 +94,7 @@ templ AccountPage(shell ShellData, data AccountData) {
 					<table style="width:100%;border-collapse:collapse">
 						<thead>
 							<tr style="position:sticky;top:0;background:var(--surface);z-index:1;border-bottom:1px solid var(--border)">
+								<th style="padding:8px 12px;width:32px"><input id="tx-select-all" type="checkbox" style="cursor:pointer"/></th>
 								<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);width:90px">Date</th>
 								<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3)">Merchant</th>
 								<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3)">Raw Payee</th>
@@ -551,7 +558,12 @@ templ AccountPage(shell ShellData, data AccountData) {
 					if (!layout) return {};
 					var fields = {};
 					layout.fields.forEach(function(field) {
-						if (field.kind !== 'column') return;
+						if (field.kind === 'enum') {
+							if (field.enum_values && field.enum_values.length) {
+								fields[field.key] = field.enum_values[0];
+							}
+							return;
+						}
 						headers.some(function(h) {
 							if (matchesAlias(h, field.aliases)) { fields[field.key] = h; return true; }
 							return false;
@@ -877,6 +889,68 @@ templ AccountPage(shell ShellData, data AccountData) {
 					});
 				}
 
+				// ─── Bulk selection ───────────────────────────────────────────────────
+				(function() {
+					var selectAllCb   = document.getElementById('tx-select-all');
+					var deleteSelBtn  = document.getElementById('delete-selected-btn');
+					if (!selectAllCb || !deleteSelBtn) return;
+
+					function getRowCheckboxes() {
+						return Array.from(document.querySelectorAll('#tx-tbody .tx-row-cb'));
+					}
+
+					window.syncSelectionUI = function() {
+						var cbs      = getRowCheckboxes();
+						var checked  = cbs.filter(function(c) { return c.checked; });
+						var n        = checked.length;
+						selectAllCb.checked       = n > 0 && n === cbs.length;
+						selectAllCb.indeterminate = n > 0 && n < cbs.length;
+						deleteSelBtn.style.display = n > 0 ? '' : 'none';
+						deleteSelBtn.textContent   = n > 0 ? 'Delete ' + n + ' selected' : 'Delete selected';
+					};
+
+					selectAllCb.addEventListener('change', function() {
+						getRowCheckboxes().forEach(function(cb) { cb.checked = selectAllCb.checked; });
+						syncSelectionUI();
+					});
+
+					document.getElementById('tx-tbody').addEventListener('change', function(e) {
+						if (e.target.classList.contains('tx-row-cb')) syncSelectionUI();
+					});
+
+					deleteSelBtn.addEventListener('click', function() {
+						var rows = Array.from(document.querySelectorAll('#tx-tbody tr')).filter(function(tr) {
+							var cb = tr.querySelector('.tx-row-cb');
+							return cb && cb.checked;
+						});
+						var ids = rows.map(function(tr) { return tr.dataset.txId; }).filter(Boolean);
+						if (!ids.length) return;
+						if (!confirm('Delete ' + ids.length + ' transaction' + (ids.length === 1 ? '' : 's') + '? This cannot be undone.')) return;
+
+						deleteSelBtn.disabled    = true;
+						deleteSelBtn.textContent = 'Deleting…';
+						fetch('/api/transactions', {
+							method: 'DELETE',
+							headers: {'Content-Type': 'application/json'},
+							body: JSON.stringify({ ids: ids }),
+						})
+						.then(function(r) {
+							if (!r.ok) return r.json().then(function(e) { throw new Error(e.detail || 'Delete failed'); });
+							rows.forEach(function(tr) { tr.remove(); });
+							selectAllCb.checked       = false;
+							selectAllCb.indeterminate = false;
+							deleteSelBtn.style.display = 'none';
+							deleteSelBtn.disabled      = false;
+							deleteSelBtn.textContent   = 'Delete selected';
+						})
+						.catch(function(err) {
+							alert(err.message || 'Delete failed. Please try again.');
+							deleteSelBtn.disabled    = false;
+							syncSelectionUI();
+						});
+					});
+				})();
+
 				// ─── Infinite scroll + SSE refresh ───────────────────────────────────
 				(function() {
 					var section = document.getElementById('tx-section');
@@ -904,6 +978,7 @@ templ AccountPage(shell ShellData, data AccountData) {
 					function makeRow(t) {
 						var tr = document.createElement('tr');
 						tr.dataset.merchant = t.merchant_normalized || '';
+						tr.dataset.txId = t.id;
 						tr.style.borderBottom = '1px solid var(--border)';
 						var amtColor = t.amount_cents >= 0 ? 'var(--income)' : 'var(--commit)';
 						var stBg = t.settlement_status === 'settled'
@@ -913,11 +988,13 @@ templ AccountPage(shell ShellData, data AccountData) {
 							? esc(t.imported_payee)
 							: '<span style="color:var(--text3)">—</span>';
 						tr.innerHTML =
-							'<td style="padding:8px 12px;font-size:13px;color:var(--text2);white-space:nowrap">'+esc(fmtDate(t.date))+'</td>'
+							'<td style="padding:8px 12px;width:32px"><input type="checkbox" class="tx-row-cb" style="cursor:pointer"/></td>'
+							+'<td style="padding:8px 12px;font-size:13px;color:var(--text2);white-space:nowrap">'+esc(fmtDate(t.date))+'</td>'
 							+'<td style="padding:8px 12px;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:0">'+payee+'</td>'
 							+'<td style="padding:8px 12px;font-size:12px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:0">'+esc(t.merchant_normalized||'')+'</td>'
 							+'<td style="padding:8px 12px;text-align:right"><span style="color:'+amtColor+';font-variant-numeric:tabular-nums">'+esc(fmtCents(t.amount_cents))+'</span></td>'
 							+'<td style="padding:8px 12px"><span style="font-size:11px;padding:2px 6px;border-radius:4px;background:'+stBg+';color:'+stColor+'">'+esc(t.settlement_status)+'</span></td>';
+						tr.querySelector('.tx-row-cb').addEventListener('change', syncSelectionUI);
 						return tr;
 					}
 
@@ -1263,7 +1340,8 @@ templ AccountPage(shell ShellData, data AccountData) {
 }
 
 templ txRow(t store.Transaction) {
-	<tr data-merchant={ t.MerchantNormalized } style="border-bottom:1px solid var(--border)">
+	<tr data-merchant={ t.MerchantNormalized } data-tx-id={ t.ID } style="border-bottom:1px solid var(--border)">
+		<td style="padding:8px 12px;width:32px"><input type="checkbox" class="tx-row-cb" style="cursor:pointer"/></td>
 		<td style="padding:8px 12px;font-size:13px;color:var(--text2);white-space:nowrap">
 			{ t.Date.Format("Jan 2, 2006") }
 		</td>

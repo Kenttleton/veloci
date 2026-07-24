@@ -74,6 +74,31 @@ func (s *Store) GetTransaction(ctx context.Context, entityID, id string) (Transa
 	return pgx.CollectOneRow(rows, pgx.RowToStructByName[Transaction])
 }
 
+// DeleteTransactions removes the given transaction IDs belonging to the entity.
+// Only IDs that actually belong to entityID are deleted (extras are silently ignored).
+func (s *Store) DeleteTransactions(ctx context.Context, entityID string, ids []string) (int64, error) {
+	uuids := make([]any, len(ids)+1)
+	uuids[0] = entityID
+	for i, id := range ids {
+		uuids[i+1] = id
+	}
+	placeholders := ""
+	for i := range ids {
+		if i > 0 {
+			placeholders += ","
+		}
+		placeholders += fmt.Sprintf("$%d::uuid", i+2)
+	}
+	tag, err := s.pool.Exec(ctx, fmt.Sprintf(`
+		DELETE FROM transactions
+		WHERE entity_id = $1 AND id IN (%s)
+	`, placeholders), uuids...)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}
+
 // ListTransactions returns a paginated list of transactions for an entity ordered by date DESC.
 // dr is an optional date filter; see DateRange / ResolveRange for resolution rules.
 // accountID and entryID are optional filters; entryID joins through transaction_entry_assignments.

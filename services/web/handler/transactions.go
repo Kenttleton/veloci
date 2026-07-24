@@ -134,6 +134,27 @@ func (h *TransactionsHandler) QueryMerchants(c echo.Context) error {
 	return c.JSON(http.StatusOK, response.Single(results))
 }
 
+func (h *TransactionsHandler) DeleteTransactions(c echo.Context) error {
+	ctx := c.Request().Context()
+	entityID := middleware.EntityID(ctx)
+
+	var body struct {
+		IDs []string `json:"ids"`
+	}
+	if err := c.Bind(&body); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid body")
+	}
+	if len(body.IDs) == 0 {
+		return echo.NewHTTPError(http.StatusBadRequest, "ids must not be empty")
+	}
+
+	n, err := h.s.DeleteTransactions(ctx, entityID, body.IDs)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
+	}
+	return c.JSON(http.StatusOK, map[string]any{"deleted": n})
+}
+
 // RegisterTransactionsRoutes registers transaction endpoints on the given Echo group.
 func RegisterTransactionsRoutes(g *echo.Group, s *store.Store, perms middleware.PermissionCache) {
 	h := NewTransactionsHandler(s)
@@ -142,4 +163,7 @@ func RegisterTransactionsRoutes(g *echo.Group, s *store.Store, perms middleware.
 	read.GET("/transactions", h.ListTransactions)
 	read.GET("/transactions/:id", h.GetTransaction)
 	read.Add("QUERY", "/transactions/merchant", h.QueryMerchants)
+
+	write := g.Group("", middleware.RequirePermission(perms, "accounts:write"))
+	write.DELETE("/transactions", h.DeleteTransactions)
 }
