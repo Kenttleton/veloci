@@ -24,12 +24,32 @@ templ ReportsPage(shell ShellData, data ReportsData) {
 					</div>
 				}
 			</div>
+			<!-- Granularity toggle row -->
+			<div style="display:flex;align-items:center;padding:0 20px;height:36px;border-bottom:1px solid var(--border);flex-shrink:0">
+				<div style="display:flex;gap:4px">
+					<button
+						class="js-gran"
+						data-gran="day"
+						style="background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:5px;padding:3px 10px;cursor:pointer;font-size:12px;font-weight:500;font-family:inherit"
+					>/day</button>
+					<button
+						class="js-gran"
+						data-gran="month"
+						style="background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:5px;padding:3px 10px;cursor:pointer;font-size:12px;font-weight:500;font-family:inherit"
+					>/mo</button>
+					<button
+						class="js-gran"
+						data-gran="year"
+						style="background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:5px;padding:3px 10px;cursor:pointer;font-size:12px;font-weight:500;font-family:inherit"
+					>/yr</button>
+				</div>
+			</div>
 			<!-- Summary strip -->
 			<div style="display:flex;align-items:center;gap:24px;padding:10px 20px;border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto">
-				@rptSummaryChip("Income", data.Summary.IncomeRate, "var(--income)")
-				@rptSummaryChip("Spend", data.Summary.SpendRate, "var(--commit)")
-				@rptSummaryChipComputed("Margin", data.Summary.IncomeRate-data.Summary.SpendRate)
-				@rptSummaryChipDrift(data.Summary.DriftRate)
+				@rptSummaryChip("Income", &data.Summary.IncomeRate, "var(--income)")
+				@rptSummaryChip("Spend", &data.Summary.SpendRate, "var(--commit)")
+				@rptSummaryChipSigned("Margin", &data.MarginRate)
+				@rptSummaryChipSigned("Drift", &data.Summary.DriftRate)
 			</div>
 			<!-- Projections table -->
 			<div style="flex:1;overflow:auto">
@@ -58,6 +78,42 @@ templ ReportsPage(shell ShellData, data ReportsData) {
 				}
 			</div>
 		</div>
+		<script>
+			(function () {
+				var activeGran = localStorage.getItem('veloci-gran') || 'day';
+
+				function updateRateDisplays() {
+					var attr = activeGran === 'day' ? 'fmtDay' : activeGran === 'year' ? 'fmtYr' : 'fmtMo';
+					document.querySelectorAll('[data-fmt-day]').forEach(function (el) {
+						el.textContent = el.dataset[attr] || el.dataset.fmtDay;
+					});
+					var label = activeGran === 'day' ? '/day' : activeGran === 'year' ? '/yr' : '/mo';
+					document.querySelectorAll('.js-gran-label').forEach(function (el) {
+						el.textContent = label;
+					});
+				}
+
+				function applyGran(gran) {
+					activeGran = gran;
+					localStorage.setItem('veloci-gran', activeGran);
+					document.querySelectorAll('.js-gran').forEach(function (b) {
+						var on   = b.dataset.gran === activeGran;
+						b.style.background = on ? 'var(--accent)' : 'var(--surface2)';
+						b.style.color      = on ? '#fff' : 'var(--text2)';
+						b.style.border     = on ? 'none' : '1px solid var(--border)';
+					});
+					updateRateDisplays();
+				}
+
+				document.addEventListener('click', function (e) {
+					var btn = e.target.closest('.js-gran');
+					if (!btn) return;
+					applyGran(btn.dataset.gran);
+				});
+
+				applyGran(activeGran);
+			})();
+		</script>
 	}
 }
 
@@ -67,13 +123,25 @@ templ rptProjectionRow(p store.Projection) {
 			{ p.ProjectedDate.Format("Jan 2, 2006") }
 		</td>
 		<td style="padding:8px 12px;text-align:right;font-size:13px;font-variant-numeric:tabular-nums;color:var(--income)">
-			{ rptFmtMo(p.IncomeRatePerDay) }
+			<span
+				data-fmt-day={ fmtRateDay(&p.IncomeRatePerDay) }
+				data-fmt-mo={ fmtRateMo(&p.IncomeRatePerDay) }
+				data-fmt-yr={ fmtRateYr(&p.IncomeRatePerDay) }
+			>{ fmtRateMo(&p.IncomeRatePerDay) }</span>
 		</td>
 		<td style="padding:8px 12px;text-align:right;font-size:13px;font-variant-numeric:tabular-nums;color:var(--commit)">
-			{ rptFmtMo(p.SpendRatePerDay) }
+			<span
+				data-fmt-day={ fmtRateDay(&p.SpendRatePerDay) }
+				data-fmt-mo={ fmtRateMo(&p.SpendRatePerDay) }
+				data-fmt-yr={ fmtRateYr(&p.SpendRatePerDay) }
+			>{ fmtRateMo(&p.SpendRatePerDay) }</span>
 		</td>
 		<td style={ "padding:8px 12px;text-align:right;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;" + rptMarginColor(p.MarginRatePerDay) }>
-			{ rptFmtMoSigned(p.MarginRatePerDay) }
+			<span
+				data-fmt-day={ fmtRateDaySigned(&p.MarginRatePerDay) }
+				data-fmt-mo={ fmtRateMoSigned(&p.MarginRatePerDay) }
+				data-fmt-yr={ fmtRateYrSigned(&p.MarginRatePerDay) }
+			>{ fmtRateMoSigned(&p.MarginRatePerDay) }</span>
 		</td>
 		<td style="padding:8px 12px;text-align:right;font-size:13px;font-variant-numeric:tabular-nums;color:var(--text2)">
 			if p.ProjectedBalanceCents != nil {
@@ -90,44 +158,43 @@ templ rptProjectionRow(p store.Projection) {
 	</tr>
 }
 
-templ rptSummaryChip(label string, ratePerDay float64, color string) {
+templ rptSummaryChip(label string, r *float64, color string) {
 	<div style="flex-shrink:0">
 		<div style="font-size:10px;font-weight:600;color:var(--text3);letter-spacing:0.04em;text-transform:uppercase;margin-bottom:2px">{ label }</div>
 		<div style={ "font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;color:" + color }>
-			{ rptFmtMo(ratePerDay) }
+			<span
+				data-fmt-day={ fmtRateDay(r) }
+				data-fmt-mo={ fmtRateMo(r) }
+				data-fmt-yr={ fmtRateYr(r) }
+			>{ fmtRateMo(r) }</span>
 		</div>
 	</div>
 }
 
-templ rptSummaryChipComputed(label string, ratePerDay float64) {
+templ rptSummaryChipSigned(label string, r *float64) {
 	<div style="flex-shrink:0">
 		<div style="font-size:10px;font-weight:600;color:var(--text3);letter-spacing:0.04em;text-transform:uppercase;margin-bottom:2px">{ label }</div>
-		<div style={ "font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;" + rptMarginColor(ratePerDay) }>
-			{ rptFmtMoSigned(ratePerDay) }
+		<div style={ "font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;" + rptSignColor(r) }>
+			<span
+				data-fmt-day={ fmtRateDaySigned(r) }
+				data-fmt-mo={ fmtRateMoSigned(r) }
+				data-fmt-yr={ fmtRateYrSigned(r) }
+			>{ fmtRateMoSigned(r) }</span>
 		</div>
 	</div>
 }
 
-templ rptSummaryChipDrift(ratePerDay float64) {
-	<div style="flex-shrink:0">
-		<div style="font-size:10px;font-weight:600;color:var(--text3);letter-spacing:0.04em;text-transform:uppercase;margin-bottom:2px">Drift</div>
-		<div style={ "font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;" + rptMarginColor(ratePerDay) }>
-			{ rptFmtMoSigned(ratePerDay) }
-		</div>
-	</div>
-}
-
-func rptFmtMo(ratePerDay float64) string {
-	mo := ratePerDay * 30.44
-	return fmt.Sprintf("$%.0f/mo", mo)
-}
-
-func rptFmtMoSigned(ratePerDay float64) string {
-	mo := ratePerDay * 30.44
-	if mo >= 0 {
-		return fmt.Sprintf("+$%.0f/mo", mo)
+func rptSignColor(r *float64) string {
+	if r == nil {
+		return "color:var(--text2)"
 	}
-	return fmt.Sprintf("-$%.0f/mo", -mo)
+	if *r > 0 {
+		return "color:var(--income)"
+	}
+	if *r < 0 {
+		return "color:var(--commit)"
+	}
+	return "color:var(--text2)"
 }
 
 func rptMarginColor(ratePerDay float64) string {
