@@ -37,7 +37,8 @@
     }, opts);
 
     this.data         = [];
-    this.projection   = null;  // float: rate_per_day
+    this.projection   = null;  // float: rate_per_day (cents)
+    this._gran        = 'day'; // 'day' | 'month' | 'year'
     this._panPx       = 0;
     this._drag        = null;
     this._loadingMore = false;
@@ -71,7 +72,8 @@
   };
 
   VelociChart.prototype.setGranularity = function (g) {
-    this.o.barWidth   = g === 'month' ? 16 : 5;
+    this._gran        = g;
+    this.o.barWidth   = g === 'month' ? 16 : g === 'year' ? 24 : 5;
     this.data         = [];
     this._panPx       = 0;
     this._loadingMore = false;
@@ -113,14 +115,26 @@
     var visible     = data.slice(startIdx, endIdx);
     var subPx       = this._panPx % cellW;
 
+    // Auto-scale bar width to fill the chart when fewer bars than capacity
+    var activeCellW = cellW, activeBw = bw;
+    if (visible.length > 0 && visible.length < visCnt) {
+      activeCellW = Math.floor(cW / visible.length);
+      activeBw    = Math.max(1, activeCellW - o.barGap);
+      subPx       = 0;
+    }
+
+    // Convert cents/day to dollars at the active granularity
+    var granMult = this._gran === 'year' ? 365 / 100 : this._gran === 'month' ? 30.44 / 100 : 1 / 100;
+    function toRate(v) { return v * granMult; }
+
     // Y range from visible data + projection
     var vals = [];
     visible.forEach(function (d) {
-      vals.push(d.actual_rate_per_day * 30.44);
-      if (d.high_rate != null) vals.push(d.high_rate * 30.44);
-      if (d.low_rate  != null) vals.push(d.low_rate  * 30.44);
+      vals.push(toRate(d.actual_rate_per_day));
+      if (d.high_rate != null) vals.push(toRate(d.high_rate));
+      if (d.low_rate  != null) vals.push(toRate(d.low_rate));
     });
-    if (this.projection != null) vals.push(this.projection * 30.44);
+    if (this.projection != null) vals.push(toRate(this.projection));
     if (!vals.length) return;
 
     var yMin = Math.min.apply(null, vals);
@@ -153,19 +167,19 @@
     var proj = this.projection;
 
     visible.forEach(function (d, i) {
-      var x      = cR - subPx - (visible.length - i) * cellW;
-      var actual = d.actual_rate_per_day * 30.44;
+      var x      = cR - subPx - (visible.length - i) * activeCellW;
+      var actual = toRate(d.actual_rate_per_day);
       var col    = proj != null
-        ? (actual >= proj * 30.44 ? c.income : c.commit)
+        ? (actual >= toRate(proj) ? c.income : c.commit)
         : c.accent;
 
       if (d.open_rate != null) {
         // Candlestick (aggregated granularity)
-        var high = d.high_rate * 30.44;
-        var low  = d.low_rate  * 30.44;
-        var open = d.open_rate * 30.44;
-        var cls  = d.close_rate * 30.44;
-        var cx   = x + bw / 2;
+        var high = toRate(d.high_rate);
+        var low  = toRate(d.low_rate);
+        var open = toRate(d.open_rate);
+        var cls  = toRate(d.close_rate);
+        var cx   = x + activeBw / 2;
 
         ctx.strokeStyle = col;
         ctx.lineWidth   = 1;
@@ -177,13 +191,13 @@
         var bodyT = Math.min(toY(open), toY(cls));
         var bodyH = Math.max(Math.abs(toY(open) - toY(cls)), 1);
         ctx.fillStyle = col;
-        ctx.fillRect(x, bodyT, bw, bodyH);
+        ctx.fillRect(x, bodyT, activeBw, bodyH);
       } else {
         // Daily bar — grows from chart bottom
         var barT = toY(actual);
         var barH = Math.max(cB - barT, 1);
         ctx.fillStyle = col;
-        ctx.fillRect(x, barT, bw, barH);
+        ctx.fillRect(x, barT, activeBw, barH);
       }
     });
 
@@ -191,7 +205,7 @@
 
     // Projection dashed line
     if (proj != null) {
-      var pY = toY(proj * 30.44);
+      var pY = toY(toRate(proj));
       ctx.strokeStyle = c.accent;
       ctx.lineWidth   = 1.5;
       ctx.setLineDash([5, 4]);
@@ -202,6 +216,7 @@
     }
 
     // X axis labels (sparse)
+    var gran = this._gran;
     var labelEvery = Math.max(1, Math.ceil(visible.length / 7));
     ctx.fillStyle    = c.axisText;
     ctx.font         = '10px system-ui,-apple-system,sans-serif';
@@ -209,9 +224,9 @@
     ctx.textBaseline = 'top';
     visible.forEach(function (d, i) {
       if (i % labelEvery !== 0) return;
-      var lx = cR - subPx - (visible.length - i) * cellW + bw / 2;
+      var lx = cR - subPx - (visible.length - i) * activeCellW + activeBw / 2;
       if (lx < cL || lx > cR) return;
-      ctx.fillText(_fmtPeriod(d.period), lx, cB + 5);
+      ctx.fillText(_fmtPeriod(d.period, gran), lx, cB + 5);
     });
 
     // Request older data when panned to start
@@ -282,10 +297,13 @@
     return '$' + v.toFixed(0);
   }
 
-  function _fmtPeriod(p) {
+  function _fmtPeriod(p, gran) {
     var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     var parts  = p.split('-');
-    return months[parseInt(parts[1], 10) - 1] + ' ' + parts[2];
+    var yr = parts[0], mo = parseInt(parts[1], 10) - 1, dd = parts[2];
+    if (gran === 'year')  return yr;
+    if (gran === 'month') return months[mo] + " '" + yr.slice(2);
+    return months[mo] + ' ' + dd;
   }
 
   global.VelociChart = VelociChart;
