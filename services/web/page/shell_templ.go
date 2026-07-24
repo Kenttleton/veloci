@@ -52,14 +52,14 @@ func Shell(data ShellData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<div class=\"app-content\"><div class=\"app-topbar\"><span class=\"app-topbar-title\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<div class=\"app-content\"><div class=\"app-topbar\"><div class=\"app-topbar-left\"><span class=\"app-topbar-title\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var3 string
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(data.PageTitle)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 12, Col: 52}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 13, Col: 53}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
@@ -77,7 +77,7 @@ func Shell(data ShellData) templ.Component {
 				var templ_7745c5c3_Var4 string
 				templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(data.PageBadge)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 14, Col: 53}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 15, Col: 54}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 				if templ_7745c5c3_Err != nil {
@@ -88,7 +88,7 @@ func Shell(data ShellData) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<div class=\"app-topbar-rail\"><div class=\"gran-toggle\" id=\"shell-gran-toggle\"><button class=\"gran-btn js-gran-shell\" data-gran=\"day\">/day</button> <button class=\"gran-btn js-gran-shell\" data-gran=\"month\">/mo</button> <button class=\"gran-btn js-gran-shell\" data-gran=\"year\">/yr</button></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</div><div class=\"app-topbar-rail\"><div class=\"gran-toggle\" id=\"shell-gran-toggle\"><button class=\"gran-btn js-gran-shell\" data-gran=\"day\">/day</button> <button class=\"gran-btn js-gran-shell\" data-gran=\"month\">/mo</button> <button class=\"gran-btn js-gran-shell\" data-gran=\"year\">/yr</button></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -400,7 +400,7 @@ func navLink(href, label, currentPath string) templ.Component {
 		var templ_7745c5c3_Var15 templ.SafeURL
 		templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(href))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 217, Col: 28}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 219, Col: 28}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 		if templ_7745c5c3_Err != nil {
@@ -430,7 +430,7 @@ func navLink(href, label, currentPath string) templ.Component {
 		var templ_7745c5c3_Var17 string
 		templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 221, Col: 9}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 223, Col: 9}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 		if templ_7745c5c3_Err != nil {
@@ -477,7 +477,7 @@ func navLinkLedger(href string, data ShellData) templ.Component {
 		var templ_7745c5c3_Var20 templ.SafeURL
 		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(href))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 227, Col: 28}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 229, Col: 28}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 		if templ_7745c5c3_Err != nil {
@@ -503,7 +503,7 @@ func navLinkLedger(href string, data ShellData) templ.Component {
 		var templ_7745c5c3_Var22 string
 		templ_7745c5c3_Var22, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(ledgerIconStyle(data.HasRunningJobs))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 230, Col: 52}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 232, Col: 52}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
 		if templ_7745c5c3_Err != nil {
@@ -558,7 +558,7 @@ func navLinkActivity(href string, hasRunning bool, currentPath string) templ.Com
 		var templ_7745c5c3_Var25 templ.SafeURL
 		templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(href))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 239, Col: 28}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 241, Col: 28}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 		if templ_7745c5c3_Err != nil {
@@ -592,7 +592,7 @@ func navLinkActivity(href string, hasRunning bool, currentPath string) templ.Com
 		var templ_7745c5c3_Var27 string
 		templ_7745c5c3_Var27, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(activityDotStyle(hasRunning))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 244, Col: 83}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 246, Col: 83}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 		if templ_7745c5c3_Err != nil {
@@ -641,7 +641,7 @@ func accountSection(title string, accounts []ShellAccount, status, currentPath s
 		var templ_7745c5c3_Var29 string
 		templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 258, Col: 46}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 260, Col: 46}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
 		if templ_7745c5c3_Err != nil {
@@ -654,7 +654,7 @@ func accountSection(title string, accounts []ShellAccount, status, currentPath s
 		var templ_7745c5c3_Var30 string
 		templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.ResolveAttributeValue("Add " + strings.ToLower(title) + " account")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 261, Col: 56}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 263, Col: 56}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var30)
 		if templ_7745c5c3_Err != nil {
@@ -667,7 +667,7 @@ func accountSection(title string, accounts []ShellAccount, status, currentPath s
 		var templ_7745c5c3_Var31 string
 		templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.ResolveAttributeValue(status)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 262, Col: 29}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 264, Col: 29}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var31)
 		if templ_7745c5c3_Err != nil {
@@ -693,7 +693,7 @@ func accountSection(title string, accounts []ShellAccount, status, currentPath s
 			var templ_7745c5c3_Var32 string
 			templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(strings.ToLower(title))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 268, Col: 100}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 270, Col: 100}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
 			if templ_7745c5c3_Err != nil {
@@ -717,7 +717,7 @@ func accountSection(title string, accounts []ShellAccount, status, currentPath s
 			var templ_7745c5c3_Var34 templ.SafeURL
 			templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/accounts/" + a.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 272, Col: 45}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 274, Col: 45}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
 			if templ_7745c5c3_Err != nil {
@@ -743,7 +743,7 @@ func accountSection(title string, accounts []ShellAccount, status, currentPath s
 			var templ_7745c5c3_Var36 string
 			templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.JoinStringErrs(a.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 275, Col: 44}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 277, Col: 44}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var36))
 			if templ_7745c5c3_Err != nil {
@@ -778,7 +778,7 @@ func accountSection(title string, accounts []ShellAccount, status, currentPath s
 			var templ_7745c5c3_Var39 string
 			templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinStringErrs(FormatBalance(a.BalanceCents))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 277, Col: 36}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 279, Col: 36}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var39))
 			if templ_7745c5c3_Err != nil {
@@ -854,7 +854,7 @@ func userMenu(user ShellUser, currentPath string) templ.Component {
 		var templ_7745c5c3_Var42 string
 		templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinStringErrs(Initials(user.Name, user.Email))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 671, Col: 70}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 673, Col: 70}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
 		if templ_7745c5c3_Err != nil {
@@ -872,7 +872,7 @@ func userMenu(user ShellUser, currentPath string) templ.Component {
 			var templ_7745c5c3_Var43 string
 			templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(user.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 675, Col: 44}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 677, Col: 44}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
 			if templ_7745c5c3_Err != nil {
@@ -890,7 +890,7 @@ func userMenu(user ShellUser, currentPath string) templ.Component {
 		var templ_7745c5c3_Var44 string
 		templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinStringErrs(user.Email)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 677, Col: 45}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 679, Col: 45}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var44))
 		if templ_7745c5c3_Err != nil {

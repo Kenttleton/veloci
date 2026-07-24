@@ -9,10 +9,12 @@ templ Shell(data ShellData) {
 			@sidebar(data)
 			<div class="app-content">
 				<div class="app-topbar">
-					<span class="app-topbar-title">{ data.PageTitle }</span>
-					if data.PageBadge != "" {
-						<span class="app-topbar-badge">{ data.PageBadge }</span>
-					}
+					<div class="app-topbar-left">
+						<span class="app-topbar-title">{ data.PageTitle }</span>
+						if data.PageBadge != "" {
+							<span class="app-topbar-badge">{ data.PageBadge }</span>
+						}
+					</div>
 					<div class="app-topbar-rail">
 						<div class="gran-toggle" id="shell-gran-toggle">
 							<button class="gran-btn js-gran-shell" data-gran="day">/day</button>

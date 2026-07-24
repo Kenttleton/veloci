@@ -57,12 +57,20 @@ html, body {
   flex-shrink: 0;
 }
 
+.app-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
 .app-topbar-title {
   font-size: 16px;
   font-weight: 700;
   color: var(--text);
   letter-spacing: -0.02em;
-  flex: 1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
