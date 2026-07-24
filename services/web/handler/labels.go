@@ -25,17 +25,17 @@ func NewLabelsHandler(s *store.Store) *LabelsHandler {
 
 // labelView is the API representation of a label.
 type labelView struct {
-	ID        string  `json:"id"`
-	Name      string  `json:"name"`
-	Scope     *string `json:"scope"`
-	CreatedAt string  `json:"created_at"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Source    string `json:"source"`
+	CreatedAt string `json:"created_at"`
 }
 
 func toLabelView(l store.Label) labelView {
 	return labelView{
 		ID:        l.ID,
 		Name:      l.Name,
-		Scope:     l.Scope,
+		Source:    l.Source,
 		CreatedAt: l.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
 }

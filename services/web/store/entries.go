@@ -18,7 +18,6 @@ type EntryRow struct {
 	EntityID            string          `db:"entity_id"`
 	LabelID             *string         `db:"label_id"`
 	LabelName           *string         `db:"label_name"`
-	Scope               *string         `db:"scope"`
 	Direction           string          `db:"direction"`
 	EntryType           string          `db:"entry_type"`
 	PeriodDays          *int            `db:"period_days"`
@@ -53,7 +52,7 @@ type EntryRow struct {
 
 const entryCols = `
 	e.id::text, e.entity_id::text, e.label_id::text, l.name AS label_name,
-	e.scope, e.direction, e.entry_type, e.period_days, e.variable_method,
+	e.direction, e.entry_type, e.period_days, e.variable_method,
 	e.projected_rate_per_day, e.conditions, e.priority, e.status, e.source,
 	e.recurrence_anchor, e.next_due_date, e.project_tentatively,
 	e.pending_amount_cents, e.pending_effective_date,
@@ -245,11 +244,11 @@ type UpdateEntryInput struct {
 // previous label is cleaned up if it has no remaining entry associations.
 func (s *Store) UpdateEntry(ctx context.Context, entityID, id string, in UpdateEntryInput) (EntryRow, error) {
 	var oldLabelID *string
-	var scope *string
+	var source string
 	_ = s.pool.QueryRow(ctx, `
-		SELECT label_id::text, scope FROM entries WHERE entity_id = $1 AND id = $2
-	`, entityID, id).Scan(&oldLabelID, &scope)
-	if scope != nil && *scope == "system" {
+		SELECT label_id::text, source FROM entries WHERE entity_id = $1 AND id = $2
+	`, entityID, id).Scan(&oldLabelID, &source)
+	if source == "system" {
 		return EntryRow{}, ErrSystemEntry
 	}
 
@@ -308,11 +307,11 @@ func (s *Store) UpdateEntry(ctx context.Context, entityID, id string, in UpdateE
 // DeleteEntry removes an entry row and cleans up the label if it becomes orphaned.
 func (s *Store) DeleteEntry(ctx context.Context, entityID, id string) error {
 	var labelID *string
-	var scope *string
+	var source string
 	_ = s.pool.QueryRow(ctx, `
-		SELECT label_id::text, scope FROM entries WHERE entity_id = $1 AND id = $2
-	`, entityID, id).Scan(&labelID, &scope)
-	if scope != nil && *scope == "system" {
+		SELECT label_id::text, source FROM entries WHERE entity_id = $1 AND id = $2
+	`, entityID, id).Scan(&labelID, &source)
+	if source == "system" {
 		return ErrSystemEntry
 	}
 
@@ -389,14 +388,14 @@ func (s *Store) UpdateEntryConditions(ctx context.Context, entityID, id string, 
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
-	var scope *string
-	if err := tx.QueryRow(ctx, `SELECT scope FROM entries WHERE entity_id = $1 AND id = $2::uuid`, entityID, id).Scan(&scope); err != nil {
+	var entrySource string
+	if err := tx.QueryRow(ctx, `SELECT source FROM entries WHERE entity_id = $1 AND id = $2::uuid`, entityID, id).Scan(&entrySource); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return EntryRow{}, pgx.ErrNoRows
 		}
 		return EntryRow{}, err
 	}
-	if scope != nil && *scope == "system" {
+	if entrySource == "system" {
 		return EntryRow{}, ErrSystemEntry
 	}
 

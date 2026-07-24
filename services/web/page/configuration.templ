@@ -610,7 +610,7 @@ templ cfgLabelsSection(labels []store.LabelWithCount) {
 						for i, l := range labels {
 							<tr
 								data-label-id={ l.ID }
-								if l.Scope != nil && *l.Scope == "system" {
+								if l.Source == "system" {
 									data-is-system="1"
 								}
 								style={ func() string {
@@ -620,7 +620,7 @@ templ cfgLabelsSection(labels []store.LabelWithCount) {
 									return ""
 								}() }
 							>
-								if l.Scope != nil && *l.Scope == "system" {
+								if l.Source == "system" {
 									<td style="padding:8px 12px;font-size:13px;color:var(--text2)">
 										{ l.Name }
 										<span style="margin-left:6px;font-size:10px;font-weight:600;padding:1px 5px;border-radius:10px;background:var(--surface2);color:var(--text3)">System</span>

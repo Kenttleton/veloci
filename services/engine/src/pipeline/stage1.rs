@@ -398,14 +398,31 @@ pub async fn run(entity_id: Uuid, pool: &PgPool) -> Result<Stage1Output> {
         .collect();
 
     let total_assignments: u64 = results.iter().map(|(_, m, _)| m.len() as u64).sum();
-    let unmatched_tx_ids: Vec<Uuid> = results
-        .iter()
-        .filter(|(_, _, u)| *u)
-        .map(|(id, _, _)| *id)
-        .collect();
 
     // Persist assignments — idempotent: delete existing for this entity first.
     persist_assignments(entity_id, &results, pool).await?;
+
+    // Stage 2 candidates: transactions with no assignment from a non-system entry.
+    // Transactions only matched by Income/Spend (source='system') are still
+    // undiscovered from a merchant-pattern perspective and belong in stage 2.
+    let unmatched_tx_ids: Vec<Uuid> = sqlx::query_scalar(
+        r#"
+        SELECT t.id
+        FROM transactions t
+        WHERE t.entity_id = $1
+          AND NOT EXISTS (
+              SELECT 1
+              FROM transaction_entry_assignments tea
+              JOIN entries e ON e.id = tea.entry_id
+              WHERE tea.transaction_id = t.id
+                AND e.source != 'system'
+          )
+        "#,
+    )
+    .bind(entity_id)
+    .fetch_all(pool)
+    .await
+    .context("failed to query stage-2 candidate transactions")?;
 
     // Update next_due_date on live entries that received new assignments this
     // run. Only live entries are updated — pending entries are excluded

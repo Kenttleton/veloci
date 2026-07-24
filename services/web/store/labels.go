@@ -17,11 +17,11 @@ type Label struct {
 	ID        string    `db:"id"`
 	EntityID  string    `db:"entity_id"`
 	Name      string    `db:"name"`
-	Scope     *string   `db:"scope"`
+	Source    string    `db:"source"`
 	CreatedAt time.Time `db:"created_at"`
 }
 
-const labelCols = `id::text, entity_id::text, name, scope, created_at`
+const labelCols = `id::text, entity_id::text, name, source, created_at`
 
 // GetLabel fetches a single label by id scoped to the entity.
 func (s *Store) GetLabel(ctx context.Context, entityID, id string) (Label, error) {
@@ -83,7 +83,7 @@ func (s *Store) CreateLabel(ctx context.Context, entityID, name string) (Label, 
 func (s *Store) UpdateLabel(ctx context.Context, entityID, id, name string) (Label, error) {
 	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
 		UPDATE labels SET name = $3
-		WHERE entity_id = $1 AND id = $2 AND scope IS DISTINCT FROM 'system'
+		WHERE entity_id = $1 AND id = $2 AND source != 'system'
 		RETURNING %s
 	`, labelCols), entityID, id, name)
 	if err != nil {
@@ -108,7 +108,7 @@ func (s *Store) DeleteLabel(ctx context.Context, entityID, id string) error {
 	if err != nil {
 		return err
 	}
-	if label.Scope != nil && *label.Scope == "system" {
+	if label.Source == "system" {
 		return ErrSystemLabel
 	}
 
@@ -134,12 +134,12 @@ func (s *Store) DeleteLabel(ctx context.Context, entityID, id string) error {
 }
 
 // DeleteLabelIfOrphaned deletes the label only when no entries reference it.
-// Skips system-scoped labels. Safe to call speculatively.
+// Skips system labels. Safe to call speculatively.
 func (s *Store) DeleteLabelIfOrphaned(ctx context.Context, entityID, labelID string) error {
 	_, err := s.pool.Exec(ctx, `
 		DELETE FROM labels
 		WHERE entity_id = $1 AND id = $2::uuid
-		  AND scope IS NULL
+		  AND source != 'system'
 		  AND NOT EXISTS (
 			SELECT 1 FROM entries WHERE entity_id = $1 AND label_id = $2::uuid
 		  )
@@ -151,11 +151,11 @@ func (s *Store) DeleteLabelIfOrphaned(ctx context.Context, entityID, labelID str
 // if they do not already exist. Safe to call on every startup.
 func (s *Store) EnsureSystemLabels(ctx context.Context, entityID string) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO labels (id, entity_id, name, scope, created_at)
+		INSERT INTO labels (id, entity_id, name, source, created_at)
 		VALUES
 			(gen_random_uuid(), $1::uuid, 'Income', 'system', NOW()),
 			(gen_random_uuid(), $1::uuid, 'Spend',  'system', NOW())
-		ON CONFLICT (entity_id, name) DO UPDATE SET scope = 'system'
+		ON CONFLICT (entity_id, name) DO UPDATE SET source = 'system'
 	`, entityID)
 	return err
 }
@@ -178,13 +178,13 @@ type LabelWithCount struct {
 // with the count of entries that reference each label.
 func (s *Store) ListLabelsWithEntryCount(ctx context.Context, entityID string) ([]LabelWithCount, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT l.id::text, l.entity_id::text, l.name, l.scope, l.created_at,
+		SELECT l.id::text, l.entity_id::text, l.name, l.source, l.created_at,
 		       COUNT(e.id)::int AS entry_count
 		FROM labels l
 		LEFT JOIN entries e ON e.label_id = l.id AND e.entity_id = l.entity_id
 		WHERE l.entity_id = $1
-		GROUP BY l.id, l.entity_id, l.name, l.scope, l.created_at
-		ORDER BY l.scope DESC NULLS LAST, l.created_at DESC, l.id DESC
+		GROUP BY l.id, l.entity_id, l.name, l.source, l.created_at
+		ORDER BY (l.source = 'system') DESC, l.created_at DESC, l.id DESC
 	`, entityID)
 	if err != nil {
 		return nil, err

@@ -61,7 +61,7 @@ func (s *Store) EnsureEntityConfig(ctx context.Context, entityID string) error {
 // EnsureSystemData idempotently initialises all system-managed data for an entity:
 //   - system labels (Income, Spend)
 //   - entity_config row
-//   - Income and Spend system entries (scope='system', priority=9999, status='live')
+//   - Income and Spend system entries (source='system', priority=9999, status='live')
 func (s *Store) EnsureSystemData(ctx context.Context, entityID string) error {
 	if err := s.EnsureSystemLabels(ctx, entityID); err != nil {
 		return err
@@ -80,16 +80,16 @@ func (s *Store) EnsureSystemData(ctx context.Context, entityID string) error {
 		_, err := s.pool.Exec(ctx, `
 			INSERT INTO entries (
 				id, entity_id, label_id, direction, entry_type,
-				scope, status, source, priority, conditions, start_date, created_at
+				status, source, priority, conditions, start_date, created_at
 			)
 			SELECT
 				gen_random_uuid(), $1::uuid,
-				(SELECT id FROM labels WHERE entity_id = $1::uuid AND name = $2 AND scope = 'system'),
+				(SELECT id FROM labels WHERE entity_id = $1::uuid AND name = $2 AND source = 'system'),
 				$3, 'irregular',
-				'system', 'live', 'engine', 9999, $4::jsonb, '2000-01-01', NOW()
+				'live', 'system', 9999, $4::jsonb, '2000-01-01', NOW()
 			WHERE NOT EXISTS (
 				SELECT 1 FROM entries
-				WHERE entity_id = $1::uuid AND scope = 'system' AND direction = $3
+				WHERE entity_id = $1::uuid AND source = 'system' AND direction = $3
 			)
 		`, entityID, labelName, dir, conds)
 		if err != nil {

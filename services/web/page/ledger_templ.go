@@ -501,13 +501,13 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		if e.Scope != nil {
+		if e.Source != "" {
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, " data-entry-scope=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var22 string
-			templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.ResolveAttributeValue(*e.Scope)
+			templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.ResolveAttributeValue(e.Source)
 			if templ_7745c5c3_Err != nil {
 				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 719, Col: 30}
 			}
@@ -544,7 +544,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		if e.Scope != nil && *e.Scope == "system" {
+		if e.Source == "system" {
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "<span style=\"margin-left:6px;font-size:10px;font-weight:600;padding:1px 5px;border-radius:10px;background:var(--surface2);color:var(--text3)\">System</span> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
@@ -794,7 +794,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		if e.Scope != nil && *e.Scope == "system" {
+		if e.Source == "system" {
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 70, " readonly")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
@@ -807,7 +807,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 		var templ_7745c5c3_Var37 string
 		templ_7745c5c3_Var37, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(func() string {
 			base := "background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:12px;font-family:monospace;color:var(--text);outline:none;resize:vertical;min-height:80px;width:100%;box-sizing:border-box"
-			if e.Scope != nil && *e.Scope == "system" {
+			if e.Source == "system" {
 				return base + ";cursor:default;opacity:0.75"
 			}
 			return base
@@ -836,7 +836,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		if e.Scope == nil || *e.Scope != "system" {
+		if e.Source != "system" {
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 74, "<span class=\"js-conditions-status\" style=\"font-size:11px;color:var(--text3);margin-top:2px\"></span> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err

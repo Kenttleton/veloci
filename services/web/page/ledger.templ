@@ -715,8 +715,8 @@ templ ledgerEntryRow(e store.EntryRow) {
 		class="js-entry-details"
 		data-entry-id={ e.ID }
 		data-entry-status={ e.Status }
-		if e.Scope != nil {
-			data-entry-scope={ *e.Scope }
+		if e.Source != "" {
+			data-entry-scope={ e.Source }
 		}
 		style="border-bottom:1px solid var(--border)"
 	>
@@ -728,7 +728,7 @@ templ ledgerEntryRow(e store.EntryRow) {
 				} else {
 					<span style="color:var(--text3);font-style:italic">Unlabeled</span>
 				}
-				if e.Scope != nil && *e.Scope == "system" {
+				if e.Source == "system" {
 					<span style="margin-left:6px;font-size:10px;font-weight:600;padding:1px 5px;border-radius:10px;background:var(--surface2);color:var(--text3)">System</span>
 				}
 				if e.AlertType != nil {
@@ -799,19 +799,19 @@ templ ledgerEntryRow(e store.EntryRow) {
 					<textarea
 						class="js-conditions-ta"
 						data-entry-id={ e.ID }
-						if e.Scope != nil && *e.Scope == "system" {
+						if e.Source == "system" {
 							readonly
 						}
 						style={ func() string {
 							base := "background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:12px;font-family:monospace;color:var(--text);outline:none;resize:vertical;min-height:80px;width:100%;box-sizing:border-box"
-							if e.Scope != nil && *e.Scope == "system" {
+							if e.Source == "system" {
 								return base + ";cursor:default;opacity:0.75"
 							}
 							return base
 						}() }
 						spellcheck="false"
 					>{ conditionsFormatted(e.Conditions) }</textarea>
-					if e.Scope == nil || *e.Scope != "system" {
+					if e.Source != "system" {
 						<span class="js-conditions-status" style="font-size:11px;color:var(--text3);margin-top:2px"></span>
 					}
 					if len(e.SampleMerchants) > 0 {

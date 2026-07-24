@@ -198,7 +198,6 @@ pub async fn run(entity_id: Uuid, unmatched_tx_ids: &[Uuid], pool: &PgPool) -> R
          WHERE entity_id = $1
            AND source = 'engine'
            AND status = 'pending'
-           AND scope IS NULL
            AND NOT EXISTS (
                SELECT 1 FROM transaction_entry_assignments
                WHERE entry_id = entries.id
@@ -630,7 +629,7 @@ async fn persist_cluster(
     // Only create a new entry if none exists yet.
     let existing: Option<(Uuid,)> = sqlx::query_as(
         "SELECT id FROM entries
-         WHERE entity_id = $1 AND label_id = $2 AND source = 'engine' AND status = 'pending' AND scope IS NULL",
+         WHERE entity_id = $1 AND label_id = $2 AND source = 'engine' AND status = 'pending'",
     )
     .bind(entity_id)
     .bind(label_id)

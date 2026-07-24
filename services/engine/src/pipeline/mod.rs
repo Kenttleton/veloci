@@ -205,7 +205,7 @@ async fn run_from_stage3(
         ) s
         WHERE e.id = s.node_id
           AND e.entity_id = $1
-          AND e.scope = 'system'
+          AND e.source = 'system'
           AND e.status = 'live'
         "#,
     )

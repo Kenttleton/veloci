@@ -178,7 +178,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				if l.Scope != nil && *l.Scope == "system" {
+				if l.Source == "system" {
 					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, " data-is-system=\"1\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
@@ -206,7 +206,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				if l.Scope != nil && *l.Scope == "system" {
+				if l.Source == "system" {
 					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "<td style=\"padding:8px 12px;font-size:13px;color:var(--text2)\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err

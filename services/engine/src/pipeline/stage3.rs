@@ -37,7 +37,7 @@ pub(crate) struct ActiveEntry {
     label_id:               Option<Uuid>,
     direction:              String,
     entry_type:             String,
-    scope:                  Option<String>,
+    source:                 String,
     period_days:            Option<i32>,
     variable_method:        Option<String>,
     projected_rate_per_day: Option<f64>,
@@ -116,7 +116,7 @@ pub(crate) fn compute_entry_rate(
     let direction  = Direction::from_str(&entry.direction).unwrap_or(Direction::Spend);
 
     // W: system entries use entity_config window; named entries use period_days.
-    let period_days = if entry.scope.as_deref() == Some("system") {
+    let period_days = if entry.source == "system" {
         system_window_days
     } else {
         entry.period_days.unwrap_or(30)
@@ -198,7 +198,7 @@ async fn load_active_entries(entity_id: Uuid, pool: &PgPool) -> Result<Vec<Activ
         label_id:               Option<Uuid>,
         direction:              String,
         entry_type:             String,
-        scope:                  Option<String>,
+        source:                 String,
         period_days:            Option<i32>,
         variable_method:        Option<String>,
         projected_rate_per_day: Option<sqlx::types::BigDecimal>,
@@ -207,7 +207,7 @@ async fn load_active_entries(entity_id: Uuid, pool: &PgPool) -> Result<Vec<Activ
 
     let rows: Vec<Row> = sqlx::query_as(
         r#"
-        SELECT id, label_id, direction, entry_type, scope, period_days,
+        SELECT id, label_id, direction, entry_type, source, period_days,
                variable_method, projected_rate_per_day, start_date
         FROM entries
         WHERE entity_id = $1
@@ -227,7 +227,7 @@ async fn load_active_entries(entity_id: Uuid, pool: &PgPool) -> Result<Vec<Activ
             label_id:               r.label_id,
             direction:              r.direction,
             entry_type:             r.entry_type,
-            scope:                  r.scope,
+            source:                 r.source,
             period_days:            r.period_days,
             variable_method:        r.variable_method,
             projected_rate_per_day: r.projected_rate_per_day

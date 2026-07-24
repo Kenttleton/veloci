@@ -175,7 +175,8 @@ CREATE TABLE labels (
   id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   entity_id  UUID        NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
   name       TEXT        NOT NULL,
-  scope      TEXT        CHECK (scope IN ('system')),
+  source     TEXT        NOT NULL DEFAULT 'engine'
+             CHECK (source IN ('user', 'engine', 'system')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (entity_id, name)
 );
@@ -198,7 +199,6 @@ CREATE TABLE entries (
   direction              TEXT          NOT NULL CHECK (direction IN ('income', 'spend', 'mixed')),
   entry_type             TEXT          NOT NULL
                          CHECK (entry_type IN ('standing', 'variable', 'irregular')),
-  scope                  TEXT          CHECK (scope IN ('system')),
   period_days            INTEGER,
   variable_method        TEXT          CHECK (variable_method IN ('avg', 'max')),
   projected_rate_per_day NUMERIC(12,4),
@@ -206,7 +206,8 @@ CREATE TABLE entries (
   priority               INTEGER       NOT NULL DEFAULT 100,
   status                 TEXT          NOT NULL DEFAULT 'pending'
                          CHECK (status IN ('pending', 'live', 'ended')),
-  source                 TEXT          NOT NULL DEFAULT 'user' CHECK (source IN ('user', 'engine')),
+  source                 TEXT          NOT NULL DEFAULT 'engine'
+                         CHECK (source IN ('user', 'engine', 'system')),
   recurrence_anchor      TEXT,
   next_due_date          DATE,
   -- TRUE = include in Stage 7 projection before user approval.
