@@ -23,10 +23,10 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 				>Run Engine</button>
 			</div>
 			<div style="display:flex;gap:6px;padding:8px 20px;border-bottom:1px solid var(--border);flex-shrink:0;align-items:center;flex-wrap:wrap">
-				@ledgerPill("all", "All", data, data.Counts.PendingReview+data.Counts.Active+data.Counts.Inactive)
-				@ledgerPill("pending_review", "Review", data, data.Counts.PendingReview)
-				@ledgerPill("active", "Active", data, data.Counts.Active)
-				@ledgerPill("inactive", "Inactive", data, data.Counts.Inactive)
+				@ledgerPill("all", "All", data, data.Counts.Pending+data.Counts.Live+data.Counts.Ended)
+				@ledgerPill("pending", "Review", data, data.Counts.Pending)
+				@ledgerPill("live", "Live", data, data.Counts.Live)
+				@ledgerPill("ended", "Ended", data, data.Counts.Ended)
 				<div style="width:1px;height:16px;background:var(--border);margin:0 4px"></div>
 				@ledgerDirectionPill("income", "Income", data)
 				@ledgerDirectionPill("spend", "Spend", data)
@@ -212,7 +212,7 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 								var txPanel = det.querySelector('.js-tx-panel');
 								if (!txPanel) return;
 								delete txPanel.dataset.loaded;
-								loadTxPanel(txPanel, entryId, det.dataset.entryStatus || 'active');
+								loadTxPanel(txPanel, entryId, det.dataset.entryStatus || 'live');
 							}, 2000);
 						})
 						.catch(function() { markDirty(); });
@@ -285,9 +285,9 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 						.then(function(r){ return r.json(); })
 						.then(function(env) {
 							var txns = env.data || [];
-							var verb = entryStatus === 'pending_review' ? 'will be' : 'are';
+							var verb = entryStatus === 'pending' ? 'will be' : 'are';
 							if (!txns.length) {
-								var msg = entryStatus === 'pending_review'
+								var msg = entryStatus === 'pending'
 									? 'No transactions matched yet. Run Engine to process this entry.'
 									: 'No matched transactions.';
 								txPanel.innerHTML = '<p style="color:var(--text3);font-size:12px">' + msg + '</p>';
@@ -327,7 +327,7 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 					var det = e.target;
 					if (!det.classList.contains('js-entry-details') || !det.open) return;
 					var entryId = det.dataset.entryId;
-					var entryStatus = det.dataset.entryStatus || 'active';
+					var entryStatus = det.dataset.entryStatus || 'live';
 					var txPanel = det.querySelector('.js-tx-panel');
 					if (!txPanel || txPanel.dataset.loaded) return;
 					loadTxPanel(txPanel, entryId, entryStatus);
@@ -696,7 +696,7 @@ templ ledgerEntryRow(e store.EntryRow) {
 			<span style={ "font-size:12px;text-align:right;font-variant-numeric:tabular-nums;color:" + fitColor(e.Fitness) }>{ fitPct(e.Fitness) }</span>
 		</summary>
 		<div>
-			if e.Status == "pending_review" {
+			if e.Status == "pending" {
 				<div
 					class="js-review-panel"
 					data-entry-id={ e.ID }
@@ -800,11 +800,11 @@ templ ledgerConfBar(label string, f *float64) {
 
 func ledgerPillColor(value string) string {
 	switch value {
-	case "pending_review":
+	case "pending":
 		return "var(--accent)"
-	case "active":
+	case "live":
 		return "var(--income)"
-	case "inactive":
+	case "ended":
 		return "var(--text3)"
 	default:
 		return "var(--text2)"
@@ -842,9 +842,9 @@ func ledgerDirectionBadgeStyle(d string) string {
 func ledgerStatusBadgeStyle(status string) string {
 	base := "font-size:11px;font-weight:600;padding:2px 7px;border-radius:4px;white-space:nowrap;justify-self:center"
 	switch status {
-	case "pending_review":
+	case "pending":
 		return base + ";background:var(--accent);color:#fff"
-	case "active":
+	case "live":
 		return base + ";background:color-mix(in srgb,var(--surface2) 70%,var(--income) 30%);color:var(--income)"
 	default:
 		return base + ";background:var(--surface2);color:var(--text3)"
@@ -853,12 +853,12 @@ func ledgerStatusBadgeStyle(status string) string {
 
 func ledgerStatusLabel(status string) string {
 	switch status {
-	case "pending_review":
+	case "pending":
 		return "Review"
-	case "active":
-		return "Active"
+	case "live":
+		return "Live"
 	default:
-		return "Inactive"
+		return "Ended"
 	}
 }
 

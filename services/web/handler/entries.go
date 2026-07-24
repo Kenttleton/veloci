@@ -59,7 +59,10 @@ type entryView struct {
 
 func toEntryView(e store.EntryRow) entryView {
 	name := entryName(e)
-	period := fmt.Sprintf("%dd", e.PeriodDays)
+	period := "—"
+	if e.PeriodDays != nil {
+		period = fmt.Sprintf("%dd", *e.PeriodDays)
+	}
 
 	var actualRate float64
 	if e.ActualRatePerDay != nil {
@@ -315,6 +318,9 @@ func (h *EntriesHandler) UpdateEntry(c echo.Context) error {
 	if errors.Is(err, pgx.ErrNoRows) {
 		return echo.NewHTTPError(http.StatusNotFound, "not found")
 	}
+	if errors.Is(err, store.ErrSystemEntry) {
+		return echo.NewHTTPError(http.StatusForbidden, "system entries cannot be modified")
+	}
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
@@ -330,6 +336,9 @@ func (h *EntriesHandler) DeleteEntry(c echo.Context) error {
 	err := h.s.DeleteEntry(ctx, entityID, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return echo.NewHTTPError(http.StatusNotFound, "not found")
+	}
+	if errors.Is(err, store.ErrSystemEntry) {
+		return echo.NewHTTPError(http.StatusForbidden, "system entries cannot be modified")
 	}
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")

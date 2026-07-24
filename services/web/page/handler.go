@@ -325,7 +325,7 @@ func (s *Server) Budget(c echo.Context) error {
 
 	summary, _ := s.store.GetSnapshotSummary(ctx, entityID)
 
-	entries, _ := s.store.ListEntries(ctx, entityID, store.DateRange{}, "", "active", 500, "")
+	entries, _ := s.store.ListEntries(ctx, entityID, store.DateRange{}, "", "live", 500, "")
 
 	var income, commits []store.EntryRow
 	for _, e := range entries {
@@ -347,7 +347,7 @@ func (s *Server) Budget(c echo.Context) error {
 type LedgerData struct {
 	Entries         []store.EntryRow
 	Counts          store.EntryCounts
-	Filter          string // status filter: all | active | pending_review | inactive
+	Filter          string // status filter: all | live | pending | ended
 	LabelFilter     string // ?label=<uuid> — filter by label_id
 	LabelName       string // display name for active label filter
 	DirectionFilter string // ?direction=income|spend
@@ -716,9 +716,9 @@ func fitColor(f *float64) string {
 // entryStatusColor returns a CSS color for an entry status.
 func entryStatusColor(status string) string {
 	switch status {
-	case "active":
+	case "live":
 		return "var(--income)"
-	case "pending_review":
+	case "pending":
 		return "var(--accent)"
 	default:
 		return "var(--text3)"
@@ -773,7 +773,7 @@ func entryDataJSON(e store.EntryRow) string {
 		LabelID:             e.LabelID,
 		Direction:           e.Direction,
 		EntryType:           e.EntryType,
-		PeriodDays:          e.PeriodDays,
+		PeriodDays:          func() int { if e.PeriodDays != nil { return *e.PeriodDays }; return 0 }(),
 		VariableMethod:      e.VariableMethod,
 		ProjectedRatePerDay: e.ProjectedRatePerDay,
 		Conditions:          conds,
@@ -835,6 +835,7 @@ type ConfigurationData struct {
 	Tab          string
 	Labels       []store.LabelWithCount
 	Institutions []InstitutionWithAccounts
+	EntityConfig store.EntityConfig
 }
 
 func (s *Server) Configuration(c echo.Context) error {
@@ -857,6 +858,8 @@ func (s *Server) Configuration(c echo.Context) error {
 				Accounts:    accounts,
 			})
 		}
+	case "system":
+		data.EntityConfig, _ = s.store.GetEntityConfig(ctx, entityID)
 	default:
 		data.Labels, _ = s.store.ListLabelsWithEntryCount(ctx, entityID)
 	}

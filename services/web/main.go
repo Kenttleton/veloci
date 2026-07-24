@@ -207,6 +207,7 @@ func runServe(_ *cobra.Command, _ []string) error {
 	handler.RegisterAdminRoutes(api, s, perms)
 	handler.RegisterJobsRoutes(api, jobsHandler, perms)
 	handler.RegisterAutocompleteRoutes(api, s, perms)
+	handler.RegisterEntityConfigRoutes(api, s, perms)
 
 	// Multipart upload — same API group auth already applied
 	api.POST("/imports", handler.NewImportsHandler(s, pub).UploadImport)
@@ -328,8 +329,8 @@ func syncAdminUser(ctx context.Context, authClient *authclient.Client, s *store.
 		return fmt.Errorf("ensure entity membership: %w", err)
 	}
 
-	if err := s.EnsureSystemLabels(ctx, entityID); err != nil {
-		return fmt.Errorf("ensure system labels: %w", err)
+	if err := s.EnsureSystemData(ctx, entityID); err != nil {
+		return fmt.Errorf("ensure system data: %w", err)
 	}
 
 	log.Printf("sync: admin user ready (id=%s, entity_id=%s)", userID, entityID)

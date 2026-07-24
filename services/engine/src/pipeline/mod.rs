@@ -14,8 +14,8 @@
 //!
 //! Stage responsibilities:
 //!   0 — CSV dedup + normalization → transactions
-//!   1 — Active entry matching → transaction_entry_assignments; updates next_due_date
-//!   2 — Pattern detection on unmatched txns → pending_review entries (with review metadata); sets next_due_date
+//!   1 — Live entry matching → transaction_entry_assignments; updates next_due_date
+//!   2 — Pattern detection on unmatched txns → pending entries (with review metadata); sets next_due_date
 //!   3 — Per-entry rate computation (day-crawl) — pure calculation, no entry metadata writes
 //!   4 — Label rate aggregation from entry rates
 //!   5 — Slope + drift regression over snapshot history

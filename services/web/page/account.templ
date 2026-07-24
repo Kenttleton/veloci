@@ -1135,8 +1135,8 @@ templ AccountPage(shell ShellData, data AccountData) {
 						var rows = entries.map(function(e) {
 							var labelText = e.label_name || '(unlabeled)';
 							var dirColor  = e.direction === 'income' ? 'var(--income)' : 'var(--commit)';
-							var dotColor  = e.status === 'active' ? 'var(--income)'
-								: e.status === 'pending_review' ? 'var(--commit)' : 'var(--text3)';
+							var dotColor  = e.status === 'live' ? 'var(--income)'
+								: e.status === 'pending' ? 'var(--commit)' : 'var(--text3)';
 							var href = e.label_id
 								? '/ledger?filter=all&label=' + encodeURIComponent(e.label_id)
 								: '/ledger?filter=all';

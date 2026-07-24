@@ -94,6 +94,25 @@ actual_rate_per_day(t) = Σ |amount_i| for t_i in [t − W, t] / W
 
 **What it is:** A JSONB boolean tree stored on `entries.conditions` that Stage 1 evaluates against each transaction to determine a match. `NULL` means the entry has no auto-matching rules (manual-only entries).
 
+### Two schemas
+
+Conditions exist in two formats. The translation boundary is `store/conditions.go` (`ConditionsForDisplay` / `ConditionsForStorage`). See `docs/conditions-editor.md` for the full UI feature reference.
+
+**Schema A — storage (DB and engine):** Every node has an explicit `type` or `op` field. Names (accounts, institutions, labels) are stored as UUIDs.
+
+**Schema B — editor (browser):** Compact shorthand; condition type is the object key; names are plain strings resolved to/from UUIDs at the API boundary.
+
+| Concept | Schema A | Schema B |
+| --- | --- | --- |
+| AND | `{"op":"AND","children":[...]}` | `{"and":[...]}` |
+| OR | `{"op":"OR","children":[...]}` | `{"or":[...]}` |
+| NOT | `{"op":"NOT","children":[node]}` | `{"not":{...}}` |
+| payee contains | `{"type":"payee_contains","value":"NETFLIX"}` | `{"payee_contains":"NETFLIX"}` |
+| account | `{"type":"account_id","value":"<uuid>"}` | `{"account":"Chase Checking"}` |
+| label matched | `{"type":"label_matched","label_id":"<uuid>"}` | `{"label_matched":"Netflix"}` |
+
+XOR has no Schema B form; compose with `AND`/`OR`/`NOT` instead. All conditions in this section are described in Schema A (the authoritative engine format).
+
 **Tree structure:** Every node is either a logical operator or a leaf. Logical nodes have `"op"` and `"children"`. Children can be leaves or other logical operators — fully recursive. Compose operators to express any boolean logic: NOR = `NOT` wrapping `OR`, NAND = `NOT` wrapping `AND`, etc.
 
 **Logical operators:**

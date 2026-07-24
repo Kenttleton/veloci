@@ -2,7 +2,7 @@
 //!
 //! **Input:** UUIDs of transactions that produced no Stage 1 assignments.
 //!
-//! **Output:** Candidate `entries` with `status = 'pending_review'` and review
+//! **Output:** Candidate `entries` with `status = 'pending'` and review
 //! metadata (alert_type, confidence, sample_merchants, etc.) written directly
 //! to the entries row.
 //!
@@ -191,13 +191,14 @@ pub async fn run(entity_id: Uuid, unmatched_tx_ids: &[Uuid], pool: &PgPool) -> R
         clusters_created += 1;
     }
 
-    // Remove engine pending_review entries that have no transaction assignments —
+    // Remove engine pending entries that have no transaction assignments —
     // they have no backing data and the pattern is no longer present.
     sqlx::query(
         "DELETE FROM entries
          WHERE entity_id = $1
            AND source = 'engine'
-           AND status = 'pending_review'
+           AND status = 'pending'
+           AND scope IS NULL
            AND NOT EXISTS (
                SELECT 1 FROM transaction_entry_assignments
                WHERE entry_id = entries.id
@@ -624,18 +625,18 @@ async fn persist_cluster(
     .await
     .context("failed to upsert label for merchant entry")?;
 
-    // Look up an existing engine-generated pending_review entry for this label.
+    // Look up an existing engine-generated pending entry for this label.
     // If one exists, update it in place to preserve the stable UUID.
     // Only create a new entry if none exists yet.
     let existing: Option<(Uuid,)> = sqlx::query_as(
         "SELECT id FROM entries
-         WHERE entity_id = $1 AND label_id = $2 AND source = 'engine' AND status = 'pending_review'",
+         WHERE entity_id = $1 AND label_id = $2 AND source = 'engine' AND status = 'pending' AND scope IS NULL",
     )
     .bind(entity_id)
     .bind(label_id)
     .fetch_optional(pool)
     .await
-    .context("failed to look up existing pending_review entry")?;
+    .context("failed to look up existing pending entry")?;
 
     let entry_id = if let Some((id,)) = existing {
         sqlx::query(
@@ -664,7 +665,7 @@ async fn persist_cluster(
         .bind(cluster.transactions.len() as i32)
         .execute(pool)
         .await
-        .context("failed to update existing pending_review entry")?;
+        .context("failed to update existing pending entry")?;
         id
     } else {
         let (id,): (Uuid,) = sqlx::query_as(
@@ -677,7 +678,7 @@ async fn persist_cluster(
              ) VALUES (
                $1, $2, $3, $4, $5, $6,
                $7, $8, $9,
-               'pending_review', 'engine', false, $10,
+               'pending', 'engine', false, $10,
                'new', $11, $12, $13, $14,
                $15, $16
              )
@@ -701,7 +702,7 @@ async fn persist_cluster(
         .bind(cluster.transactions.len() as i32)
         .fetch_one(pool)
         .await
-        .context("failed to insert pending_review entry")?;
+        .context("failed to insert pending entry")?;
         id
     };
 

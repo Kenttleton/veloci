@@ -8,13 +8,12 @@
 //!
 //! ## Eligibility
 //!
-//! | Status           | Epoch state              | project_tentatively | Stage 7    |
-//! |------------------|--------------------------|---------------------|------------|
-//! | `active`         | open epoch               | —                   | Include    |
-//! | `active`         | terminated or no epoch   | —                   | Exclude    |
-//! | `pending_review` | no epoch                 | `TRUE`              | Include    |
-//! | `pending_review` | no epoch                 | `FALSE`             | Exclude    |
-//! | `inactive`       | any                      | —                   | Exclude    |
+//! | Status    | project_tentatively | Stage 7 |
+//! |-----------|---------------------|---------|
+//! | `live`    | —                   | Include |
+//! | `pending` | `TRUE`              | Include |
+//! | `pending` | `FALSE`             | Exclude |
+//! | `ended`   | —                   | Exclude |
 //!
 //! ## Algorithm
 //!
@@ -440,9 +439,9 @@ async fn load_eligible_entries(entity_id: Uuid, pool: &PgPool) -> Result<Vec<Eli
         LEFT JOIN accounts a ON a.entity_id = e.entity_id AND a.status = 'active'
         WHERE e.entity_id = $1
           AND (
-            (e.status = 'active' AND e.end_date IS NULL)
+            (e.status = 'live' AND e.end_date IS NULL)
             OR
-            (e.status = 'pending_review' AND e.project_tentatively = TRUE)
+            (e.status = 'pending' AND e.project_tentatively = TRUE)
           )
         "#,
     )

@@ -21,11 +21,17 @@ templ ConfigurationPage(shell ShellData, data ConfigurationData) {
 						href="?tab=institutions"
 						style={ cfgTabStyle(data.Tab == "institutions") }
 					>Institution Mappings</a>
+					<a
+						href="?tab=system"
+						style={ cfgTabStyle(data.Tab == "system") }
+					>System</a>
 				</div>
 			</div>
 			<div style="flex:1;overflow:auto;padding:24px 20px">
 				if data.Tab == "institutions" {
 					@cfgInstitutionsSection(data.Institutions)
+				} else if data.Tab == "system" {
+					@cfgSystemSection(data.EntityConfig.SystemWindowDays)
 				} else {
 					@cfgLabelsSection(data.Labels)
 				}

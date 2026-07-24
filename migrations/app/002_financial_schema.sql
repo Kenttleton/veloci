@@ -198,13 +198,14 @@ CREATE TABLE entries (
   direction              TEXT          NOT NULL CHECK (direction IN ('income', 'spend', 'mixed')),
   entry_type             TEXT          NOT NULL
                          CHECK (entry_type IN ('standing', 'variable', 'irregular')),
-  period_days            INTEGER       NOT NULL DEFAULT 30,
+  scope                  TEXT          CHECK (scope IN ('system')),
+  period_days            INTEGER,
   variable_method        TEXT          CHECK (variable_method IN ('avg', 'max')),
   projected_rate_per_day NUMERIC(12,4),
   conditions             JSONB,
   priority               INTEGER       NOT NULL DEFAULT 100,
-  status                 TEXT          NOT NULL DEFAULT 'pending_review'
-                         CHECK (status IN ('pending_review', 'active', 'inactive')),
+  status                 TEXT          NOT NULL DEFAULT 'pending'
+                         CHECK (status IN ('pending', 'live', 'ended')),
   source                 TEXT          NOT NULL DEFAULT 'user' CHECK (source IN ('user', 'engine')),
   recurrence_anchor      TEXT,
   next_due_date          DATE,
@@ -327,6 +328,17 @@ CREATE TABLE projections (
 );
 
 CREATE INDEX ON projections (entity_id, account_id, projected_date);
+
+-- ── ENTITY CONFIG ─────────────────────────────────────────────────────────────
+-- Per-entity configuration. One row per entity, created with defaults on setup.
+-- system_window_days: rolling window W for system Income/Spend entries.
+
+CREATE TABLE entity_config (
+  entity_id          UUID        PRIMARY KEY REFERENCES entities(id) ON DELETE CASCADE,
+  system_window_days INTEGER     NOT NULL DEFAULT 90,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
 GRANT ALL ON ALL TABLES IN SCHEMA public TO veloci_app_user;
 GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO veloci_app_user;

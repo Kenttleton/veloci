@@ -1,6 +1,6 @@
 //! Stage 1: Entry matching (boolean condition trees against transactions).
 //!
-//! **Input:** `transactions` for an entity; all `active` and `pending_review`
+//! **Input:** `transactions` for an entity; all `live` and `pending`
 //! `entries` with their JSONB condition trees.
 //!
 //! **Output:** `transaction_entry_assignments` rows (many-to-many — intentional).
@@ -24,7 +24,7 @@
 //! - cycle: an entry matches whose `label_id` is already in the accumulated set
 //!   (logged, not an error — intentional for mutual/reflexive label references).
 //!
-//! 1. Load entries (`status IN ('active', 'pending_review')`, `end_date IS NULL`).
+//! 1. Load entries (`status IN ('live', 'pending')`, `end_date IS NULL`).
 //! 2. Pre-compile JSONB conditions — malformed entries are logged and skipped.
 //! 3. Sort compiled entries by `priority ASC`.
 //! 4. Partition entries: transaction-target-only → Pass 1; entry-target → Pass 2+.
@@ -246,7 +246,7 @@ pub async fn run(entity_id: Uuid, pool: &PgPool) -> Result<Stage1Output> {
     // Load all transactions for the entity.
     let txns = load_transactions(entity_id, pool).await?;
 
-    // Load active + pending_review entries (pending_review entries are matched
+    // Load live + pending entries (pending entries are matched
     // so their transactions can be previewed in the UI after a reprocess run).
     let entry_rows = load_entries(entity_id, pool).await?;
 
@@ -407,8 +407,8 @@ pub async fn run(entity_id: Uuid, pool: &PgPool) -> Result<Stage1Output> {
     // Persist assignments — idempotent: delete existing for this entity first.
     persist_assignments(entity_id, &results, pool).await?;
 
-    // Update next_due_date on active entries that received new assignments this
-    // run. Only active entries are updated — pending_review entries are excluded
+    // Update next_due_date on live entries that received new assignments this
+    // run. Only live entries are updated — pending entries are excluded
     // by the SQL WHERE clause in update_next_due_dates.
     let matched_entry_ids: Vec<Uuid> = results
         .iter()
@@ -443,7 +443,6 @@ fn tree_has_entry_targets(tree: &CompiledConditionTree) -> bool {
             tree_has_entry_targets(a) || tree_has_entry_targets(b)
         }
         CompiledConditionTree::LabelMatched(_)
-        | CompiledConditionTree::EntryDirection(_)
         | CompiledConditionTree::EntryType(_)
         | CompiledConditionTree::EntryPeriod { .. }
         | CompiledConditionTree::EntrySource(_)
@@ -629,8 +628,14 @@ fn evaluate(
             if label_index.contains(label_id) { Some(1.0) } else { None }
         }
 
+        // Transaction-target: matches sign of amount_cents to entry direction.
         CompiledConditionTree::EntryDirection(dir) => {
-            if accumulated.iter().any(|e| e.direction == *dir) { Some(1.0) } else { None }
+            use crate::pipeline::types::Direction;
+            match dir {
+                Direction::Income => if txn.amount_cents > 0 { Some(1.0) } else { None },
+                Direction::Spend  => if txn.amount_cents < 0 { Some(1.0) } else { None },
+                Direction::Mixed  => Some(1.0),
+            }
         }
 
         CompiledConditionTree::EntryType(et) => {
@@ -983,9 +988,9 @@ async fn load_transactions(entity_id: Uuid, pool: &PgPool) -> Result<Vec<Transac
 
 /// Load all entries eligible for Stage 1 matching.
 ///
-/// Includes both `active` and `pending_review` entries so that `pending_review`
+/// Includes both `live` and `pending` entries so that `pending`
 /// entries receive `transaction_entry_assignments` rows after a reprocess run.
-/// Stage 3+ independently filters to `status = 'active'` and is not affected.
+/// Stage 3+ independently filters to `status = 'live'` and is not affected.
 async fn load_entries(entity_id: Uuid, pool: &PgPool) -> Result<Vec<EntryRow>> {
     #[derive(sqlx::FromRow)]
     struct Row {
@@ -1013,7 +1018,7 @@ async fn load_entries(entity_id: Uuid, pool: &PgPool) -> Result<Vec<EntryRow>> {
                projected_rate_per_day, recurrence_anchor
         FROM entries
         WHERE entity_id = $1
-          AND status IN ('active', 'pending_review')
+          AND status IN ('live', 'pending')
           AND end_date IS NULL
           AND conditions IS NOT NULL
         ORDER BY priority ASC
@@ -1117,7 +1122,7 @@ async fn update_next_due_dates(
     if entry_ids.is_empty() {
         return Ok(());
     }
-    // Only active entries receive next_due_date updates. pending_review entries
+    // Only live entries receive next_due_date updates. pending entries
     // are excluded — they do not participate in absence detection (Stage 7).
     sqlx::query(
         r#"
@@ -1130,7 +1135,7 @@ async fn update_next_due_dates(
         )
         WHERE e.id = ANY($1)
           AND e.entity_id = $2
-          AND e.status = 'active'
+          AND e.status = 'live'
         "#,
     )
     .bind(entry_ids)
@@ -1791,36 +1796,51 @@ mod tests {
 
     // --- evaluate: true when a matching entry is in accumulated ---
 
+    // entry_direction is now a transaction-target: matches amount_cents sign.
     #[test]
-    fn entry_direction_matches_when_present() {
+    fn entry_direction_spend_matches_negative_txn() {
+        // any_txn() has amount_cents = -1000 (negative = spend)
         let txn = any_txn();
-        let meta = make_meta(Direction::Spend, EntryType::Standing, 30, EntrySource::User);
         assert!(eval_with_accumulated(
             json!({"type": "entry_direction", "direction": "spend"}),
             &txn,
-            &[meta]
+            &[]
         ));
     }
 
     #[test]
-    fn entry_direction_no_match_wrong_direction() {
-        let txn = any_txn();
-        let meta = make_meta(Direction::Income, EntryType::Standing, 30, EntrySource::User);
+    fn entry_direction_spend_no_match_positive_txn() {
+        let txn = make_txn(any_uuid(), any_uuid(), "2026-03-01", 1000, "Paycheck");
         assert!(!eval_with_accumulated(
             json!({"type": "entry_direction", "direction": "spend"}),
             &txn,
-            &[meta]
+            &[]
         ));
     }
 
     #[test]
-    fn entry_direction_mixed_matches() {
-        let txn = any_txn();
-        let meta = make_meta(Direction::Mixed, EntryType::Irregular, 7, EntrySource::Engine);
+    fn entry_direction_income_matches_positive_txn() {
+        let txn = make_txn(any_uuid(), any_uuid(), "2026-03-01", 5000, "Paycheck");
+        assert!(eval_with_accumulated(
+            json!({"type": "entry_direction", "direction": "income"}),
+            &txn,
+            &[]
+        ));
+    }
+
+    #[test]
+    fn entry_direction_mixed_always_matches() {
+        let spend_txn = any_txn(); // amount_cents = -1000
+        let income_txn = make_txn(any_uuid(), any_uuid(), "2026-03-01", 5000, "Paycheck");
         assert!(eval_with_accumulated(
             json!({"type": "entry_direction", "direction": "mixed"}),
-            &txn,
-            &[meta]
+            &spend_txn,
+            &[]
+        ));
+        assert!(eval_with_accumulated(
+            json!({"type": "entry_direction", "direction": "mixed"}),
+            &income_txn,
+            &[]
         ));
     }
 
