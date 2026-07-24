@@ -43,9 +43,8 @@ const PROJECTION_DAYS: i64 = 90;
 #[derive(Debug, Clone)]
 struct EligibleEntry {
     id:                     Uuid,
-    account_id:             Option<Uuid>,
     direction:              String,
-    period_days:            i32,
+    period_days:            Option<i32>,
     /// Pre-computed projected rate in cents/day. Loaded from DB and used by
     /// `rate_for_day`. Replaces the old `amount_cents / period_days` division.
     projected_rate_per_day: f64,
@@ -215,8 +214,9 @@ fn window_covers(entry: &EligibleEntry, day: NaiveDate, _computed_as_of: NaiveDa
 
     let Some(ref anchor_str) = entry.recurrence_anchor else {
         // Non-recurring: one window [next_due, next_due + period_days).
+        let Some(pd) = entry.period_days else { return false; };
         return day >= next_due
-            && day < next_due + chrono::Duration::days(i64::from(entry.period_days));
+            && day < next_due + chrono::Duration::days(i64::from(pd));
     };
 
     match parse_anchor(anchor_str) {
@@ -239,7 +239,8 @@ fn window_covers(entry: &EligibleEntry, day: NaiveDate, _computed_as_of: NaiveDa
         }
         None => {
             // Unparseable anchor — fall back to period_days interval logic.
-            let period_days = i64::from(entry.period_days);
+            let Some(pd) = entry.period_days else { return false; };
+            let period_days = i64::from(pd);
             if period_days == 0 { return false; }
             let days_since_due = (day - next_due).num_days();
             if days_since_due < 0 { return false; }
@@ -318,51 +319,19 @@ pub async fn run(
         return Ok(());
     }
 
-    // Build projection rows for each account and the entity aggregate.
-    let mut all_rows: Vec<ProjectionRow> = Vec::new();
+    // Entity aggregate: sum all active account balances as the starting point.
+    let start_balance: i64 = balances.values().sum();
+    let all_entries: Vec<&EligibleEntry> = entries.iter().collect();
+    let rows = project_account(
+        entity_id,
+        None,
+        &all_entries,
+        start_balance,
+        computed_as_of,
+        &snapshot_rates,
+    );
 
-    // Group entries by account_id (Some(account_id) or None for entity-level).
-    let account_ids: Vec<Option<Uuid>> = {
-        let mut ids: Vec<Option<Uuid>> = entries
-            .iter()
-            .map(|e| e.account_id)
-            .collect::<std::collections::HashSet<_>>()
-            .into_iter()
-            .collect();
-        // Always include the entity aggregate (None).
-        if !ids.contains(&None) {
-            ids.push(None);
-        }
-        ids
-    };
-
-    for account_id in account_ids {
-        let account_entries: Vec<&EligibleEntry> = if account_id.is_some() {
-            entries.iter().filter(|e| e.account_id == account_id).collect()
-        } else {
-            entries.iter().collect() // entity aggregate = all entries
-        };
-
-        let start_balance = match account_id {
-            Some(aid) => balances.get(&aid).copied().unwrap_or(0),
-            None      => balances.values().sum(), // entity aggregate
-        };
-
-        let rows = project_account(
-            entity_id,
-            account_id,
-            &account_entries,
-            start_balance,
-            computed_as_of,
-            &snapshot_rates,
-        );
-        all_rows.extend(rows);
-    }
-
-    // Write projection rows in a single transaction (committed together with Stage 6
-    // per spec, but Stage 7 runs after Stage 6 commits in this implementation;
-    // they share the same job_id for audit traceability).
-    write_projections(entity_id, job_id, all_rows, write_pool).await
+    write_projections(entity_id, job_id, rows, write_pool).await
 }
 
 // ---------------------------------------------------------------------------
@@ -423,25 +392,22 @@ async fn load_eligible_entries(entity_id: Uuid, pool: &PgPool) -> Result<Vec<Eli
     struct Row {
         id:                     Uuid,
         direction:              String,
-        period_days:            i32,
+        period_days:            Option<i32>,
         recurrence_anchor:      Option<String>,
         next_due_date:          Option<NaiveDate>,
         projected_rate_per_day: Option<sqlx::types::BigDecimal>,
-        account_id:             Option<Uuid>,
     }
 
     let rows: Vec<Row> = sqlx::query_as(
         r#"
-        SELECT e.id, e.direction, e.period_days, e.recurrence_anchor, e.next_due_date,
-               e.projected_rate_per_day,
-               a.id AS account_id
-        FROM entries e
-        LEFT JOIN accounts a ON a.entity_id = e.entity_id AND a.status = 'active'
-        WHERE e.entity_id = $1
+        SELECT id, direction, period_days, recurrence_anchor, next_due_date,
+               projected_rate_per_day
+        FROM entries
+        WHERE entity_id = $1
           AND (
-            (e.status = 'live' AND e.end_date IS NULL)
+            (status = 'live' AND end_date IS NULL)
             OR
-            (e.status = 'pending' AND e.project_tentatively = TRUE)
+            (status = 'pending' AND project_tentatively = TRUE)
           )
         "#,
     )
@@ -454,7 +420,6 @@ async fn load_eligible_entries(entity_id: Uuid, pool: &PgPool) -> Result<Vec<Eli
         .into_iter()
         .map(|r| EligibleEntry {
             id:                r.id,
-            account_id:        r.account_id,
             direction:         r.direction,
             period_days:       r.period_days,
             projected_rate_per_day: r
@@ -615,14 +580,13 @@ mod tests {
     fn make_entry(
         id: &str,
         direction: &str,
-        period_days: i32,
+        period_days: Option<i32>,
         rate_cents_per_day: f64,
         next_due: Option<&str>,
         anchor: Option<&str>,
     ) -> EligibleEntry {
         EligibleEntry {
             id:                     Uuid::parse_str(id).unwrap_or(Uuid::nil()),
-            account_id:             None,
             direction:              direction.to_string(),
             period_days,
             projected_rate_per_day: rate_cents_per_day,
@@ -841,13 +805,13 @@ mod tests {
 
     #[test]
     fn window_covers_no_next_due_returns_false() {
-        let r = make_entry(ENTRY_1, "income", 30, 10_000.0, None, Some("interval:30"));
+        let r = make_entry(ENTRY_1, "income", Some(30), 10_000.0, None, Some("interval:30"));
         assert!(!window_covers(&r, date("2026-03-15"), date("2026-03-01")));
     }
 
     #[test]
     fn window_covers_non_recurring() {
-        let r = make_entry(ENTRY_1, "income", 10, 10_000.0, Some("2026-03-05"), None);
+        let r = make_entry(ENTRY_1, "income", Some(10), 10_000.0, Some("2026-03-05"), None);
         // Days 5–14 should be covered.
         assert!( window_covers(&r, date("2026-03-05"), date("2026-03-01")));
         assert!( window_covers(&r, date("2026-03-14"), date("2026-03-01")));
@@ -860,7 +824,7 @@ mod tests {
     #[test]
     fn window_covers_interval_recurring_multiple_cycles() {
         // Monthly entry: interval:30 from 2026-03-01.
-        let r = make_entry(ENTRY_1, "income", 30, 10_000.0, Some("2026-03-01"), Some("interval:30"));
+        let r = make_entry(ENTRY_1, "income", Some(30), 10_000.0, Some("2026-03-01"), Some("interval:30"));
         // Cycle 0: March 1–30
         assert!(window_covers(&r, date("2026-03-01"), date("2026-03-01")));
         assert!(window_covers(&r, date("2026-03-30"), date("2026-03-01")));
@@ -874,7 +838,7 @@ mod tests {
         // dom:15 — active from the 15th of each month until the next 15th.
         // The ±45-day expansion always finds a prior fire, so a dom entry is
         // active on any day D ≥ first_ever_fire.
-        let r = make_entry(ENTRY_1, "income", 30, 10_000.0, Some("2026-01-15"), Some("dom:15"));
+        let r = make_entry(ENTRY_1, "income", Some(30), 10_000.0, Some("2026-01-15"), Some("dom:15"));
         // Jan 15 is the fire date itself — covered.
         assert!(window_covers(&r, date("2026-01-15"), date("2026-01-01")));
         // Jan 20 is within the [Jan 15, Feb 15) window — covered.
@@ -886,14 +850,14 @@ mod tests {
         // Jan 14 falls in the [Dec 15, Jan 15) window of the prior cycle — covered.
         assert!(window_covers(&r, date("2026-01-14"), date("2026-01-01")));
         // A dom entry without next_due_date is never active.
-        let r_no_due = make_entry(ENTRY_2, "income", 30, 10_000.0, None, Some("dom:15"));
+        let r_no_due = make_entry(ENTRY_2, "income", Some(30), 10_000.0, None, Some("dom:15"));
         assert!(!window_covers(&r_no_due, date("2026-01-15"), date("2026-01-01")));
     }
 
     #[test]
     fn window_covers_dow_anchor_fires_on_correct_weekday() {
         // dow:0 = every Monday.
-        let r = make_entry(ENTRY_1, "income", 7, 1_000.0, Some("2026-07-06"), Some("dow:0"));
+        let r = make_entry(ENTRY_1, "income", Some(7), 1_000.0, Some("2026-07-06"), Some("dow:0"));
         // 2026-07-06 is a Monday.
         assert!( window_covers(&r, date("2026-07-06"), date("2026-07-01")));
         assert!( window_covers(&r, date("2026-07-13"), date("2026-07-01")));
@@ -905,7 +869,7 @@ mod tests {
     #[test]
     fn window_covers_unknown_anchor_falls_back_to_period_days() {
         // Anchor "monthly" is unparseable; falls back to period_days = 30.
-        let r = make_entry(ENTRY_1, "income", 30, 10_000.0, Some("2026-03-01"), Some("monthly"));
+        let r = make_entry(ENTRY_1, "income", Some(30), 10_000.0, Some("2026-03-01"), Some("monthly"));
         // Same interval-like behaviour as period_days.
         assert!(window_covers(&r, date("2026-03-01"), date("2026-03-01")));
         assert!(window_covers(&r, date("2026-03-30"), date("2026-03-01")));
@@ -916,14 +880,14 @@ mod tests {
 
     #[test]
     fn rate_for_day_uses_projected_rate() {
-        let r = make_entry(ENTRY_1, "income", 30, 10_000.0, Some("2026-03-01"), None);
+        let r = make_entry(ENTRY_1, "income", Some(30), 10_000.0, Some("2026-03-01"), None);
         let rates = std::collections::HashMap::new();
         assert_eq!(rate_for_day(&r, &rates), 10_000);
     }
 
     #[test]
     fn rate_for_day_prefers_snapshot_rate() {
-        let r = make_entry(ENTRY_1, "income", 30, 10_000.0, Some("2026-03-01"), None);
+        let r = make_entry(ENTRY_1, "income", Some(30), 10_000.0, Some("2026-03-01"), None);
         let id = Uuid::parse_str(ENTRY_1).unwrap();
         let mut rates = std::collections::HashMap::new();
         rates.insert(id, 15_000.0_f64);
@@ -935,7 +899,7 @@ mod tests {
     #[test]
     fn pinch_point_when_spend_exceeds_income() {
         let income  = make_entry(ENTRY_1, "income",  30, 10_000.0, Some("2026-03-01"), Some("interval:30"));
-        let spend = make_entry(ENTRY_2, "spend", 30, 20_000.0, Some("2026-03-01"), Some("interval:30"));
+        let spend = make_entry(ENTRY_2, "spend", Some(30), 20_000.0, Some("2026-03-01"), Some("interval:30"));
         let rates = std::collections::HashMap::new();
         let rows = project_account(
             Uuid::nil(),
@@ -952,7 +916,7 @@ mod tests {
     #[test]
     fn no_pinch_point_when_income_exceeds_spend() {
         let income  = make_entry(ENTRY_1, "income",  30, 20_000.0, Some("2026-03-01"), Some("interval:30"));
-        let spend = make_entry(ENTRY_2, "spend", 30, 10_000.0, Some("2026-03-01"), Some("interval:30"));
+        let spend = make_entry(ENTRY_2, "spend", Some(30), 10_000.0, Some("2026-03-01"), Some("interval:30"));
         let rates = std::collections::HashMap::new();
         let rows = project_account(
             Uuid::nil(),
@@ -968,7 +932,7 @@ mod tests {
 
     #[test]
     fn projection_covers_ninety_days() {
-        let income = make_entry(ENTRY_1, "income", 30, 10_000.0, Some("2026-03-01"), Some("interval:30"));
+        let income = make_entry(ENTRY_1, "income", Some(30), 10_000.0, Some("2026-03-01"), Some("interval:30"));
         let rates = std::collections::HashMap::new();
         let rows = project_account(
             Uuid::nil(),
@@ -983,7 +947,7 @@ mod tests {
 
     #[test]
     fn projection_starts_at_computed_as_of() {
-        let income = make_entry(ENTRY_1, "income", 30, 10_000.0, Some("2026-03-01"), Some("interval:30"));
+        let income = make_entry(ENTRY_1, "income", Some(30), 10_000.0, Some("2026-03-01"), Some("interval:30"));
         let rates = std::collections::HashMap::new();
         let computed_as_of = date("2026-03-01");
         let rows = project_account(
@@ -999,7 +963,7 @@ mod tests {
 
     #[test]
     fn balance_accumulates_from_start_balance() {
-        let income = make_entry(ENTRY_1, "income", 30, 10_000.0, Some("2026-03-01"), Some("interval:30"));
+        let income = make_entry(ENTRY_1, "income", Some(30), 10_000.0, Some("2026-03-01"), Some("interval:30"));
         let rates = std::collections::HashMap::new();
         let rows = project_account(
             Uuid::nil(),
