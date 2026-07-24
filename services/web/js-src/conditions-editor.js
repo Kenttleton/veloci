@@ -1,7 +1,7 @@
 import { EditorView, keymap } from "@codemirror/view"
 import { EditorState } from "@codemirror/state"
 import { json } from "@codemirror/lang-json"
-import { autocompletion, snippet, closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete"
+import { autocompletion, snippet, closeBrackets, closeBracketsKeymap, startCompletion } from "@codemirror/autocomplete"
 import { syntaxTree, HighlightStyle, syntaxHighlighting } from "@codemirror/language"
 import { tags } from "@lezer/highlight"
 import { linter, lintGutter } from "@codemirror/lint"
@@ -15,22 +15,45 @@ const PAYEE_KEYS = new Set([
 ])
 
 const KEY_LABELS = {
-  payee_contains:     "payee contains",
-  payee_exact:        "payee is exactly",
-  payee_starts_with:  "payee starts with",
-  payee_ends_with:    "payee ends with",
-  payee_not_contains: "payee does not contain",
-  payee_regex:        "payee matches regex",
-  label_matched:      "label matched",
-  account:            "account is",
-  institution:        "institution is",
-  entry_direction:    "direction is",
-  entry_type:         "type is",
+  and:                    "All of these",
+  or:                     "Any of these",
+  not:                    "None of these",
+  payee_contains:         "Description contains",
+  payee_exact:            "Description is exactly",
+  payee_starts_with:      "Description starts with",
+  payee_ends_with:        "Description ends with",
+  payee_not_contains:     "Description does not contain",
+  payee_regex:            "Description matches pattern",
+  payee_one_of:           "Description is one of",
+  amount_range:           "Amount is between",
+  date_day_of_month:      "Day of month is",
+  date_range:             "Date is between",
+  account:                "From account",
+  institution:            "From institution",
+  label_matched:          "Tagged as",
+  entry_direction:        "Direction is",
+  entry_type:             "Type is",
+  entry_period:           "Period is between",
+  entry_projected_rate:   "Projected rate is between",
+  entry_fitness:          "Fitness is",
+  entry_recurrence_anchor: "Anchor is",
 }
 
 const KNOWN_KEYS = new Set([
-  ...PAYEE_KEYS, "label_matched", "account", "institution",
-  "entry_direction", "entry_type", "recurrence_anchor",
+  ...PAYEE_KEYS,
+  "payee_one_of",
+  "amount_range",
+  "date_day_of_month",
+  "date_range",
+  "label_matched",
+  "account",
+  "institution",
+  "entry_direction",
+  "entry_type",
+  "entry_period",
+  "entry_fitness",
+  "entry_projected_rate",
+  "entry_recurrence_anchor",
   "and", "or", "not",
 ])
 
@@ -89,13 +112,16 @@ async function fetchInstitutionMap() {
 
 // ── Context detection ──────────────────────────────────────────────────────
 // Walks the CM6 JSON syntax tree to determine where the cursor sits.
-// The Lezer JSON parser is error-tolerant, so partial/unclosed strings
-// still produce a usable tree — no special incomplete-JSON handling needed.
 //
 // Returns one of:
 //   { type: "key",   depth, parentKey, node }
 //   { type: "value", key,              node }
 //   null
+//
+// Lezer's error-tolerant JSON parser may not wrap a String in a Property node
+// when there is no colon yet (incomplete property, user still typing the key).
+// We handle that case by checking for String-directly-inside-Object and
+// treating it as a key context.
 
 function getJsonContext(state, pos) {
   const tree = syntaxTree(state)
@@ -106,51 +132,58 @@ function getJsonContext(state, pos) {
     return d
   }
 
-  // Strip surrounding quotes; handles partial strings (no closing quote).
   function strContent(n) {
     const raw = state.sliceDoc(n.from, n.to)
     return raw.startsWith('"') ? raw.slice(1, raw.endsWith('"') ? -1 : undefined) : raw
   }
 
-  // resolveInner(pos, 0) finds the deepest node containing pos — works for
-  // both incomplete strings (no closing ") and complete ones (closing " is
-  // after pos, so the node doesn't end at pos and bias -1 would miss it).
+  function parentKey(containerObj) {
+    let n = containerObj
+    while (n) {
+      if (n.name === "Array" && n.parent?.name === "Property") {
+        const k = n.parent.firstChild
+        if (k?.name === "String") return strContent(k)
+        break
+      }
+      if (n.name === "Object" && n.parent?.name === "Property") {
+        const k = n.parent.firstChild
+        if (k?.name === "String") return strContent(k)
+      }
+      n = n.parent
+    }
+    return null
+  }
+
   let cur = tree.resolveInner(pos, 0)
 
   while (cur) {
     if (cur.name === "String") {
-      const prop = cur.parent
-      if (!prop || prop.name !== "Property") break
+      const parent = cur.parent
+      if (!parent) break
 
-      const isKey = prop.firstChild?.from === cur.from
-
-      if (isKey) {
-        const containerObj = prop.parent // Object that owns this Property
-        const depth = objectDepth(containerObj)
-
-        // Walk up to find the nearest enclosing logic-combinator key, if any.
-        // Handles arbitrary nesting: not→or, and→not→and, etc.
-        let parentKey = null
-        let n = containerObj
-        while (n) {
-          if (n.name === "Array" && n.parent?.name === "Property") {
-            const k = n.parent.firstChild
-            if (k?.name === "String") { parentKey = strContent(k); break }
-          }
-          if (n.name === "Object" && n.parent?.name === "Property") {
-            const k = n.parent.firstChild
-            if (k?.name === "String") { parentKey = strContent(k); break }
-          }
-          n = n.parent
+      // ── Key inside a complete Property node ───────────────────────────
+      if (parent.name === "Property") {
+        const isKey = parent.firstChild?.from === cur.from
+        if (isKey) {
+          const containerObj = parent.parent
+          const depth = objectDepth(containerObj)
+          return { type: "key", depth, parentKey: parentKey(containerObj), node: cur }
         }
-
-        return { type: "key", depth, parentKey, node: cur }
+        // Value string — find the owning property key.
+        const keyNode = parent.firstChild
+        const key = keyNode?.name === "String" ? strContent(keyNode) : null
+        return { type: "value", key, node: cur }
       }
 
-      // Value string — find the owning property key.
-      const keyNode = prop.firstChild
-      const key = keyNode?.name === "String" ? strContent(keyNode) : null
-      return { type: "value", key, node: cur }
+      // ── String directly inside Object — incomplete property (no colon yet) ──
+      // Lezer omits the Property wrapper in error recovery when only a key
+      // string exists with no colon or value. Treat it as a key context.
+      if (parent.name === "Object") {
+        const depth = objectDepth(parent)
+        return { type: "key", depth, parentKey: parentKey(parent), node: cur }
+      }
+
+      break
     }
     cur = cur.parent
   }
@@ -159,13 +192,6 @@ function getJsonContext(state, pos) {
 }
 
 // ── Key completer ──────────────────────────────────────────────────────────
-// Fires inside a JSON object key string (the part before the colon).
-// Ordering logic:
-//   depth 1 (root): logic ops (and/or/not) first — root is almost always a combinator
-//   depth 2+:       condition leaves first — nested objects are usually conditions
-//   Both groups always present; typing filters across both.
-//
-// and/or/not can appear at any depth (e.g. {"not":{"or":[]}} is a NOR gate).
 
 function contextKeyCompleter(context) {
   const ctx = getJsonContext(context.state, context.pos)
@@ -196,22 +222,31 @@ function contextKeyCompleter(context) {
   ]
 
   const conditionOptions = [
-    { label: "payee_contains",     detail: "payee contains text",           apply: snippet('"payee_contains": "${}"') },
-    { label: "payee_exact",        detail: "payee is exactly this",         apply: snippet('"payee_exact": "${}"') },
-    { label: "payee_starts_with",  detail: "payee starts with",             apply: snippet('"payee_starts_with": "${}"') },
-    { label: "payee_ends_with",    detail: "payee ends with",               apply: snippet('"payee_ends_with": "${}"') },
-    { label: "payee_not_contains", detail: "payee does not contain",        apply: snippet('"payee_not_contains": "${}"') },
-    { label: "payee_regex",        detail: "payee matches regex",           apply: snippet('"payee_regex": "${}"') },
-    { label: "label_matched",      detail: "transaction has this label",    apply: snippet('"label_matched": "${}"') },
-    { label: "account",            detail: "from this account",             apply: snippet('"account": "${}"') },
-    { label: "institution",        detail: "from this institution",         apply: snippet('"institution": "${}"') },
-    { label: "entry_direction",    detail: "income or spend",               apply: snippet('"entry_direction": "${spend}"') },
-    { label: "entry_type",         detail: "standing, variable, irregular", apply: snippet('"entry_type": "${standing}"') },
-    { label: "recurrence_anchor",  detail: "recurrence anchor date",        apply: snippet('"recurrence_anchor": "${}"') },
+    // Payee (transaction-target)
+    { label: "payee_contains",     detail: "description contains text",            apply: snippet('"payee_contains": "${}"') },
+    { label: "payee_exact",        detail: "description is exactly this",          apply: snippet('"payee_exact": "${}"') },
+    { label: "payee_starts_with",  detail: "description starts with",              apply: snippet('"payee_starts_with": "${}"') },
+    { label: "payee_ends_with",    detail: "description ends with",                apply: snippet('"payee_ends_with": "${}"') },
+    { label: "payee_not_contains", detail: "description does not contain",         apply: snippet('"payee_not_contains": "${}"') },
+    { label: "payee_regex",        detail: "description matches regex",            apply: snippet('"payee_regex": "${}"') },
+    { label: "payee_one_of",       detail: "description is one of several values", apply: snippet('"payee_one_of": ["${}"]') },
+    // Amount / date (transaction-target)
+    { label: "amount_range",       detail: "amount between values (dollars)",      apply: snippet('"amount_range": {"min": ${-50}, "max": ${-10}}') },
+    { label: "date_day_of_month",  detail: "day of month (1–28)",                  apply: snippet('"date_day_of_month": {"day": ${15}}') },
+    { label: "date_range",         detail: "date is within a range",               apply: snippet('"date_range": {"start": "${2026-01-01}", "end": "${2026-12-31}"}') },
+    // Account / institution (transaction-target)
+    { label: "account",            detail: "from a specific account",              apply: snippet('"account": "${}"') },
+    { label: "institution",        detail: "from a specific institution",          apply: snippet('"institution": "${}"') },
+    // Entry-target leaves
+    { label: "label_matched",      detail: "entry has this label",                 apply: snippet('"label_matched": "${}"') },
+    { label: "entry_direction",    detail: "income or spend",                      apply: snippet('"entry_direction": "${spend}"') },
+    { label: "entry_type",         detail: "standing, variable, or irregular",     apply: snippet('"entry_type": "${standing}"') },
+    { label: "entry_period",       detail: "recurrence period in days",            apply: snippet('"entry_period": {"min_days": ${25}, "max_days": ${35}}') },
+    { label: "entry_fitness",      detail: "fitness score gates",                  apply: snippet('"entry_fitness": {"overall": {"min": ${0.8}}}') },
+    { label: "entry_projected_rate", detail: "projected rate (percent)",           apply: snippet('"entry_projected_rate": {"min": ${1.5}}') },
+    { label: "entry_recurrence_anchor", detail: "anchor: dom:N, dow:N, interval:N", apply: snippet('"entry_recurrence_anchor": "${dom:15}"') },
   ]
 
-  // At the root (depth 1), logic combinators are the most common starting point.
-  // Deeper objects are usually leaf conditions, but logic remains available.
   const ordered = ctx.depth <= 1
     ? [...logicOptions, ...conditionOptions]
     : [...conditionOptions, ...logicOptions]
@@ -222,22 +257,17 @@ function contextKeyCompleter(context) {
 
   if (!options.length) return null
 
-  // from/to span the entire key string (including both quotes) so applying a
-  // completion replaces the whole key rather than leaving a stray closing ".
-  // validFor keeps the list alive while the cursor stays inside the string.
   return { from: node.from, to: node.to, options, filter: false, validFor: /^"[^"]*/ }
 }
 
 // ── Value completer ────────────────────────────────────────────────────────
-// Fires inside a JSON string value, keyed by the owning property name.
-// Async because payee search hits the API; label/account maps are cached.
 
 async function valueCompleter(context) {
   const ctx = getJsonContext(context.state, context.pos)
   if (!ctx || ctx.type !== "value" || !ctx.key) return null
 
   const node = ctx.node
-  const valueStart = node.from + 1 // character after the opening quote
+  const valueStart = node.from + 1
   const typed = context.state.sliceDoc(valueStart, context.pos)
   const { key } = ctx
 
@@ -271,6 +301,25 @@ async function valueCompleter(context) {
       from: valueStart,
       options: ["standing", "variable", "irregular"].map(v => ({ label: v, type: "enum", apply: makeApply(v) })),
     }
+  }
+
+  if (key === "entry_recurrence_anchor") {
+    const anchors = [
+      { label: "dom:1",      detail: "1st of month" },
+      { label: "dom:15",     detail: "15th of month" },
+      { label: "dom:-1",     detail: "last day of month" },
+      { label: "dom:-7",     detail: "7 days before month end" },
+      { label: "dom:1,15",   detail: "1st and 15th (semi-monthly)" },
+      { label: "dow:0",      detail: "every Monday" },
+      { label: "dow:4",      detail: "every Friday" },
+      { label: "interval:7",  detail: "every 7 days" },
+      { label: "interval:14", detail: "every 14 days" },
+      { label: "interval:30", detail: "every 30 days" },
+    ]
+    const options = anchors
+      .filter(a => !typed || a.label.includes(typed))
+      .map(a => ({ label: a.label, detail: a.detail, type: "enum", apply: makeApply(a.label) }))
+    return options.length ? { from: valueStart, options } : null
   }
 
   if (key === "label_matched") {
@@ -329,6 +378,10 @@ function conditionsLinter(view) {
     return { from: start, to: start + m[1].length }
   }
 
+  function label(key) {
+    return KEY_LABELS[key] || `"${key}"`
+  }
+
   function checkObj(obj) {
     if (!obj || typeof obj !== "object" || Array.isArray(obj)) return
     for (const [key, val] of Object.entries(obj)) {
@@ -339,6 +392,7 @@ function conditionsLinter(view) {
           severity: "warning",
           message: `Unknown condition key "${key}". Type " inside an object to see suggestions.`,
         })
+        continue
       }
 
       if (key === "entry_direction" && !["income", "spend"].includes(val)) {
@@ -346,7 +400,7 @@ function conditionsLinter(view) {
         if (pos) diagnostics.push({
           ...pos,
           severity: "error",
-          message: 'entry_direction must be "income" or "spend".',
+          message: `${label(key)} must be "income" or "spend".`,
         })
       }
 
@@ -355,7 +409,7 @@ function conditionsLinter(view) {
         if (pos) diagnostics.push({
           ...pos,
           severity: "error",
-          message: 'entry_type must be "standing", "variable", or "irregular".',
+          message: `${label(key)} must be "standing", "variable", or "irregular".`,
         })
       }
 
@@ -364,10 +418,106 @@ function conditionsLinter(view) {
         if (pos) diagnostics.push({
           ...pos,
           severity: "error",
-          message: `"${key}" must be an array of condition objects, e.g. [{"payee_contains": "..."}].`,
+          message: `${label(key)} must be an array of condition objects.`,
         })
       }
 
+      if (PAYEE_KEYS.has(key) && typeof val === "string" && val === "") {
+        const pos = findKeyRange(key)
+        if (pos) diagnostics.push({
+          ...pos,
+          severity: "warning",
+          message: `${label(key)} is empty — it will match every transaction.`,
+        })
+      }
+
+      if (key === "payee_one_of" && (!Array.isArray(val) || val.length === 0)) {
+        const pos = findKeyRange(key)
+        if (pos) diagnostics.push({
+          ...pos,
+          severity: "error",
+          message: `${label(key)} must be a non-empty array of strings.`,
+        })
+      }
+
+      if (key === "amount_range") {
+        if (!val || typeof val !== "object" || Array.isArray(val) ||
+            (val.min === undefined && val.max === undefined)) {
+          const pos = findKeyRange(key)
+          if (pos) diagnostics.push({
+            ...pos,
+            severity: "error",
+            message: `${label(key)} must be an object with at least one of "min" or "max" (dollar values).`,
+          })
+        }
+      }
+
+      if (key === "date_day_of_month") {
+        if (!val || typeof val !== "object" || Array.isArray(val) || val.day === undefined) {
+          const pos = findKeyRange(key)
+          if (pos) diagnostics.push({
+            ...pos,
+            severity: "error",
+            message: `${label(key)} requires a "day" field (1–28).`,
+          })
+        }
+      }
+
+      if (key === "date_range") {
+        if (!val || typeof val !== "object" || Array.isArray(val) ||
+            val.start === undefined || val.end === undefined) {
+          const pos = findKeyRange(key)
+          if (pos) diagnostics.push({
+            ...pos,
+            severity: "error",
+            message: `${label(key)} requires both "start" and "end" date strings (YYYY-MM-DD).`,
+          })
+        }
+      }
+
+      if (key === "entry_period") {
+        if (!val || typeof val !== "object" || Array.isArray(val) ||
+            (val.min_days === undefined && val.max_days === undefined)) {
+          const pos = findKeyRange(key)
+          if (pos) diagnostics.push({
+            ...pos,
+            severity: "error",
+            message: `${label(key)} must be an object with at least one of "min_days" or "max_days".`,
+          })
+        }
+      }
+
+      if (key === "entry_fitness" && (!val || typeof val !== "object" || Array.isArray(val))) {
+        const pos = findKeyRange(key)
+        if (pos) diagnostics.push({
+          ...pos,
+          severity: "error",
+          message: `${label(key)} must be an object with score gates (e.g. {"overall": {"min": 0.8}}).`,
+        })
+      }
+
+      if (key === "entry_projected_rate") {
+        if (!val || typeof val !== "object" || Array.isArray(val) ||
+            (val.min === undefined && val.max === undefined)) {
+          const pos = findKeyRange(key)
+          if (pos) diagnostics.push({
+            ...pos,
+            severity: "error",
+            message: `${label(key)} must be an object with at least one of "min" or "max".`,
+          })
+        }
+      }
+
+      if (key === "entry_recurrence_anchor" && typeof val !== "string") {
+        const pos = findKeyRange(key)
+        if (pos) diagnostics.push({
+          ...pos,
+          severity: "error",
+          message: `${label(key)} must be a string (e.g. "dom:15", "dow:0", "interval:14").`,
+        })
+      }
+
+      // Recurse into logical containers.
       if (key === "and" && Array.isArray(val)) val.forEach(checkObj)
       if (key === "or"  && Array.isArray(val)) val.forEach(checkObj)
       if (key === "not" && val && typeof val === "object") checkObj(val)
@@ -385,9 +535,9 @@ async function summaryHTML(conditions) {
     return ""
   }
 
-  const labelMap       = await fetchLabelMap()
-  const accountMap     = await fetchAccountMap()
-  await fetchInstitutionMap() // warm cache; institution summary uses inline span, no map needed
+  const labelMap   = await fetchLabelMap()
+  const accountMap = await fetchAccountMap()
+  await fetchInstitutionMap()
 
   const esc = s => String(s)
     .replace(/&/g, "&amp;")
@@ -398,25 +548,75 @@ async function summaryHTML(conditions) {
   const OR_SEP  = ` <span style="color:var(--text3);font-weight:600">OR</span> `
   const NOT_PFX = `<span style="color:var(--text3);font-weight:600">NOT</span> `
 
-  function renderValue(key, val) {
+  function strong(s) { return `<strong style="color:var(--text)">${esc(s)}</strong>` }
+  function accent(s) { return `<span style="color:var(--accent);font-weight:500">${esc(s)}</span>` }
+  function link(href, text) {
+    return `<a href="${href}" style="color:var(--accent);text-decoration:none;font-weight:500">${esc(text)}</a>`
+  }
+
+  function renderLeaf(key, val) {
+    const lbl = KEY_LABELS[key] || key.replace(/_/g, " ")
+
     if (key === "label_matched") {
       const entry = labelMap[String(val).toLowerCase()]
-      if (entry) {
-        return `<a href="/ledger?label=${entry.id}" style="color:var(--accent);text-decoration:none;font-weight:500">${esc(val)}</a>`
-      }
-      return `<span style="color:var(--accent);font-weight:500">${esc(val)}</span>`
+      return `${lbl} ${entry ? link(`/ledger?label=${entry.id}`, val) : accent(val)}`
     }
     if (key === "account") {
       const entry = accountMap[String(val).toLowerCase()]
-      if (entry) {
-        return `<a href="/accounts/${entry.id}" style="color:var(--accent);text-decoration:none;font-weight:500">${esc(val)}</a>`
-      }
-      return `<span style="color:var(--accent);font-weight:500">${esc(val)}</span>`
+      return `${lbl} ${entry ? link(`/accounts/${entry.id}`, val) : accent(val)}`
     }
     if (key === "institution") {
-      return `<span style="color:var(--accent);font-weight:500">${esc(val)}</span>`
+      return `${lbl} ${accent(val)}`
     }
-    return `<strong style="color:var(--text)">${esc(val)}</strong>`
+    if (PAYEE_KEYS.has(key)) {
+      return `${lbl} ${strong(val)}`
+    }
+    if (key === "payee_one_of" && Array.isArray(val)) {
+      return `${lbl} ${strong(val.join(", "))}`
+    }
+    if (key === "entry_direction" || key === "entry_type") {
+      return `${lbl} ${strong(val)}`
+    }
+    if (key === "entry_recurrence_anchor") {
+      return `${lbl} ${strong(val)}`
+    }
+    if (key === "amount_range" && val && typeof val === "object") {
+      const parts = []
+      if (val.min !== undefined) parts.push(`min $${val.min}`)
+      if (val.max !== undefined) parts.push(`max $${val.max}`)
+      return `${lbl} ${strong(parts.join(", "))}`
+    }
+    if (key === "date_day_of_month" && val && typeof val === "object") {
+      let s = `day ${val.day}`
+      if (val.tolerance_days) s += ` ±${val.tolerance_days}d`
+      return `${lbl} ${strong(s)}`
+    }
+    if (key === "date_range" && val && typeof val === "object") {
+      return `${lbl} ${strong(`${val.start ?? "?"} – ${val.end ?? "?"}`)}`
+    }
+    if (key === "entry_period" && val && typeof val === "object") {
+      const parts = []
+      if (val.min_days !== undefined) parts.push(`≥${val.min_days}d`)
+      if (val.max_days !== undefined) parts.push(`≤${val.max_days}d`)
+      return `${lbl} ${strong(parts.join(" "))}`
+    }
+    if (key === "entry_projected_rate" && val && typeof val === "object") {
+      const parts = []
+      if (val.min !== undefined) parts.push(`≥${val.min}%`)
+      if (val.max !== undefined) parts.push(`≤${val.max}%`)
+      return `${lbl} ${strong(parts.join(" "))}`
+    }
+    if (key === "entry_fitness" && val && typeof val === "object") {
+      const gates = Object.entries(val).map(([k, v]) => {
+        const bounds = []
+        if (v?.min !== undefined) bounds.push(`≥${v.min}`)
+        if (v?.max !== undefined) bounds.push(`≤${v.max}`)
+        return `${k} ${bounds.join(" ")}`
+      })
+      return `${lbl} ${strong(gates.join(", "))}`
+    }
+    // Fallback for unknown / complex values.
+    return `${lbl} ${strong(typeof val === "object" ? JSON.stringify(val) : val)}`
   }
 
   function renderObj(obj) {
@@ -433,8 +633,7 @@ async function summaryHTML(conditions) {
         const inner = renderObj(v)
         if (inner) parts.push(`${NOT_PFX}( ${inner} )`)
       } else {
-        const displayKey = KEY_LABELS[k] || k.replace(/_/g, " ")
-        parts.push(`${displayKey} ${renderValue(k, v)}`)
+        parts.push(renderLeaf(k, v))
       }
     }
     return parts.filter(Boolean).join(AND_SEP)
@@ -443,7 +642,7 @@ async function summaryHTML(conditions) {
   return renderObj(conditions)
 }
 
-// ── Summary updater extension ──────────────────────────────────────────────
+// ── Summary updater ────────────────────────────────────────────────────────
 
 function makeSummaryUpdater(summaryDiv) {
   if (!summaryDiv) return []
@@ -469,12 +668,25 @@ function makeSaveExtension(entryId, indicator) {
   return EditorView.updateListener.of((update) => {
     if (!update.docChanged) return
     clearTimeout(timer)
+
+    const text = update.state.doc.toString()
+
+    if (!text.trim()) {
+      if (indicator) indicator.textContent = ""
+      return
+    }
+
+    let parsed
+    try {
+      parsed = JSON.parse(text)
+    } catch {
+      if (indicator) indicator.textContent = "invalid JSON"
+      return
+    }
+
     if (indicator) indicator.textContent = "unsaved"
     timer = setTimeout(() => {
-      const text = update.state.doc.toString()
-      let parsed
-      try { parsed = JSON.parse(text) } catch { return }
-
+      if (indicator) indicator.textContent = "saving…"
       fetch(`/api/entries/${entryId}/conditions`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -492,25 +704,42 @@ function makeSaveExtension(entryId, indicator) {
         } else {
           indicator.textContent = "error"
         }
+      }).catch(() => {
+        if (indicator) indicator.textContent = "error"
       })
     }, 1500)
   })
 }
 
-// ── Syntax highlighting (dark-safe, WCAG AA on #1a2235) ───────────────────
+// ── Autocomplete-after-close-quote trigger ────────────────────────────────
+// When closeBrackets() inserts the matching `"`, it creates a synthetic
+// transaction that may not re-fire activateOnTyping.  We detect the cursor
+// landing between "" and call startCompletion() manually.
+
+function makeAutocompleteTrigger() {
+  return EditorView.updateListener.of((update) => {
+    if (!update.docChanged) return
+    // Only act on user input transactions.
+    const isInput = update.transactions.some(
+      tr => tr.isUserEvent("input") || tr.isUserEvent("delete")
+    )
+    if (!isInput) return
+    const state = update.state
+    const pos = state.selection.main.head
+    if (state.sliceDoc(pos - 1, pos) === '"' && state.sliceDoc(pos, pos + 1) === '"') {
+      startCompletion(update.view)
+    }
+  })
+}
+
+// ── Syntax highlighting ────────────────────────────────────────────────────
 
 const velociHighlightStyle = HighlightStyle.define([
-  // JSON property keys — accent blue (#7aa3e0 ≈ 5.6:1)
   { tag: tags.propertyName, color: "#7aa3e0", fontWeight: "600" },
-  // String values — soft green (#7ecb9a ≈ 6.1:1)
   { tag: tags.string, color: "#7ecb9a" },
-  // Numbers — warm amber (#e8c06a ≈ 8.1:1)
   { tag: tags.number, color: "#e8c06a" },
-  // Booleans (true / false) — lavender (#c9a7eb ≈ 5.4:1)
   { tag: tags.bool, color: "#c9a7eb" },
-  // null keyword — same lavender family
   { tag: tags.null, color: "#c9a7eb" },
-  // Punctuation: braces, brackets, colons, commas — muted text2 (#8a9bb8 ≈ 3.6:1)
   { tag: tags.punctuation, color: "#8a9bb8" },
   { tag: tags.bracket, color: "#8a9bb8" },
 ])
@@ -537,6 +766,14 @@ const velociTheme = EditorView.theme({
   },
   ".cm-lintRange-warning": { backgroundImage: "none", borderBottom: "2px solid var(--commit)" },
   ".cm-lintRange-error":   { backgroundImage: "none", borderBottom: "2px solid var(--neg)" },
+  // Lint tooltip contrast fix — CM6 defaults to light gray; match app surface.
+  ".cm-tooltip.cm-tooltip-lint": {
+    background: "var(--bg-secondary, var(--bg))",
+    border: "1px solid var(--border)",
+    color: "var(--text)",
+    borderRadius: "4px",
+    boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+  },
   ".cm-tooltip.cm-tooltip-autocomplete": {
     background: "var(--bg)",
     border: "1px solid var(--border)",
@@ -561,9 +798,6 @@ const velociTheme = EditorView.theme({
 })
 
 // ── Structure completer ────────────────────────────────────────────────────
-// Fires in non-string positions after logic combinator keys.
-// Suggests the expected array/object structure so the user doesn't have to
-// remember which combinators take arrays vs objects.
 
 function structureCompleter(context) {
   const andOr = context.matchBefore(/"(and|or)"\s*:\s*/)
@@ -638,6 +872,7 @@ function initEditor(textarea) {
         EditorView.lineWrapping,
         makeSaveExtension(entryId, indicator),
         makeSummaryUpdater(summaryDiv),
+        makeAutocompleteTrigger(),
         velociTheme,
       ],
     }),
