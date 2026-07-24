@@ -103,7 +103,7 @@ func SettingsPage(data ShellData) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<div style=\"display:flex;flex-direction:column;height:100%;overflow:hidden\"><div style=\"padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0\"><h1 style=\"margin:0;font-size:18px;font-weight:700;color:var(--text);letter-spacing:-0.02em\">Settings</h1></div><div style=\"flex:1;overflow:auto;padding:24px 20px\"><section style=\"max-width:480px\"><h2 style=\"margin:0 0 4px;font-size:15px;font-weight:700;color:var(--text)\">Profile</h2><p style=\"margin:0 0 20px;font-size:12px;color:var(--text3)\">Manage your display name, email, and password.</p><div style=\"padding:32px 0;color:var(--text3);font-size:13px\">Profile settings coming soon.</div></section></div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<div style=\"display:flex;flex-direction:column;height:100%;overflow:hidden\"><div style=\"flex:1;overflow:auto;padding:24px 20px\"><section style=\"max-width:480px\"><h2 style=\"margin:0 0 4px;font-size:15px;font-weight:700;color:var(--text)\">Profile</h2><p style=\"margin:0 0 20px;font-size:12px;color:var(--text3)\">Manage your display name, email, and password.</p><div style=\"padding:32px 0;color:var(--text3);font-size:13px\">Profile settings coming soon.</div></section></div></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

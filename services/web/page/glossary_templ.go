@@ -42,7 +42,7 @@ func GlossaryPage(data ShellData) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div style=\"display:flex;flex-direction:column;height:100%;overflow:hidden\"><div style=\"padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0\"><h1 style=\"margin:0;font-size:18px;font-weight:700;color:var(--text);letter-spacing:-0.02em\">Glossary</h1><p style=\"margin:4px 0 0;font-size:13px;color:var(--text3)\">Domain vocabulary for Veloci. Hover any dashed-underline term in the app for a short definition.</p></div><div style=\"flex:1;overflow:auto;padding:20px\"><div style=\"max-width:720px\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div style=\"display:flex;flex-direction:column;height:100%;overflow:hidden\"><div style=\"padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0\"><p style=\"margin:0;font-size:13px;color:var(--text3)\">Domain vocabulary for Veloci. Hover any dashed-underline term in the app for a short definition.</p></div><div style=\"flex:1;overflow:auto;padding:20px\"><div style=\"max-width:720px\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -288,7 +288,7 @@ func glossaryTermRow(term, shortDef, fullDef, examples string) templ.Component {
 		var templ_7745c5c3_Var6 string
 		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(term)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/glossary.templ`, Line: 108, Col: 72}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/glossary.templ`, Line: 107, Col: 72}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 		if templ_7745c5c3_Err != nil {
@@ -302,7 +302,7 @@ func glossaryTermRow(term, shortDef, fullDef, examples string) templ.Component {
 			var templ_7745c5c3_Var7 string
 			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(fullDef)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/glossary.templ`, Line: 113, Col: 14}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/glossary.templ`, Line: 112, Col: 14}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 			if templ_7745c5c3_Err != nil {
@@ -312,7 +312,7 @@ func glossaryTermRow(term, shortDef, fullDef, examples string) templ.Component {
 			var templ_7745c5c3_Var8 string
 			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(shortDef)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/glossary.templ`, Line: 115, Col: 15}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/glossary.templ`, Line: 114, Col: 15}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 			if templ_7745c5c3_Err != nil {
@@ -331,7 +331,7 @@ func glossaryTermRow(term, shortDef, fullDef, examples string) templ.Component {
 			var templ_7745c5c3_Var9 string
 			templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(examples)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/glossary.templ`, Line: 120, Col: 24}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/glossary.templ`, Line: 119, Col: 24}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 			if templ_7745c5c3_Err != nil {

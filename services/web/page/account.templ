@@ -9,28 +9,6 @@ import (
 templ AccountPage(shell ShellData, data AccountData) {
 	@Shell(shell) {
 		<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
-			<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;padding-right:64px;border-bottom:1px solid var(--border);flex-shrink:0">
-				<div style="display:flex;align-items:center;gap:12px">
-					<h1 style="margin:0;font-size:18px;font-weight:700;color:var(--text);letter-spacing:-0.02em">
-						{ data.Account.Name }
-					</h1>
-					<span style="font-size:11px;font-weight:500;padding:2px 8px;border-radius:4px;background:var(--surface2);color:var(--text2)">
-						{ accountTypeLabel(data.Account.AccountType) }
-					</span>
-				</div>
-				<div style="display:flex;align-items:center;gap:8px">
-					<span
-						id="account-balance"
-						data-account-id={ data.Account.ID }
-						data-balance-cents={ balanceCentsStr(data.Account.BalanceCents) }
-						data-starting-balance-cents={ startingBalanceCentsStr(data.Account.StartingBalanceCents) }
-						style={ "font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;cursor:pointer;" + accountBalanceColor(data.Account) }
-						title="Click to edit balance"
-					>
-						{ FormatBalance(data.Account.BalanceCents) }
-					</span>
-				</div>
-			</div>
 			<div style="display:flex;align-items:center;justify-content:space-between;padding:0 20px;height:36px;border-bottom:1px solid var(--border);flex-shrink:0">
 				<div style="display:flex;align-items:center;gap:8px">
 					<button
@@ -47,13 +25,23 @@ templ AccountPage(shell ShellData, data AccountData) {
 					style="background:none;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:12px;color:var(--text3);font-family:inherit"
 				>Delete Account</button>
 			</div>
-			<div style="padding:8px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
+			<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
 				<input
 					id="merchant-filter"
 					type="text"
 					placeholder="Filter by merchant…"
 					style="background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);outline:none;width:260px"
 				/>
+				<span
+					id="account-balance"
+					data-account-id={ data.Account.ID }
+					data-balance-cents={ balanceCentsStr(data.Account.BalanceCents) }
+					data-starting-balance-cents={ startingBalanceCentsStr(data.Account.StartingBalanceCents) }
+					style={ "font-size:16px;font-weight:600;font-variant-numeric:tabular-nums;cursor:pointer;" + accountBalanceColor(data.Account) }
+					title="Click to edit balance"
+				>
+					{ FormatBalance(data.Account.BalanceCents) }
+				</span>
 			</div>
 			<!-- "Entries referencing this account" collapsible panel.
 			     SPEC GAP: No /api/entries?account_condition= endpoint exists.

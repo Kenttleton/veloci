@@ -48,7 +48,7 @@ func LedgerPage(shell ShellData, data LedgerData) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div style=\"display:flex;flex-direction:column;height:100%;overflow:hidden\"><div style=\"display:flex;align-items:center;padding:12px 20px;border-bottom:1px solid var(--border);flex-shrink:0;gap:8px\"><h1 style=\"margin:0;font-size:18px;font-weight:700;color:var(--text);letter-spacing:-0.02em;flex:1\">Ledger</h1><span id=\"dirty-indicator\" style=\"display:none;font-size:11px;font-weight:600;color:var(--commit);padding:2px 8px;border-radius:10px;background:color-mix(in srgb,var(--surface2) 60%,var(--commit) 40%)\">Changes pending — reprocess to apply</span> <button id=\"add-entry-btn\" style=\"background:var(--accent);border:none;border-radius:5px;padding:4px 12px;cursor:pointer;font-size:12px;font-weight:500;color:#fff;font-family:inherit\">+ Add Entry</button> <button id=\"run-engine-btn\" style=\"background:none;border:1px solid var(--border);border-radius:5px;padding:4px 10px;cursor:pointer;font-size:12px;color:var(--text2);font-family:inherit\">Run Engine</button></div><div style=\"display:flex;gap:6px;padding:8px 20px;border-bottom:1px solid var(--border);flex-shrink:0;align-items:center;flex-wrap:wrap\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div style=\"display:flex;flex-direction:column;height:100%;overflow:hidden\"><div style=\"display:flex;gap:6px;padding:8px 20px;border-bottom:1px solid var(--border);flex-shrink:0;align-items:center;flex-wrap:wrap\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -104,7 +104,7 @@ func LedgerPage(shell ShellData, data LedgerData) templ.Component {
 				var templ_7745c5c3_Var3 templ.SafeURL
 				templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(ledgerFilterURL(data, "label", "")))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 40, Col: 62}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 28, Col: 62}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 				if templ_7745c5c3_Err != nil {
@@ -118,7 +118,7 @@ func LedgerPage(shell ShellData, data LedgerData) templ.Component {
 					var templ_7745c5c3_Var4 string
 					templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(data.LabelName)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 45, Col: 23}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 33, Col: 23}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 					if templ_7745c5c3_Err != nil {
@@ -139,7 +139,7 @@ func LedgerPage(shell ShellData, data LedgerData) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<div style=\"margin-left:auto;display:flex;align-items:center;gap:6px\"><label style=\"font-size:11px;color:var(--text3)\">Sort:</label> <select id=\"ledger-sort\" style=\"background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:12px;color:var(--text);outline:none;cursor:pointer;font-family:inherit\"><option value=\"label\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<div style=\"margin-left:auto;display:flex;align-items:center;gap:6px\"><span id=\"dirty-indicator\" style=\"display:none;font-size:11px;font-weight:600;color:var(--commit);padding:2px 8px;border-radius:10px;background:color-mix(in srgb,var(--surface2) 60%,var(--commit) 40%)\">Changes pending — reprocess to apply</span> <label style=\"font-size:11px;color:var(--text3)\">Sort:</label> <select id=\"ledger-sort\" style=\"background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:12px;color:var(--text);outline:none;cursor:pointer;font-family:inherit\"><option value=\"label\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -179,7 +179,7 @@ func LedgerPage(shell ShellData, data LedgerData) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, ">Fitness</option></select></div></div><!-- Granularity toggle row --><div style=\"display:flex;align-items:center;padding:0 20px;height:36px;border-bottom:1px solid var(--border);flex-shrink:0\"><div style=\"display:flex;gap:4px\"><button class=\"js-gran\" data-gran=\"day\" style=\"background:var(--accent);color:#fff;border:none;border-radius:5px;padding:3px 10px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit\">/day</button> <button class=\"js-gran\" data-gran=\"month\" style=\"background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:5px;padding:3px 10px;cursor:pointer;font-size:12px;font-weight:500;font-family:inherit\">/mo</button> <button class=\"js-gran\" data-gran=\"year\" style=\"background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:5px;padding:3px 10px;cursor:pointer;font-size:12px;font-weight:500;font-family:inherit\">/yr</button></div></div><div style=\"display:grid;grid-template-columns:28px 1fr 80px 70px 90px 110px 140px;padding:5px 20px;border-bottom:1px solid var(--border);flex-shrink:0\"><div></div><div style=\"font-size:11px;font-weight:600;color:var(--text3)\">Entry</div><div style=\"font-size:11px;font-weight:600;color:var(--text3)\">Type</div><div style=\"font-size:11px;font-weight:600;color:var(--text3)\">Dir</div><div style=\"font-size:11px;font-weight:600;color:var(--text3);text-align:right\">Rate/<span class=\"js-gran-label\">day</span></div><div style=\"font-size:11px;font-weight:600;color:var(--text3);text-align:center\">Status</div><div style=\"font-size:11px;font-weight:600;color:var(--text3);text-align:right\">Fitness</div></div><div style=\"flex:1;overflow:auto\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, ">Fitness</option></select><div style=\"width:1px;height:16px;background:var(--border)\"></div><button id=\"add-entry-btn\" style=\"background:var(--accent);border:none;border-radius:5px;padding:4px 12px;cursor:pointer;font-size:12px;font-weight:500;color:#fff;font-family:inherit\">+ Add Entry</button> <button id=\"run-engine-btn\" style=\"background:none;border:1px solid var(--border);border-radius:5px;padding:4px 10px;cursor:pointer;font-size:12px;color:var(--text2);font-family:inherit\">Run Engine</button></div></div><div style=\"display:grid;grid-template-columns:28px 1fr 80px 70px 90px 110px 140px;padding:5px 20px;border-bottom:1px solid var(--border);flex-shrink:0\"><div style=\"display:flex;align-items:center\"><input type=\"checkbox\" class=\"js-check-all\" style=\"cursor:pointer;accent-color:var(--accent)\" title=\"Select all\"></div><div style=\"font-size:11px;font-weight:600;color:var(--text3)\">Entry</div><div style=\"font-size:11px;font-weight:600;color:var(--text3)\">Type</div><div style=\"font-size:11px;font-weight:600;color:var(--text3)\">Dir</div><div style=\"font-size:11px;font-weight:600;color:var(--text3);text-align:right\">Rate/<span class=\"js-gran-label\">day</span></div><div style=\"font-size:11px;font-weight:600;color:var(--text3);text-align:center\">Status</div><div style=\"font-size:11px;font-weight:600;color:var(--text3);text-align:right\">Fitness</div></div><div style=\"flex:1;overflow:auto\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -196,7 +196,7 @@ func LedgerPage(shell ShellData, data LedgerData) templ.Component {
 					}
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "</div></div><!-- Add Entry Dialog — must appear before the script so getElementById finds it --> <dialog id=\"add-entry-dialog\" style=\"border:1px solid var(--border);border-radius:8px;padding:0;background:var(--surface);color:var(--text);max-width:480px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.3)\"><div style=\"display:flex;align-items:center;padding:14px 18px;border-bottom:1px solid var(--border)\"><span style=\"font-size:14px;font-weight:700;flex:1\">Add Entry</span> <button id=\"add-entry-close\" style=\"background:none;border:none;cursor:pointer;font-size:18px;color:var(--text3);line-height:1;padding:2px 6px\">&times;</button></div><div style=\"padding:16px 18px;display:grid;gap:12px\"><div><label style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px\">Label</label> <input id=\"ae-label\" type=\"text\" placeholder=\"e.g. Rent\" style=\"width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit\"></div><div style=\"display:grid;grid-template-columns:1fr 1fr;gap:10px\"><div><label style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px\">Direction</label> <select id=\"ae-direction\" style=\"width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit\"><option value=\"\">— select —</option> <option value=\"spend\">Spend</option> <option value=\"income\">Income</option></select></div><div><label style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px\">Type</label> <select id=\"ae-type\" style=\"width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit\"><option value=\"\">— select —</option> <option value=\"standing\">Standing</option> <option value=\"variable\">Variable</option> <option value=\"irregular\">Irregular</option></select></div></div><div style=\"display:grid;grid-template-columns:1fr 1fr;gap:10px\"><div><label style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px\">Projected $/mo <span style=\"font-weight:400;color:var(--text3)\">(optional)</span></label> <input id=\"ae-rate\" type=\"number\" min=\"0\" step=\"0.01\" placeholder=\"e.g. 1500\" style=\"width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit\"></div><div><label style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px\">Start date</label> <input id=\"ae-start-date\" type=\"date\" style=\"width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit\"></div></div><div><label style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px\">Conditions JSON <span style=\"font-weight:400;color:var(--text3)\">(optional — you can add via the editor after saving)</span></label> <textarea id=\"ae-conditions\" rows=\"4\" placeholder=\"{}\" style=\"width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:12px;color:var(--text);font-family:monospace;resize:vertical\"></textarea></div><div id=\"add-entry-error\" style=\"font-size:12px;color:var(--commit);min-height:16px\"></div></div><div style=\"display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--border)\"><button id=\"add-entry-cancel\" style=\"background:none;border:1px solid var(--border);border-radius:5px;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit\">Cancel</button> <button id=\"add-entry-save\" style=\"background:var(--accent);border:none;border-radius:5px;padding:6px 16px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit\">Save</button></div></dialog><script>\n\t\t\t(function() {\n\t\t\t\t// ── Granularity toggle ─────────────────────────────────────────────────────\n\t\t\t\tvar activeGran = localStorage.getItem('veloci-gran') || 'day';\n\t\t\t\tfunction updateRateDisplays() {\n\t\t\t\t\tvar attr = activeGran === 'day' ? 'fmtDay' : activeGran === 'year' ? 'fmtYr' : 'fmtMo';\n\t\t\t\t\tdocument.querySelectorAll('[data-fmt-day]').forEach(function (el) {\n\t\t\t\t\t\tel.textContent = el.dataset[attr] || el.dataset.fmtDay;\n\t\t\t\t\t});\n\t\t\t\t\tvar label = activeGran === 'day' ? 'day' : activeGran === 'year' ? 'yr' : 'mo';\n\t\t\t\t\tdocument.querySelectorAll('.js-gran-label').forEach(function (el) {\n\t\t\t\t\t\tel.textContent = label;\n\t\t\t\t\t});\n\t\t\t\t}\n\t\t\t\tfunction applyGran(gran) {\n\t\t\t\t\tactiveGran = gran;\n\t\t\t\t\tlocalStorage.setItem('veloci-gran', activeGran);\n\t\t\t\t\tdocument.querySelectorAll('.js-gran').forEach(function (b) {\n\t\t\t\t\t\tvar on   = b.dataset.gran === activeGran;\n\t\t\t\t\t\tb.style.background = on ? 'var(--accent)' : 'var(--surface2)';\n\t\t\t\t\t\tb.style.color      = on ? '#fff' : 'var(--text2)';\n\t\t\t\t\t\tb.style.border     = on ? 'none' : '1px solid var(--border)';\n\t\t\t\t\t});\n\t\t\t\t\tupdateRateDisplays();\n\t\t\t\t}\n\t\t\t\tdocument.addEventListener('click', function (e) {\n\t\t\t\t\tvar btn = e.target.closest('.js-gran');\n\t\t\t\t\tif (!btn) return;\n\t\t\t\t\tapplyGran(btn.dataset.gran);\n\t\t\t\t});\n\t\t\t\tapplyGran(activeGran);\n\n\t\t\t\t// ── Dirty state ───────────────────────────────────────────────────────────\n\t\t\t\tvar _dirty = false;\n\t\t\t\tfunction markDirty() {\n\t\t\t\t\tif (_dirty) return;\n\t\t\t\t\t_dirty = true;\n\t\t\t\t\tvar ind = document.getElementById('dirty-indicator');\n\t\t\t\t\tif (ind) ind.style.display = '';\n\t\t\t\t\tvar runBtn = document.getElementById('run-engine-btn');\n\t\t\t\t\tif (runBtn) {\n\t\t\t\t\t\trunBtn.style.background = 'var(--commit)';\n\t\t\t\t\t\trunBtn.style.color = '#fff';\n\t\t\t\t\t\trunBtn.style.borderColor = 'var(--commit)';\n\t\t\t\t\t\trunBtn.textContent = 'Reprocess';\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t\tfunction clearDirty() {\n\t\t\t\t\t_dirty = false;\n\t\t\t\t\tvar ind = document.getElementById('dirty-indicator');\n\t\t\t\t\tif (ind) ind.style.display = 'none';\n\t\t\t\t\tvar runBtn = document.getElementById('run-engine-btn');\n\t\t\t\t\tif (runBtn) {\n\t\t\t\t\t\trunBtn.style.background = '';\n\t\t\t\t\t\trunBtn.style.color = '';\n\t\t\t\t\t\trunBtn.style.borderColor = '';\n\t\t\t\t\t\trunBtn.textContent = 'Run Engine';\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t\t// Conditions saved → auto-reprocess, then reload the tx panel and entry stats.\n\t\t\t\tdocument.addEventListener('veloci:conditions-saved', function(e) {\n\t\t\t\t\tvar entryId = e.detail && e.detail.entryId;\n\t\t\t\t\tfetch('/api/jobs/reprocess', {method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin', body:'{}'})\n\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\tif (r.ok) clearDirty();\n\t\t\t\t\t\t\tsetTimeout(function() {\n\t\t\t\t\t\t\t\tif (!entryId) return;\n\t\t\t\t\t\t\t\tvar det = document.querySelector('.js-entry-details[data-entry-id=\"'+entryId+'\"]');\n\t\t\t\t\t\t\t\tif (!det) return;\n\t\t\t\t\t\t\t\tif (det.open) {\n\t\t\t\t\t\t\t\t\tvar txPanel = det.querySelector('.js-tx-panel');\n\t\t\t\t\t\t\t\t\tif (txPanel) {\n\t\t\t\t\t\t\t\t\t\tdelete txPanel.dataset.loaded;\n\t\t\t\t\t\t\t\t\t\tloadTxPanel(txPanel, entryId, det.dataset.entryStatus || 'live');\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\tloadEntryStats(entryId, det);\n\t\t\t\t\t\t\t}, 2000);\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function() { markDirty(); });\n\t\t\t\t});\n\t\t\t\t// Navigate-away warning when dirty.\n\t\t\t\twindow.addEventListener('beforeunload', function(e) {\n\t\t\t\t\tif (!_dirty) return;\n\t\t\t\t\te.preventDefault();\n\t\t\t\t\te.returnValue = '';\n\t\t\t\t});\n\n\t\t\t\t// ── Run Engine / Reprocess ─────────────────────────────────────────────\n\t\t\t\tvar runBtn = document.getElementById('run-engine-btn');\n\t\t\t\tif (runBtn) {\n\t\t\t\t\trunBtn.addEventListener('click', function() {\n\t\t\t\t\t\trunBtn.disabled = true;\n\t\t\t\t\t\tvar origText = runBtn.textContent;\n\t\t\t\t\t\trunBtn.textContent = 'Running…';\n\t\t\t\t\t\tfetch('/api/jobs/reprocess', {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})\n\t\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\t\tif (r.ok) {\n\t\t\t\t\t\t\t\t\tclearDirty();\n\t\t\t\t\t\t\t\t\trunBtn.textContent = 'Engine started';\n\t\t\t\t\t\t\t\t} else {\n\t\t\t\t\t\t\t\t\trunBtn.textContent = 'Failed';\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\tsetTimeout(function(){ runBtn.disabled=false; runBtn.textContent=_dirty?'Reprocess':'Run Engine'; }, 3000);\n\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t.catch(function(){ runBtn.disabled=false; runBtn.textContent=origText; });\n\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\t// ── Sort selector ──────────────────────────────────────────────────────\n\t\t\t\tvar sortSel = document.getElementById('ledger-sort');\n\t\t\t\tif (sortSel) {\n\t\t\t\t\tsortSel.addEventListener('change', function() {\n\t\t\t\t\t\tvar url = new URL(window.location.href);\n\t\t\t\t\t\tif (sortSel.value === 'label') {\n\t\t\t\t\t\t\turl.searchParams.delete('sort');\n\t\t\t\t\t\t} else {\n\t\t\t\t\t\t\turl.searchParams.set('sort', sortSel.value);\n\t\t\t\t\t\t}\n\t\t\t\t\t\twindow.location.href = url.toString();\n\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\t// ── Chevron rotation ───────────────────────────────────────────────────\n\t\t\t\tdocument.addEventListener('toggle', function(e) {\n\t\t\t\t\tvar det = e.target;\n\t\t\t\t\tif (!det.classList.contains('js-entry-details')) return;\n\t\t\t\t\tvar chev = det.querySelector('.entry-chevron');\n\t\t\t\t\tif (chev) chev.style.transform = det.open ? 'rotate(90deg)' : '';\n\t\t\t\t}, true);\n\n\t\t\t\t// ── Label cache (shared between hint + blur-save) ─────────────────────\n\t\t\t\tvar _labelCache = null;\n\t\t\t\tfunction fetchLabels(cb) {\n\t\t\t\t\tif (_labelCache) { cb(_labelCache); return; }\n\t\t\t\t\tfetch('/api/labels?limit=500', {credentials:'same-origin'})\n\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t.then(function(env){ _labelCache = env.data || []; cb(_labelCache); })\n\t\t\t\t\t\t.catch(function(){ cb([]); });\n\t\t\t\t}\n\n\t\t\t\t// ── Entry stats reload (rate/day + fitness) ───────────────────────────\n\t\t\t\tfunction loadEntryStats(entryId, det) {\n\t\t\t\t\tfetch('/api/entries/' + entryId, {credentials:'same-origin'})\n\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t.then(function(env) {\n\t\t\t\t\t\t\tvar entry = env.data;\n\t\t\t\t\t\t\tif (!entry) return;\n\n\t\t\t\t\t\t\t// Rate: prefer projected_rate_per_day (set by engine for system entries).\n\t\t\t\t\t\t\tvar rateEl = det.querySelector('.js-entry-rate');\n\t\t\t\t\t\t\tif (rateEl) {\n\t\t\t\t\t\t\t\tvar rate = entry.projected_rate_per_day;\n\t\t\t\t\t\t\t\tif (rate == null) {\n\t\t\t\t\t\t\t\t\trateEl.dataset.fmtDay = '—';\n\t\t\t\t\t\t\t\t\trateEl.dataset.fmtMo  = '—';\n\t\t\t\t\t\t\t\t\trateEl.dataset.fmtYr  = '—';\n\t\t\t\t\t\t\t\t} else {\n\t\t\t\t\t\t\t\t\tvar d = Math.abs(rate / 100);\n\t\t\t\t\t\t\t\t\trateEl.dataset.fmtDay = '$' + d.toFixed(2) + '/day';\n\t\t\t\t\t\t\t\t\trateEl.dataset.fmtMo  = '$' + Math.round(d * 30.44) + '/mo';\n\t\t\t\t\t\t\t\t\trateEl.dataset.fmtYr  = '$' + Math.round(d * 365.25) + '/yr';\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\tvar attr = activeGran === 'day' ? 'fmtDay' : activeGran === 'year' ? 'fmtYr' : 'fmtMo';\n\t\t\t\t\t\t\t\trateEl.textContent = rateEl.dataset[attr] || rateEl.dataset.fmtDay;\n\t\t\t\t\t\t\t}\n\n\t\t\t\t\t\t\t// Fitness %.\n\t\t\t\t\t\t\tvar fitEl = det.querySelector('.js-entry-fitness');\n\t\t\t\t\t\t\tif (fitEl) {\n\t\t\t\t\t\t\t\tvar fit = entry.fitness;\n\t\t\t\t\t\t\t\tif (fit == null) {\n\t\t\t\t\t\t\t\t\tfitEl.textContent = '—';\n\t\t\t\t\t\t\t\t\tfitEl.style.color = 'var(--text3)';\n\t\t\t\t\t\t\t\t} else {\n\t\t\t\t\t\t\t\t\tfitEl.textContent = Math.round(fit * 100) + '%';\n\t\t\t\t\t\t\t\t\tfitEl.style.color = fit >= 0.8 ? 'var(--income)' : fit >= 0.5 ? 'var(--text2)' : 'var(--commit)';\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function() {});\n\t\t\t\t}\n\n\t\t\t\t// ── Tx panel loader ────────────────────────────────────────────────────\n\t\t\t\tfunction loadTxPanel(txPanel, entryId, entryStatus) {\n\t\t\t\t\ttxPanel.dataset.loaded = '1';\n\t\t\t\t\ttxPanel.innerHTML = '<p style=\"color:var(--text3);font-size:12px\">Loading…</p>';\n\t\t\t\t\tfetch('/api/transactions?entry_id=' + entryId + '&limit=50', {credentials:'same-origin'})\n\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t.then(function(env) {\n\t\t\t\t\t\t\tvar txns = env.data || [];\n\t\t\t\t\t\t\tvar verb = entryStatus === 'pending' ? 'will be' : 'are';\n\t\t\t\t\t\t\tif (!txns.length) {\n\t\t\t\t\t\t\t\tvar msg = entryStatus === 'pending'\n\t\t\t\t\t\t\t\t\t? 'No transactions matched yet. Run Engine to process this entry.'\n\t\t\t\t\t\t\t\t\t: 'No matched transactions.';\n\t\t\t\t\t\t\t\ttxPanel.innerHTML = '<p style=\"color:var(--text3);font-size:12px\">' + msg + '</p>';\n\t\t\t\t\t\t\t\treturn;\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\tvar rows = txns.map(function(t) {\n\t\t\t\t\t\t\t\tvar abs = Math.abs(t.amount_cents);\n\t\t\t\t\t\t\t\tvar s = (t.amount_cents < 0 ? '-' : '') + '$' + (abs/100).toFixed(2);\n\t\t\t\t\t\t\t\tvar col = t.amount_cents >= 0 ? 'var(--income)' : 'var(--commit)';\n\t\t\t\t\t\t\t\tvar merch = t.merchant_normalized || t.imported_payee || '';\n\t\t\t\t\t\t\t\treturn '<tr style=\"border-top:1px solid var(--border)\">' +\n\t\t\t\t\t\t\t\t\t'<td style=\"padding:5px 8px;font-size:12px;color:var(--text2)\">' + t.date + '</td>' +\n\t\t\t\t\t\t\t\t\t'<td style=\"padding:5px 8px;font-size:12px;color:var(--text)\">' + merch + '</td>' +\n\t\t\t\t\t\t\t\t\t'<td style=\"padding:5px 8px;font-size:12px;color:' + col + ';text-align:right;font-variant-numeric:tabular-nums\">' + s + '</td>' +\n\t\t\t\t\t\t\t\t\t'<td style=\"padding:5px 8px;font-size:12px;color:var(--text3)\">' + t.settlement_status + '</td>' +\n\t\t\t\t\t\t\t\t\t'</tr>';\n\t\t\t\t\t\t\t}).join('');\n\t\t\t\t\t\t\tvar countLine = '<div style=\"font-size:11px;font-weight:600;color:var(--text3);margin-bottom:6px\">' +\n\t\t\t\t\t\t\t\ttxns.length + ' transaction' + (txns.length === 1 ? '' : 's') + ' ' + verb + ' matched' +\n\t\t\t\t\t\t\t'</div>';\n\t\t\t\t\t\t\ttxPanel.innerHTML = countLine +\n\t\t\t\t\t\t\t\t'<table style=\"width:100%;border-collapse:collapse\">' +\n\t\t\t\t\t\t\t\t'<thead><tr>' +\n\t\t\t\t\t\t\t\t'<th style=\"padding:5px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:600\">Date</th>' +\n\t\t\t\t\t\t\t\t'<th style=\"padding:5px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:600\">Description</th>' +\n\t\t\t\t\t\t\t\t'<th style=\"padding:5px 8px;text-align:right;font-size:11px;color:var(--text3);font-weight:600\">Amount</th>' +\n\t\t\t\t\t\t\t\t'<th style=\"padding:5px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:600\">Status</th>' +\n\t\t\t\t\t\t\t\t'</tr></thead><tbody>' + rows + '</tbody></table>';\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function() {\n\t\t\t\t\t\t\ttxPanel.innerHTML = '<p style=\"color:var(--commit);font-size:12px\">Failed to load.</p>';\n\t\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\t// ── Lazy-load transactions when entry opened ────────────────────────────\n\t\t\t\tdocument.addEventListener('toggle', function(e) {\n\t\t\t\t\tvar det = e.target;\n\t\t\t\t\tif (!det.classList.contains('js-entry-details') || !det.open) return;\n\t\t\t\t\tvar entryId = det.dataset.entryId;\n\t\t\t\t\tvar entryStatus = det.dataset.entryStatus || 'live';\n\t\t\t\t\tvar txPanel = det.querySelector('.js-tx-panel');\n\t\t\t\t\tif (!txPanel || txPanel.dataset.loaded) return;\n\t\t\t\t\tloadTxPanel(txPanel, entryId, entryStatus);\n\t\t\t\t}, true);\n\n\t\t\t\t// ── Label input: rename in place, conflict offers link ────────────────\n\t\t\t\tdocument.addEventListener('focusout', function(e) {\n\t\t\t\t\tvar inp = e.target;\n\t\t\t\t\tif (!inp.classList.contains('js-label-input')) return;\n\t\t\t\t\tvar panel = inp.closest('.js-review-panel');\n\t\t\t\t\tif (!panel) return;\n\t\t\t\t\tvar entryId = panel.dataset.entryId;\n\t\t\t\t\tvar entry = JSON.parse(panel.dataset.entry);\n\t\t\t\t\tvar name = inp.value.trim();\n\t\t\t\t\tvar hint = inp.parentNode.querySelector('.js-label-hint');\n\t\t\t\t\tvar origName = (entry.label_name || '').toLowerCase();\n\t\t\t\t\tif (name.toLowerCase() === origName) return;\n\t\t\t\t\tif (hint) { hint.innerHTML = ''; }\n\n\t\t\t\t\t// No label assigned — only allow linking to an existing label.\n\t\t\t\t\tif (!entry.label_id) {\n\t\t\t\t\t\tif (!name) return;\n\t\t\t\t\t\tfetchLabels(function(labels) {\n\t\t\t\t\t\t\tvar found = labels.find(function(l){ return l.name.toLowerCase() === name.toLowerCase(); });\n\t\t\t\t\t\t\tif (found) {\n\t\t\t\t\t\t\t\tlinkEntryLabel(panel, entry, found.id, found.name, hint);\n\t\t\t\t\t\t\t} else if (hint) {\n\t\t\t\t\t\t\t\thint.textContent = 'Create labels in Configuration, then assign here.';\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t});\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\n\t\t\t\t\t// Label assigned — rename it, detect conflict.\n\t\t\t\t\tfetch('/api/labels/' + entry.label_id, {\n\t\t\t\t\t\tmethod: 'PUT',\n\t\t\t\t\t\theaders: {'Content-Type': 'application/json'},\n\t\t\t\t\t\tcredentials: 'same-origin',\n\t\t\t\t\t\tbody: JSON.stringify({name: name}),\n\t\t\t\t\t}).then(function(r) {\n\t\t\t\t\t\tif (r.status === 409) {\n\t\t\t\t\t\t\t// Another label already has this name — offer to link to it.\n\t\t\t\t\t\t\t_labelCache = null;\n\t\t\t\t\t\t\tfetchLabels(function(labels) {\n\t\t\t\t\t\t\t\tvar conflict = labels.find(function(l){ return l.name.toLowerCase() === name.toLowerCase(); });\n\t\t\t\t\t\t\t\tif (!conflict || !hint) return;\n\t\t\t\t\t\t\t\tvar btn = document.createElement('button');\n\t\t\t\t\t\t\t\tbtn.className = 'js-label-link-btn';\n\t\t\t\t\t\t\t\tbtn.dataset.labelId = conflict.id;\n\t\t\t\t\t\t\t\tbtn.dataset.labelName = conflict.name;\n\t\t\t\t\t\t\t\tbtn.style.cssText = 'background:none;border:none;cursor:pointer;color:var(--accent);font-size:11px;font-family:inherit;padding:0;text-decoration:underline';\n\t\t\t\t\t\t\t\tbtn.textContent = 'Link to ‘' + conflict.name + '’ instead?';\n\t\t\t\t\t\t\t\thint.textContent = 'Name already taken. ';\n\t\t\t\t\t\t\t\thint.appendChild(btn);\n\t\t\t\t\t\t\t});\n\t\t\t\t\t\t\treturn null;\n\t\t\t\t\t\t}\n\t\t\t\t\t\tif (!r.ok) {\n\t\t\t\t\t\t\tif (hint) hint.textContent = 'Failed to rename.';\n\t\t\t\t\t\t\treturn null;\n\t\t\t\t\t\t}\n\t\t\t\t\t\treturn r.json();\n\t\t\t\t\t}).then(function(env) {\n\t\t\t\t\t\tif (!env) return;\n\t\t\t\t\t\t_labelCache = null;\n\t\t\t\t\t\tpanel.dataset.entry = JSON.stringify(Object.assign({}, entry, {label_name: env.data.name}));\n\t\t\t\t\t}).catch(function() {\n\t\t\t\t\t\tif (hint) hint.textContent = 'Failed to rename.';\n\t\t\t\t\t});\n\t\t\t\t});\n\n\t\t\t\t// Link-instead button: re-associate entry with an existing label.\n\t\t\t\tdocument.addEventListener('click', function(e) {\n\t\t\t\t\tvar btn = e.target.closest('.js-label-link-btn');\n\t\t\t\t\tif (!btn) return;\n\t\t\t\t\tvar panel = btn.closest('.js-review-panel');\n\t\t\t\t\tif (!panel) return;\n\t\t\t\t\tvar entry = JSON.parse(panel.dataset.entry);\n\t\t\t\t\tvar hint = btn.closest('.js-label-hint');\n\t\t\t\t\tlinkEntryLabel(panel, entry, btn.dataset.labelId, btn.dataset.labelName, hint);\n\t\t\t\t});\n\n\t\t\t\tfunction linkEntryLabel(panel, entry, newLabelId, newLabelName, hint) {\n\t\t\t\t\tvar dirSel = panel.querySelector('.js-direction-sel');\n\t\t\t\t\tvar typeSel = panel.querySelector('.js-type-sel');\n\t\t\t\t\tfetch('/api/entries/' + panel.dataset.entryId, {\n\t\t\t\t\t\tmethod: 'PUT',\n\t\t\t\t\t\theaders: {'Content-Type': 'application/json'},\n\t\t\t\t\t\tcredentials: 'same-origin',\n\t\t\t\t\t\tbody: JSON.stringify(Object.assign({}, entry, {\n\t\t\t\t\t\t\tlabel_id: newLabelId,\n\t\t\t\t\t\t\tdirection: dirSel ? dirSel.value : entry.direction,\n\t\t\t\t\t\t\tentry_type: typeSel ? typeSel.value : entry.entry_type,\n\t\t\t\t\t\t})),\n\t\t\t\t\t}).then(function(r) {\n\t\t\t\t\t\tif (!r.ok) { if (hint) hint.textContent = 'Failed to update label.'; return; }\n\t\t\t\t\t\tvar inp = panel.querySelector('.js-label-input');\n\t\t\t\t\t\tif (inp) inp.value = newLabelName || '';\n\t\t\t\t\t\tpanel.dataset.entry = JSON.stringify(Object.assign({}, entry, {label_id: newLabelId, label_name: newLabelName}));\n\t\t\t\t\t\tif (hint) hint.innerHTML = '';\n\t\t\t\t\t\t_labelCache = null;\n\t\t\t\t\t}).catch(function() {\n\t\t\t\t\t\tif (hint) hint.textContent = 'Failed to update label.';\n\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\t// ── Approve / Reject ───────────────────────────────────────────────────\n\t\t\t\tdocument.addEventListener('click', function(e) {\n\t\t\t\t\tvar btn = e.target.closest('.js-review-btn');\n\t\t\t\t\tif (!btn) return;\n\t\t\t\t\tvar panel = btn.closest('.js-review-panel');\n\t\t\t\t\tif (!panel) return;\n\t\t\t\t\tvar entryId = panel.dataset.entryId;\n\t\t\t\t\tvar entry = JSON.parse(panel.dataset.entry);\n\t\t\t\t\tvar action = btn.dataset.action;\n\t\t\t\t\tvar labelInput = panel.querySelector('.js-label-input');\n\t\t\t\t\tvar dirSel = panel.querySelector('.js-direction-sel');\n\t\t\t\t\tvar typeSel = panel.querySelector('.js-type-sel');\n\t\t\t\t\tvar ta = document.querySelector('.js-conditions-ta[data-entry-id=\"' + entryId + '\"]');\n\t\t\t\t\tvar conds = entry.conditions || {};\n\t\t\t\t\ttry {\n\t\t\t\t\t\tif (ta) {\n\t\t\t\t\t\t\tvar src = (ta._cmView && ta._cmView.state)\n\t\t\t\t\t\t\t\t? ta._cmView.state.doc.toString()\n\t\t\t\t\t\t\t\t: ta.value;\n\t\t\t\t\t\t\tconds = JSON.parse(src);\n\t\t\t\t\t\t}\n\t\t\t\t\t} catch(ex) {}\n\n\t\t\t\t\tfunction resolveLabel(cb) {\n\t\t\t\t\t\tvar name = labelInput ? labelInput.value.trim() : '';\n\t\t\t\t\t\tif (!name) { cb(entry.label_id); return; }\n\t\t\t\t\t\tfetch('/api/labels?limit=500')\n\t\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t\t.then(function(env) {\n\t\t\t\t\t\t\t\tvar found = (env.data||[]).find(function(l){ return l.name.toLowerCase()===name.toLowerCase(); });\n\t\t\t\t\t\t\t\tif (found) { cb(found.id); return; }\n\t\t\t\t\t\t\t\tfetch('/api/labels',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})\n\t\t\t\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t\t\t\t.then(function(c){ cb(c.data ? c.data.id : null); });\n\t\t\t\t\t\t\t});\n\t\t\t\t\t}\n\n\t\t\t\t\tbtn.disabled = true;\n\t\t\t\t\tbtn.textContent = '…';\n\n\t\t\t\t\tresolveLabel(function(labelId) {\n\t\t\t\t\t\tvar body = Object.assign({}, entry, {\n\t\t\t\t\t\t\tlabel_id: labelId,\n\t\t\t\t\t\t\tdirection: dirSel ? dirSel.value : entry.direction,\n\t\t\t\t\t\t\tentry_type: typeSel ? typeSel.value : entry.entry_type,\n\t\t\t\t\t\t\tconditions: conds\n\t\t\t\t\t\t});\n\t\t\t\t\t\tfetch('/api/entries/' + entryId, {\n\t\t\t\t\t\t\tmethod:'PUT',\n\t\t\t\t\t\t\theaders:{'Content-Type':'application/json'},\n\t\t\t\t\t\t\tbody: JSON.stringify(body)\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\tif (!r.ok) throw new Error('put-failed');\n\t\t\t\t\t\t\tvar ep = action==='approve'\n\t\t\t\t\t\t\t\t? '/api/entries/'+entryId+'/approve'\n\t\t\t\t\t\t\t\t: '/api/entries/'+entryId+'/reject';\n\t\t\t\t\t\t\treturn fetch(ep, {method:'POST'});\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\tif (!r || !r.ok) throw new Error('action-failed');\n\t\t\t\t\t\t\tif (action === 'approve') { markDirty(); }\n\t\t\t\t\t\t\tvar row = document.querySelector('.js-entry-details[data-entry-id=\"'+entryId+'\"]');\n\t\t\t\t\t\t\tif (row) row.remove();\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function() {\n\t\t\t\t\t\t\tbtn.disabled = false;\n\t\t\t\t\t\t\tbtn.textContent = action==='approve' ? 'Approve' : 'Reject';\n\t\t\t\t\t\t});\n\t\t\t\t\t});\n\t\t\t\t});\n\n\t\t\t\t// ── Confidence panel collapse ──────────────────────────────────────────\n\t\t\t\tdocument.addEventListener('click', function(e) {\n\t\t\t\t\tvar btn = e.target.closest('.js-conf-toggle');\n\t\t\t\t\tif (!btn) return;\n\t\t\t\t\tvar panel = btn.closest('.js-conf-panel');\n\t\t\t\t\tif (!panel) return;\n\t\t\t\t\tvar expanded = panel.dataset.expanded === 'true';\n\t\t\t\t\tpanel.dataset.expanded = expanded ? 'false' : 'true';\n\t\t\t\t\tpanel.style.width = expanded ? '120px' : '230px';\n\t\t\t\t\tpanel.querySelectorAll('.js-conf-bar').forEach(function(b) {\n\t\t\t\t\t\tb.style.display = expanded ? 'none' : '';\n\t\t\t\t\t});\n\t\t\t\t\tbtn.textContent = expanded ? '▶' : '◀';\n\t\t\t\t});\n\n\t\t\t\t// ── Add Entry modal ────────────────────────────────────────────────────\n\t\t\t\tvar addEntryBtn = document.getElementById('add-entry-btn');\n\t\t\t\tvar addEntryDialog = document.getElementById('add-entry-dialog');\n\t\t\t\tvar addEntryClose = document.getElementById('add-entry-close');\n\t\t\t\tvar addEntryCancel = document.getElementById('add-entry-cancel');\n\t\t\t\tvar addEntrySave = document.getElementById('add-entry-save');\n\t\t\t\tvar addEntryError = document.getElementById('add-entry-error');\n\n\t\t\t\tif (addEntryBtn && addEntryDialog) {\n\t\t\t\t\taddEntryBtn.addEventListener('click', function() {\n\t\t\t\t\t\taddEntryDialog.showModal();\n\t\t\t\t\t\tvar startInput = document.getElementById('ae-start-date');\n\t\t\t\t\t\tif (startInput && !startInput.value) {\n\t\t\t\t\t\t\tstartInput.value = new Date().toISOString().slice(0, 10);\n\t\t\t\t\t\t}\n\t\t\t\t\t});\n\t\t\t\t}\n\t\t\t\tif (addEntryClose) addEntryClose.addEventListener('click', function() { addEntryDialog.close(); });\n\t\t\t\tif (addEntryCancel) addEntryCancel.addEventListener('click', function() { addEntryDialog.close(); });\n\t\t\t\tif (addEntryDialog) addEntryDialog.addEventListener('click', function(e) {\n\t\t\t\t\tif (e.target === addEntryDialog) addEntryDialog.close();\n\t\t\t\t});\n\n\t\t\t\tfunction getAeField(id) {\n\t\t\t\t\tvar el = document.getElementById(id);\n\t\t\t\t\treturn el ? el.value.trim() : '';\n\t\t\t\t}\n\n\t\t\t\tfunction resolveAddEntryLabel(name, cb) {\n\t\t\t\t\tif (!name) { cb(null); return; }\n\t\t\t\t\tfetch('/api/labels?limit=500')\n\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t.then(function(env) {\n\t\t\t\t\t\t\tvar found = (env.data||[]).find(function(l){ return l.name.toLowerCase()===name.toLowerCase(); });\n\t\t\t\t\t\t\tif (found) { cb(found.id); return; }\n\t\t\t\t\t\t\tfetch('/api/labels',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})\n\t\t\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t\t\t.then(function(c){ cb(c.data ? c.data.id : null); });\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function(){ cb(null); });\n\t\t\t\t}\n\n\t\t\t\tif (addEntrySave) {\n\t\t\t\t\taddEntrySave.addEventListener('click', function() {\n\t\t\t\t\t\tvar labelName = getAeField('ae-label');\n\t\t\t\t\t\tvar direction = getAeField('ae-direction');\n\t\t\t\t\t\tvar entryType = getAeField('ae-type');\n\t\t\t\t\t\tvar rateStr = getAeField('ae-rate');\n\t\t\t\t\t\tvar startDate = getAeField('ae-start-date');\n\t\t\t\t\t\tvar condsStr = getAeField('ae-conditions');\n\n\t\t\t\t\t\tif (!direction || !entryType || !startDate) {\n\t\t\t\t\t\t\tif (addEntryError) addEntryError.textContent = 'Direction, type, and start date are required.';\n\t\t\t\t\t\t\treturn;\n\t\t\t\t\t\t}\n\n\t\t\t\t\t\tvar conds = {};\n\t\t\t\t\t\tif (condsStr) {\n\t\t\t\t\t\t\ttry { conds = JSON.parse(condsStr); }\n\t\t\t\t\t\t\tcatch(ex) {\n\t\t\t\t\t\t\t\tif (addEntryError) addEntryError.textContent = 'Conditions must be valid JSON.';\n\t\t\t\t\t\t\t\treturn;\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t}\n\n\t\t\t\t\t\t// Rate: user enters $/mo, convert to cents/day (÷ 30.44 × 100).\n\t\t\t\t\t\tvar ratePerDay = null;\n\t\t\t\t\t\tif (rateStr) {\n\t\t\t\t\t\t\tvar rateVal = parseFloat(rateStr);\n\t\t\t\t\t\t\tif (!isNaN(rateVal)) { ratePerDay = (rateVal / 30.44) * 100; }\n\t\t\t\t\t\t}\n\n\t\t\t\t\t\taddEntrySave.disabled = true;\n\t\t\t\t\t\taddEntrySave.textContent = 'Saving…';\n\t\t\t\t\t\tif (addEntryError) addEntryError.textContent = '';\n\n\t\t\t\t\t\tresolveAddEntryLabel(labelName, function(labelId) {\n\t\t\t\t\t\t\tvar body = {\n\t\t\t\t\t\t\t\tlabel_id: labelId,\n\t\t\t\t\t\t\t\tdirection: direction,\n\t\t\t\t\t\t\t\tentry_type: entryType,\n\t\t\t\t\t\t\t\tperiod_days: entryType === 'standing' ? 30 : 1,\n\t\t\t\t\t\t\t\tsource: 'user',\n\t\t\t\t\t\t\t\tstart_date: startDate,\n\t\t\t\t\t\t\t\tconditions: conds,\n\t\t\t\t\t\t\t\tprojected_rate_per_day: ratePerDay,\n\t\t\t\t\t\t\t\tpriority: 0,\n\t\t\t\t\t\t\t\tproject_tentatively: false,\n\t\t\t\t\t\t\t};\n\t\t\t\t\t\t\tfetch('/api/entries', {\n\t\t\t\t\t\t\t\tmethod: 'POST',\n\t\t\t\t\t\t\t\theaders: {'Content-Type': 'application/json'},\n\t\t\t\t\t\t\t\tcredentials: 'same-origin',\n\t\t\t\t\t\t\t\tbody: JSON.stringify(body),\n\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\t\tif (!r.ok) return r.json().then(function(e){ throw new Error(e.detail||'Save failed'); });\n\t\t\t\t\t\t\t\tmarkDirty();\n\t\t\t\t\t\t\t\taddEntryDialog.close();\n\t\t\t\t\t\t\t\tlocation.reload();\n\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t.catch(function(err) {\n\t\t\t\t\t\t\t\taddEntrySave.disabled = false;\n\t\t\t\t\t\t\t\taddEntrySave.textContent = 'Save';\n\t\t\t\t\t\t\t\tif (addEntryError) addEntryError.textContent = err.message || 'Failed to create entry.';\n\t\t\t\t\t\t\t});\n\t\t\t\t\t\t});\n\t\t\t\t\t});\n\t\t\t\t}\n\t\t\t})();\n\t\t</script> <script type=\"module\" src=\"/static/js/conditions-editor.js\"></script>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "</div></div><!-- Add Entry Dialog — must appear before the script so getElementById finds it --> <dialog id=\"add-entry-dialog\" style=\"border:1px solid var(--border);border-radius:8px;padding:0;background:var(--surface);color:var(--text);max-width:480px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.3)\"><div style=\"display:flex;align-items:center;padding:14px 18px;border-bottom:1px solid var(--border)\"><span style=\"font-size:14px;font-weight:700;flex:1\">Add Entry</span> <button id=\"add-entry-close\" style=\"background:none;border:none;cursor:pointer;font-size:18px;color:var(--text3);line-height:1;padding:2px 6px\">&times;</button></div><div style=\"padding:16px 18px;display:grid;gap:12px\"><div><label style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px\">Label</label> <input id=\"ae-label\" type=\"text\" placeholder=\"e.g. Rent\" style=\"width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit\"></div><div style=\"display:grid;grid-template-columns:1fr 1fr;gap:10px\"><div><label style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px\">Direction</label> <select id=\"ae-direction\" style=\"width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit\"><option value=\"\">— select —</option> <option value=\"spend\">Spend</option> <option value=\"income\">Income</option></select></div><div><label style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px\">Type</label> <select id=\"ae-type\" style=\"width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit\"><option value=\"\">— select —</option> <option value=\"standing\">Standing</option> <option value=\"variable\">Variable</option> <option value=\"irregular\">Irregular</option></select></div></div><div style=\"display:grid;grid-template-columns:1fr 1fr;gap:10px\"><div><label style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px\">Projected $/mo <span style=\"font-weight:400;color:var(--text3)\">(optional)</span></label> <input id=\"ae-rate\" type=\"number\" min=\"0\" step=\"0.01\" placeholder=\"e.g. 1500\" style=\"width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit\"></div><div><label style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px\">Start date</label> <input id=\"ae-start-date\" type=\"date\" style=\"width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit\"></div></div><div><label style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px\">Conditions JSON <span style=\"font-weight:400;color:var(--text3)\">(optional — you can add via the editor after saving)</span></label> <textarea id=\"ae-conditions\" rows=\"4\" placeholder=\"{}\" style=\"width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:12px;color:var(--text);font-family:monospace;resize:vertical\"></textarea></div><div id=\"add-entry-error\" style=\"font-size:12px;color:var(--commit);min-height:16px\"></div></div><div style=\"display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--border)\"><button id=\"add-entry-cancel\" style=\"background:none;border:1px solid var(--border);border-radius:5px;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit\">Cancel</button> <button id=\"add-entry-save\" style=\"background:var(--accent);border:none;border-radius:5px;padding:6px 16px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit\">Save</button></div></dialog><script>\n\t\t\t(function() {\n\t\t\t\t// ── Granularity toggle ─────────────────────────────────────────────────────\n\t\t\t\tvar activeGran = localStorage.getItem('veloci-gran') || 'day';\n\t\t\t\tfunction updateRateDisplays() {\n\t\t\t\t\tvar attr = activeGran === 'day' ? 'fmtDay' : activeGran === 'year' ? 'fmtYr' : 'fmtMo';\n\t\t\t\t\tdocument.querySelectorAll('[data-fmt-day]').forEach(function (el) {\n\t\t\t\t\t\tel.textContent = el.dataset[attr] || el.dataset.fmtDay;\n\t\t\t\t\t});\n\t\t\t\t\tvar label = activeGran === 'day' ? 'day' : activeGran === 'year' ? 'yr' : 'mo';\n\t\t\t\t\tdocument.querySelectorAll('.js-gran-label').forEach(function (el) {\n\t\t\t\t\t\tel.textContent = label;\n\t\t\t\t\t});\n\t\t\t\t}\n\t\t\t\tfunction applyGran(gran) {\n\t\t\t\t\tactiveGran = gran;\n\t\t\t\t\tlocalStorage.setItem('veloci-gran', activeGran);\n\t\t\t\t\tdocument.querySelectorAll('.js-gran').forEach(function (b) {\n\t\t\t\t\t\tvar on   = b.dataset.gran === activeGran;\n\t\t\t\t\t\tb.style.background = on ? 'var(--accent)' : 'var(--surface2)';\n\t\t\t\t\t\tb.style.color      = on ? '#fff' : 'var(--text2)';\n\t\t\t\t\t\tb.style.border     = on ? 'none' : '1px solid var(--border)';\n\t\t\t\t\t});\n\t\t\t\t\tupdateRateDisplays();\n\t\t\t\t}\n\t\t\t\tdocument.addEventListener('click', function (e) {\n\t\t\t\t\tvar btn = e.target.closest('.js-gran');\n\t\t\t\t\tif (!btn) return;\n\t\t\t\t\tapplyGran(btn.dataset.gran);\n\t\t\t\t});\n\t\t\t\tvar activeGranInit = window.__velociGran ? window.__velociGran() : activeGran;\n\t\t\t\tif (activeGranInit !== activeGran) { applyGran(activeGranInit); } else { applyGran(activeGran); }\n\t\t\t\tdocument.addEventListener('veloci:granchange', function(e) { applyGran(e.detail.gran); });\n\n\t\t\t\t// ── Dirty state ───────────────────────────────────────────────────────────\n\t\t\t\tvar _dirty = false;\n\t\t\t\tfunction markDirty() {\n\t\t\t\t\tif (_dirty) return;\n\t\t\t\t\t_dirty = true;\n\t\t\t\t\tvar ind = document.getElementById('dirty-indicator');\n\t\t\t\t\tif (ind) ind.style.display = '';\n\t\t\t\t\tvar runBtn = document.getElementById('run-engine-btn');\n\t\t\t\t\tif (runBtn) {\n\t\t\t\t\t\trunBtn.style.background = 'var(--commit)';\n\t\t\t\t\t\trunBtn.style.color = '#fff';\n\t\t\t\t\t\trunBtn.style.borderColor = 'var(--commit)';\n\t\t\t\t\t\trunBtn.textContent = 'Reprocess';\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t\tfunction clearDirty() {\n\t\t\t\t\t_dirty = false;\n\t\t\t\t\tvar ind = document.getElementById('dirty-indicator');\n\t\t\t\t\tif (ind) ind.style.display = 'none';\n\t\t\t\t\tvar runBtn = document.getElementById('run-engine-btn');\n\t\t\t\t\tif (runBtn) {\n\t\t\t\t\t\trunBtn.style.background = '';\n\t\t\t\t\t\trunBtn.style.color = '';\n\t\t\t\t\t\trunBtn.style.borderColor = '';\n\t\t\t\t\t\trunBtn.textContent = 'Run Engine';\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t\t// Conditions saved → auto-reprocess, then reload the tx panel and entry stats.\n\t\t\t\tdocument.addEventListener('veloci:conditions-saved', function(e) {\n\t\t\t\t\tvar entryId = e.detail && e.detail.entryId;\n\t\t\t\t\tfetch('/api/jobs/reprocess', {method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin', body:'{}'})\n\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\tif (r.ok) clearDirty();\n\t\t\t\t\t\t\tsetTimeout(function() {\n\t\t\t\t\t\t\t\tif (!entryId) return;\n\t\t\t\t\t\t\t\tvar det = document.querySelector('.js-entry-details[data-entry-id=\"'+entryId+'\"]');\n\t\t\t\t\t\t\t\tif (!det) return;\n\t\t\t\t\t\t\t\tif (det.open) {\n\t\t\t\t\t\t\t\t\tvar txPanel = det.querySelector('.js-tx-panel');\n\t\t\t\t\t\t\t\t\tif (txPanel) {\n\t\t\t\t\t\t\t\t\t\tdelete txPanel.dataset.loaded;\n\t\t\t\t\t\t\t\t\t\tloadTxPanel(txPanel, entryId, det.dataset.entryStatus || 'live');\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\tloadEntryStats(entryId, det);\n\t\t\t\t\t\t\t}, 2000);\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function() { markDirty(); });\n\t\t\t\t});\n\t\t\t\t// Navigate-away warning when dirty.\n\t\t\t\twindow.addEventListener('beforeunload', function(e) {\n\t\t\t\t\tif (!_dirty) return;\n\t\t\t\t\te.preventDefault();\n\t\t\t\t\te.returnValue = '';\n\t\t\t\t});\n\n\t\t\t\t// ── Run Engine / Reprocess ─────────────────────────────────────────────\n\t\t\t\tvar runBtn = document.getElementById('run-engine-btn');\n\t\t\t\tif (runBtn) {\n\t\t\t\t\trunBtn.addEventListener('click', function() {\n\t\t\t\t\t\trunBtn.disabled = true;\n\t\t\t\t\t\tvar origText = runBtn.textContent;\n\t\t\t\t\t\trunBtn.textContent = 'Running…';\n\t\t\t\t\t\tfetch('/api/jobs/reprocess', {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})\n\t\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\t\tif (r.ok) {\n\t\t\t\t\t\t\t\t\tclearDirty();\n\t\t\t\t\t\t\t\t\trunBtn.textContent = 'Engine started';\n\t\t\t\t\t\t\t\t} else {\n\t\t\t\t\t\t\t\t\trunBtn.textContent = 'Failed';\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\tsetTimeout(function(){ runBtn.disabled=false; runBtn.textContent=_dirty?'Reprocess':'Run Engine'; }, 3000);\n\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t.catch(function(){ runBtn.disabled=false; runBtn.textContent=origText; });\n\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\t// ── Sort selector ──────────────────────────────────────────────────────\n\t\t\t\tvar sortSel = document.getElementById('ledger-sort');\n\t\t\t\tif (sortSel) {\n\t\t\t\t\tsortSel.addEventListener('change', function() {\n\t\t\t\t\t\tvar url = new URL(window.location.href);\n\t\t\t\t\t\tif (sortSel.value === 'label') {\n\t\t\t\t\t\t\turl.searchParams.delete('sort');\n\t\t\t\t\t\t} else {\n\t\t\t\t\t\t\turl.searchParams.set('sort', sortSel.value);\n\t\t\t\t\t\t}\n\t\t\t\t\t\twindow.location.href = url.toString();\n\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\t// ── Chevron rotation ───────────────────────────────────────────────────\n\t\t\t\tdocument.addEventListener('toggle', function(e) {\n\t\t\t\t\tvar det = e.target;\n\t\t\t\t\tif (!det.classList.contains('js-entry-details')) return;\n\t\t\t\t\tvar chev = det.querySelector('.entry-chevron');\n\t\t\t\t\tif (chev) chev.style.transform = det.open ? 'rotate(90deg)' : '';\n\t\t\t\t}, true);\n\n\t\t\t\t// ── Label cache (shared between hint + blur-save) ─────────────────────\n\t\t\t\tvar _labelCache = null;\n\t\t\t\tfunction fetchLabels(cb) {\n\t\t\t\t\tif (_labelCache) { cb(_labelCache); return; }\n\t\t\t\t\tfetch('/api/labels?limit=500', {credentials:'same-origin'})\n\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t.then(function(env){ _labelCache = env.data || []; cb(_labelCache); })\n\t\t\t\t\t\t.catch(function(){ cb([]); });\n\t\t\t\t}\n\n\t\t\t\t// ── Entry stats reload (rate/day + fitness) ───────────────────────────\n\t\t\t\tfunction loadEntryStats(entryId, det) {\n\t\t\t\t\tfetch('/api/entries/' + entryId, {credentials:'same-origin'})\n\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t.then(function(env) {\n\t\t\t\t\t\t\tvar entry = env.data;\n\t\t\t\t\t\t\tif (!entry) return;\n\n\t\t\t\t\t\t\t// Rate: prefer projected_rate_per_day (set by engine for system entries).\n\t\t\t\t\t\t\tvar rateEl = det.querySelector('.js-entry-rate');\n\t\t\t\t\t\t\tif (rateEl) {\n\t\t\t\t\t\t\t\tvar rate = entry.projected_rate_per_day;\n\t\t\t\t\t\t\t\tif (rate == null) {\n\t\t\t\t\t\t\t\t\trateEl.dataset.fmtDay = '—';\n\t\t\t\t\t\t\t\t\trateEl.dataset.fmtMo  = '—';\n\t\t\t\t\t\t\t\t\trateEl.dataset.fmtYr  = '—';\n\t\t\t\t\t\t\t\t} else {\n\t\t\t\t\t\t\t\t\tvar d = Math.abs(rate / 100);\n\t\t\t\t\t\t\t\t\trateEl.dataset.fmtDay = '$' + d.toFixed(2) + '/day';\n\t\t\t\t\t\t\t\t\trateEl.dataset.fmtMo  = '$' + Math.round(d * 30.44) + '/mo';\n\t\t\t\t\t\t\t\t\trateEl.dataset.fmtYr  = '$' + Math.round(d * 365.25) + '/yr';\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\tvar attr = activeGran === 'day' ? 'fmtDay' : activeGran === 'year' ? 'fmtYr' : 'fmtMo';\n\t\t\t\t\t\t\t\trateEl.textContent = rateEl.dataset[attr] || rateEl.dataset.fmtDay;\n\t\t\t\t\t\t\t}\n\n\t\t\t\t\t\t\t// Fitness %.\n\t\t\t\t\t\t\tvar fitEl = det.querySelector('.js-entry-fitness');\n\t\t\t\t\t\t\tif (fitEl) {\n\t\t\t\t\t\t\t\tvar fit = entry.fitness;\n\t\t\t\t\t\t\t\tif (fit == null) {\n\t\t\t\t\t\t\t\t\tfitEl.textContent = '—';\n\t\t\t\t\t\t\t\t\tfitEl.style.color = 'var(--text3)';\n\t\t\t\t\t\t\t\t} else {\n\t\t\t\t\t\t\t\t\tfitEl.textContent = Math.round(fit * 100) + '%';\n\t\t\t\t\t\t\t\t\tfitEl.style.color = fit >= 0.8 ? 'var(--income)' : fit >= 0.5 ? 'var(--text2)' : 'var(--commit)';\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function() {});\n\t\t\t\t}\n\n\t\t\t\t// ── Tx panel loader ────────────────────────────────────────────────────\n\t\t\t\tfunction loadTxPanel(txPanel, entryId, entryStatus) {\n\t\t\t\t\ttxPanel.dataset.loaded = '1';\n\t\t\t\t\ttxPanel.innerHTML = '<p style=\"color:var(--text3);font-size:12px\">Loading…</p>';\n\t\t\t\t\tfetch('/api/transactions?entry_id=' + entryId + '&limit=50', {credentials:'same-origin'})\n\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t.then(function(env) {\n\t\t\t\t\t\t\tvar txns = env.data || [];\n\t\t\t\t\t\t\tvar verb = entryStatus === 'pending' ? 'will be' : 'are';\n\t\t\t\t\t\t\tif (!txns.length) {\n\t\t\t\t\t\t\t\tvar msg = entryStatus === 'pending'\n\t\t\t\t\t\t\t\t\t? 'No transactions matched yet. Run Engine to process this entry.'\n\t\t\t\t\t\t\t\t\t: 'No matched transactions.';\n\t\t\t\t\t\t\t\ttxPanel.innerHTML = '<p style=\"color:var(--text3);font-size:12px\">' + msg + '</p>';\n\t\t\t\t\t\t\t\treturn;\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\tvar rows = txns.map(function(t) {\n\t\t\t\t\t\t\t\tvar abs = Math.abs(t.amount_cents);\n\t\t\t\t\t\t\t\tvar s = (t.amount_cents < 0 ? '-' : '') + '$' + (abs/100).toFixed(2);\n\t\t\t\t\t\t\t\tvar col = t.amount_cents >= 0 ? 'var(--income)' : 'var(--commit)';\n\t\t\t\t\t\t\t\tvar merch = t.merchant_normalized || t.imported_payee || '';\n\t\t\t\t\t\t\t\treturn '<tr style=\"border-top:1px solid var(--border)\">' +\n\t\t\t\t\t\t\t\t\t'<td style=\"padding:5px 8px;font-size:12px;color:var(--text2)\">' + t.date + '</td>' +\n\t\t\t\t\t\t\t\t\t'<td style=\"padding:5px 8px;font-size:12px;color:var(--text)\">' + merch + '</td>' +\n\t\t\t\t\t\t\t\t\t'<td style=\"padding:5px 8px;font-size:12px;color:' + col + ';text-align:right;font-variant-numeric:tabular-nums\">' + s + '</td>' +\n\t\t\t\t\t\t\t\t\t'<td style=\"padding:5px 8px;font-size:12px;color:var(--text3)\">' + t.settlement_status + '</td>' +\n\t\t\t\t\t\t\t\t\t'</tr>';\n\t\t\t\t\t\t\t}).join('');\n\t\t\t\t\t\t\tvar countLine = '<div style=\"font-size:11px;font-weight:600;color:var(--text3);margin-bottom:6px\">' +\n\t\t\t\t\t\t\t\ttxns.length + ' transaction' + (txns.length === 1 ? '' : 's') + ' ' + verb + ' matched' +\n\t\t\t\t\t\t\t'</div>';\n\t\t\t\t\t\t\ttxPanel.innerHTML = countLine +\n\t\t\t\t\t\t\t\t'<table style=\"width:100%;border-collapse:collapse\">' +\n\t\t\t\t\t\t\t\t'<thead><tr>' +\n\t\t\t\t\t\t\t\t'<th style=\"padding:5px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:600\">Date</th>' +\n\t\t\t\t\t\t\t\t'<th style=\"padding:5px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:600\">Description</th>' +\n\t\t\t\t\t\t\t\t'<th style=\"padding:5px 8px;text-align:right;font-size:11px;color:var(--text3);font-weight:600\">Amount</th>' +\n\t\t\t\t\t\t\t\t'<th style=\"padding:5px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:600\">Status</th>' +\n\t\t\t\t\t\t\t\t'</tr></thead><tbody>' + rows + '</tbody></table>';\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function() {\n\t\t\t\t\t\t\ttxPanel.innerHTML = '<p style=\"color:var(--commit);font-size:12px\">Failed to load.</p>';\n\t\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\t// ── Lazy-load transactions when entry opened ────────────────────────────\n\t\t\t\tdocument.addEventListener('toggle', function(e) {\n\t\t\t\t\tvar det = e.target;\n\t\t\t\t\tif (!det.classList.contains('js-entry-details') || !det.open) return;\n\t\t\t\t\tvar entryId = det.dataset.entryId;\n\t\t\t\t\tvar entryStatus = det.dataset.entryStatus || 'live';\n\t\t\t\t\tvar txPanel = det.querySelector('.js-tx-panel');\n\t\t\t\t\tif (!txPanel || txPanel.dataset.loaded) return;\n\t\t\t\t\tloadTxPanel(txPanel, entryId, entryStatus);\n\t\t\t\t}, true);\n\n\t\t\t\t// ── Label input: rename in place, conflict offers link ────────────────\n\t\t\t\tdocument.addEventListener('focusout', function(e) {\n\t\t\t\t\tvar inp = e.target;\n\t\t\t\t\tif (!inp.classList.contains('js-label-input')) return;\n\t\t\t\t\tvar panel = inp.closest('.js-review-panel');\n\t\t\t\t\tif (!panel) return;\n\t\t\t\t\tvar entryId = panel.dataset.entryId;\n\t\t\t\t\tvar entry = JSON.parse(panel.dataset.entry);\n\t\t\t\t\tvar name = inp.value.trim();\n\t\t\t\t\tvar hint = inp.parentNode.querySelector('.js-label-hint');\n\t\t\t\t\tvar origName = (entry.label_name || '').toLowerCase();\n\t\t\t\t\tif (name.toLowerCase() === origName) return;\n\t\t\t\t\tif (hint) { hint.innerHTML = ''; }\n\n\t\t\t\t\t// No label assigned — only allow linking to an existing label.\n\t\t\t\t\tif (!entry.label_id) {\n\t\t\t\t\t\tif (!name) return;\n\t\t\t\t\t\tfetchLabels(function(labels) {\n\t\t\t\t\t\t\tvar found = labels.find(function(l){ return l.name.toLowerCase() === name.toLowerCase(); });\n\t\t\t\t\t\t\tif (found) {\n\t\t\t\t\t\t\t\tlinkEntryLabel(panel, entry, found.id, found.name, hint);\n\t\t\t\t\t\t\t} else if (hint) {\n\t\t\t\t\t\t\t\thint.textContent = 'Create labels in Configuration, then assign here.';\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t});\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\n\t\t\t\t\t// Label assigned — rename it, detect conflict.\n\t\t\t\t\tfetch('/api/labels/' + entry.label_id, {\n\t\t\t\t\t\tmethod: 'PUT',\n\t\t\t\t\t\theaders: {'Content-Type': 'application/json'},\n\t\t\t\t\t\tcredentials: 'same-origin',\n\t\t\t\t\t\tbody: JSON.stringify({name: name}),\n\t\t\t\t\t}).then(function(r) {\n\t\t\t\t\t\tif (r.status === 409) {\n\t\t\t\t\t\t\t// Another label already has this name — offer to link to it.\n\t\t\t\t\t\t\t_labelCache = null;\n\t\t\t\t\t\t\tfetchLabels(function(labels) {\n\t\t\t\t\t\t\t\tvar conflict = labels.find(function(l){ return l.name.toLowerCase() === name.toLowerCase(); });\n\t\t\t\t\t\t\t\tif (!conflict || !hint) return;\n\t\t\t\t\t\t\t\tvar btn = document.createElement('button');\n\t\t\t\t\t\t\t\tbtn.className = 'js-label-link-btn';\n\t\t\t\t\t\t\t\tbtn.dataset.labelId = conflict.id;\n\t\t\t\t\t\t\t\tbtn.dataset.labelName = conflict.name;\n\t\t\t\t\t\t\t\tbtn.style.cssText = 'background:none;border:none;cursor:pointer;color:var(--accent);font-size:11px;font-family:inherit;padding:0;text-decoration:underline';\n\t\t\t\t\t\t\t\tbtn.textContent = 'Link to ‘' + conflict.name + '’ instead?';\n\t\t\t\t\t\t\t\thint.textContent = 'Name already taken. ';\n\t\t\t\t\t\t\t\thint.appendChild(btn);\n\t\t\t\t\t\t\t});\n\t\t\t\t\t\t\treturn null;\n\t\t\t\t\t\t}\n\t\t\t\t\t\tif (!r.ok) {\n\t\t\t\t\t\t\tif (hint) hint.textContent = 'Failed to rename.';\n\t\t\t\t\t\t\treturn null;\n\t\t\t\t\t\t}\n\t\t\t\t\t\treturn r.json();\n\t\t\t\t\t}).then(function(env) {\n\t\t\t\t\t\tif (!env) return;\n\t\t\t\t\t\t_labelCache = null;\n\t\t\t\t\t\tpanel.dataset.entry = JSON.stringify(Object.assign({}, entry, {label_name: env.data.name}));\n\t\t\t\t\t}).catch(function() {\n\t\t\t\t\t\tif (hint) hint.textContent = 'Failed to rename.';\n\t\t\t\t\t});\n\t\t\t\t});\n\n\t\t\t\t// Link-instead button: re-associate entry with an existing label.\n\t\t\t\tdocument.addEventListener('click', function(e) {\n\t\t\t\t\tvar btn = e.target.closest('.js-label-link-btn');\n\t\t\t\t\tif (!btn) return;\n\t\t\t\t\tvar panel = btn.closest('.js-review-panel');\n\t\t\t\t\tif (!panel) return;\n\t\t\t\t\tvar entry = JSON.parse(panel.dataset.entry);\n\t\t\t\t\tvar hint = btn.closest('.js-label-hint');\n\t\t\t\t\tlinkEntryLabel(panel, entry, btn.dataset.labelId, btn.dataset.labelName, hint);\n\t\t\t\t});\n\n\t\t\t\tfunction linkEntryLabel(panel, entry, newLabelId, newLabelName, hint) {\n\t\t\t\t\tvar dirSel = panel.querySelector('.js-direction-sel');\n\t\t\t\t\tvar typeSel = panel.querySelector('.js-type-sel');\n\t\t\t\t\tfetch('/api/entries/' + panel.dataset.entryId, {\n\t\t\t\t\t\tmethod: 'PUT',\n\t\t\t\t\t\theaders: {'Content-Type': 'application/json'},\n\t\t\t\t\t\tcredentials: 'same-origin',\n\t\t\t\t\t\tbody: JSON.stringify(Object.assign({}, entry, {\n\t\t\t\t\t\t\tlabel_id: newLabelId,\n\t\t\t\t\t\t\tdirection: dirSel ? dirSel.value : entry.direction,\n\t\t\t\t\t\t\tentry_type: typeSel ? typeSel.value : entry.entry_type,\n\t\t\t\t\t\t})),\n\t\t\t\t\t}).then(function(r) {\n\t\t\t\t\t\tif (!r.ok) { if (hint) hint.textContent = 'Failed to update label.'; return; }\n\t\t\t\t\t\tvar inp = panel.querySelector('.js-label-input');\n\t\t\t\t\t\tif (inp) inp.value = newLabelName || '';\n\t\t\t\t\t\tpanel.dataset.entry = JSON.stringify(Object.assign({}, entry, {label_id: newLabelId, label_name: newLabelName}));\n\t\t\t\t\t\tif (hint) hint.innerHTML = '';\n\t\t\t\t\t\t_labelCache = null;\n\t\t\t\t\t}).catch(function() {\n\t\t\t\t\t\tif (hint) hint.textContent = 'Failed to update label.';\n\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\t// ── Approve / Reject ───────────────────────────────────────────────────\n\t\t\t\tdocument.addEventListener('click', function(e) {\n\t\t\t\t\tvar btn = e.target.closest('.js-review-btn');\n\t\t\t\t\tif (!btn) return;\n\t\t\t\t\tvar panel = btn.closest('.js-review-panel');\n\t\t\t\t\tif (!panel) return;\n\t\t\t\t\tvar entryId = panel.dataset.entryId;\n\t\t\t\t\tvar entry = JSON.parse(panel.dataset.entry);\n\t\t\t\t\tvar action = btn.dataset.action;\n\t\t\t\t\tvar labelInput = panel.querySelector('.js-label-input');\n\t\t\t\t\tvar dirSel = panel.querySelector('.js-direction-sel');\n\t\t\t\t\tvar typeSel = panel.querySelector('.js-type-sel');\n\t\t\t\t\tvar ta = document.querySelector('.js-conditions-ta[data-entry-id=\"' + entryId + '\"]');\n\t\t\t\t\tvar conds = entry.conditions || {};\n\t\t\t\t\ttry {\n\t\t\t\t\t\tif (ta) {\n\t\t\t\t\t\t\tvar src = (ta._cmView && ta._cmView.state)\n\t\t\t\t\t\t\t\t? ta._cmView.state.doc.toString()\n\t\t\t\t\t\t\t\t: ta.value;\n\t\t\t\t\t\t\tconds = JSON.parse(src);\n\t\t\t\t\t\t}\n\t\t\t\t\t} catch(ex) {}\n\n\t\t\t\t\tfunction resolveLabel(cb) {\n\t\t\t\t\t\tvar name = labelInput ? labelInput.value.trim() : '';\n\t\t\t\t\t\tif (!name) { cb(entry.label_id); return; }\n\t\t\t\t\t\tfetch('/api/labels?limit=500')\n\t\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t\t.then(function(env) {\n\t\t\t\t\t\t\t\tvar found = (env.data||[]).find(function(l){ return l.name.toLowerCase()===name.toLowerCase(); });\n\t\t\t\t\t\t\t\tif (found) { cb(found.id); return; }\n\t\t\t\t\t\t\t\tfetch('/api/labels',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})\n\t\t\t\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t\t\t\t.then(function(c){ cb(c.data ? c.data.id : null); });\n\t\t\t\t\t\t\t});\n\t\t\t\t\t}\n\n\t\t\t\t\tbtn.disabled = true;\n\t\t\t\t\tbtn.textContent = '…';\n\n\t\t\t\t\tresolveLabel(function(labelId) {\n\t\t\t\t\t\tvar body = Object.assign({}, entry, {\n\t\t\t\t\t\t\tlabel_id: labelId,\n\t\t\t\t\t\t\tdirection: dirSel ? dirSel.value : entry.direction,\n\t\t\t\t\t\t\tentry_type: typeSel ? typeSel.value : entry.entry_type,\n\t\t\t\t\t\t\tconditions: conds\n\t\t\t\t\t\t});\n\t\t\t\t\t\tfetch('/api/entries/' + entryId, {\n\t\t\t\t\t\t\tmethod:'PUT',\n\t\t\t\t\t\t\theaders:{'Content-Type':'application/json'},\n\t\t\t\t\t\t\tbody: JSON.stringify(body)\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\tif (!r.ok) throw new Error('put-failed');\n\t\t\t\t\t\t\tvar ep = action==='approve'\n\t\t\t\t\t\t\t\t? '/api/entries/'+entryId+'/approve'\n\t\t\t\t\t\t\t\t: '/api/entries/'+entryId+'/reject';\n\t\t\t\t\t\t\treturn fetch(ep, {method:'POST'});\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\tif (!r || !r.ok) throw new Error('action-failed');\n\t\t\t\t\t\t\tif (action === 'approve') { markDirty(); }\n\t\t\t\t\t\t\tvar row = document.querySelector('.js-entry-details[data-entry-id=\"'+entryId+'\"]');\n\t\t\t\t\t\t\tif (row) row.remove();\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function() {\n\t\t\t\t\t\t\tbtn.disabled = false;\n\t\t\t\t\t\t\tbtn.textContent = action==='approve' ? 'Approve' : 'Reject';\n\t\t\t\t\t\t});\n\t\t\t\t\t});\n\t\t\t\t});\n\n\t\t\t\t// ── Confidence panel collapse ──────────────────────────────────────────\n\t\t\t\tdocument.addEventListener('click', function(e) {\n\t\t\t\t\tvar btn = e.target.closest('.js-conf-toggle');\n\t\t\t\t\tif (!btn) return;\n\t\t\t\t\tvar panel = btn.closest('.js-conf-panel');\n\t\t\t\t\tif (!panel) return;\n\t\t\t\t\tvar expanded = panel.dataset.expanded === 'true';\n\t\t\t\t\tpanel.dataset.expanded = expanded ? 'false' : 'true';\n\t\t\t\t\tpanel.style.width = expanded ? '120px' : '230px';\n\t\t\t\t\tpanel.querySelectorAll('.js-conf-bar').forEach(function(b) {\n\t\t\t\t\t\tb.style.display = expanded ? 'none' : '';\n\t\t\t\t\t});\n\t\t\t\t\tbtn.textContent = expanded ? '▶' : '◀';\n\t\t\t\t});\n\n\t\t\t\t// ── Add Entry modal ────────────────────────────────────────────────────\n\t\t\t\tvar addEntryBtn = document.getElementById('add-entry-btn');\n\t\t\t\tvar addEntryDialog = document.getElementById('add-entry-dialog');\n\t\t\t\tvar addEntryClose = document.getElementById('add-entry-close');\n\t\t\t\tvar addEntryCancel = document.getElementById('add-entry-cancel');\n\t\t\t\tvar addEntrySave = document.getElementById('add-entry-save');\n\t\t\t\tvar addEntryError = document.getElementById('add-entry-error');\n\n\t\t\t\tif (addEntryBtn && addEntryDialog) {\n\t\t\t\t\taddEntryBtn.addEventListener('click', function() {\n\t\t\t\t\t\taddEntryDialog.showModal();\n\t\t\t\t\t\tvar startInput = document.getElementById('ae-start-date');\n\t\t\t\t\t\tif (startInput && !startInput.value) {\n\t\t\t\t\t\t\tstartInput.value = new Date().toISOString().slice(0, 10);\n\t\t\t\t\t\t}\n\t\t\t\t\t});\n\t\t\t\t}\n\t\t\t\tif (addEntryClose) addEntryClose.addEventListener('click', function() { addEntryDialog.close(); });\n\t\t\t\tif (addEntryCancel) addEntryCancel.addEventListener('click', function() { addEntryDialog.close(); });\n\t\t\t\tif (addEntryDialog) addEntryDialog.addEventListener('click', function(e) {\n\t\t\t\t\tif (e.target === addEntryDialog) addEntryDialog.close();\n\t\t\t\t});\n\n\t\t\t\tfunction getAeField(id) {\n\t\t\t\t\tvar el = document.getElementById(id);\n\t\t\t\t\treturn el ? el.value.trim() : '';\n\t\t\t\t}\n\n\t\t\t\tfunction resolveAddEntryLabel(name, cb) {\n\t\t\t\t\tif (!name) { cb(null); return; }\n\t\t\t\t\tfetch('/api/labels?limit=500')\n\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t.then(function(env) {\n\t\t\t\t\t\t\tvar found = (env.data||[]).find(function(l){ return l.name.toLowerCase()===name.toLowerCase(); });\n\t\t\t\t\t\t\tif (found) { cb(found.id); return; }\n\t\t\t\t\t\t\tfetch('/api/labels',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})\n\t\t\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t\t\t.then(function(c){ cb(c.data ? c.data.id : null); });\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function(){ cb(null); });\n\t\t\t\t}\n\n\t\t\t\tif (addEntrySave) {\n\t\t\t\t\taddEntrySave.addEventListener('click', function() {\n\t\t\t\t\t\tvar labelName = getAeField('ae-label');\n\t\t\t\t\t\tvar direction = getAeField('ae-direction');\n\t\t\t\t\t\tvar entryType = getAeField('ae-type');\n\t\t\t\t\t\tvar rateStr = getAeField('ae-rate');\n\t\t\t\t\t\tvar startDate = getAeField('ae-start-date');\n\t\t\t\t\t\tvar condsStr = getAeField('ae-conditions');\n\n\t\t\t\t\t\tif (!direction || !entryType || !startDate) {\n\t\t\t\t\t\t\tif (addEntryError) addEntryError.textContent = 'Direction, type, and start date are required.';\n\t\t\t\t\t\t\treturn;\n\t\t\t\t\t\t}\n\n\t\t\t\t\t\tvar conds = {};\n\t\t\t\t\t\tif (condsStr) {\n\t\t\t\t\t\t\ttry { conds = JSON.parse(condsStr); }\n\t\t\t\t\t\t\tcatch(ex) {\n\t\t\t\t\t\t\t\tif (addEntryError) addEntryError.textContent = 'Conditions must be valid JSON.';\n\t\t\t\t\t\t\t\treturn;\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t}\n\n\t\t\t\t\t\t// Rate: user enters $/mo, convert to cents/day (÷ 30.44 × 100).\n\t\t\t\t\t\tvar ratePerDay = null;\n\t\t\t\t\t\tif (rateStr) {\n\t\t\t\t\t\t\tvar rateVal = parseFloat(rateStr);\n\t\t\t\t\t\t\tif (!isNaN(rateVal)) { ratePerDay = (rateVal / 30.44) * 100; }\n\t\t\t\t\t\t}\n\n\t\t\t\t\t\taddEntrySave.disabled = true;\n\t\t\t\t\t\taddEntrySave.textContent = 'Saving…';\n\t\t\t\t\t\tif (addEntryError) addEntryError.textContent = '';\n\n\t\t\t\t\t\tresolveAddEntryLabel(labelName, function(labelId) {\n\t\t\t\t\t\t\tvar body = {\n\t\t\t\t\t\t\t\tlabel_id: labelId,\n\t\t\t\t\t\t\t\tdirection: direction,\n\t\t\t\t\t\t\t\tentry_type: entryType,\n\t\t\t\t\t\t\t\tperiod_days: entryType === 'standing' ? 30 : 1,\n\t\t\t\t\t\t\t\tsource: 'user',\n\t\t\t\t\t\t\t\tstart_date: startDate,\n\t\t\t\t\t\t\t\tconditions: conds,\n\t\t\t\t\t\t\t\tprojected_rate_per_day: ratePerDay,\n\t\t\t\t\t\t\t\tpriority: 0,\n\t\t\t\t\t\t\t\tproject_tentatively: false,\n\t\t\t\t\t\t\t};\n\t\t\t\t\t\t\tfetch('/api/entries', {\n\t\t\t\t\t\t\t\tmethod: 'POST',\n\t\t\t\t\t\t\t\theaders: {'Content-Type': 'application/json'},\n\t\t\t\t\t\t\t\tcredentials: 'same-origin',\n\t\t\t\t\t\t\t\tbody: JSON.stringify(body),\n\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\t\tif (!r.ok) return r.json().then(function(e){ throw new Error(e.detail||'Save failed'); });\n\t\t\t\t\t\t\t\tmarkDirty();\n\t\t\t\t\t\t\t\taddEntryDialog.close();\n\t\t\t\t\t\t\t\tlocation.reload();\n\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t.catch(function(err) {\n\t\t\t\t\t\t\t\taddEntrySave.disabled = false;\n\t\t\t\t\t\t\t\taddEntrySave.textContent = 'Save';\n\t\t\t\t\t\t\t\tif (addEntryError) addEntryError.textContent = err.message || 'Failed to create entry.';\n\t\t\t\t\t\t\t});\n\t\t\t\t\t\t});\n\t\t\t\t\t});\n\t\t\t\t}\n\t\t\t\t// ── Entry checkbox tracking ───────────────────────────────────────────────\n\t\t\t\t(function() {\n\t\t\t\t\tvar checkedIds = new Set();\n\t\t\t\t\tvar selectAll  = document.querySelector('.js-check-all');\n\n\t\t\t\t\tfunction syncSelectAll() {\n\t\t\t\t\t\tvar cbs     = Array.from(document.querySelectorAll('.js-entry-check'));\n\t\t\t\t\t\tvar checked = cbs.filter(function(c) { return c.checked; });\n\t\t\t\t\t\tif (selectAll) {\n\t\t\t\t\t\t\tselectAll.checked       = checked.length > 0 && checked.length === cbs.length;\n\t\t\t\t\t\t\tselectAll.indeterminate = checked.length > 0 && checked.length < cbs.length;\n\t\t\t\t\t\t}\n\t\t\t\t\t\twindow.__velociCheckedEntries = Array.from(checkedIds);\n\t\t\t\t\t}\n\n\t\t\t\t\tdocument.addEventListener('change', function(e) {\n\t\t\t\t\t\tvar cb = e.target.closest('.js-entry-check');\n\t\t\t\t\t\tif (!cb) return;\n\t\t\t\t\t\tvar id = cb.dataset.entryId;\n\t\t\t\t\t\tif (!id) return;\n\t\t\t\t\t\tif (cb.checked) { checkedIds.add(id); } else { checkedIds.delete(id); }\n\t\t\t\t\t\tsyncSelectAll();\n\t\t\t\t\t});\n\n\t\t\t\t\tif (selectAll) {\n\t\t\t\t\t\tselectAll.addEventListener('change', function() {\n\t\t\t\t\t\t\tdocument.querySelectorAll('.js-entry-check').forEach(function(cb) {\n\t\t\t\t\t\t\t\tcb.checked = selectAll.checked;\n\t\t\t\t\t\t\t\tvar id = cb.dataset.entryId;\n\t\t\t\t\t\t\t\tif (!id) return;\n\t\t\t\t\t\t\t\tif (selectAll.checked) { checkedIds.add(id); } else { checkedIds.delete(id); }\n\t\t\t\t\t\t\t});\n\t\t\t\t\t\t\tsyncSelectAll();\n\t\t\t\t\t\t});\n\t\t\t\t\t}\n\n\t\t\t\t\twindow.__velociCheckedEntries = [];\n\t\t\t\t})();\n\t\t\t})();\n\t\t</script> <script type=\"module\" src=\"/static/js/conditions-editor.js\"></script>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -238,7 +238,7 @@ func ledgerPill(value, label string, data LedgerData, count int) templ.Component
 		var templ_7745c5c3_Var6 templ.SafeURL
 		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(ledgerFilterURL(data, "filter", value)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 737, Col: 62}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 757, Col: 62}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 		if templ_7745c5c3_Err != nil {
@@ -251,7 +251,7 @@ func ledgerPill(value, label string, data LedgerData, count int) templ.Component
 		var templ_7745c5c3_Var7 string
 		templ_7745c5c3_Var7, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(ledgerPillStyle(value, value == data.Filter))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 738, Col: 54}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 758, Col: 54}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 		if templ_7745c5c3_Err != nil {
@@ -264,7 +264,7 @@ func ledgerPill(value, label string, data LedgerData, count int) templ.Component
 		var templ_7745c5c3_Var8 string
 		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 740, Col: 9}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 760, Col: 9}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 		if templ_7745c5c3_Err != nil {
@@ -277,7 +277,7 @@ func ledgerPill(value, label string, data LedgerData, count int) templ.Component
 		var templ_7745c5c3_Var9 string
 		templ_7745c5c3_Var9, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(ledgerPillCountStyle(value == data.Filter))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 741, Col: 58}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 761, Col: 58}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 		if templ_7745c5c3_Err != nil {
@@ -290,7 +290,7 @@ func ledgerPill(value, label string, data LedgerData, count int) templ.Component
 		var templ_7745c5c3_Var10 string
 		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", count))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 741, Col: 87}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 761, Col: 87}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 		if templ_7745c5c3_Err != nil {
@@ -337,7 +337,7 @@ func ledgerDirectionPill(value, label string, data LedgerData) templ.Component {
 			return ledgerFilterURL(data, "direction", value)
 		}()))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 752, Col: 6}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 772, Col: 6}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 		if templ_7745c5c3_Err != nil {
@@ -350,7 +350,7 @@ func ledgerDirectionPill(value, label string, data LedgerData) templ.Component {
 		var templ_7745c5c3_Var13 string
 		templ_7745c5c3_Var13, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(ledgerSmallPillStyle(data.DirectionFilter == value))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 753, Col: 61}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 773, Col: 61}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 		if templ_7745c5c3_Err != nil {
@@ -363,7 +363,7 @@ func ledgerDirectionPill(value, label string, data LedgerData) templ.Component {
 		var templ_7745c5c3_Var14 string
 		templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 754, Col: 9}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 774, Col: 9}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 		if templ_7745c5c3_Err != nil {
@@ -410,7 +410,7 @@ func ledgerTypePill(value, label string, data LedgerData) templ.Component {
 			return ledgerFilterURL(data, "entry_type", value)
 		}()))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 764, Col: 6}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 784, Col: 6}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 		if templ_7745c5c3_Err != nil {
@@ -423,7 +423,7 @@ func ledgerTypePill(value, label string, data LedgerData) templ.Component {
 		var templ_7745c5c3_Var17 string
 		templ_7745c5c3_Var17, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(ledgerSmallPillStyle(data.TypeFilter == value))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 765, Col: 56}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 785, Col: 56}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 		if templ_7745c5c3_Err != nil {
@@ -436,7 +436,7 @@ func ledgerTypePill(value, label string, data LedgerData) templ.Component {
 		var templ_7745c5c3_Var18 string
 		templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 766, Col: 9}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 786, Col: 9}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
 		if templ_7745c5c3_Err != nil {
@@ -478,7 +478,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 		var templ_7745c5c3_Var20 string
 		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.ResolveAttributeValue(e.ID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 772, Col: 22}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 792, Col: 22}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var20)
 		if templ_7745c5c3_Err != nil {
@@ -491,7 +491,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 		var templ_7745c5c3_Var21 string
 		templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.ResolveAttributeValue(e.Status)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 773, Col: 30}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 793, Col: 30}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var21)
 		if templ_7745c5c3_Err != nil {
@@ -509,7 +509,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 			var templ_7745c5c3_Var22 string
 			templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.ResolveAttributeValue(e.Source)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 775, Col: 30}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 795, Col: 30}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var22)
 			if templ_7745c5c3_Err != nil {
@@ -520,331 +520,344 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, " style=\"border-bottom:1px solid var(--border)\"><summary style=\"display:grid;grid-template-columns:28px 1fr 80px 70px 90px 110px 140px;align-items:center;padding:10px 20px;cursor:pointer;list-style:none;user-select:none\"><span class=\"entry-chevron\" style=\"color:var(--text3);font-size:10px;transition:transform 0.15s\">▶</span> <span style=\"min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:500;color:var(--text)\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, " style=\"border-bottom:1px solid var(--border)\"><summary style=\"display:grid;grid-template-columns:28px 1fr 80px 70px 90px 110px 140px;align-items:center;padding:10px 20px;cursor:pointer;list-style:none;user-select:none\"><span style=\"display:flex;align-items:center\" onclick=\"event.stopPropagation()\"><input type=\"checkbox\" class=\"js-entry-check\" data-entry-id=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var23 string
+		templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.ResolveAttributeValue(e.ID)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 801, Col: 70}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var23)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "\" style=\"cursor:pointer;accent-color:var(--accent)\"></span> <span style=\"min-width:0;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--text)\"><span class=\"entry-chevron\" style=\"color:var(--text3);font-size:10px;transition:transform 0.15s;flex-shrink:0\">▶</span> <span style=\"overflow:hidden;text-overflow:ellipsis;white-space:nowrap\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if e.LabelName != nil && *e.LabelName != "" {
-			var templ_7745c5c3_Var23 string
-			templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(*e.LabelName)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 783, Col: 19}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, " ")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "<span style=\"color:var(--text3);font-style:italic\">Unlabeled</span> ")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		if e.Source == "system" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "<span style=\"margin-left:6px;font-size:10px;font-weight:600;padding:1px 5px;border-radius:10px;background:var(--surface2);color:var(--text3)\">System</span> ")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		if e.AlertType != nil {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "<span style=\"margin-left:6px;font-size:10px;font-weight:700;padding:1px 5px;border-radius:10px;background:var(--accent);color:#fff\">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
 			var templ_7745c5c3_Var24 string
-			templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(alertTypeLabel(e.AlertType))
+			templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(*e.LabelName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 791, Col: 166}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 807, Col: 20}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "</span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, " ")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		} else {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "<span style=\"color:var(--text3);font-style:italic\">Unlabeled</span> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "</span> <span style=\"font-size:12px;color:var(--text3)\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
+		if e.Source == "system" {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "<span style=\"margin-left:6px;font-size:10px;font-weight:600;padding:1px 5px;border-radius:10px;background:var(--surface2);color:var(--text3)\">System</span> ")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
 		}
-		var templ_7745c5c3_Var25 string
-		templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(entryTypeLabel(e.EntryType))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 794, Col: 80}
+		if e.AlertType != nil {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "<span style=\"margin-left:6px;font-size:10px;font-weight:700;padding:1px 5px;border-radius:10px;background:var(--accent);color:#fff\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var25 string
+			templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(alertTypeLabel(e.AlertType))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 815, Col: 167}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "</span>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "</span> <span style=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "</span></span> <span style=\"font-size:12px;color:var(--text3)\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var26 string
-		templ_7745c5c3_Var26, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("font-size:11px;font-weight:600;padding:2px 6px;border-radius:4px;display:inline-block;" + ledgerDirectionBadgeStyle(e.Direction))
+		templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(entryTypeLabel(e.EntryType))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 795, Col: 146}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 819, Col: 80}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "</span> <span style=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var27 string
-		templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(directionLabel(e.Direction))
+		templ_7745c5c3_Var27, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("font-size:11px;font-weight:600;padding:2px 6px;border-radius:4px;display:inline-block;" + ledgerDirectionBadgeStyle(e.Direction))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 795, Col: 178}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 820, Col: 146}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "</span> <span class=\"js-entry-rate\" data-fmt-day=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var28 string
-		templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateDay(e.ProjectedRatePerDay))
+		templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(directionLabel(e.Direction))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 798, Col: 52}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 820, Col: 178}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var28)
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "\" data-fmt-mo=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "</span> <span class=\"js-entry-rate\" data-fmt-day=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var29 string
-		templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateMo(e.ProjectedRatePerDay))
+		templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateDay(e.ProjectedRatePerDay))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 799, Col: 50}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 823, Col: 52}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var29)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "\" data-fmt-yr=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "\" data-fmt-mo=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var30 string
-		templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateYr(e.ProjectedRatePerDay))
+		templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateMo(e.ProjectedRatePerDay))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 800, Col: 50}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 824, Col: 50}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var30)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "\" style=\"font-size:12px;color:var(--text2);text-align:right;font-variant-numeric:tabular-nums\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "\" data-fmt-yr=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var31 string
-		templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(fmtRateDay(e.ProjectedRatePerDay))
+		templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateYr(e.ProjectedRatePerDay))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 802, Col: 39}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 825, Col: 50}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var31)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "</span> <span style=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "\" style=\"font-size:12px;color:var(--text2);text-align:right;font-variant-numeric:tabular-nums\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var32 string
-		templ_7745c5c3_Var32, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(ledgerStatusBadgeStyle(e.Status))
+		templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(fmtRateDay(e.ProjectedRatePerDay))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 803, Col: 49}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 827, Col: 39}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, "\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, "</span> <span style=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var33 string
-		templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(ledgerStatusLabel(e.Status))
+		templ_7745c5c3_Var33, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(ledgerStatusBadgeStyle(e.Status))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 803, Col: 81}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 828, Col: 49}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "</span> <span class=\"js-entry-fitness\" style=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var34 string
-		templ_7745c5c3_Var34, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("font-size:12px;text-align:right;font-variant-numeric:tabular-nums;color:" + fitColor(e.Fitness))
+		templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinStringErrs(ledgerStatusLabel(e.Status))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 804, Col: 138}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 828, Col: 81}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "</span> <span class=\"js-entry-fitness\" style=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var35 string
-		templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.JoinStringErrs(fitPct(e.Fitness))
+		templ_7745c5c3_Var35, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("font-size:12px;text-align:right;font-variant-numeric:tabular-nums;color:" + fitColor(e.Fitness))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 804, Col: 160}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 829, Col: 138}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var35))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "</span></summary><div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var36 string
+		templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.JoinStringErrs(fitPct(e.Fitness))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 829, Col: 160}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var36))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 57, "</span></summary><div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if e.Status == "pending" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 57, "<div class=\"js-review-panel\" data-entry-id=\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var36 string
-			templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.ResolveAttributeValue(e.ID)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 810, Col: 25}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var36)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "\" data-entry=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "<div class=\"js-review-panel\" data-entry-id=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var37 string
-			templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.ResolveAttributeValue(entryDataJSON(e))
+			templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.ResolveAttributeValue(e.ID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 811, Col: 34}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 835, Col: 25}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var37)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "\" style=\"display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 20px;border-top:1px solid var(--border);background:var(--surface2)\"><div style=\"flex:1;min-width:120px;display:flex;flex-direction:column;gap:3px\"><input class=\"js-label-input\" type=\"text\" placeholder=\"Label name\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "\" data-entry=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var38 string
-			templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.ResolveAttributeValue(func() string {
+			templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.ResolveAttributeValue(entryDataJSON(e))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 836, Col: 34}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var38)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 60, "\" style=\"display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 20px;border-top:1px solid var(--border);background:var(--surface2)\"><div style=\"flex:1;min-width:120px;display:flex;flex-direction:column;gap:3px\"><input class=\"js-label-input\" type=\"text\" placeholder=\"Label name\" value=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var39 string
+			templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.ResolveAttributeValue(func() string {
 				if e.LabelName != nil {
 					return *e.LabelName
 				}
 				return ""
 			}())
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 824, Col: 10}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 849, Col: 10}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var38)
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var39)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 60, "\" style=\"width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:5px 8px;font-size:13px;color:var(--text);outline:none\"> <span class=\"js-label-hint\" style=\"font-size:11px;color:var(--income);padding-left:2px;min-height:0;line-height:1.3\"></span></div><select class=\"js-direction-sel\" style=\"background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:5px 8px;font-size:13px;color:var(--text);outline:none\"><option value=\"income\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 61, "\" style=\"width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:5px 8px;font-size:13px;color:var(--text);outline:none\"> <span class=\"js-label-hint\" style=\"font-size:11px;color:var(--income);padding-left:2px;min-height:0;line-height:1.3\"></span></div><select class=\"js-direction-sel\" style=\"background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:5px 8px;font-size:13px;color:var(--text);outline:none\"><option value=\"income\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if e.Direction == "income" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 61, " selected")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 62, " selected")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 62, ">Income</option> <option value=\"spend\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 63, ">Income</option> <option value=\"spend\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if e.Direction == "spend" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 63, " selected")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 64, " selected")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 64, ">Spend</option></select> <select class=\"js-type-sel\" style=\"background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:5px 8px;font-size:13px;color:var(--text);outline:none\"><option value=\"standing\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 65, ">Spend</option></select> <select class=\"js-type-sel\" style=\"background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:5px 8px;font-size:13px;color:var(--text);outline:none\"><option value=\"standing\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if e.EntryType == "standing" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 65, " selected")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 66, " selected")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 66, ">Standing</option> <option value=\"variable\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 67, ">Standing</option> <option value=\"variable\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if e.EntryType == "variable" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 67, " selected")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 68, " selected")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 68, ">Variable</option> <option value=\"irregular\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 69, ">Variable</option> <option value=\"irregular\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if e.EntryType == "irregular" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 69, " selected")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 70, " selected")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 70, ">Irregular</option></select><div style=\"display:flex;gap:6px;margin-left:auto\"><button class=\"js-review-btn\" data-action=\"reject\" style=\"padding:5px 14px;border-radius:5px;border:1px solid var(--border);cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;background:transparent;color:var(--text2)\">Reject</button> <button class=\"js-review-btn\" data-action=\"approve\" style=\"padding:5px 14px;border-radius:5px;border:none;cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;background:var(--income);color:#fff\">Approve</button></div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 71, ">Irregular</option></select><div style=\"display:flex;gap:6px;margin-left:auto\"><button class=\"js-review-btn\" data-action=\"reject\" style=\"padding:5px 14px;border-radius:5px;border:1px solid var(--border);cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;background:transparent;color:var(--text2)\">Reject</button> <button class=\"js-review-btn\" data-action=\"approve\" style=\"padding:5px 14px;border-radius:5px;border:none;cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;background:var(--income);color:#fff\">Approve</button></div></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 71, "<div style=\"display:flex;border-top:1px solid var(--border);background:var(--surface)\"><div style=\"flex:1;padding:12px 20px;display:flex;flex-direction:column;gap:6px;min-width:0\"><div style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em\">Matching Rule</div><textarea class=\"js-conditions-ta\" data-entry-id=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var39 string
-		templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.ResolveAttributeValue(e.ID)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 863, Col: 26}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var39)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 72, "\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if e.Source == "system" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 73, " readonly")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 74, " style=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 72, "<div style=\"display:flex;border-top:1px solid var(--border);background:var(--surface)\"><div style=\"flex:1;padding:12px 20px;display:flex;flex-direction:column;gap:6px;min-width:0\"><div style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em\">Matching Rule</div><textarea class=\"js-conditions-ta\" data-entry-id=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var40 string
-		templ_7745c5c3_Var40, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(func() string {
+		templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.ResolveAttributeValue(e.ID)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 888, Col: 26}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var40)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 73, "\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if e.Source == "system" {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 74, " readonly")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 75, " style=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var41 string
+		templ_7745c5c3_Var41, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(func() string {
 			base := "background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:12px;font-family:monospace;color:var(--text);outline:none;resize:vertical;min-height:80px;width:100%;box-sizing:border-box"
 			if e.Source == "system" {
 				return base + ";cursor:default;opacity:0.75"
@@ -852,60 +865,60 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 			return base
 		}())
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 873, Col: 9}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var40))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 75, "\" spellcheck=\"false\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var41 string
-		templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(conditionsFormatted(e.Conditions))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 875, Col: 41}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 898, Col: 9}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 76, "</textarea> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 76, "\" spellcheck=\"false\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var42 string
+		templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinStringErrs(conditionsFormatted(e.Conditions))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 900, Col: 41}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 77, "</textarea> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if e.Source != "system" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 77, "<span class=\"js-conditions-status\" style=\"font-size:11px;color:var(--text3);margin-top:2px\"></span> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 78, "<span class=\"js-conditions-status\" style=\"font-size:11px;color:var(--text3);margin-top:2px\"></span> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
 		if len(e.SampleMerchants) > 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 78, "<div style=\"font-size:11px;color:var(--text3);line-height:1.5\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 79, "<div style=\"font-size:11px;color:var(--text3);line-height:1.5\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var42 string
-			templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinStringErrs(strings.Join(e.SampleMerchants[:min(3, len(e.SampleMerchants))], " · "))
+			var templ_7745c5c3_Var43 string
+			templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(strings.Join(e.SampleMerchants[:min(3, len(e.SampleMerchants))], " · "))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 881, Col: 81}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 906, Col: 81}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 79, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 80, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 80, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 81, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if e.Fitness != nil {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 81, "<div class=\"js-conf-panel\" data-expanded=\"true\" style=\"width:230px;transition:width 0.2s;border-left:1px solid var(--border);padding:12px 16px;display:flex;flex-direction:column;gap:8px;overflow:hidden;flex-shrink:0\"><div style=\"display:flex;align-items:center;justify-content:space-between\"><span style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em\">Fitness</span> <button class=\"js-conf-toggle\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:11px;padding:0\">◀</button></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 82, "<div class=\"js-conf-panel\" data-expanded=\"true\" style=\"width:230px;transition:width 0.2s;border-left:1px solid var(--border);padding:12px 16px;display:flex;flex-direction:column;gap:8px;overflow:hidden;flex-shrink:0\"><div style=\"display:flex;align-items:center;justify-content:space-between\"><span style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em\">Fitness</span> <button class=\"js-conf-toggle\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:11px;padding:0\">◀</button></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -925,25 +938,25 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 82, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 83, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 83, "</div><div style=\"border-top:1px solid var(--border);background:var(--surface);padding:10px 20px\"><div class=\"js-conditions-summary\" style=\"font-size:12px;color:var(--text2);line-height:1.7\"></div></div><div style=\"border-top:1px solid var(--border);background:var(--surface);padding:10px 20px 12px\"><div class=\"js-tx-panel\" data-entry-id=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 84, "</div><div style=\"border-top:1px solid var(--border);background:var(--surface);padding:10px 20px\"><div class=\"js-conditions-summary\" style=\"font-size:12px;color:var(--text2);line-height:1.7\"></div></div><div style=\"border-top:1px solid var(--border);background:var(--surface);padding:10px 20px 12px\"><div class=\"js-tx-panel\" data-entry-id=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var43 string
-		templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.ResolveAttributeValue(e.ID)
+		var templ_7745c5c3_Var44 string
+		templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.ResolveAttributeValue(e.ID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 902, Col: 49}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 927, Col: 49}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var43)
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var44)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 84, "\"><p style=\"color:var(--text3);font-size:12px\">Open to load matched transactions.</p></div></div></div></details>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 85, "\"><p style=\"color:var(--text3);font-size:12px\">Open to load matched transactions.</p></div></div></div></details>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -967,64 +980,64 @@ func ledgerConfBar(label string, f *float64) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var44 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var44 == nil {
-			templ_7745c5c3_Var44 = templ.NopComponent
+		templ_7745c5c3_Var45 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var45 == nil {
+			templ_7745c5c3_Var45 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 85, "<div style=\"display:flex;align-items:center;gap:8px\"><span style=\"font-size:11px;color:var(--text3);min-width:52px;white-space:nowrap\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var45 string
-		templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.JoinStringErrs(label)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 912, Col: 91}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var45))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 86, "</span><div class=\"js-conf-bar\" style=\"flex:1;background:var(--surface2);border-radius:3px;height:5px;overflow:hidden\"><div style=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 86, "<div style=\"display:flex;align-items:center;gap:8px\"><span style=\"font-size:11px;color:var(--text3);min-width:52px;white-space:nowrap\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var46 string
-		templ_7745c5c3_Var46, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(ledgerConfBarFill(f))
+		templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 914, Col: 36}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 937, Col: 91}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var46))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 87, "\"></div></div><span style=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 87, "</span><div class=\"js-conf-bar\" style=\"flex:1;background:var(--surface2);border-radius:3px;height:5px;overflow:hidden\"><div style=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var47 string
-		templ_7745c5c3_Var47, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("font-size:11px;min-width:28px;text-align:right;color:" + fitColor(f))
+		templ_7745c5c3_Var47, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(ledgerConfBarFill(f))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 916, Col: 85}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 939, Col: 36}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var47))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 88, "\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 88, "\"></div></div><span style=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var48 string
-		templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.JoinStringErrs(fitPct(f))
+		templ_7745c5c3_Var48, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("font-size:11px;min-width:28px;text-align:right;color:" + fitColor(f))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 916, Col: 99}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 941, Col: 85}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var48))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 89, "</span></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 89, "\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var49 string
+		templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.JoinStringErrs(fitPct(f))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 941, Col: 99}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var49))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 90, "</span></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

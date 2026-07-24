@@ -19,9 +19,6 @@ type ActivityData struct {
 templ ActivityPage(shell ShellData, data ActivityData) {
 	@Shell(shell) {
 		<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
-			<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
-				<h1 style="margin:0;font-size:18px;font-weight:700;color:var(--text);letter-spacing:-0.02em">Activity</h1>
-			</div>
 			<div style="flex:1;overflow:auto;padding:16px 20px">
 				if len(data.Jobs) == 0 {
 					<div style="text-align:center;padding-top:48px">

@@ -9,47 +9,24 @@ import (
 templ ReportsPage(shell ShellData, data ReportsData) {
 	@Shell(shell) {
 		<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
-			<!-- Header -->
-			<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
-				<h1 style="margin:0;font-size:18px;font-weight:700;color:var(--text);letter-spacing:-0.02em">Reports</h1>
-				if data.PinchCount > 0 {
-					<div style="display:flex;align-items:center;gap:6px;padding:4px 12px;background:color-mix(in srgb,var(--surface2) 60%,var(--commit) 40%);border:1px solid var(--commit);border-radius:20px">
-						<span style="width:6px;height:6px;border-radius:50%;background:var(--commit);display:inline-block"></span>
-						<span style="font-size:12px;font-weight:600;color:var(--commit)">
-							{ fmt.Sprintf("%d pinch point", data.PinchCount) }
-							if data.PinchCount != 1 {
-								s
-							}
-						</span>
-					</div>
-				}
-			</div>
-			<!-- Granularity toggle row -->
-			<div style="display:flex;align-items:center;padding:0 20px;height:36px;border-bottom:1px solid var(--border);flex-shrink:0">
-				<div style="display:flex;gap:4px">
-					<button
-						class="js-gran"
-						data-gran="day"
-						style="background:var(--accent);color:#fff;border:none;border-radius:5px;padding:3px 10px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit"
-					>/day</button>
-					<button
-						class="js-gran"
-						data-gran="month"
-						style="background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:5px;padding:3px 10px;cursor:pointer;font-size:12px;font-weight:500;font-family:inherit"
-					>/mo</button>
-					<button
-						class="js-gran"
-						data-gran="year"
-						style="background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:5px;padding:3px 10px;cursor:pointer;font-size:12px;font-weight:500;font-family:inherit"
-					>/yr</button>
-				</div>
-			</div>
 			<!-- Summary strip -->
 			<div style="display:flex;align-items:center;gap:24px;padding:10px 20px;border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto">
 				@rptSummaryChip("Income", &data.Summary.IncomeRate, "var(--income)")
 				@rptSummaryChip("Spend", &data.Summary.SpendRate, "var(--commit)")
 				@rptSummaryChipSigned("Margin", &data.MarginRate)
 				@rptSummaryChipSigned("Drift", &data.Summary.DriftRate)
+				if data.PinchCount > 0 {
+					<div style="margin-left:auto;display:flex;align-items:center;gap:6px;padding:4px 12px;background:color-mix(in srgb,var(--surface2) 60%,var(--commit) 40%);border:1px solid var(--commit);border-radius:20px;flex-shrink:0">
+						<span style="width:6px;height:6px;border-radius:50%;background:var(--commit);display:inline-block"></span>
+						<span style="font-size:12px;font-weight:600;color:var(--commit)">
+							if data.PinchCount == 1 {
+								{ fmt.Sprintf("%d pinch point", data.PinchCount) }
+							} else {
+								{ fmt.Sprintf("%d pinch points", data.PinchCount) }
+							}
+						</span>
+					</div>
+				}
 			</div>
 			<!-- Projections table -->
 			<div style="flex:1;overflow:auto">

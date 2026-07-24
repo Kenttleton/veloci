@@ -48,14 +48,14 @@ func ConfigurationPage(shell ShellData, data ConfigurationData) templ.Component 
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div style=\"display:flex;flex-direction:column;height:100%;overflow:hidden\"><div style=\"padding:14px 20px 0;border-bottom:1px solid var(--border);flex-shrink:0\"><h1 style=\"margin:0 0 12px;font-size:18px;font-weight:700;color:var(--text);letter-spacing:-0.02em\">Configuration</h1><div style=\"display:flex;gap:2px\"><a href=\"?tab=labels\" style=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div style=\"display:flex;flex-direction:column;height:100%;overflow:hidden\"><div style=\"padding:14px 20px 0;border-bottom:1px solid var(--border);flex-shrink:0\"><div style=\"display:flex;gap:2px\"><a href=\"?tab=labels\" style=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var3 string
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(cfgTabStyle(data.Tab == "labels"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 18, Col: 47}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 17, Col: 47}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
@@ -68,7 +68,7 @@ func ConfigurationPage(shell ShellData, data ConfigurationData) templ.Component 
 			var templ_7745c5c3_Var4 string
 			templ_7745c5c3_Var4, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(cfgTabStyle(data.Tab == "institutions"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 22, Col: 53}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 21, Col: 53}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 			if templ_7745c5c3_Err != nil {
@@ -81,7 +81,7 @@ func ConfigurationPage(shell ShellData, data ConfigurationData) templ.Component 
 			var templ_7745c5c3_Var5 string
 			templ_7745c5c3_Var5, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(cfgTabStyle(data.Tab == "system"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 26, Col: 47}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 25, Col: 47}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 			if templ_7745c5c3_Err != nil {
@@ -168,7 +168,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 				var templ_7745c5c3_Var7 string
 				templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.ResolveAttributeValue(l.ID)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 612, Col: 28}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 611, Col: 28}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
 				if templ_7745c5c3_Err != nil {
@@ -196,7 +196,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 					return ""
 				}())
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 621, Col: 11}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 620, Col: 11}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 				if templ_7745c5c3_Err != nil {
@@ -214,7 +214,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 					var templ_7745c5c3_Var9 string
 					templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(l.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 625, Col: 18}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 624, Col: 18}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 					if templ_7745c5c3_Err != nil {
@@ -228,7 +228,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 						var templ_7745c5c3_Var10 string
 						templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", l.EntryCount))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 630, Col: 44}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 629, Col: 44}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 						if templ_7745c5c3_Err != nil {
@@ -242,7 +242,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 							var templ_7745c5c3_Var11 string
 							templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(" entry")
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 632, Col: 22}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 631, Col: 22}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 							if templ_7745c5c3_Err != nil {
@@ -252,7 +252,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 							var templ_7745c5c3_Var12 string
 							templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(" entries")
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 634, Col: 24}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 633, Col: 24}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 							if templ_7745c5c3_Err != nil {
@@ -272,7 +272,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 					var templ_7745c5c3_Var13 string
 					templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.ResolveAttributeValue(l.ID)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 641, Col: 66}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 640, Col: 66}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var13)
 					if templ_7745c5c3_Err != nil {
@@ -285,7 +285,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 					var templ_7745c5c3_Var14 string
 					templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.ResolveAttributeValue(l.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 641, Col: 93}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 640, Col: 93}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var14)
 					if templ_7745c5c3_Err != nil {
@@ -303,7 +303,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 					var templ_7745c5c3_Var15 string
 					templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.ResolveAttributeValue(l.ID)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 646, Col: 30}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 645, Col: 30}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var15)
 					if templ_7745c5c3_Err != nil {
@@ -316,7 +316,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 					var templ_7745c5c3_Var16 string
 					templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.ResolveAttributeValue(l.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 647, Col: 34}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 646, Col: 34}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var16)
 					if templ_7745c5c3_Err != nil {
@@ -329,7 +329,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 					var templ_7745c5c3_Var17 string
 					templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", l.EntryCount))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 648, Col: 60}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 647, Col: 60}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var17)
 					if templ_7745c5c3_Err != nil {
@@ -342,7 +342,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 					var templ_7745c5c3_Var18 string
 					templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(l.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 650, Col: 18}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 649, Col: 18}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
 					if templ_7745c5c3_Err != nil {
@@ -356,7 +356,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 						var templ_7745c5c3_Var19 string
 						templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", l.EntryCount))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 653, Col: 44}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 652, Col: 44}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 						if templ_7745c5c3_Err != nil {
@@ -370,7 +370,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 							var templ_7745c5c3_Var20 string
 							templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(" entry")
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 655, Col: 22}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 654, Col: 22}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 							if templ_7745c5c3_Err != nil {
@@ -380,7 +380,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 							var templ_7745c5c3_Var21 string
 							templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(" entries")
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 657, Col: 24}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 656, Col: 24}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 							if templ_7745c5c3_Err != nil {
@@ -400,7 +400,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 					var templ_7745c5c3_Var22 string
 					templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.ResolveAttributeValue(l.ID)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 665, Col: 67}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 664, Col: 67}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var22)
 					if templ_7745c5c3_Err != nil {
@@ -413,7 +413,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 					var templ_7745c5c3_Var23 string
 					templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.ResolveAttributeValue(l.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 665, Col: 94}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 664, Col: 94}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var23)
 					if templ_7745c5c3_Err != nil {
@@ -426,7 +426,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 					var templ_7745c5c3_Var24 string
 					templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.ResolveAttributeValue(l.ID)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 666, Col: 63}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 665, Col: 63}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var24)
 					if templ_7745c5c3_Err != nil {
@@ -439,7 +439,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 					var templ_7745c5c3_Var25 string
 					templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.ResolveAttributeValue(l.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 666, Col: 90}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 665, Col: 90}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var25)
 					if templ_7745c5c3_Err != nil {
@@ -452,7 +452,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 					var templ_7745c5c3_Var26 string
 					templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", l.EntryCount))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 666, Col: 143}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 665, Col: 143}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var26)
 					if templ_7745c5c3_Err != nil {
@@ -465,7 +465,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 					var templ_7745c5c3_Var27 string
 					templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.ResolveAttributeValue(l.ID)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 667, Col: 63}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 666, Col: 63}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var27)
 					if templ_7745c5c3_Err != nil {
@@ -478,7 +478,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 					var templ_7745c5c3_Var28 string
 					templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.ResolveAttributeValue(l.ID)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 671, Col: 67}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 670, Col: 67}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var28)
 					if templ_7745c5c3_Err != nil {
@@ -491,7 +491,7 @@ func cfgLabelsSection(labels []store.LabelWithCount) templ.Component {
 					var templ_7745c5c3_Var29 string
 					templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.ResolveAttributeValue(l.ID)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 672, Col: 66}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 671, Col: 66}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var29)
 					if templ_7745c5c3_Err != nil {
@@ -590,7 +590,7 @@ func cfgInstRow(inst InstitutionWithAccounts, isLast bool) templ.Component {
 		var templ_7745c5c3_Var32 string
 		templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.ResolveAttributeValue(inst.ID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 713, Col: 24}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 712, Col: 24}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var32)
 		if templ_7745c5c3_Err != nil {
@@ -608,7 +608,7 @@ func cfgInstRow(inst InstitutionWithAccounts, isLast bool) templ.Component {
 			return "background:var(--surface);border-bottom:1px solid var(--border)"
 		}())
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 717, Col: 5}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 716, Col: 5}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
 		if templ_7745c5c3_Err != nil {
@@ -621,7 +621,7 @@ func cfgInstRow(inst InstitutionWithAccounts, isLast bool) templ.Component {
 		var templ_7745c5c3_Var34 string
 		templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinStringErrs(inst.InstitutionName)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 721, Col: 95}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 720, Col: 95}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
 		if templ_7745c5c3_Err != nil {
@@ -634,7 +634,7 @@ func cfgInstRow(inst InstitutionWithAccounts, isLast bool) templ.Component {
 		var templ_7745c5c3_Var35 string
 		templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.JoinStringErrs(inst.SourceType)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 722, Col: 143}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 721, Col: 143}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var35))
 		if templ_7745c5c3_Err != nil {
@@ -647,7 +647,7 @@ func cfgInstRow(inst InstitutionWithAccounts, isLast bool) templ.Component {
 		var templ_7745c5c3_Var36 string
 		templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.ResolveAttributeValue(instJSON(inst.Institution))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 727, Col: 51}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 726, Col: 51}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var36)
 		if templ_7745c5c3_Err != nil {
@@ -660,7 +660,7 @@ func cfgInstRow(inst InstitutionWithAccounts, isLast bool) templ.Component {
 		var templ_7745c5c3_Var37 string
 		templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.ResolveAttributeValue(inst.ID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 739, Col: 28}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 738, Col: 28}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var37)
 		if templ_7745c5c3_Err != nil {
@@ -706,7 +706,7 @@ func cfgInstRow(inst InstitutionWithAccounts, isLast bool) templ.Component {
 				var templ_7745c5c3_Var38 templ.SafeURL
 				templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/accounts/" + a.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 763, Col: 49}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 762, Col: 49}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var38))
 				if templ_7745c5c3_Err != nil {
@@ -719,7 +719,7 @@ func cfgInstRow(inst InstitutionWithAccounts, isLast bool) templ.Component {
 				var templ_7745c5c3_Var39 string
 				templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinStringErrs(a.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 763, Col: 152}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 762, Col: 152}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var39))
 				if templ_7745c5c3_Err != nil {
@@ -767,7 +767,7 @@ func cfgInstField(label, value string) templ.Component {
 		var templ_7745c5c3_Var41 string
 		templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 772, Col: 74}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 771, Col: 74}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
 		if templ_7745c5c3_Err != nil {
@@ -780,7 +780,7 @@ func cfgInstField(label, value string) templ.Component {
 		var templ_7745c5c3_Var42 string
 		templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinStringErrs(value)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 773, Col: 77}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 772, Col: 77}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
 		if templ_7745c5c3_Err != nil {
@@ -853,7 +853,7 @@ func cfgInstDialog() templ.Component {
 		var templ_7745c5c3_Var45 string
 		templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.ResolveAttributeValue(fieldRegistryJSON())
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 786, Col: 43}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 785, Col: 43}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var45)
 		if templ_7745c5c3_Err != nil {
@@ -919,7 +919,7 @@ func cfgFormField(label, id, inputType, placeholder string, required bool) templ
 		var templ_7745c5c3_Var47 string
 		templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 832, Col: 10}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 831, Col: 10}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var47))
 		if templ_7745c5c3_Err != nil {
@@ -942,7 +942,7 @@ func cfgFormField(label, id, inputType, placeholder string, required bool) templ
 		var templ_7745c5c3_Var48 string
 		templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.ResolveAttributeValue(id)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 838, Col: 10}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 837, Col: 10}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var48)
 		if templ_7745c5c3_Err != nil {
@@ -955,7 +955,7 @@ func cfgFormField(label, id, inputType, placeholder string, required bool) templ
 		var templ_7745c5c3_Var49 string
 		templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.ResolveAttributeValue(inputType)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 839, Col: 19}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 838, Col: 19}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var49)
 		if templ_7745c5c3_Err != nil {
@@ -968,7 +968,7 @@ func cfgFormField(label, id, inputType, placeholder string, required bool) templ
 		var templ_7745c5c3_Var50 string
 		templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.ResolveAttributeValue(placeholder)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 840, Col: 28}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 839, Col: 28}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var50)
 		if templ_7745c5c3_Err != nil {

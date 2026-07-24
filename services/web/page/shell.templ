@@ -2,19 +2,66 @@ package page
 
 import "strings"
 
-// Shell wraps the app layout: sidebar + main area + user menu.
+// Shell wraps the app layout: sidebar + top bar + main area.
 templ Shell(data ShellData) {
 	@base("Veloci") {
 		<div class="app-shell">
 			@sidebar(data)
-			<main class="app-main">
-				{ children... }
-			</main>
-			@userMenu(data.User, data.CurrentPath)
+			<div class="app-content">
+				<div class="app-topbar">
+					<span class="app-topbar-title">{ data.PageTitle }</span>
+					if data.PageBadge != "" {
+						<span class="app-topbar-badge">{ data.PageBadge }</span>
+					}
+					<div class="app-topbar-rail">
+						<div class="gran-toggle" id="shell-gran-toggle">
+							<button class="gran-btn js-gran-shell" data-gran="day">/day</button>
+							<button class="gran-btn js-gran-shell" data-gran="month">/mo</button>
+							<button class="gran-btn js-gran-shell" data-gran="year">/yr</button>
+						</div>
+						@userMenu(data.User, data.CurrentPath)
+					</div>
+				</div>
+				<main class="app-main">
+					{ children... }
+				</main>
+			</div>
 			@addAccountDialog()
 		</div>
+		@granToggleScript()
 		@jobStream()
 	}
+}
+
+templ granToggleScript() {
+	<script>
+		(function() {
+			var gran = localStorage.getItem('veloci-gran') || 'day';
+
+			function applyGran(g) {
+				gran = g;
+				localStorage.setItem('veloci-gran', g);
+				document.querySelectorAll('.js-gran-shell').forEach(function(b) {
+					var on = b.dataset.gran === g;
+					b.style.background = on ? 'var(--accent)' : 'var(--surface2)';
+					b.style.color      = on ? '#fff'           : 'var(--text2)';
+					b.style.border     = on ? 'none'           : '1px solid var(--border)';
+					b.style.fontWeight = on ? '600'            : '500';
+				});
+				document.dispatchEvent(new CustomEvent('veloci:granchange', { detail: { gran: g } }));
+			}
+
+			applyGran(gran);
+
+			document.addEventListener('click', function(e) {
+				var btn = e.target.closest('.js-gran-shell');
+				if (btn) applyGran(btn.dataset.gran);
+			});
+
+			// Expose current gran value for page scripts that initialise after Shell.
+			window.__velociGran = function() { return gran; };
+		})();
+	</script>
 }
 
 // jobStream is a persistent SSE listener: drives the activity dot and
@@ -620,8 +667,8 @@ templ addAccountDialog() {
 }
 
 templ userMenu(user ShellUser, currentPath string) {
-	<details class="user-menu">
-		<summary>{ Initials(user.Name, user.Email) }</summary>
+	<details class="user-menu" style="position:relative">
+		<summary class="user-menu-summary">{ Initials(user.Name, user.Email) }</summary>
 		<div class="user-menu-dropdown">
 			<div class="user-menu-info">
 				if user.Name != "" {

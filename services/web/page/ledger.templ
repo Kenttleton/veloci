@@ -10,18 +10,6 @@ import (
 templ LedgerPage(shell ShellData, data LedgerData) {
 	@Shell(shell) {
 		<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
-			<div style="display:flex;align-items:center;padding:12px 20px;border-bottom:1px solid var(--border);flex-shrink:0;gap:8px">
-				<h1 style="margin:0;font-size:18px;font-weight:700;color:var(--text);letter-spacing:-0.02em;flex:1">Ledger</h1>
-				<span id="dirty-indicator" style="display:none;font-size:11px;font-weight:600;color:var(--commit);padding:2px 8px;border-radius:10px;background:color-mix(in srgb,var(--surface2) 60%,var(--commit) 40%)">Changes pending — reprocess to apply</span>
-				<button
-					id="add-entry-btn"
-					style="background:var(--accent);border:none;border-radius:5px;padding:4px 12px;cursor:pointer;font-size:12px;font-weight:500;color:#fff;font-family:inherit"
-				>+ Add Entry</button>
-				<button
-					id="run-engine-btn"
-					style="background:none;border:1px solid var(--border);border-radius:5px;padding:4px 10px;cursor:pointer;font-size:12px;color:var(--text2);font-family:inherit"
-				>Run Engine</button>
-			</div>
 			<div style="display:flex;gap:6px;padding:8px 20px;border-bottom:1px solid var(--border);flex-shrink:0;align-items:center;flex-wrap:wrap">
 				@ledgerPill("all", "All", data, data.Counts.Pending+data.Counts.Live+data.Counts.Ended)
 				@ledgerPill("pending", "Review", data, data.Counts.Pending)
@@ -50,6 +38,7 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 					</a>
 				}
 				<div style="margin-left:auto;display:flex;align-items:center;gap:6px">
+					<span id="dirty-indicator" style="display:none;font-size:11px;font-weight:600;color:var(--commit);padding:2px 8px;border-radius:10px;background:color-mix(in srgb,var(--surface2) 60%,var(--commit) 40%)">Changes pending — reprocess to apply</span>
 					<label style="font-size:11px;color:var(--text3)">Sort:</label>
 					<select
 						id="ledger-sort"
@@ -60,30 +49,21 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 						<option value="rate" selected?={ data.Sort == "rate" }>Rate/day</option>
 						<option value="fitness" selected?={ data.Sort == "fitness" }>Fitness</option>
 					</select>
-				</div>
-			</div>
-			<!-- Granularity toggle row -->
-			<div style="display:flex;align-items:center;padding:0 20px;height:36px;border-bottom:1px solid var(--border);flex-shrink:0">
-				<div style="display:flex;gap:4px">
+					<div style="width:1px;height:16px;background:var(--border)"></div>
 					<button
-						class="js-gran"
-						data-gran="day"
-						style="background:var(--accent);color:#fff;border:none;border-radius:5px;padding:3px 10px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit"
-					>/day</button>
+						id="add-entry-btn"
+						style="background:var(--accent);border:none;border-radius:5px;padding:4px 12px;cursor:pointer;font-size:12px;font-weight:500;color:#fff;font-family:inherit"
+					>+ Add Entry</button>
 					<button
-						class="js-gran"
-						data-gran="month"
-						style="background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:5px;padding:3px 10px;cursor:pointer;font-size:12px;font-weight:500;font-family:inherit"
-					>/mo</button>
-					<button
-						class="js-gran"
-						data-gran="year"
-						style="background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:5px;padding:3px 10px;cursor:pointer;font-size:12px;font-weight:500;font-family:inherit"
-					>/yr</button>
+						id="run-engine-btn"
+						style="background:none;border:1px solid var(--border);border-radius:5px;padding:4px 10px;cursor:pointer;font-size:12px;color:var(--text2);font-family:inherit"
+					>Run Engine</button>
 				</div>
 			</div>
 			<div style="display:grid;grid-template-columns:28px 1fr 80px 70px 90px 110px 140px;padding:5px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
-				<div></div>
+				<div style="display:flex;align-items:center">
+					<input type="checkbox" class="js-check-all" style="cursor:pointer;accent-color:var(--accent)" title="Select all"/>
+				</div>
 				<div style="font-size:11px;font-weight:600;color:var(--text3)">Entry</div>
 				<div style="font-size:11px;font-weight:600;color:var(--text3)">Type</div>
 				<div style="font-size:11px;font-weight:600;color:var(--text3)">Dir</div>
@@ -220,7 +200,9 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 					if (!btn) return;
 					applyGran(btn.dataset.gran);
 				});
-				applyGran(activeGran);
+				var activeGranInit = window.__velociGran ? window.__velociGran() : activeGran;
+				if (activeGranInit !== activeGran) { applyGran(activeGranInit); } else { applyGran(activeGran); }
+				document.addEventListener('veloci:granchange', function(e) { applyGran(e.detail.gran); });
 
 				// ── Dirty state ───────────────────────────────────────────────────────────
 				var _dirty = false;
@@ -726,6 +708,44 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 						});
 					});
 				}
+				// ── Entry checkbox tracking ───────────────────────────────────────────────
+				(function() {
+					var checkedIds = new Set();
+					var selectAll  = document.querySelector('.js-check-all');
+
+					function syncSelectAll() {
+						var cbs     = Array.from(document.querySelectorAll('.js-entry-check'));
+						var checked = cbs.filter(function(c) { return c.checked; });
+						if (selectAll) {
+							selectAll.checked       = checked.length > 0 && checked.length === cbs.length;
+							selectAll.indeterminate = checked.length > 0 && checked.length < cbs.length;
+						}
+						window.__velociCheckedEntries = Array.from(checkedIds);
+					}
+
+					document.addEventListener('change', function(e) {
+						var cb = e.target.closest('.js-entry-check');
+						if (!cb) return;
+						var id = cb.dataset.entryId;
+						if (!id) return;
+						if (cb.checked) { checkedIds.add(id); } else { checkedIds.delete(id); }
+						syncSelectAll();
+					});
+
+					if (selectAll) {
+						selectAll.addEventListener('change', function() {
+							document.querySelectorAll('.js-entry-check').forEach(function(cb) {
+								cb.checked = selectAll.checked;
+								var id = cb.dataset.entryId;
+								if (!id) return;
+								if (selectAll.checked) { checkedIds.add(id); } else { checkedIds.delete(id); }
+							});
+							syncSelectAll();
+						});
+					}
+
+					window.__velociCheckedEntries = [];
+				})();
 			})();
 		</script>
 		<script type="module" src="/static/js/conditions-editor.js"></script>
@@ -777,19 +797,24 @@ templ ledgerEntryRow(e store.EntryRow) {
 		style="border-bottom:1px solid var(--border)"
 	>
 		<summary style="display:grid;grid-template-columns:28px 1fr 80px 70px 90px 110px 140px;align-items:center;padding:10px 20px;cursor:pointer;list-style:none;user-select:none">
-			<span class="entry-chevron" style="color:var(--text3);font-size:10px;transition:transform 0.15s">▶</span>
-			<span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:500;color:var(--text)">
-				if e.LabelName != nil && *e.LabelName != "" {
-					{ *e.LabelName }
-				} else {
-					<span style="color:var(--text3);font-style:italic">Unlabeled</span>
-				}
-				if e.Source == "system" {
-					<span style="margin-left:6px;font-size:10px;font-weight:600;padding:1px 5px;border-radius:10px;background:var(--surface2);color:var(--text3)">System</span>
-				}
-				if e.AlertType != nil {
-					<span style="margin-left:6px;font-size:10px;font-weight:700;padding:1px 5px;border-radius:10px;background:var(--accent);color:#fff">{ alertTypeLabel(e.AlertType) }</span>
-				}
+			<span style="display:flex;align-items:center" onclick="event.stopPropagation()">
+				<input type="checkbox" class="js-entry-check" data-entry-id={ e.ID } style="cursor:pointer;accent-color:var(--accent)"/>
+			</span>
+			<span style="min-width:0;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--text)">
+				<span class="entry-chevron" style="color:var(--text3);font-size:10px;transition:transform 0.15s;flex-shrink:0">▶</span>
+				<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+					if e.LabelName != nil && *e.LabelName != "" {
+						{ *e.LabelName }
+					} else {
+						<span style="color:var(--text3);font-style:italic">Unlabeled</span>
+					}
+					if e.Source == "system" {
+						<span style="margin-left:6px;font-size:10px;font-weight:600;padding:1px 5px;border-radius:10px;background:var(--surface2);color:var(--text3)">System</span>
+					}
+					if e.AlertType != nil {
+						<span style="margin-left:6px;font-size:10px;font-weight:700;padding:1px 5px;border-radius:10px;background:var(--accent);color:#fff">{ alertTypeLabel(e.AlertType) }</span>
+					}
+				</span>
 			</span>
 			<span style="font-size:12px;color:var(--text3)">{ entryTypeLabel(e.EntryType) }</span>
 			<span style={ "font-size:11px;font-weight:600;padding:2px 6px;border-radius:4px;display:inline-block;" + ledgerDirectionBadgeStyle(e.Direction) }>{ directionLabel(e.Direction) }</span>

@@ -10,30 +10,6 @@ import (
 templ BudgetPage(shell ShellData, data BudgetData) {
 	@Shell(shell) {
 		<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
-			<!-- Title row -->
-			<div style="display:flex;align-items:center;padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
-				<h1 style="margin:0;font-size:18px;font-weight:700;color:var(--text);letter-spacing:-0.02em">Budget</h1>
-			</div>
-			<!-- Granularity toggle row -->
-			<div style="display:flex;align-items:center;padding:0 20px;height:36px;border-bottom:1px solid var(--border);flex-shrink:0">
-				<div style="display:flex;gap:4px">
-					<button
-						class="js-gran active-gran"
-						data-gran="day"
-						style="background:var(--accent);color:#fff;border:none;border-radius:5px;padding:3px 10px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit"
-					>/day</button>
-					<button
-						class="js-gran"
-						data-gran="month"
-						style="background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:5px;padding:3px 10px;cursor:pointer;font-size:12px;font-weight:500;font-family:inherit"
-					>/mo</button>
-					<button
-						class="js-gran"
-						data-gran="year"
-						style="background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:5px;padding:3px 10px;cursor:pointer;font-size:12px;font-weight:500;font-family:inherit"
-					>/yr</button>
-				</div>
-			</div>
 			<!-- Summary strip -->
 			@budgetSummaryStrip(data)
 			<!-- Scrollable body: horizon chart + stack panel -->
@@ -45,7 +21,7 @@ templ BudgetPage(shell ShellData, data BudgetData) {
 		<script src="/static/js/veloci-chart.js"></script>
 		<script>
 			(function () {
-				var activeGran    = localStorage.getItem('veloci-gran') || 'day';
+				var activeGran    = window.__velociGran ? window.__velociGran() : (localStorage.getItem('veloci-gran') || 'day');
 				var activeEntryId = null;
 				var chart         = null;
 
@@ -61,24 +37,12 @@ templ BudgetPage(shell ShellData, data BudgetData) {
 					});
 				}
 
-				// ── Granularity toggle ────────────────────────────────────────────
-				function applyGran(gran) {
-					activeGran = gran;
-					localStorage.setItem('veloci-gran', activeGran);
-					document.querySelectorAll('.js-gran').forEach(function (b) {
-						var on   = b.dataset.gran === activeGran;
-						b.style.background = on ? 'var(--accent)' : 'var(--surface2)';
-						b.style.color      = on ? '#fff' : 'var(--text2)';
-						b.style.border     = on ? 'none' : '1px solid var(--border)';
-					});
-					updateRateDisplays();
-				}
-				document.addEventListener('click', function (e) {
-					var btn = e.target.closest('.js-gran');
-					if (!btn) return;
-					applyGran(btn.dataset.gran);
+				// ── Listen for Shell granularity toggle ───────────────────────────
+				document.addEventListener('veloci:granchange', function(e) {
+					activeGran = e.detail.gran;
 					if (chart) chart.setGranularity(activeGran);
 					if (activeEntryId) loadHistory(activeEntryId, null);
+					updateRateDisplays();
 				});
 
 				// ── Stack panel: collapse/expand ──────────────────────────────────

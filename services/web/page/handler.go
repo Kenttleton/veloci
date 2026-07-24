@@ -24,6 +24,8 @@ const sessionCookie = "veloci_session"
 
 // ShellData is passed to every protected page template.
 type ShellData struct {
+	PageTitle       string
+	PageBadge       string // optional pill shown next to the title in the shell header
 	User            ShellUser
 	ActiveAccounts  []ShellAccount
 	PassiveAccounts []ShellAccount
@@ -174,6 +176,15 @@ func (s *Server) buildShellData(r *http.Request) ShellData {
 		CurrentPath:     r.URL.Path,
 		HasRunningJobs:  false, // TODO: Datastar SSE will drive this signal
 	}
+}
+
+// titled returns a copy of sd with PageTitle (and optional PageBadge) set.
+func titled(sd ShellData, title string, badge ...string) ShellData {
+	sd.PageTitle = title
+	if len(badge) > 0 {
+		sd.PageBadge = badge[0]
+	}
+	return sd
 }
 
 // GetLogin renders the login form.
@@ -386,7 +397,7 @@ func (s *Server) Budget(c echo.Context) error {
 		}
 	}
 
-	return s.render(c, BudgetPage(s.buildShellData(c.Request()), BudgetData{
+	return s.render(c, BudgetPage(titled(s.buildShellData(c.Request()), "Budget"), BudgetData{
 		Summary:         summary,
 		MarginRate:      summary.IncomeRate - summary.SpendRate,
 		TotalIncomeRate: totalIncomeRate,
@@ -541,7 +552,7 @@ func (s *Server) Ledger(c echo.Context) error {
 		TypeFilter:      typeFilter,
 		Sort:            srt,
 	}
-	return s.render(c, LedgerPage(s.buildShellData(c.Request()), data))
+	return s.render(c, LedgerPage(titled(s.buildShellData(c.Request()), "Ledger"), data))
 }
 
 func (s *Server) Activity(c echo.Context) error {
@@ -563,7 +574,7 @@ func (s *Server) Activity(c echo.Context) error {
 		NextCursor:  nextCursor,
 		TargetJobID: targetJobID,
 	}
-	return s.render(c, ActivityPage(s.buildShellData(c.Request()), data))
+	return s.render(c, ActivityPage(titled(s.buildShellData(c.Request()), "Activity"), data))
 }
 
 // fieldRegistryJSON returns the static field registry serialised as a JSON string
@@ -635,7 +646,7 @@ func (s *Server) Account(c echo.Context) error {
 		Transactions: txns,
 		NextCursor:   nextCursor,
 	}
-	return s.render(c, AccountPage(s.buildShellData(c.Request()), data))
+	return s.render(c, AccountPage(titled(s.buildShellData(c.Request()), data.Account.Name, accountTypeLabel(data.Account.AccountType)), data))
 }
 
 // ─── Page helpers ─────────────────────────────────────────────────────────────
@@ -960,15 +971,15 @@ func (s *Server) Configuration(c echo.Context) error {
 	default:
 		data.Labels, _ = s.store.ListLabelsWithEntryCount(ctx, entityID)
 	}
-	return s.render(c, ConfigurationPage(s.buildShellData(c.Request()), data))
+	return s.render(c, ConfigurationPage(titled(s.buildShellData(c.Request()), "Configuration"), data))
 }
 
 func (s *Server) Settings(c echo.Context) error {
-	return s.render(c, SettingsPage(s.buildShellData(c.Request())))
+	return s.render(c, SettingsPage(titled(s.buildShellData(c.Request()), "Settings")))
 }
 
 func (s *Server) Glossary(c echo.Context) error {
-	return s.render(c, GlossaryPage(s.buildShellData(c.Request())))
+	return s.render(c, GlossaryPage(titled(s.buildShellData(c.Request()), "Glossary")))
 }
 
 // ReportsData is passed to the Reports page template.
@@ -1008,7 +1019,7 @@ func (s *Server) Reports(c echo.Context) error {
 		}
 	}
 
-	return s.render(c, ReportsPage(s.buildShellData(c.Request()), ReportsData{
+	return s.render(c, ReportsPage(titled(s.buildShellData(c.Request()), "Reports"), ReportsData{
 		Summary:     summary,
 		MarginRate:  summary.IncomeRate - summary.SpendRate,
 		Projections: projections,

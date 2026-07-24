@@ -10,7 +10,7 @@ import templruntime "github.com/a-h/templ/runtime"
 
 import "strings"
 
-// Shell wraps the app layout: sidebar + main area + user menu.
+// Shell wraps the app layout: sidebar + top bar + main area.
 func Shell(data ShellData) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -52,15 +52,43 @@ func Shell(data ShellData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<main class=\"app-main\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<div class=\"app-content\"><div class=\"app-topbar\"><span class=\"app-topbar-title\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templ_7745c5c3_Var1.Render(ctx, templ_7745c5c3_Buffer)
+			var templ_7745c5c3_Var3 string
+			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(data.PageTitle)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 12, Col: 52}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</main>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</span> ")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if data.PageBadge != "" {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<span class=\"app-topbar-badge\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var4 string
+				templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(data.PageBadge)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 14, Col: 53}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</span>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<div class=\"app-topbar-rail\"><div class=\"gran-toggle\" id=\"shell-gran-toggle\"><button class=\"gran-btn js-gran-shell\" data-gran=\"day\">/day</button> <button class=\"gran-btn js-gran-shell\" data-gran=\"month\">/mo</button> <button class=\"gran-btn js-gran-shell\" data-gran=\"year\">/yr</button></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -68,11 +96,31 @@ func Shell(data ShellData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "</div></div><main class=\"app-main\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templ_7745c5c3_Var1.Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</main></div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
 			templ_7745c5c3_Err = addAccountDialog().Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = granToggleScript().Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, " ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -83,6 +131,35 @@ func Shell(data ShellData) templ.Component {
 			return nil
 		})
 		templ_7745c5c3_Err = base("Veloci").Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		return nil
+	})
+}
+
+func granToggleScript() templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var5 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var5 == nil {
+			templ_7745c5c3_Var5 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<script>\n\t\t(function() {\n\t\t\tvar gran = localStorage.getItem('veloci-gran') || 'day';\n\n\t\t\tfunction applyGran(g) {\n\t\t\t\tgran = g;\n\t\t\t\tlocalStorage.setItem('veloci-gran', g);\n\t\t\t\tdocument.querySelectorAll('.js-gran-shell').forEach(function(b) {\n\t\t\t\t\tvar on = b.dataset.gran === g;\n\t\t\t\t\tb.style.background = on ? 'var(--accent)' : 'var(--surface2)';\n\t\t\t\t\tb.style.color      = on ? '#fff'           : 'var(--text2)';\n\t\t\t\t\tb.style.border     = on ? 'none'           : '1px solid var(--border)';\n\t\t\t\t\tb.style.fontWeight = on ? '600'            : '500';\n\t\t\t\t});\n\t\t\t\tdocument.dispatchEvent(new CustomEvent('veloci:granchange', { detail: { gran: g } }));\n\t\t\t}\n\n\t\t\tapplyGran(gran);\n\n\t\t\tdocument.addEventListener('click', function(e) {\n\t\t\t\tvar btn = e.target.closest('.js-gran-shell');\n\t\t\t\tif (btn) applyGran(btn.dataset.gran);\n\t\t\t});\n\n\t\t\t// Expose current gran value for page scripts that initialise after Shell.\n\t\t\twindow.__velociGran = function() { return gran; };\n\t\t})();\n\t</script>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -108,12 +185,12 @@ func jobStream() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var3 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var3 == nil {
-			templ_7745c5c3_Var3 = templ.NopComponent
+		templ_7745c5c3_Var6 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var6 == nil {
+			templ_7745c5c3_Var6 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<script>\n\t\t// ── Session management ────────────────────────────────────────────────────────\n\t\t(function() {\n\t\t\tvar lastActivity = Date.now();\n\t\t\tvar lastRefreshTime = Date.now();\n\t\t\tvar idleRefreshCount = 0;\n\n\t\t\t// Track user activity\n\t\t\t['click', 'keydown', 'scroll', 'touchstart'].forEach(function(evt) {\n\t\t\t\tdocument.addEventListener(evt, function() { lastActivity = Date.now(); }, {passive: true, capture: true});\n\t\t\t});\n\t\t\t// Throttled mousemove (avoid per-pixel updates)\n\t\t\tvar lastMouseUpdate = 0;\n\t\t\tdocument.addEventListener('mousemove', function() {\n\t\t\t\tvar now = Date.now();\n\t\t\t\tif (now - lastMouseUpdate > 10000) { lastActivity = now; lastMouseUpdate = now; }\n\t\t\t}, {passive: true});\n\n\t\t\tfunction doLogout() {\n\t\t\t\tfetch('/logout', {method: 'POST', credentials: 'same-origin'}).finally(function() {\n\t\t\t\t\twindow.location.href = '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search);\n\t\t\t\t});\n\t\t\t}\n\n\t\t\tfunction scheduleRefresh() {\n\t\t\t\tsetTimeout(performRefresh, 13 * 60 * 1000);\n\t\t\t}\n\n\t\t\tfunction performRefresh() {\n\t\t\t\tvar wasActive = lastActivity > lastRefreshTime;\n\t\t\t\tif (wasActive) {\n\t\t\t\t\tidleRefreshCount = 0;\n\t\t\t\t} else {\n\t\t\t\t\tidleRefreshCount++;\n\t\t\t\t}\n\t\t\t\t// After 1 consecutive idle refresh, skip the next and logout\n\t\t\t\tif (idleRefreshCount > 1) {\n\t\t\t\t\tdoLogout();\n\t\t\t\t\treturn;\n\t\t\t\t}\n\t\t\t\tfetch('/api/session/refresh', {method: 'POST', credentials: 'same-origin'})\n\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\tlastRefreshTime = Date.now();\n\t\t\t\t\t\tif (!r.ok) { doLogout(); return; }\n\t\t\t\t\t\tscheduleRefresh();\n\t\t\t\t\t})\n\t\t\t\t\t.catch(function() {\n\t\t\t\t\t\t// Network error — retry in 60s without resetting idle counter\n\t\t\t\t\t\tsetTimeout(performRefresh, 60 * 1000);\n\t\t\t\t\t});\n\t\t\t}\n\n\t\t\tscheduleRefresh();\n\n\t\t\t// Global 401 intercept — redirect to login preserving current URL\n\t\t\tvar _fetch = window.fetch;\n\t\t\twindow.fetch = function(url, opts) {\n\t\t\t\treturn _fetch(url, opts).then(function(r) {\n\t\t\t\t\tif (r.status === 401 || r.status === 403) {\n\t\t\t\t\t\twindow.location.href = '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search);\n\t\t\t\t\t}\n\t\t\t\t\treturn r;\n\t\t\t\t});\n\t\t\t};\n\t\t})();\n\n\t\t(function() {\n\t\t\tvar TX_JOBS = { 'import.process': true, 'account.analyze': true, 'entries.reprocess': true };\n\t\t\tvar running = {};\n\t\t\tvar backoff = 1000;\n\n\t\t\tfunction syncDot() {\n\t\t\t\tvar el = document.getElementById('activity-dot');\n\t\t\t\tif (el) el.style.display = Object.keys(running).length > 0 ? '' : 'none';\n\t\t\t}\n\n\t\t\tfunction refreshTransactions() {\n\t\t\t\tif (window.__velociTxRefresh) {\n\t\t\t\t\twindow.__velociTxRefresh();\n\t\t\t\t}\n\t\t\t}\n\n\t\t\t// ─── SSE ─────────────────────────────────────────────────────────────\n\t\t\tfunction onEvent(evt) {\n\t\t\t\tif (evt.status === 'queued' || evt.status === 'processing') {\n\t\t\t\t\trunning[evt.job_id] = true;\n\t\t\t\t} else {\n\t\t\t\t\tdelete running[evt.job_id];\n\t\t\t\t}\n\t\t\t\tsyncDot();\n\t\t\t\tif (evt.status === 'complete' && TX_JOBS[evt.job_type]) {\n\t\t\t\t\trefreshTransactions();\n\t\t\t\t}\n\t\t\t}\n\n\t\t\tfunction connect() {\n\t\t\t\tvar es = new EventSource('/api/jobs/stream');\n\t\t\t\tes.onmessage = function(e) {\n\t\t\t\t\ttry { onEvent(JSON.parse(e.data)); backoff = 1000; } catch(_) {}\n\t\t\t\t};\n\t\t\t\tes.onerror = function() {\n\t\t\t\t\tes.close();\n\t\t\t\t\tsetTimeout(connect, backoff);\n\t\t\t\t\tbackoff = Math.min(backoff * 2, 30000);\n\t\t\t\t};\n\t\t\t}\n\n\t\t\tconnect();\n\t\t})();\n\t</script>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<script>\n\t\t// ── Session management ────────────────────────────────────────────────────────\n\t\t(function() {\n\t\t\tvar lastActivity = Date.now();\n\t\t\tvar lastRefreshTime = Date.now();\n\t\t\tvar idleRefreshCount = 0;\n\n\t\t\t// Track user activity\n\t\t\t['click', 'keydown', 'scroll', 'touchstart'].forEach(function(evt) {\n\t\t\t\tdocument.addEventListener(evt, function() { lastActivity = Date.now(); }, {passive: true, capture: true});\n\t\t\t});\n\t\t\t// Throttled mousemove (avoid per-pixel updates)\n\t\t\tvar lastMouseUpdate = 0;\n\t\t\tdocument.addEventListener('mousemove', function() {\n\t\t\t\tvar now = Date.now();\n\t\t\t\tif (now - lastMouseUpdate > 10000) { lastActivity = now; lastMouseUpdate = now; }\n\t\t\t}, {passive: true});\n\n\t\t\tfunction doLogout() {\n\t\t\t\tfetch('/logout', {method: 'POST', credentials: 'same-origin'}).finally(function() {\n\t\t\t\t\twindow.location.href = '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search);\n\t\t\t\t});\n\t\t\t}\n\n\t\t\tfunction scheduleRefresh() {\n\t\t\t\tsetTimeout(performRefresh, 13 * 60 * 1000);\n\t\t\t}\n\n\t\t\tfunction performRefresh() {\n\t\t\t\tvar wasActive = lastActivity > lastRefreshTime;\n\t\t\t\tif (wasActive) {\n\t\t\t\t\tidleRefreshCount = 0;\n\t\t\t\t} else {\n\t\t\t\t\tidleRefreshCount++;\n\t\t\t\t}\n\t\t\t\t// After 1 consecutive idle refresh, skip the next and logout\n\t\t\t\tif (idleRefreshCount > 1) {\n\t\t\t\t\tdoLogout();\n\t\t\t\t\treturn;\n\t\t\t\t}\n\t\t\t\tfetch('/api/session/refresh', {method: 'POST', credentials: 'same-origin'})\n\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\tlastRefreshTime = Date.now();\n\t\t\t\t\t\tif (!r.ok) { doLogout(); return; }\n\t\t\t\t\t\tscheduleRefresh();\n\t\t\t\t\t})\n\t\t\t\t\t.catch(function() {\n\t\t\t\t\t\t// Network error — retry in 60s without resetting idle counter\n\t\t\t\t\t\tsetTimeout(performRefresh, 60 * 1000);\n\t\t\t\t\t});\n\t\t\t}\n\n\t\t\tscheduleRefresh();\n\n\t\t\t// Global 401 intercept — redirect to login preserving current URL\n\t\t\tvar _fetch = window.fetch;\n\t\t\twindow.fetch = function(url, opts) {\n\t\t\t\treturn _fetch(url, opts).then(function(r) {\n\t\t\t\t\tif (r.status === 401 || r.status === 403) {\n\t\t\t\t\t\twindow.location.href = '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search);\n\t\t\t\t\t}\n\t\t\t\t\treturn r;\n\t\t\t\t});\n\t\t\t};\n\t\t})();\n\n\t\t(function() {\n\t\t\tvar TX_JOBS = { 'import.process': true, 'account.analyze': true, 'entries.reprocess': true };\n\t\t\tvar running = {};\n\t\t\tvar backoff = 1000;\n\n\t\t\tfunction syncDot() {\n\t\t\t\tvar el = document.getElementById('activity-dot');\n\t\t\t\tif (el) el.style.display = Object.keys(running).length > 0 ? '' : 'none';\n\t\t\t}\n\n\t\t\tfunction refreshTransactions() {\n\t\t\t\tif (window.__velociTxRefresh) {\n\t\t\t\t\twindow.__velociTxRefresh();\n\t\t\t\t}\n\t\t\t}\n\n\t\t\t// ─── SSE ─────────────────────────────────────────────────────────────\n\t\t\tfunction onEvent(evt) {\n\t\t\t\tif (evt.status === 'queued' || evt.status === 'processing') {\n\t\t\t\t\trunning[evt.job_id] = true;\n\t\t\t\t} else {\n\t\t\t\t\tdelete running[evt.job_id];\n\t\t\t\t}\n\t\t\t\tsyncDot();\n\t\t\t\tif (evt.status === 'complete' && TX_JOBS[evt.job_type]) {\n\t\t\t\t\trefreshTransactions();\n\t\t\t\t}\n\t\t\t}\n\n\t\t\tfunction connect() {\n\t\t\t\tvar es = new EventSource('/api/jobs/stream');\n\t\t\t\tes.onmessage = function(e) {\n\t\t\t\t\ttry { onEvent(JSON.parse(e.data)); backoff = 1000; } catch(_) {}\n\t\t\t\t};\n\t\t\t\tes.onerror = function() {\n\t\t\t\t\tes.close();\n\t\t\t\t\tsetTimeout(connect, backoff);\n\t\t\t\t\tbackoff = Math.min(backoff * 2, 30000);\n\t\t\t\t};\n\t\t\t}\n\n\t\t\tconnect();\n\t\t})();\n\t</script>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -137,16 +214,16 @@ func sidebar(data ShellData) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var4 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var4 == nil {
-			templ_7745c5c3_Var4 = templ.NopComponent
+		templ_7745c5c3_Var7 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var7 == nil {
+			templ_7745c5c3_Var7 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<aside class=\"sidebar\"><div class=\"sidebar-logo\">Veloci</div><nav class=\"sidebar-nav\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "<aside class=\"sidebar\"><div class=\"sidebar-logo\">Veloci</div><nav class=\"sidebar-nav\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Var5 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var8 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -164,11 +241,11 @@ func sidebar(data ShellData) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = navLink("/budget", "Budget", data.CurrentPath).Render(templ.WithChildren(ctx, templ_7745c5c3_Var5), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = navLink("/budget", "Budget", data.CurrentPath).Render(templ.WithChildren(ctx, templ_7745c5c3_Var8), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Var6 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var9 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -186,7 +263,7 @@ func sidebar(data ShellData) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = navLink("/reports", "Reports", data.CurrentPath).Render(templ.WithChildren(ctx, templ_7745c5c3_Var6), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = navLink("/reports", "Reports", data.CurrentPath).Render(templ.WithChildren(ctx, templ_7745c5c3_Var9), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -194,7 +271,7 @@ func sidebar(data ShellData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "</nav><div class=\"sidebar-accounts\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</nav><div class=\"sidebar-accounts\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -208,7 +285,7 @@ func sidebar(data ShellData) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</div><div class=\"sidebar-footer\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</div><div class=\"sidebar-footer\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -216,7 +293,7 @@ func sidebar(data ShellData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Var7 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var10 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -234,11 +311,11 @@ func sidebar(data ShellData) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = navLink("/settings", "Settings", data.CurrentPath).Render(templ.WithChildren(ctx, templ_7745c5c3_Var7), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = navLink("/settings", "Settings", data.CurrentPath).Render(templ.WithChildren(ctx, templ_7745c5c3_Var10), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Var8 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var11 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -256,11 +333,11 @@ func sidebar(data ShellData) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = navLink("/glossary", "Glossary", data.CurrentPath).Render(templ.WithChildren(ctx, templ_7745c5c3_Var8), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = navLink("/glossary", "Glossary", data.CurrentPath).Render(templ.WithChildren(ctx, templ_7745c5c3_Var11), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Var9 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var12 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -278,11 +355,11 @@ func sidebar(data ShellData) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = navLink("/configuration", "Configuration", data.CurrentPath).Render(templ.WithChildren(ctx, templ_7745c5c3_Var9), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = navLink("/configuration", "Configuration", data.CurrentPath).Render(templ.WithChildren(ctx, templ_7745c5c3_Var12), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</div></aside>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "</div></aside>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -306,60 +383,60 @@ func navLink(href, label, currentPath string) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var10 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var10 == nil {
-			templ_7745c5c3_Var10 = templ.NopComponent
+		templ_7745c5c3_Var13 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var13 == nil {
+			templ_7745c5c3_Var13 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		var templ_7745c5c3_Var11 = []any{"nav-item", templ.KV("nav-item--active", isActivePath(currentPath, href))}
-		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var11...)
+		var templ_7745c5c3_Var14 = []any{"nav-item", templ.KV("nav-item--active", isActivePath(currentPath, href))}
+		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var14...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var12 templ.SafeURL
-		templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(href))
+		var templ_7745c5c3_Var15 templ.SafeURL
+		templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(href))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 170, Col: 28}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 217, Col: 28}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "\" class=\"")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var13 string
-		templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var11).String())
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "\" class=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var16 string
+		templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var14).String())
 		if templ_7745c5c3_Err != nil {
 			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 1, Col: 0}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var13)
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var16)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templ_7745c5c3_Var10.Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = templ_7745c5c3_Var13.Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var14 string
-		templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(label)
+		var templ_7745c5c3_Var17 string
+		templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 174, Col: 9}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 221, Col: 9}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</a>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "</a>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -383,56 +460,56 @@ func navLinkLedger(href string, data ShellData) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var15 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var15 == nil {
-			templ_7745c5c3_Var15 = templ.NopComponent
+		templ_7745c5c3_Var18 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var18 == nil {
+			templ_7745c5c3_Var18 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		var templ_7745c5c3_Var16 = []any{"nav-item", templ.KV("nav-item--active", isActivePath(data.CurrentPath, href))}
-		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var16...)
+		var templ_7745c5c3_Var19 = []any{"nav-item", templ.KV("nav-item--active", isActivePath(data.CurrentPath, href))}
+		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var19...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "<a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var17 templ.SafeURL
-		templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(href))
+		var templ_7745c5c3_Var20 templ.SafeURL
+		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(href))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 180, Col: 28}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 227, Col: 28}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "\" class=\"")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var18 string
-		templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var16).String())
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "\" class=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var21 string
+		templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var19).String())
 		if templ_7745c5c3_Err != nil {
 			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 1, Col: 0}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var18)
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var21)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "\"><span style=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "\"><span style=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var19 string
-		templ_7745c5c3_Var19, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(ledgerIconStyle(data.HasRunningJobs))
+		var templ_7745c5c3_Var22 string
+		templ_7745c5c3_Var22, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(ledgerIconStyle(data.HasRunningJobs))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 183, Col: 52}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 230, Col: 52}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -440,7 +517,7 @@ func navLinkLedger(href string, data ShellData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "</span> Ledger</a>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "</span> Ledger</a>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -464,43 +541,43 @@ func navLinkActivity(href string, hasRunning bool, currentPath string) templ.Com
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var20 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var20 == nil {
-			templ_7745c5c3_Var20 = templ.NopComponent
+		templ_7745c5c3_Var23 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var23 == nil {
+			templ_7745c5c3_Var23 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		var templ_7745c5c3_Var21 = []any{"nav-item", templ.KV("nav-item--active", isActivePath(currentPath, href))}
-		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var21...)
+		var templ_7745c5c3_Var24 = []any{"nav-item", templ.KV("nav-item--active", isActivePath(currentPath, href))}
+		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var24...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "<a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "<a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var22 templ.SafeURL
-		templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(href))
+		var templ_7745c5c3_Var25 templ.SafeURL
+		templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(href))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 192, Col: 28}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 239, Col: 28}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "\" class=\"")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var23 string
-		templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var21).String())
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "\" class=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var26 string
+		templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var24).String())
 		if templ_7745c5c3_Err != nil {
 			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 1, Col: 0}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var23)
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var26)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -508,20 +585,20 @@ func navLinkActivity(href string, hasRunning bool, currentPath string) templ.Com
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "Activity <span id=\"activity-dot\" class=\"activity-dot\" style=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "Activity <span id=\"activity-dot\" class=\"activity-dot\" style=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var24 string
-		templ_7745c5c3_Var24, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(activityDotStyle(hasRunning))
+		var templ_7745c5c3_Var27 string
+		templ_7745c5c3_Var27, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(activityDotStyle(hasRunning))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 197, Col: 83}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 244, Col: 83}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "\"></span></a>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "\"></span></a>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -552,51 +629,51 @@ func accountSection(title string, accounts []ShellAccount, status, currentPath s
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var25 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var25 == nil {
-			templ_7745c5c3_Var25 = templ.NopComponent
+		templ_7745c5c3_Var28 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var28 == nil {
+			templ_7745c5c3_Var28 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "<div style=\"margin-bottom:8px\"><div class=\"account-section-header\"><span class=\"account-section-label\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "<div style=\"margin-bottom:8px\"><div class=\"account-section-header\"><span class=\"account-section-label\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var26 string
-		templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(title)
+		var templ_7745c5c3_Var29 string
+		templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 211, Col: 46}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 258, Col: 46}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "</span> <button class=\"account-section-add\" title=\"")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var27 string
-		templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.ResolveAttributeValue("Add " + strings.ToLower(title) + " account")
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 214, Col: 56}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var27)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "</span> <button class=\"account-section-add\" title=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "\" data-add-account=\"")
+		var templ_7745c5c3_Var30 string
+		templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.ResolveAttributeValue("Add " + strings.ToLower(title) + " account")
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 261, Col: 56}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var30)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var28 string
-		templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.ResolveAttributeValue(status)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 215, Col: 29}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var28)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "\" data-add-account=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "\">")
+		var templ_7745c5c3_Var31 string
+		templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.ResolveAttributeValue(status)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 262, Col: 29}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var31)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -604,89 +681,54 @@ func accountSection(title string, accounts []ShellAccount, status, currentPath s
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "</button></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "</button></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if len(accounts) == 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<p style=\"font-size:12px;color:var(--text3);padding:4px 8px;margin:0\">No ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "<p style=\"font-size:12px;color:var(--text3);padding:4px 8px;margin:0\">No ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var29 string
-			templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(strings.ToLower(title))
+			var templ_7745c5c3_Var32 string
+			templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(strings.ToLower(title))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 221, Col: 100}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 268, Col: 100}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, " accounts</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, " accounts</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
 		for _, a := range accounts {
-			var templ_7745c5c3_Var30 = []any{"account-item", templ.KV("account-item--active", currentPath == "/accounts/"+a.ID)}
-			templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var30...)
+			var templ_7745c5c3_Var33 = []any{"account-item", templ.KV("account-item--active", currentPath == "/accounts/"+a.ID)}
+			templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var33...)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "<a href=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "<a href=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var31 templ.SafeURL
-			templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/accounts/" + a.ID))
+			var templ_7745c5c3_Var34 templ.SafeURL
+			templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/accounts/" + a.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 225, Col: 45}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 272, Col: 45}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "\" class=\"")
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var32 string
-			templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var30).String())
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 1, Col: 0}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var32)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "\"><span class=\"account-item-name\">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var33 string
-			templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(a.Name)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 228, Col: 44}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "</span> ")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var34 = []any{"account-item-balance", templ.KV("account-item-balance--negative", IsNegativeBalance(a))}
-			templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var34...)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "<span class=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "\" class=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var35 string
-			templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var34).String())
+			templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var33).String())
 			if templ_7745c5c3_Err != nil {
 				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 1, Col: 0}
 			}
@@ -694,25 +736,60 @@ func accountSection(title string, accounts []ShellAccount, status, currentPath s
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "\"><span class=\"account-item-name\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var36 string
-			templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.JoinStringErrs(FormatBalance(a.BalanceCents))
+			templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.JoinStringErrs(a.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 230, Col: 36}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 275, Col: 44}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var36))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "</span></a>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "</span> ")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var37 = []any{"account-item-balance", templ.KV("account-item-balance--negative", IsNegativeBalance(a))}
+			templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var37...)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "<span class=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var38 string
+			templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var37).String())
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 1, Col: 0}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var38)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var39 string
+			templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinStringErrs(FormatBalance(a.BalanceCents))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 277, Col: 36}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var39))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "</span></a>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -736,12 +813,12 @@ func addAccountDialog() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var37 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var37 == nil {
-			templ_7745c5c3_Var37 = templ.NopComponent
+		templ_7745c5c3_Var40 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var40 == nil {
+			templ_7745c5c3_Var40 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "<dialog id=\"add-account-dialog\" style=\"background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0;color:var(--text);width:480px;max-width:90vw\"><div style=\"padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between\"><span id=\"add-account-title\" style=\"font-size:15px;font-weight:700\">Add account</span> <button id=\"add-account-close\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:18px;line-height:1;padding:0 4px\">✕</button></div><div style=\"padding:20px;overflow-y:auto;max-height:80vh;display:flex;flex-direction:column;gap:14px\"><!-- Account fields --><div><label style=\"display:block;font-size:12px;color:var(--text3);margin-bottom:4px\" for=\"aa-name\">Name</label> <input id=\"aa-name\" type=\"text\" placeholder=\"e.g. Chase Checking\" style=\"width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:7px 10px;font-size:13px;color:var(--text);outline:none;font-family:inherit\"></div><div style=\"display:flex;gap:12px\"><div style=\"flex:1\"><label style=\"display:block;font-size:12px;color:var(--text3);margin-bottom:4px\" for=\"aa-type\">Account type</label> <select id=\"aa-type\" style=\"width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:7px 10px;font-size:13px;color:var(--text);outline:none;font-family:inherit;cursor:pointer\"><option value=\"checking\">Checking</option> <option value=\"savings\">Savings</option> <option value=\"credit\">Credit</option> <option value=\"loan\">Loan</option> <option value=\"mortgage\">Mortgage</option> <option value=\"investment\">Investment</option></select></div><div style=\"flex:1\"><label style=\"display:block;font-size:12px;color:var(--text3);margin-bottom:4px\" for=\"aa-status\">Status</label> <select id=\"aa-status\" style=\"width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:7px 10px;font-size:13px;color:var(--text);outline:none;font-family:inherit;cursor:pointer\"><option value=\"active\">Active</option> <option value=\"passive\">Passive</option></select></div></div><div><label style=\"display:block;font-size:12px;color:var(--text3);margin-bottom:4px\" for=\"aa-balance\">Starting Balance (optional)</label><div style=\"position:relative\"><span style=\"position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:13px;pointer-events:none\">$</span> <input id=\"aa-balance\" type=\"text\" inputmode=\"decimal\" placeholder=\"0.00\" style=\"width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:7px 10px 7px 18px;font-size:13px;color:var(--text);outline:none;font-family:inherit\"></div></div><div id=\"aa-rate-wrap\" style=\"display:none\"><label style=\"display:block;font-size:12px;color:var(--text3);margin-bottom:4px\" for=\"aa-rate\">Interest rate % (optional)</label> <input id=\"aa-rate\" type=\"text\" inputmode=\"decimal\" placeholder=\"e.g. 19.99\" style=\"width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:7px 10px;font-size:13px;color:var(--text);outline:none;font-family:inherit\"></div><div id=\"aa-limit-wrap\" style=\"display:none\"><label style=\"display:block;font-size:12px;color:var(--text3);margin-bottom:4px\" for=\"aa-limit\">Credit limit (optional)</label><div style=\"position:relative\"><span style=\"position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:13px;pointer-events:none\">$</span> <input id=\"aa-limit\" type=\"text\" inputmode=\"decimal\" placeholder=\"0.00\" style=\"width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:7px 10px 7px 18px;font-size:13px;color:var(--text);outline:none;font-family:inherit\"></div></div><!-- Institution section --><div style=\"border-top:1px solid var(--border);padding-top:14px\"><div style=\"font-size:12px;color:var(--text3);margin-bottom:8px\">Institution</div><div style=\"display:flex;flex-direction:column;gap:8px;margin-bottom:10px\"><label style=\"display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);cursor:pointer\"><input type=\"radio\" name=\"aa-inst-choice\" value=\"skip\" id=\"aa-inst-skip\" checked> Skip for now</label> <label style=\"display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);cursor:pointer\"><input type=\"radio\" name=\"aa-inst-choice\" value=\"existing\" id=\"aa-inst-existing\"> Link to existing institution</label> <label style=\"display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);cursor:pointer\"><input type=\"radio\" name=\"aa-inst-choice\" value=\"new\" id=\"aa-inst-new\"> Create new institution</label></div><!-- Existing institution section --><div id=\"aa-existing-section\" style=\"display:none\"><label style=\"display:block;font-size:12px;color:var(--text3);margin-bottom:4px\" for=\"aa-existing-select\">Institution</label> <select id=\"aa-existing-select\" style=\"width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:7px 10px;font-size:13px;color:var(--text);outline:none;font-family:inherit;cursor:pointer;margin-bottom:8px\"><option value=\"\">Select an institution</option></select><div id=\"aa-existing-empty\" style=\"font-size:12px;color:var(--text3);display:none\">No institutions yet — choose \"Create new institution\" instead.</div><div id=\"aa-existing-preview\" style=\"display:none;padding:12px;background:var(--surface2);border-radius:4px;border:1px solid var(--border)\"></div></div><!-- New institution: name only; column mapping is configured at first upload --><div id=\"aa-new-section\" style=\"display:none\"><label style=\"display:block;font-size:12px;color:var(--text3);margin-bottom:4px\" for=\"aa-inst-name\">Institution name</label> <input id=\"aa-inst-name\" type=\"text\" placeholder=\"e.g. Chase\" autocomplete=\"off\" style=\"width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:7px 10px;font-size:13px;color:var(--text);outline:none;font-family:inherit\"><div id=\"aa-name-status\" style=\"font-size:11px;margin-top:5px;min-height:15px\"></div><div style=\"font-size:11px;color:var(--text3);margin-top:2px\">Column mapping is configured when you upload your first CSV.</div></div></div><div id=\"aa-error\" style=\"font-size:12px;color:var(--commit);display:none\"></div><div style=\"display:flex;gap:8px;justify-content:flex-end;margin-top:4px\"><button id=\"aa-cancel\" style=\"background:transparent;border:1px solid var(--border);border-radius:4px;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit\">Cancel</button> <button id=\"aa-submit\" style=\"background:var(--accent);border:none;border-radius:4px;padding:6px 14px;cursor:pointer;font-size:13px;font-weight:600;color:#fff;font-family:inherit\">Create account</button></div></div></dialog><script>\n\t\t(function() {\n\t\t\tvar dialog       = document.getElementById('add-account-dialog');\n\t\t\tvar titleEl      = document.getElementById('add-account-title');\n\t\t\tvar nameInput    = document.getElementById('aa-name');\n\t\t\tvar typeSelect   = document.getElementById('aa-type');\n\t\t\tvar statusSelect = document.getElementById('aa-status');\n\t\t\tvar balanceInput = document.getElementById('aa-balance');\n\t\t\tvar rateInput    = document.getElementById('aa-rate');\n\t\t\tvar limitInput   = document.getElementById('aa-limit');\n\t\t\tvar rateWrap     = document.getElementById('aa-rate-wrap');\n\t\t\tvar limitWrap    = document.getElementById('aa-limit-wrap');\n\t\t\tvar errorEl      = document.getElementById('aa-error');\n\t\t\tvar submitBtn    = document.getElementById('aa-submit');\n\t\t\tvar cancelBtn    = document.getElementById('aa-cancel');\n\t\t\tvar closeBtn     = document.getElementById('add-account-close');\n\n\t\t\tvar existingSection = document.getElementById('aa-existing-section');\n\t\t\tvar existingSelect  = document.getElementById('aa-existing-select');\n\t\t\tvar existingEmpty   = document.getElementById('aa-existing-empty');\n\t\t\tvar existingPreview = document.getElementById('aa-existing-preview');\n\t\t\tvar newSection      = document.getElementById('aa-new-section');\n\t\t\tvar instNameInput   = document.getElementById('aa-inst-name');\n\t\t\tvar nameStatusEl    = document.getElementById('aa-name-status');\n\n\t\t\tvar allInstitutions = [];\n\t\t\tvar choice = 'skip';\n\n\t\t\tfunction findInstCI(name) {\n\t\t\t\tvar lower = name.toLowerCase();\n\t\t\t\treturn allInstitutions.find(function(i) {\n\t\t\t\t\treturn i.institution_name.toLowerCase() === lower;\n\t\t\t\t}) || null;\n\t\t\t}\n\n\t\t\tinstNameInput.addEventListener('input', function() {\n\t\t\t\tvar match = findInstCI(instNameInput.value.trim());\n\t\t\t\tif (match) {\n\t\t\t\t\tnameStatusEl.textContent = 'Existing: \"' + match.institution_name + '\" — will link to it';\n\t\t\t\t\tnameStatusEl.style.color = 'var(--accent)';\n\t\t\t\t} else {\n\t\t\t\t\tnameStatusEl.textContent = '';\n\t\t\t\t}\n\t\t\t});\n\n\t\t\tfunction dollarsToCents(s) {\n\t\t\t\tvar t = (s || '').trim().replace(/,/g, '');\n\t\t\t\tif (!t) return null;\n\t\t\t\tvar n = parseFloat(t);\n\t\t\t\treturn isNaN(n) ? null : Math.round(n * 100);\n\t\t\t}\n\n\t\t\tfunction updateTypeFields() {\n\t\t\t\tvar t = typeSelect.value;\n\t\t\t\trateWrap.style.display  = (t === 'credit' || t === 'loan' || t === 'mortgage') ? '' : 'none';\n\t\t\t\tlimitWrap.style.display = (t === 'credit') ? '' : 'none';\n\t\t\t}\n\n\t\t\ttypeSelect.addEventListener('change', updateTypeFields);\n\n\t\t\tfunction setChoice(c) {\n\t\t\t\tchoice = c;\n\t\t\t\texistingSection.style.display = c === 'existing' ? '' : 'none';\n\t\t\t\tnewSection.style.display      = c === 'new'      ? '' : 'none';\n\t\t\t}\n\n\t\t\tfunction renderPreview(inst) {\n\t\t\t\tfunction row(label, value) {\n\t\t\t\t\treturn '<div style=\"display:flex;justify-content:space-between;padding:4px 0;font-size:12px\">'\n\t\t\t\t\t\t+ '<span style=\"color:var(--text3)\">' + label + '</span>'\n\t\t\t\t\t\t+ '<span style=\"color:var(--text);font-weight:500\">' + value + '</span>'\n\t\t\t\t\t\t+ '</div>';\n\t\t\t\t}\n\t\t\t\tvar cfg = (inst && inst.mapping_config) ? inst.mapping_config : {};\n\t\t\t\tvar fields = cfg.fields || {};\n\t\t\t\tvar hasMapping = cfg.layout && Object.keys(fields).some(function(k) { return fields[k]; });\n\t\t\t\tvar html = hasMapping\n\t\t\t\t\t? Object.keys(fields).reduce(function(acc, k) {\n\t\t\t\t\t\treturn fields[k] ? acc + row(k, fields[k]) : acc;\n\t\t\t\t\t}, row('Layout', cfg.layout))\n\t\t\t\t\t: '<div style=\"font-size:12px;color:var(--text3)\">No column mapping configured yet.</div>';\n\t\t\t\texistingPreview.innerHTML = html;\n\t\t\t\texistingPreview.style.display = '';\n\t\t\t}\n\n\t\t\tdocument.querySelectorAll('input[name=\"aa-inst-choice\"]').forEach(function(radio) {\n\t\t\t\tradio.addEventListener('change', function() {\n\t\t\t\t\tif (radio.checked) setChoice(radio.value);\n\t\t\t\t});\n\t\t\t});\n\n\t\t\texistingSelect.addEventListener('change', function() {\n\t\t\t\tvar inst = allInstitutions.find(function(i) { return i.id === existingSelect.value; });\n\t\t\t\tif (inst) { renderPreview(inst); }\n\t\t\t\telse { existingPreview.style.display = 'none'; existingPreview.innerHTML = ''; }\n\t\t\t});\n\n\t\t\tfunction loadInstitutions() {\n\t\t\t\tfetch('/api/institutions')\n\t\t\t\t\t.then(function(r) { return r.json(); })\n\t\t\t\t\t.then(function(body) {\n\t\t\t\t\t\tallInstitutions = (body && Array.isArray(body.data) ? body.data : []);\n\t\t\t\t\t\twhile (existingSelect.options.length > 1) existingSelect.remove(1);\n\t\t\t\t\t\tallInstitutions.forEach(function(inst) {\n\t\t\t\t\t\t\tvar opt = document.createElement('option');\n\t\t\t\t\t\t\topt.value = inst.id;\n\t\t\t\t\t\t\topt.textContent = inst.institution_name;\n\t\t\t\t\t\t\texistingSelect.appendChild(opt);\n\t\t\t\t\t\t});\n\t\t\t\t\t\texistingEmpty.style.display = allInstitutions.length === 0 ? '' : 'none';\n\t\t\t\t\t})\n\t\t\t\t\t.catch(function() {});\n\t\t\t}\n\n\t\t\tfunction resetForm(defaultStatus) {\n\t\t\t\tnameInput.value      = '';\n\t\t\t\ttypeSelect.value     = 'checking';\n\t\t\t\tstatusSelect.value   = defaultStatus || 'active';\n\t\t\t\tbalanceInput.value   = '';\n\t\t\t\trateInput.value      = '';\n\t\t\t\tlimitInput.value     = '';\n\t\t\t\tinstNameInput.value  = '';\n\t\t\t\tnameStatusEl.textContent = '';\n\t\t\t\terrorEl.style.display = 'none';\n\t\t\t\texistingSelect.value = '';\n\t\t\t\texistingPreview.style.display = 'none';\n\t\t\t\texistingPreview.innerHTML = '';\n\t\t\t\tdocument.getElementById('aa-inst-skip').checked = true;\n\t\t\t\tsetChoice('skip');\n\t\t\t\tupdateTypeFields();\n\t\t\t}\n\n\t\t\tfunction openDialog(status) {\n\t\t\t\tresetForm(status);\n\t\t\t\ttitleEl.textContent = 'Add ' + status + ' account';\n\t\t\t\tsubmitBtn.disabled = false;\n\t\t\t\tsubmitBtn.textContent = 'Create account';\n\t\t\t\tloadInstitutions();\n\t\t\t\tdialog.showModal();\n\t\t\t\tnameInput.focus();\n\t\t\t}\n\n\t\t\tfunction closeDialog() { dialog.close(); }\n\n\t\t\tcloseBtn.addEventListener('click', closeDialog);\n\t\t\tcancelBtn.addEventListener('click', closeDialog);\n\t\t\tdialog.addEventListener('click', function(e) { if (e.target === dialog) closeDialog(); });\n\n\t\t\tdocument.querySelectorAll('[data-add-account]').forEach(function(btn) {\n\t\t\t\tbtn.addEventListener('click', function() { openDialog(btn.dataset.addAccount); });\n\t\t\t});\n\n\t\t\tsubmitBtn.addEventListener('click', function() {\n\t\t\t\tvar name = nameInput.value.trim();\n\t\t\t\tif (!name) {\n\t\t\t\t\terrorEl.textContent = 'Account name is required.';\n\t\t\t\t\terrorEl.style.display = '';\n\t\t\t\t\tnameInput.focus();\n\t\t\t\t\treturn;\n\t\t\t\t}\n\t\t\t\tif (choice === 'existing' && !existingSelect.value) {\n\t\t\t\t\terrorEl.textContent = 'Select an institution, or choose a different option.';\n\t\t\t\t\terrorEl.style.display = '';\n\t\t\t\t\treturn;\n\t\t\t\t}\n\t\t\t\tif (choice === 'new' && !instNameInput.value.trim()) {\n\t\t\t\t\terrorEl.textContent = 'Institution name is required.';\n\t\t\t\t\terrorEl.style.display = '';\n\t\t\t\t\tinstNameInput.focus();\n\t\t\t\t\treturn;\n\t\t\t\t}\n\n\t\t\t\tsubmitBtn.disabled = true;\n\t\t\t\tsubmitBtn.textContent = 'Creating…';\n\t\t\t\terrorEl.style.display = 'none';\n\n\t\t\t\tvar accountBody = {\n\t\t\t\t\tname:                   name,\n\t\t\t\t\taccount_type:           typeSelect.value,\n\t\t\t\t\tstatus:                 statusSelect.value,\n\t\t\t\t\tstarting_balance_cents: dollarsToCents(balanceInput.value) || 0,\n\t\t\t\t\tinterest_rate:          rateWrap.style.display !== 'none' && rateInput.value.trim() ? parseFloat(rateInput.value) : null,\n\t\t\t\t\tcredit_limit_cents:     limitWrap.style.display !== 'none' ? dollarsToCents(limitInput.value) : null,\n\t\t\t\t};\n\n\t\t\t\tfunction createAccount(institutionId) {\n\t\t\t\t\taccountBody.institution_id = institutionId || null;\n\t\t\t\t\treturn fetch('/api/accounts', {\n\t\t\t\t\t\tmethod: 'POST', headers: {'Content-Type': 'application/json'},\n\t\t\t\t\t\tbody:   JSON.stringify(accountBody),\n\t\t\t\t\t}).then(function(r) {\n\t\t\t\t\t\tif (!r.ok) return r.json().then(function(e) { throw new Error(e.detail || e.title || 'Failed to create account'); });\n\t\t\t\t\t\tcloseDialog();\n\t\t\t\t\t\tlocation.reload();\n\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\tfunction getOrCreateInstitution() {\n\t\t\t\t\tvar instName = instNameInput.value.trim();\n\t\t\t\t\t// Case-insensitive match: reuses existing if user typed different casing,\n\t\t\t\t\t// and also handles the retry case where the institution was already created\n\t\t\t\t\t// during a previous failed submit attempt.\n\t\t\t\t\tvar existing = findInstCI(instName);\n\t\t\t\t\tif (existing) return Promise.resolve(existing.id);\n\t\t\t\t\treturn fetch('/api/institutions', {\n\t\t\t\t\t\tmethod: 'POST', headers: {'Content-Type': 'application/json'},\n\t\t\t\t\t\tbody:   JSON.stringify({ institution_name: instName, source_type: 'csv' }),\n\t\t\t\t\t}).then(function(r) {\n\t\t\t\t\t\tif (r.status === 409) {\n\t\t\t\t\t\t\t// Created in a prior failed attempt but not yet in our local list.\n\t\t\t\t\t\t\t// Re-fetch and find it case-insensitively.\n\t\t\t\t\t\t\treturn fetch('/api/institutions').then(function(r2) { return r2.json(); }).then(function(b) {\n\t\t\t\t\t\t\t\tallInstitutions = Array.isArray(b.data) ? b.data : allInstitutions;\n\t\t\t\t\t\t\t\tvar found = findInstCI(instName);\n\t\t\t\t\t\t\t\tif (!found) throw new Error('Institution name conflict — try a slightly different name.');\n\t\t\t\t\t\t\t\treturn { data: found };\n\t\t\t\t\t\t\t});\n\t\t\t\t\t\t}\n\t\t\t\t\t\tif (!r.ok) return r.json().then(function(e) { throw new Error(e.detail || e.title || 'Failed to create institution'); });\n\t\t\t\t\t\treturn r.json();\n\t\t\t\t\t}).then(function(body) {\n\t\t\t\t\t\t// Keep local list fresh so retries within the same dialog session work.\n\t\t\t\t\t\tif (body.data && !findInstCI(instName)) allInstitutions.push(body.data);\n\t\t\t\t\t\treturn body.data.id;\n\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\tvar p = choice === 'existing' ? createAccount(existingSelect.value)\n\t\t\t\t      : choice === 'new'      ? getOrCreateInstitution().then(createAccount)\n\t\t\t\t      :                         createAccount(null);\n\n\t\t\t\tp.catch(function(err) {\n\t\t\t\t\terrorEl.textContent = err.message || 'Something went wrong. Please try again.';\n\t\t\t\t\terrorEl.style.display = '';\n\t\t\t\t\tsubmitBtn.disabled = false;\n\t\t\t\t\tsubmitBtn.textContent = 'Create account';\n\t\t\t\t});\n\t\t\t});\n\t\t})();\n\t</script>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "<dialog id=\"add-account-dialog\" style=\"background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0;color:var(--text);width:480px;max-width:90vw\"><div style=\"padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between\"><span id=\"add-account-title\" style=\"font-size:15px;font-weight:700\">Add account</span> <button id=\"add-account-close\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:18px;line-height:1;padding:0 4px\">✕</button></div><div style=\"padding:20px;overflow-y:auto;max-height:80vh;display:flex;flex-direction:column;gap:14px\"><!-- Account fields --><div><label style=\"display:block;font-size:12px;color:var(--text3);margin-bottom:4px\" for=\"aa-name\">Name</label> <input id=\"aa-name\" type=\"text\" placeholder=\"e.g. Chase Checking\" style=\"width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:7px 10px;font-size:13px;color:var(--text);outline:none;font-family:inherit\"></div><div style=\"display:flex;gap:12px\"><div style=\"flex:1\"><label style=\"display:block;font-size:12px;color:var(--text3);margin-bottom:4px\" for=\"aa-type\">Account type</label> <select id=\"aa-type\" style=\"width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:7px 10px;font-size:13px;color:var(--text);outline:none;font-family:inherit;cursor:pointer\"><option value=\"checking\">Checking</option> <option value=\"savings\">Savings</option> <option value=\"credit\">Credit</option> <option value=\"loan\">Loan</option> <option value=\"mortgage\">Mortgage</option> <option value=\"investment\">Investment</option></select></div><div style=\"flex:1\"><label style=\"display:block;font-size:12px;color:var(--text3);margin-bottom:4px\" for=\"aa-status\">Status</label> <select id=\"aa-status\" style=\"width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:7px 10px;font-size:13px;color:var(--text);outline:none;font-family:inherit;cursor:pointer\"><option value=\"active\">Active</option> <option value=\"passive\">Passive</option></select></div></div><div><label style=\"display:block;font-size:12px;color:var(--text3);margin-bottom:4px\" for=\"aa-balance\">Starting Balance (optional)</label><div style=\"position:relative\"><span style=\"position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:13px;pointer-events:none\">$</span> <input id=\"aa-balance\" type=\"text\" inputmode=\"decimal\" placeholder=\"0.00\" style=\"width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:7px 10px 7px 18px;font-size:13px;color:var(--text);outline:none;font-family:inherit\"></div></div><div id=\"aa-rate-wrap\" style=\"display:none\"><label style=\"display:block;font-size:12px;color:var(--text3);margin-bottom:4px\" for=\"aa-rate\">Interest rate % (optional)</label> <input id=\"aa-rate\" type=\"text\" inputmode=\"decimal\" placeholder=\"e.g. 19.99\" style=\"width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:7px 10px;font-size:13px;color:var(--text);outline:none;font-family:inherit\"></div><div id=\"aa-limit-wrap\" style=\"display:none\"><label style=\"display:block;font-size:12px;color:var(--text3);margin-bottom:4px\" for=\"aa-limit\">Credit limit (optional)</label><div style=\"position:relative\"><span style=\"position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:13px;pointer-events:none\">$</span> <input id=\"aa-limit\" type=\"text\" inputmode=\"decimal\" placeholder=\"0.00\" style=\"width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:7px 10px 7px 18px;font-size:13px;color:var(--text);outline:none;font-family:inherit\"></div></div><!-- Institution section --><div style=\"border-top:1px solid var(--border);padding-top:14px\"><div style=\"font-size:12px;color:var(--text3);margin-bottom:8px\">Institution</div><div style=\"display:flex;flex-direction:column;gap:8px;margin-bottom:10px\"><label style=\"display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);cursor:pointer\"><input type=\"radio\" name=\"aa-inst-choice\" value=\"skip\" id=\"aa-inst-skip\" checked> Skip for now</label> <label style=\"display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);cursor:pointer\"><input type=\"radio\" name=\"aa-inst-choice\" value=\"existing\" id=\"aa-inst-existing\"> Link to existing institution</label> <label style=\"display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);cursor:pointer\"><input type=\"radio\" name=\"aa-inst-choice\" value=\"new\" id=\"aa-inst-new\"> Create new institution</label></div><!-- Existing institution section --><div id=\"aa-existing-section\" style=\"display:none\"><label style=\"display:block;font-size:12px;color:var(--text3);margin-bottom:4px\" for=\"aa-existing-select\">Institution</label> <select id=\"aa-existing-select\" style=\"width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:7px 10px;font-size:13px;color:var(--text);outline:none;font-family:inherit;cursor:pointer;margin-bottom:8px\"><option value=\"\">Select an institution</option></select><div id=\"aa-existing-empty\" style=\"font-size:12px;color:var(--text3);display:none\">No institutions yet — choose \"Create new institution\" instead.</div><div id=\"aa-existing-preview\" style=\"display:none;padding:12px;background:var(--surface2);border-radius:4px;border:1px solid var(--border)\"></div></div><!-- New institution: name only; column mapping is configured at first upload --><div id=\"aa-new-section\" style=\"display:none\"><label style=\"display:block;font-size:12px;color:var(--text3);margin-bottom:4px\" for=\"aa-inst-name\">Institution name</label> <input id=\"aa-inst-name\" type=\"text\" placeholder=\"e.g. Chase\" autocomplete=\"off\" style=\"width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:7px 10px;font-size:13px;color:var(--text);outline:none;font-family:inherit\"><div id=\"aa-name-status\" style=\"font-size:11px;margin-top:5px;min-height:15px\"></div><div style=\"font-size:11px;color:var(--text3);margin-top:2px\">Column mapping is configured when you upload your first CSV.</div></div></div><div id=\"aa-error\" style=\"font-size:12px;color:var(--commit);display:none\"></div><div style=\"display:flex;gap:8px;justify-content:flex-end;margin-top:4px\"><button id=\"aa-cancel\" style=\"background:transparent;border:1px solid var(--border);border-radius:4px;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit\">Cancel</button> <button id=\"aa-submit\" style=\"background:var(--accent);border:none;border-radius:4px;padding:6px 14px;cursor:pointer;font-size:13px;font-weight:600;color:#fff;font-family:inherit\">Create account</button></div></div></dialog><script>\n\t\t(function() {\n\t\t\tvar dialog       = document.getElementById('add-account-dialog');\n\t\t\tvar titleEl      = document.getElementById('add-account-title');\n\t\t\tvar nameInput    = document.getElementById('aa-name');\n\t\t\tvar typeSelect   = document.getElementById('aa-type');\n\t\t\tvar statusSelect = document.getElementById('aa-status');\n\t\t\tvar balanceInput = document.getElementById('aa-balance');\n\t\t\tvar rateInput    = document.getElementById('aa-rate');\n\t\t\tvar limitInput   = document.getElementById('aa-limit');\n\t\t\tvar rateWrap     = document.getElementById('aa-rate-wrap');\n\t\t\tvar limitWrap    = document.getElementById('aa-limit-wrap');\n\t\t\tvar errorEl      = document.getElementById('aa-error');\n\t\t\tvar submitBtn    = document.getElementById('aa-submit');\n\t\t\tvar cancelBtn    = document.getElementById('aa-cancel');\n\t\t\tvar closeBtn     = document.getElementById('add-account-close');\n\n\t\t\tvar existingSection = document.getElementById('aa-existing-section');\n\t\t\tvar existingSelect  = document.getElementById('aa-existing-select');\n\t\t\tvar existingEmpty   = document.getElementById('aa-existing-empty');\n\t\t\tvar existingPreview = document.getElementById('aa-existing-preview');\n\t\t\tvar newSection      = document.getElementById('aa-new-section');\n\t\t\tvar instNameInput   = document.getElementById('aa-inst-name');\n\t\t\tvar nameStatusEl    = document.getElementById('aa-name-status');\n\n\t\t\tvar allInstitutions = [];\n\t\t\tvar choice = 'skip';\n\n\t\t\tfunction findInstCI(name) {\n\t\t\t\tvar lower = name.toLowerCase();\n\t\t\t\treturn allInstitutions.find(function(i) {\n\t\t\t\t\treturn i.institution_name.toLowerCase() === lower;\n\t\t\t\t}) || null;\n\t\t\t}\n\n\t\t\tinstNameInput.addEventListener('input', function() {\n\t\t\t\tvar match = findInstCI(instNameInput.value.trim());\n\t\t\t\tif (match) {\n\t\t\t\t\tnameStatusEl.textContent = 'Existing: \"' + match.institution_name + '\" — will link to it';\n\t\t\t\t\tnameStatusEl.style.color = 'var(--accent)';\n\t\t\t\t} else {\n\t\t\t\t\tnameStatusEl.textContent = '';\n\t\t\t\t}\n\t\t\t});\n\n\t\t\tfunction dollarsToCents(s) {\n\t\t\t\tvar t = (s || '').trim().replace(/,/g, '');\n\t\t\t\tif (!t) return null;\n\t\t\t\tvar n = parseFloat(t);\n\t\t\t\treturn isNaN(n) ? null : Math.round(n * 100);\n\t\t\t}\n\n\t\t\tfunction updateTypeFields() {\n\t\t\t\tvar t = typeSelect.value;\n\t\t\t\trateWrap.style.display  = (t === 'credit' || t === 'loan' || t === 'mortgage') ? '' : 'none';\n\t\t\t\tlimitWrap.style.display = (t === 'credit') ? '' : 'none';\n\t\t\t}\n\n\t\t\ttypeSelect.addEventListener('change', updateTypeFields);\n\n\t\t\tfunction setChoice(c) {\n\t\t\t\tchoice = c;\n\t\t\t\texistingSection.style.display = c === 'existing' ? '' : 'none';\n\t\t\t\tnewSection.style.display      = c === 'new'      ? '' : 'none';\n\t\t\t}\n\n\t\t\tfunction renderPreview(inst) {\n\t\t\t\tfunction row(label, value) {\n\t\t\t\t\treturn '<div style=\"display:flex;justify-content:space-between;padding:4px 0;font-size:12px\">'\n\t\t\t\t\t\t+ '<span style=\"color:var(--text3)\">' + label + '</span>'\n\t\t\t\t\t\t+ '<span style=\"color:var(--text);font-weight:500\">' + value + '</span>'\n\t\t\t\t\t\t+ '</div>';\n\t\t\t\t}\n\t\t\t\tvar cfg = (inst && inst.mapping_config) ? inst.mapping_config : {};\n\t\t\t\tvar fields = cfg.fields || {};\n\t\t\t\tvar hasMapping = cfg.layout && Object.keys(fields).some(function(k) { return fields[k]; });\n\t\t\t\tvar html = hasMapping\n\t\t\t\t\t? Object.keys(fields).reduce(function(acc, k) {\n\t\t\t\t\t\treturn fields[k] ? acc + row(k, fields[k]) : acc;\n\t\t\t\t\t}, row('Layout', cfg.layout))\n\t\t\t\t\t: '<div style=\"font-size:12px;color:var(--text3)\">No column mapping configured yet.</div>';\n\t\t\t\texistingPreview.innerHTML = html;\n\t\t\t\texistingPreview.style.display = '';\n\t\t\t}\n\n\t\t\tdocument.querySelectorAll('input[name=\"aa-inst-choice\"]').forEach(function(radio) {\n\t\t\t\tradio.addEventListener('change', function() {\n\t\t\t\t\tif (radio.checked) setChoice(radio.value);\n\t\t\t\t});\n\t\t\t});\n\n\t\t\texistingSelect.addEventListener('change', function() {\n\t\t\t\tvar inst = allInstitutions.find(function(i) { return i.id === existingSelect.value; });\n\t\t\t\tif (inst) { renderPreview(inst); }\n\t\t\t\telse { existingPreview.style.display = 'none'; existingPreview.innerHTML = ''; }\n\t\t\t});\n\n\t\t\tfunction loadInstitutions() {\n\t\t\t\tfetch('/api/institutions')\n\t\t\t\t\t.then(function(r) { return r.json(); })\n\t\t\t\t\t.then(function(body) {\n\t\t\t\t\t\tallInstitutions = (body && Array.isArray(body.data) ? body.data : []);\n\t\t\t\t\t\twhile (existingSelect.options.length > 1) existingSelect.remove(1);\n\t\t\t\t\t\tallInstitutions.forEach(function(inst) {\n\t\t\t\t\t\t\tvar opt = document.createElement('option');\n\t\t\t\t\t\t\topt.value = inst.id;\n\t\t\t\t\t\t\topt.textContent = inst.institution_name;\n\t\t\t\t\t\t\texistingSelect.appendChild(opt);\n\t\t\t\t\t\t});\n\t\t\t\t\t\texistingEmpty.style.display = allInstitutions.length === 0 ? '' : 'none';\n\t\t\t\t\t})\n\t\t\t\t\t.catch(function() {});\n\t\t\t}\n\n\t\t\tfunction resetForm(defaultStatus) {\n\t\t\t\tnameInput.value      = '';\n\t\t\t\ttypeSelect.value     = 'checking';\n\t\t\t\tstatusSelect.value   = defaultStatus || 'active';\n\t\t\t\tbalanceInput.value   = '';\n\t\t\t\trateInput.value      = '';\n\t\t\t\tlimitInput.value     = '';\n\t\t\t\tinstNameInput.value  = '';\n\t\t\t\tnameStatusEl.textContent = '';\n\t\t\t\terrorEl.style.display = 'none';\n\t\t\t\texistingSelect.value = '';\n\t\t\t\texistingPreview.style.display = 'none';\n\t\t\t\texistingPreview.innerHTML = '';\n\t\t\t\tdocument.getElementById('aa-inst-skip').checked = true;\n\t\t\t\tsetChoice('skip');\n\t\t\t\tupdateTypeFields();\n\t\t\t}\n\n\t\t\tfunction openDialog(status) {\n\t\t\t\tresetForm(status);\n\t\t\t\ttitleEl.textContent = 'Add ' + status + ' account';\n\t\t\t\tsubmitBtn.disabled = false;\n\t\t\t\tsubmitBtn.textContent = 'Create account';\n\t\t\t\tloadInstitutions();\n\t\t\t\tdialog.showModal();\n\t\t\t\tnameInput.focus();\n\t\t\t}\n\n\t\t\tfunction closeDialog() { dialog.close(); }\n\n\t\t\tcloseBtn.addEventListener('click', closeDialog);\n\t\t\tcancelBtn.addEventListener('click', closeDialog);\n\t\t\tdialog.addEventListener('click', function(e) { if (e.target === dialog) closeDialog(); });\n\n\t\t\tdocument.querySelectorAll('[data-add-account]').forEach(function(btn) {\n\t\t\t\tbtn.addEventListener('click', function() { openDialog(btn.dataset.addAccount); });\n\t\t\t});\n\n\t\t\tsubmitBtn.addEventListener('click', function() {\n\t\t\t\tvar name = nameInput.value.trim();\n\t\t\t\tif (!name) {\n\t\t\t\t\terrorEl.textContent = 'Account name is required.';\n\t\t\t\t\terrorEl.style.display = '';\n\t\t\t\t\tnameInput.focus();\n\t\t\t\t\treturn;\n\t\t\t\t}\n\t\t\t\tif (choice === 'existing' && !existingSelect.value) {\n\t\t\t\t\terrorEl.textContent = 'Select an institution, or choose a different option.';\n\t\t\t\t\terrorEl.style.display = '';\n\t\t\t\t\treturn;\n\t\t\t\t}\n\t\t\t\tif (choice === 'new' && !instNameInput.value.trim()) {\n\t\t\t\t\terrorEl.textContent = 'Institution name is required.';\n\t\t\t\t\terrorEl.style.display = '';\n\t\t\t\t\tinstNameInput.focus();\n\t\t\t\t\treturn;\n\t\t\t\t}\n\n\t\t\t\tsubmitBtn.disabled = true;\n\t\t\t\tsubmitBtn.textContent = 'Creating…';\n\t\t\t\terrorEl.style.display = 'none';\n\n\t\t\t\tvar accountBody = {\n\t\t\t\t\tname:                   name,\n\t\t\t\t\taccount_type:           typeSelect.value,\n\t\t\t\t\tstatus:                 statusSelect.value,\n\t\t\t\t\tstarting_balance_cents: dollarsToCents(balanceInput.value) || 0,\n\t\t\t\t\tinterest_rate:          rateWrap.style.display !== 'none' && rateInput.value.trim() ? parseFloat(rateInput.value) : null,\n\t\t\t\t\tcredit_limit_cents:     limitWrap.style.display !== 'none' ? dollarsToCents(limitInput.value) : null,\n\t\t\t\t};\n\n\t\t\t\tfunction createAccount(institutionId) {\n\t\t\t\t\taccountBody.institution_id = institutionId || null;\n\t\t\t\t\treturn fetch('/api/accounts', {\n\t\t\t\t\t\tmethod: 'POST', headers: {'Content-Type': 'application/json'},\n\t\t\t\t\t\tbody:   JSON.stringify(accountBody),\n\t\t\t\t\t}).then(function(r) {\n\t\t\t\t\t\tif (!r.ok) return r.json().then(function(e) { throw new Error(e.detail || e.title || 'Failed to create account'); });\n\t\t\t\t\t\tcloseDialog();\n\t\t\t\t\t\tlocation.reload();\n\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\tfunction getOrCreateInstitution() {\n\t\t\t\t\tvar instName = instNameInput.value.trim();\n\t\t\t\t\t// Case-insensitive match: reuses existing if user typed different casing,\n\t\t\t\t\t// and also handles the retry case where the institution was already created\n\t\t\t\t\t// during a previous failed submit attempt.\n\t\t\t\t\tvar existing = findInstCI(instName);\n\t\t\t\t\tif (existing) return Promise.resolve(existing.id);\n\t\t\t\t\treturn fetch('/api/institutions', {\n\t\t\t\t\t\tmethod: 'POST', headers: {'Content-Type': 'application/json'},\n\t\t\t\t\t\tbody:   JSON.stringify({ institution_name: instName, source_type: 'csv' }),\n\t\t\t\t\t}).then(function(r) {\n\t\t\t\t\t\tif (r.status === 409) {\n\t\t\t\t\t\t\t// Created in a prior failed attempt but not yet in our local list.\n\t\t\t\t\t\t\t// Re-fetch and find it case-insensitively.\n\t\t\t\t\t\t\treturn fetch('/api/institutions').then(function(r2) { return r2.json(); }).then(function(b) {\n\t\t\t\t\t\t\t\tallInstitutions = Array.isArray(b.data) ? b.data : allInstitutions;\n\t\t\t\t\t\t\t\tvar found = findInstCI(instName);\n\t\t\t\t\t\t\t\tif (!found) throw new Error('Institution name conflict — try a slightly different name.');\n\t\t\t\t\t\t\t\treturn { data: found };\n\t\t\t\t\t\t\t});\n\t\t\t\t\t\t}\n\t\t\t\t\t\tif (!r.ok) return r.json().then(function(e) { throw new Error(e.detail || e.title || 'Failed to create institution'); });\n\t\t\t\t\t\treturn r.json();\n\t\t\t\t\t}).then(function(body) {\n\t\t\t\t\t\t// Keep local list fresh so retries within the same dialog session work.\n\t\t\t\t\t\tif (body.data && !findInstCI(instName)) allInstitutions.push(body.data);\n\t\t\t\t\t\treturn body.data.id;\n\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\tvar p = choice === 'existing' ? createAccount(existingSelect.value)\n\t\t\t\t      : choice === 'new'      ? getOrCreateInstitution().then(createAccount)\n\t\t\t\t      :                         createAccount(null);\n\n\t\t\t\tp.catch(function(err) {\n\t\t\t\t\terrorEl.textContent = err.message || 'Something went wrong. Please try again.';\n\t\t\t\t\terrorEl.style.display = '';\n\t\t\t\t\tsubmitBtn.disabled = false;\n\t\t\t\t\tsubmitBtn.textContent = 'Create account';\n\t\t\t\t});\n\t\t\t});\n\t\t})();\n\t</script>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -765,61 +842,61 @@ func userMenu(user ShellUser, currentPath string) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var38 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var38 == nil {
-			templ_7745c5c3_Var38 = templ.NopComponent
+		templ_7745c5c3_Var41 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var41 == nil {
+			templ_7745c5c3_Var41 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "<details class=\"user-menu\"><summary>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "<details class=\"user-menu\" style=\"position:relative\"><summary class=\"user-menu-summary\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var39 string
-		templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinStringErrs(Initials(user.Name, user.Email))
+		var templ_7745c5c3_Var42 string
+		templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinStringErrs(Initials(user.Name, user.Email))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 624, Col: 44}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 671, Col: 70}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var39))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "</summary><div class=\"user-menu-dropdown\"><div class=\"user-menu-info\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "</summary><div class=\"user-menu-dropdown\"><div class=\"user-menu-info\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if user.Name != "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "<div class=\"user-menu-name\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "<div class=\"user-menu-name\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var40 string
-			templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.JoinStringErrs(user.Name)
+			var templ_7745c5c3_Var43 string
+			templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(user.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 628, Col: 44}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 675, Col: 44}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var40))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "<div class=\"user-menu-email\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "<div class=\"user-menu-email\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var41 string
-		templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(user.Email)
+		var templ_7745c5c3_Var44 string
+		templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinStringErrs(user.Email)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 630, Col: 45}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 677, Col: 45}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var44))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "</div></div><form method=\"POST\" action=\"/logout\"><button type=\"submit\" class=\"user-menu-btn\">Sign out</button></form></div></details>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "</div></div><form method=\"POST\" action=\"/logout\"><button type=\"submit\" class=\"user-menu-btn\">Sign out</button></form></div></details>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -844,12 +921,12 @@ func iconBarChart2() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var42 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var42 == nil {
-			templ_7745c5c3_Var42 = templ.NopComponent
+		templ_7745c5c3_Var45 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var45 == nil {
+			templ_7745c5c3_Var45 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polyline points=\"18 20 18 10\"></polyline> <polyline points=\"12 20 12 4\"></polyline> <polyline points=\"6 20 6 14\"></polyline></svg>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polyline points=\"18 20 18 10\"></polyline> <polyline points=\"12 20 12 4\"></polyline> <polyline points=\"6 20 6 14\"></polyline></svg>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -873,12 +950,12 @@ func iconFileText() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var43 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var43 == nil {
-			templ_7745c5c3_Var43 = templ.NopComponent
+		templ_7745c5c3_Var46 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var46 == nil {
+			templ_7745c5c3_Var46 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"></path> <polyline points=\"14 2 14 8 20 8\"></polyline> <line x1=\"16\" y1=\"13\" x2=\"8\" y2=\"13\"></line> <line x1=\"16\" y1=\"17\" x2=\"8\" y2=\"17\"></line> <polyline points=\"10 9 9 9 8 9\"></polyline></svg>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"></path> <polyline points=\"14 2 14 8 20 8\"></polyline> <line x1=\"16\" y1=\"13\" x2=\"8\" y2=\"13\"></line> <line x1=\"16\" y1=\"17\" x2=\"8\" y2=\"17\"></line> <polyline points=\"10 9 9 9 8 9\"></polyline></svg>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -902,12 +979,12 @@ func iconCheckSquare() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var44 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var44 == nil {
-			templ_7745c5c3_Var44 = templ.NopComponent
+		templ_7745c5c3_Var47 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var47 == nil {
+			templ_7745c5c3_Var47 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polyline points=\"9 11 12 14 22 4\"></polyline> <path d=\"M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11\"></path></svg>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polyline points=\"9 11 12 14 22 4\"></polyline> <path d=\"M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11\"></path></svg>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -931,12 +1008,12 @@ func iconActivity() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var45 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var45 == nil {
-			templ_7745c5c3_Var45 = templ.NopComponent
+		templ_7745c5c3_Var48 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var48 == nil {
+			templ_7745c5c3_Var48 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polyline points=\"22 12 18 12 15 21 9 3 6 12 2 12\"></polyline></svg>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polyline points=\"22 12 18 12 15 21 9 3 6 12 2 12\"></polyline></svg>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -960,12 +1037,12 @@ func iconSettings() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var46 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var46 == nil {
-			templ_7745c5c3_Var46 = templ.NopComponent
+		templ_7745c5c3_Var49 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var49 == nil {
+			templ_7745c5c3_Var49 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"3\"></circle> <path d=\"M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z\"></path></svg>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 57, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"3\"></circle> <path d=\"M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z\"></path></svg>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -989,12 +1066,12 @@ func iconBookOpen() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var47 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var47 == nil {
-			templ_7745c5c3_Var47 = templ.NopComponent
+		templ_7745c5c3_Var50 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var50 == nil {
+			templ_7745c5c3_Var50 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z\"></path> <path d=\"M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z\"></path></svg>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z\"></path> <path d=\"M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z\"></path></svg>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1018,12 +1095,12 @@ func iconSlidersHorizontal() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var48 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var48 == nil {
-			templ_7745c5c3_Var48 = templ.NopComponent
+		templ_7745c5c3_Var51 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var51 == nil {
+			templ_7745c5c3_Var51 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"21\" y1=\"4\" x2=\"14\" y2=\"4\"></line> <line x1=\"10\" y1=\"4\" x2=\"3\" y2=\"4\"></line> <line x1=\"21\" y1=\"12\" x2=\"12\" y2=\"12\"></line> <line x1=\"8\" y1=\"12\" x2=\"3\" y2=\"12\"></line> <line x1=\"21\" y1=\"20\" x2=\"16\" y2=\"20\"></line> <line x1=\"12\" y1=\"20\" x2=\"3\" y2=\"20\"></line> <circle cx=\"12\" cy=\"4\" r=\"2\"></circle> <circle cx=\"10\" cy=\"12\" r=\"2\"></circle> <circle cx=\"16\" cy=\"20\" r=\"2\"></circle></svg>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"21\" y1=\"4\" x2=\"14\" y2=\"4\"></line> <line x1=\"10\" y1=\"4\" x2=\"3\" y2=\"4\"></line> <line x1=\"21\" y1=\"12\" x2=\"12\" y2=\"12\"></line> <line x1=\"8\" y1=\"12\" x2=\"3\" y2=\"12\"></line> <line x1=\"21\" y1=\"20\" x2=\"16\" y2=\"20\"></line> <line x1=\"12\" y1=\"20\" x2=\"3\" y2=\"20\"></line> <circle cx=\"12\" cy=\"4\" r=\"2\"></circle> <circle cx=\"10\" cy=\"12\" r=\"2\"></circle> <circle cx=\"16\" cy=\"20\" r=\"2\"></circle></svg>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1047,12 +1124,12 @@ func iconPlus() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var49 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var49 == nil {
-			templ_7745c5c3_Var49 = templ.NopComponent
+		templ_7745c5c3_Var52 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var52 == nil {
+			templ_7745c5c3_Var52 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"13\" height=\"13\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"12\" y1=\"5\" x2=\"12\" y2=\"19\"></line> <line x1=\"5\" y1=\"12\" x2=\"19\" y2=\"12\"></line></svg>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 60, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"13\" height=\"13\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"12\" y1=\"5\" x2=\"12\" y2=\"19\"></line> <line x1=\"5\" y1=\"12\" x2=\"19\" y2=\"12\"></line></svg>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

@@ -36,14 +36,78 @@ html, body {
   background: var(--bg);
 }
 
+.app-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* ─── App top bar ────────────────────────────────────────────────────────── */
+
+.app-topbar {
+  height: 52px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 12px 0 20px;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.app-topbar-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.02em;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-topbar-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--surface2);
+  color: var(--text2);
+  flex-shrink: 0;
+}
+
+.app-topbar-rail {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ─── Granularity toggle ─────────────────────────────────────────────────── */
+
+.gran-toggle { display: flex; gap: 3px; }
+
+.gran-btn {
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text2);
+  font-family: inherit;
+  line-height: 1.4;
+}
+
 .app-main {
   flex: 1;
   overflow: auto;
   display: flex;
   flex-direction: column;
   min-width: 0;
-  /* Reserve space so fixed user-menu (right:16px, 32px wide) never overlaps content */
-  padding-right: 56px;
 }
 
 /* ─── Sidebar ───────────────────────────────────────────────────────────── */
@@ -172,24 +236,19 @@ html, body {
   margin-left: auto;
 }
 
-/* ─── User menu (details/summary) ──────────────────────────────────────── */
+/* ─── User menu (details/summary, inline in app-topbar) ─────────────────── */
 
-.user-menu {
-  position: fixed;
-  top: 12px;
-  right: 16px;
-  z-index: 100;
-}
+.user-menu { position: relative; }
 
-.user-menu summary {
-  width: 32px;
-  height: 32px;
+.user-menu-summary {
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   background: var(--accent);
   border: none;
   cursor: pointer;
   color: #fff;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.02em;
   display: flex;
@@ -198,11 +257,11 @@ html, body {
   list-style: none;
   user-select: none;
 }
-.user-menu summary::-webkit-details-marker { display: none; }
+.user-menu-summary::-webkit-details-marker { display: none; }
 
 .user-menu-dropdown {
   position: absolute;
-  top: 40px;
+  top: calc(100% + 6px);
   right: 0;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -210,6 +269,7 @@ html, body {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
   min-width: 200px;
   padding: 8px 0;
+  z-index: 200;
 }
 .user-menu-info {
   padding: 8px 14px 10px;
