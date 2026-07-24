@@ -312,11 +312,22 @@ func (s *Server) PostSessionRefresh(c echo.Context) error {
 
 // ─── Page handlers ───────────────────────────────────────────────────────────
 
+// BudgetGroup holds a label group with pre-computed aggregate rates for display.
+type BudgetGroup struct {
+	LabelID          *string
+	LabelName        *string
+	Entries          []store.EntryRow
+	ActualRatePerDay float64
+	DriftPerDay      float64
+}
+
 // BudgetData is passed to the Budget page template.
 type BudgetData struct {
-	Summary store.SnapshotSummary
-	Income  []store.EntryRow
-	Commits []store.EntryRow
+	Summary         store.SnapshotSummary
+	MarginRate      float64
+	TotalIncomeRate float64
+	Income          []store.EntryRow
+	CommitGroups    []BudgetGroup
 }
 
 func (s *Server) Budget(c echo.Context) error {
@@ -324,22 +335,63 @@ func (s *Server) Budget(c echo.Context) error {
 	entityID := middleware.EntityID(ctx)
 
 	summary, _ := s.store.GetSnapshotSummary(ctx, entityID)
-
 	entries, _ := s.store.ListEntries(ctx, entityID, store.DateRange{}, "", "live", 500, "")
 
-	var income, commits []store.EntryRow
+	var income []store.EntryRow
+	groupIdx := make(map[string]int)
+	var commitGroups []BudgetGroup
+
 	for _, e := range entries {
 		if e.Direction == "income" {
 			income = append(income, e)
+			continue
+		}
+		key := "__null__"
+		if e.LabelID != nil {
+			key = *e.LabelID
+		}
+		if idx, ok := groupIdx[key]; ok {
+			commitGroups[idx].Entries = append(commitGroups[idx].Entries, e)
+			if e.ActualRatePerDay != nil {
+				commitGroups[idx].ActualRatePerDay += *e.ActualRatePerDay
+			}
+			if e.SnapshotDriftPerDay != nil {
+				commitGroups[idx].DriftPerDay += *e.SnapshotDriftPerDay
+			}
 		} else {
-			commits = append(commits, e)
+			groupIdx[key] = len(commitGroups)
+			g := BudgetGroup{Entries: []store.EntryRow{e}}
+			if e.LabelID != nil {
+				lid := *e.LabelID
+				g.LabelID = &lid
+			}
+			if e.LabelName != nil {
+				lname := *e.LabelName
+				g.LabelName = &lname
+			}
+			if e.ActualRatePerDay != nil {
+				g.ActualRatePerDay = *e.ActualRatePerDay
+			}
+			if e.SnapshotDriftPerDay != nil {
+				g.DriftPerDay = *e.SnapshotDriftPerDay
+			}
+			commitGroups = append(commitGroups, g)
+		}
+	}
+
+	var totalIncomeRate float64
+	for _, e := range income {
+		if e.ActualRatePerDay != nil {
+			totalIncomeRate += *e.ActualRatePerDay
 		}
 	}
 
 	return s.render(c, BudgetPage(s.buildShellData(c.Request()), BudgetData{
-		Summary: summary,
-		Income:  income,
-		Commits: commits,
+		Summary:         summary,
+		MarginRate:      summary.IncomeRate - summary.SpendRate,
+		TotalIncomeRate: totalIncomeRate,
+		Income:          income,
+		CommitGroups:    commitGroups,
 	}))
 }
 
@@ -691,6 +743,51 @@ func fmtRateYr(r *float64) string {
 	return fmt.Sprintf("$%.2f/yr", v)
 }
 
+// fmtRateDaySigned formats a cents/day rate as signed $/day. Nil means no data (—), zero means $0.00.
+func fmtRateDaySigned(r *float64) string {
+	if r == nil {
+		return "—"
+	}
+	v := *r / 100.0
+	if v > 0 {
+		return fmt.Sprintf("+$%.2f/day", v)
+	}
+	if v < 0 {
+		return fmt.Sprintf("−$%.2f/day", -v)
+	}
+	return "$0.00/day"
+}
+
+// fmtRateMoSigned formats a cents/day rate as signed $/mo (× 30.44). Nil means no data (—), zero means $0.
+func fmtRateMoSigned(r *float64) string {
+	if r == nil {
+		return "—"
+	}
+	v := *r / 100.0 * 30.44
+	if v > 0 {
+		return fmt.Sprintf("+$%.0f/mo", v)
+	}
+	if v < 0 {
+		return fmt.Sprintf("−$%.0f/mo", -v)
+	}
+	return "$0/mo"
+}
+
+// fmtRateYrSigned formats a cents/day rate as signed $/yr (× 365). Nil means no data (—), zero means $0.
+func fmtRateYrSigned(r *float64) string {
+	if r == nil {
+		return "—"
+	}
+	v := *r / 100.0 * 365
+	if v > 0 {
+		return fmt.Sprintf("+$%.0f/yr", v)
+	}
+	if v < 0 {
+		return fmt.Sprintf("−$%.0f/yr", -v)
+	}
+	return "$0/yr"
+}
+
 // fitPct formats a fitness/fit float as a percentage string.
 func fitPct(f *float64) string {
 	if f == nil {
@@ -877,6 +974,7 @@ func (s *Server) Glossary(c echo.Context) error {
 // ReportsData is passed to the Reports page template.
 type ReportsData struct {
 	Summary     store.SnapshotSummary
+	MarginRate  float64
 	Projections []store.Projection
 	PinchCount  int
 }
@@ -912,6 +1010,7 @@ func (s *Server) Reports(c echo.Context) error {
 
 	return s.render(c, ReportsPage(s.buildShellData(c.Request()), ReportsData{
 		Summary:     summary,
+		MarginRate:  summary.IncomeRate - summary.SpendRate,
 		Projections: projections,
 		PinchCount:  pinchCount,
 	}))
