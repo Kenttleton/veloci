@@ -898,7 +898,7 @@ mod tests {
 
     #[test]
     fn pinch_point_when_spend_exceeds_income() {
-        let income  = make_entry(ENTRY_1, "income",  30, 10_000.0, Some("2026-03-01"), Some("interval:30"));
+        let income  = make_entry(ENTRY_1, "income",  Some(30), 10_000.0, Some("2026-03-01"), Some("interval:30"));
         let spend = make_entry(ENTRY_2, "spend", Some(30), 20_000.0, Some("2026-03-01"), Some("interval:30"));
         let rates = std::collections::HashMap::new();
         let rows = project_account(
@@ -915,7 +915,7 @@ mod tests {
 
     #[test]
     fn no_pinch_point_when_income_exceeds_spend() {
-        let income  = make_entry(ENTRY_1, "income",  30, 20_000.0, Some("2026-03-01"), Some("interval:30"));
+        let income  = make_entry(ENTRY_1, "income",  Some(30), 20_000.0, Some("2026-03-01"), Some("interval:30"));
         let spend = make_entry(ENTRY_2, "spend", Some(30), 10_000.0, Some("2026-03-01"), Some("interval:30"));
         let rates = std::collections::HashMap::new();
         let rows = project_account(

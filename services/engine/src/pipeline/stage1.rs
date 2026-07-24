@@ -464,6 +464,7 @@ fn tree_has_entry_targets(tree: &CompiledConditionTree) -> bool {
             tree_has_entry_targets(a) || tree_has_entry_targets(b)
         }
         CompiledConditionTree::LabelMatched(_)
+        | CompiledConditionTree::EntryDirection(_)
         | CompiledConditionTree::EntryType(_)
         | CompiledConditionTree::EntryPeriod { .. }
         | CompiledConditionTree::EntrySource(_)
@@ -649,14 +650,24 @@ fn evaluate(
             if label_index.contains(label_id) { Some(1.0) } else { None }
         }
 
-        // Transaction-target: matches sign of amount_cents to entry direction.
+        // Combines txn sign with accumulated sub-entry directions. An entry can
+        // have both transaction children AND sub-entry children simultaneously,
+        // so both signal sources must be merged before comparing against `dir`.
         CompiledConditionTree::EntryDirection(dir) => {
             use crate::pipeline::types::Direction;
-            match dir {
-                Direction::Income => if txn.amount_cents > 0 { Some(1.0) } else { None },
-                Direction::Spend  => if txn.amount_cents < 0 { Some(1.0) } else { None },
-                Direction::Mixed  => Some(1.0),
-            }
+            let has_income = txn.amount_cents > 0
+                || accumulated.iter().any(|e| matches!(e.direction, Direction::Income | Direction::Mixed));
+            let has_spend = txn.amount_cents < 0
+                || accumulated.iter().any(|e| matches!(e.direction, Direction::Spend | Direction::Mixed));
+            let matched = match dir {
+                Direction::Income => has_income && !has_spend,
+                Direction::Spend  => has_spend && !has_income,
+                // Mixed can only be confirmed when both signal types are present.
+                // With no accumulated context a single txn cannot rule it out, so
+                // we treat it as permissive (any txn could belong to a Mixed entry).
+                Direction::Mixed  => if accumulated.is_empty() { true } else { has_income && has_spend },
+            };
+            if matched { Some(1.0) } else { None }
         }
 
         CompiledConditionTree::EntryType(et) => {
@@ -1780,9 +1791,11 @@ mod tests {
     // --- evaluate: false with empty accumulated ---
 
     #[test]
-    fn entry_direction_false_with_empty_accumulated() {
+    fn entry_direction_spend_with_empty_accumulated() {
+        // any_txn() has amount_cents = -1000 (negative). An entry with no prior
+        // matches defaults to Spend — the txn sign determines direction.
         let txn = any_txn();
-        assert!(!eval_with_accumulated(
+        assert!(eval_with_accumulated(
             json!({"type": "entry_direction", "direction": "spend"}),
             &txn,
             &[]
