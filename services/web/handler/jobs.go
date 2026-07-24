@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
@@ -182,17 +183,8 @@ func (h *JobsHandler) StreamJobs(c echo.Context) error {
 	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
 
-	w := c.Response()
-	flusher, ok := w.Writer.(http.Flusher)
-	if !ok {
-		return echo.NewHTTPError(http.StatusInternalServerError, "streaming not supported")
-	}
-
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("X-Accel-Buffering", "no")
-
+	// Acquire DB connection and start LISTEN before committing SSE headers so
+	// setup errors can still return a clean HTTP error response.
 	conn, err := h.pool.Acquire(ctx)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
@@ -205,6 +197,18 @@ func (h *JobsHandler) StreamJobs(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 
+	w := c.Response()
+	flusher, ok := w.Writer.(http.Flusher)
+	if !ok {
+		return echo.NewHTTPError(http.StatusInternalServerError, "streaming not supported")
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.WriteHeader(http.StatusOK)
+
 	activeJobs, err := h.s.ListActiveJobs(ctx, entityID)
 	if err == nil {
 		for _, j := range activeJobs {
@@ -212,21 +216,25 @@ func (h *JobsHandler) StreamJobs(c echo.Context) error {
 			b, _ := json.Marshal(event)
 			fmt.Fprintf(w, "data: %s\n\n", b)
 		}
-		flusher.Flush()
 	}
+	flusher.Flush()
 
 	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		default:
-		}
+		// Use a 25s timeout so we can send keepalives on idle connections; this
+		// prevents proxies and browsers from closing the stream between events.
+		waitCtx, cancel := context.WithTimeout(ctx, 25*time.Second)
+		notification, err := rawConn.WaitForNotification(waitCtx)
+		cancel()
 
-		notification, err := rawConn.WaitForNotification(ctx)
+		if ctx.Err() != nil {
+			return nil
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			fmt.Fprintf(w, ": keepalive\n\n")
+			flusher.Flush()
+			continue
+		}
 		if err != nil {
-			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-				return nil
-			}
 			return nil
 		}
 
