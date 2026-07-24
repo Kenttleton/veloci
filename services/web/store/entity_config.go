@@ -75,7 +75,7 @@ func (s *Store) EnsureSystemData(ctx context.Context, entityID string) error {
 		if dir == "spend" {
 			labelName = "Spend"
 		}
-		conds := `{"entry_direction": "` + dir + `"}`
+		conds := `{"type": "entry_direction", "direction": "` + dir + `"}`
 
 		_, err := s.pool.Exec(ctx, `
 			INSERT INTO entries (

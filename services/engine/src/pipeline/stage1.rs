@@ -418,6 +418,10 @@ pub async fn run(entity_id: Uuid, pool: &PgPool) -> Result<Stage1Output> {
         .collect();
     update_next_due_dates(entity_id, &matched_entry_ids, pool).await?;
 
+    // Write back matched_transaction_count and fitness to ALL live entries so
+    // user-created and system entries reflect current assignment state.
+    update_live_entry_stats(entity_id, pool).await?;
+
     Ok(Stage1Output {
         total_assignments,
         unmatched_tx_ids,
@@ -1111,6 +1115,40 @@ async fn persist_assignments(
     .await
     .context("failed to insert entry assignments")?;
 
+    Ok(())
+}
+
+/// Write matched_transaction_count and fitness back to all live entries.
+///
+/// Since persist_assignments does a full delete-then-insert for idempotency,
+/// we recalculate from the current transaction_entry_assignments state after
+/// each engine run. This covers user-created and system entries that stage 2
+/// never touches.
+async fn update_live_entry_stats(entity_id: Uuid, pool: &PgPool) -> Result<()> {
+    sqlx::query(
+        r#"
+        UPDATE entries e
+        SET
+            matched_transaction_count = COALESCE(sub.cnt, 0),
+            fitness                   = sub.avg_fit
+        FROM (
+            SELECT
+                e2.id,
+                COUNT(tea.transaction_id)                                                        AS cnt,
+                CASE WHEN COUNT(tea.transaction_id) > 0 THEN AVG(tea.fit) ELSE NULL END         AS avg_fit
+            FROM entries e2
+            LEFT JOIN transaction_entry_assignments tea ON tea.entry_id = e2.id
+            LEFT JOIN transactions t ON t.id = tea.transaction_id AND t.entity_id = $1
+            WHERE e2.entity_id = $1 AND e2.status = 'live'
+            GROUP BY e2.id
+        ) sub
+        WHERE e.id = sub.id AND e.entity_id = $1
+        "#,
+    )
+    .bind(entity_id)
+    .execute(pool)
+    .await
+    .context("failed to update live entry stats")?;
     Ok(())
 }
 

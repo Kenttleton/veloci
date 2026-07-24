@@ -182,9 +182,9 @@ func (s *Store) ListLabelsWithEntryCount(ctx context.Context, entityID string) (
 		       COUNT(e.id)::int AS entry_count
 		FROM labels l
 		LEFT JOIN entries e ON e.label_id = l.id AND e.entity_id = l.entity_id
-		WHERE l.entity_id = $1 AND l.scope IS DISTINCT FROM 'system'
+		WHERE l.entity_id = $1
 		GROUP BY l.id, l.entity_id, l.name, l.scope, l.created_at
-		ORDER BY l.created_at DESC, l.id DESC
+		ORDER BY l.scope DESC NULLS LAST, l.created_at DESC, l.id DESC
 	`, entityID)
 	if err != nil {
 		return nil, err

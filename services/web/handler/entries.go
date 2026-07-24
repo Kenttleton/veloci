@@ -408,6 +408,9 @@ func (h *EntriesHandler) UpdateEntryConditions(c echo.Context) error {
 	if errors.Is(err, pgx.ErrNoRows) {
 		return echo.NewHTTPError(http.StatusNotFound, "not found")
 	}
+	if errors.Is(err, store.ErrSystemEntry) {
+		return echo.NewHTTPError(http.StatusForbidden, "system entries cannot be modified")
+	}
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/labstack/echo/v4"
@@ -69,7 +70,7 @@ const SessionCookie = "veloci_session"
 func AuthenticateCookieOrRedirect(client *authclient.Client) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			loginURL := "/login?next=" + c.Request().URL.RequestURI()
+			loginURL := "/login?next=" + url.QueryEscape(c.Request().URL.RequestURI())
 			cookie, err := c.Cookie(SessionCookie)
 			if err != nil || cookie.Value == "" {
 				return c.Redirect(http.StatusFound, loginURL)

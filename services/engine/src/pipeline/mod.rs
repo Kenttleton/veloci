@@ -32,7 +32,7 @@ pub mod stage6;
 pub mod stage7;
 pub mod types;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use uuid::Uuid;
 
 use crate::db::Pools;
@@ -189,6 +189,30 @@ async fn run_from_stage3(
     }
 
     tracing::info!(%entity_id, "flux window day-crawl complete");
+
+    // Sync projected_rate_per_day back to system entries from their latest snapshot.
+    // User-created entries keep their manually set projection; system entries
+    // (Income, Spend) derive their rate from actual matched transactions.
+    sqlx::query(
+        r#"
+        UPDATE entries e
+        SET projected_rate_per_day = s.projected_rate_per_day
+        FROM (
+            SELECT DISTINCT ON (node_id) node_id, projected_rate_per_day
+            FROM snapshots
+            WHERE entity_id = $1 AND node_type = 'entry'
+            ORDER BY node_id, snapshot_date DESC
+        ) s
+        WHERE e.id = s.node_id
+          AND e.entity_id = $1
+          AND e.scope = 'system'
+          AND e.status = 'live'
+        "#,
+    )
+    .bind(entity_id)
+    .execute(&pools.write)
+    .await
+    .context("failed to sync projected_rate for system entries")?;
 
     // Stage 7: Cash flow projection (write pool for final INSERT)
     run_stage7(entity_id, job_id, computed_as_of, pools).await

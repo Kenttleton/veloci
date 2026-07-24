@@ -389,6 +389,17 @@ func (s *Store) UpdateEntryConditions(ctx context.Context, entityID, id string, 
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
+	var scope *string
+	if err := tx.QueryRow(ctx, `SELECT scope FROM entries WHERE entity_id = $1 AND id = $2::uuid`, entityID, id).Scan(&scope); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return EntryRow{}, pgx.ErrNoRows
+		}
+		return EntryRow{}, err
+	}
+	if scope != nil && *scope == "system" {
+		return EntryRow{}, ErrSystemEntry
+	}
+
 	tag, err := tx.Exec(ctx, `
 		UPDATE entries
 		SET conditions = $3, status = 'pending'

@@ -114,8 +114,16 @@ templ ConfigurationPage(shell ShellData, data ConfigurationData) {
 					return tr;
 				}
 
-				function labelRowHTML(id, name, entryCount, editing) {
+				function labelRowHTML(id, name, entryCount, editing, isSystem) {
 					var countStr = entryCount > 0 ? entryCount + ' entr' + (entryCount === 1 ? 'y' : 'ies') : '—';
+					if (isSystem) {
+						return '<td style="padding:8px 12px;font-size:13px;color:var(--text2)">' + escHtml(name) +
+							'<span style="margin-left:6px;font-size:10px;font-weight:600;padding:1px 5px;border-radius:10px;background:var(--surface2);color:var(--text3)">System</span></td>' +
+							'<td style="padding:8px 12px;font-size:12px;color:var(--text2)">' + countStr + '</td>' +
+							'<td style="padding:8px 12px">' +
+							  '<button class="js-label-where-used" data-label-id="' + id + '" data-label-name="' + escHtml(name) + '" style="background:none;border:none;cursor:pointer;color:var(--accent);font-size:12px;font-family:inherit;padding:0">Where used</button>' +
+							'</td>';
+					}
 					if (editing) {
 						return '<td style="padding:8px 12px"><input class="label-edit-input" data-label-id="' + id + '" type="text" value="' + escHtml(name) + '" style="background:var(--surface2);border:1px solid var(--accent);border-radius:4px;padding:4px 8px;font-size:13px;color:var(--text);outline:none;width:100%"/><div class="label-edit-error" style="font-size:11px;color:var(--commit);margin-top:2px"></div></td>' +
 							'<td style="padding:8px 12px;font-size:12px;color:var(--text2)">' + countStr + '</td>' +
@@ -602,6 +610,9 @@ templ cfgLabelsSection(labels []store.LabelWithCount) {
 						for i, l := range labels {
 							<tr
 								data-label-id={ l.ID }
+								if l.Scope != nil && *l.Scope == "system" {
+									data-is-system="1"
+								}
 								style={ func() string {
 									if i < len(labels)-1 {
 										return "border-bottom:1px solid var(--border)"
@@ -609,37 +620,59 @@ templ cfgLabelsSection(labels []store.LabelWithCount) {
 									return ""
 								}() }
 							>
-								<td
-									class="js-label-name-cell"
-									data-label-id={ l.ID }
-									data-label-name={ l.Name }
-									data-entry-count={ fmt.Sprintf("%d", l.EntryCount) }
-									style="padding:8px 12px;font-size:13px;color:var(--text);cursor:pointer"
-								>{ l.Name }</td>
-								<td style="padding:8px 12px;font-size:12px;color:var(--text2)">
-									if l.EntryCount > 0 {
-										{ fmt.Sprintf("%d", l.EntryCount) }
-										if l.EntryCount == 1 {
-											{ " entry" }
+								if l.Scope != nil && *l.Scope == "system" {
+									<td style="padding:8px 12px;font-size:13px;color:var(--text2)">
+										{ l.Name }
+										<span style="margin-left:6px;font-size:10px;font-weight:600;padding:1px 5px;border-radius:10px;background:var(--surface2);color:var(--text3)">System</span>
+									</td>
+									<td style="padding:8px 12px;font-size:12px;color:var(--text2)">
+										if l.EntryCount > 0 {
+											{ fmt.Sprintf("%d", l.EntryCount) }
+											if l.EntryCount == 1 {
+												{ " entry" }
+											} else {
+												{ " entries" }
+											}
 										} else {
-											{ " entries" }
+											<span style="color:var(--text3)">—</span>
 										}
-									} else {
-										<span style="color:var(--text3)">—</span>
-									}
-								</td>
-								<td style="padding:8px 12px">
-									<div class="js-label-actions-normal" style="display:flex;gap:6px">
+									</td>
+									<td style="padding:8px 12px">
 										<button class="js-label-where-used" data-label-id={ l.ID } data-label-name={ l.Name } style="background:none;border:none;cursor:pointer;color:var(--accent);font-size:12px;font-family:inherit;padding:0">Where used</button>
-										<button class="js-label-rename" data-label-id={ l.ID } data-label-name={ l.Name } data-entry-count={ fmt.Sprintf("%d", l.EntryCount) } style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:0">Rename</button>
-										<button class="js-label-delete" data-label-id={ l.ID } style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit;padding:0">Delete</button>
-									</div>
-									<div class="js-label-delete-confirm" style="display:none;align-items:center;gap:4px">
-										<span style="font-size:11px;color:var(--commit)">Delete?</span>
-										<button class="js-label-delete-yes" data-label-id={ l.ID } style="background:none;border:none;cursor:pointer;color:var(--commit);font-size:11px;font-family:inherit;padding:2px 4px">Yes</button>
-										<button class="js-label-delete-no" data-label-id={ l.ID } style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:11px;font-family:inherit;padding:2px 4px">No</button>
-									</div>
-								</td>
+									</td>
+								} else {
+									<td
+										class="js-label-name-cell"
+										data-label-id={ l.ID }
+										data-label-name={ l.Name }
+										data-entry-count={ fmt.Sprintf("%d", l.EntryCount) }
+										style="padding:8px 12px;font-size:13px;color:var(--text);cursor:pointer"
+									>{ l.Name }</td>
+									<td style="padding:8px 12px;font-size:12px;color:var(--text2)">
+										if l.EntryCount > 0 {
+											{ fmt.Sprintf("%d", l.EntryCount) }
+											if l.EntryCount == 1 {
+												{ " entry" }
+											} else {
+												{ " entries" }
+											}
+										} else {
+											<span style="color:var(--text3)">—</span>
+										}
+									</td>
+									<td style="padding:8px 12px">
+										<div class="js-label-actions-normal" style="display:flex;gap:6px">
+											<button class="js-label-where-used" data-label-id={ l.ID } data-label-name={ l.Name } style="background:none;border:none;cursor:pointer;color:var(--accent);font-size:12px;font-family:inherit;padding:0">Where used</button>
+											<button class="js-label-rename" data-label-id={ l.ID } data-label-name={ l.Name } data-entry-count={ fmt.Sprintf("%d", l.EntryCount) } style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:0">Rename</button>
+											<button class="js-label-delete" data-label-id={ l.ID } style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit;padding:0">Delete</button>
+										</div>
+										<div class="js-label-delete-confirm" style="display:none;align-items:center;gap:4px">
+											<span style="font-size:11px;color:var(--commit)">Delete?</span>
+											<button class="js-label-delete-yes" data-label-id={ l.ID } style="background:none;border:none;cursor:pointer;color:var(--commit);font-size:11px;font-family:inherit;padding:2px 4px">Yes</button>
+											<button class="js-label-delete-no" data-label-id={ l.ID } style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:11px;font-family:inherit;padding:2px 4px">No</button>
+										</div>
+									</td>
+								}
 							</tr>
 						}
 					}

@@ -181,13 +181,13 @@ func (h *Handler) mintPair(ctx context.Context, credentialID string, claims json
 
 	refreshJTI := uuid.New().String()
 	refreshID := uuid.New().String()
-	refreshClaims := json.RawMessage(`{}`)
 
-	refreshTok, err = mintJWT(h.secret, refreshJTI, refreshClaims, refreshExp, "refresh")
+	refreshTok, err = mintJWT(h.secret, refreshJTI, json.RawMessage(`{}`), refreshExp, "refresh")
 	if err != nil {
 		return "", "", "", time.Time{}, err
 	}
-	if err = h.db.StoreToken(ctx, refreshID, credentialID, refreshJTI, refreshClaims, refreshExp, "refresh", &accessID); err != nil {
+	// Store full user claims on the refresh token row so Refresh can propagate them.
+	if err = h.db.StoreToken(ctx, refreshID, credentialID, refreshJTI, claims, refreshExp, "refresh", &accessID); err != nil {
 		return "", "", "", time.Time{}, err
 	}
 
@@ -314,7 +314,7 @@ func (h *Handler) Refresh(ctx context.Context, input *RefreshTokenInput) (*Token
 		return nil, huma.Error500InternalServerError("internal error")
 	}
 
-	accessTok, refreshTok, accessJTI, accessExp, err := h.mintPair(ctx, row.CredentialID, json.RawMessage(`{}`))
+	accessTok, refreshTok, accessJTI, accessExp, err := h.mintPair(ctx, row.CredentialID, row.Claims)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("internal error")
 	}

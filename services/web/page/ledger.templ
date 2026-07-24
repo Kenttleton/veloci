@@ -199,7 +199,7 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 						runBtn.textContent = 'Run Engine';
 					}
 				}
-				// Conditions saved → auto-reprocess, then reload the tx panel for that entry.
+				// Conditions saved → auto-reprocess, then reload the tx panel and entry stats.
 				document.addEventListener('veloci:conditions-saved', function(e) {
 					var entryId = e.detail && e.detail.entryId;
 					fetch('/api/jobs/reprocess', {method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin', body:'{}'})
@@ -208,11 +208,15 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 							setTimeout(function() {
 								if (!entryId) return;
 								var det = document.querySelector('.js-entry-details[data-entry-id="'+entryId+'"]');
-								if (!det || !det.open) return;
-								var txPanel = det.querySelector('.js-tx-panel');
-								if (!txPanel) return;
-								delete txPanel.dataset.loaded;
-								loadTxPanel(txPanel, entryId, det.dataset.entryStatus || 'live');
+								if (!det) return;
+								if (det.open) {
+									var txPanel = det.querySelector('.js-tx-panel');
+									if (txPanel) {
+										delete txPanel.dataset.loaded;
+										loadTxPanel(txPanel, entryId, det.dataset.entryStatus || 'live');
+									}
+								}
+								loadEntryStats(entryId, det);
 							}, 2000);
 						})
 						.catch(function() { markDirty(); });
@@ -275,6 +279,42 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 						.then(function(r){ return r.json(); })
 						.then(function(env){ _labelCache = env.data || []; cb(_labelCache); })
 						.catch(function(){ cb([]); });
+				}
+
+				// ── Entry stats reload (rate/day + fitness) ───────────────────────────
+				function loadEntryStats(entryId, det) {
+					fetch('/api/entries/' + entryId, {credentials:'same-origin'})
+						.then(function(r){ return r.json(); })
+						.then(function(env) {
+							var entry = env.data;
+							if (!entry) return;
+
+							// Rate/day: prefer projected_rate_per_day (set by engine for system entries).
+							var rateEl = det.querySelector('.js-entry-rate');
+							if (rateEl) {
+								var rate = entry.projected_rate_per_day;
+								if (rate == null) {
+									rateEl.textContent = '—';
+								} else {
+									var v = Math.abs(rate / 100);
+									rateEl.textContent = '$' + v.toFixed(2) + '/day';
+								}
+							}
+
+							// Fitness %.
+							var fitEl = det.querySelector('.js-entry-fitness');
+							if (fitEl) {
+								var fit = entry.fitness;
+								if (fit == null) {
+									fitEl.textContent = '—';
+									fitEl.style.color = 'var(--text3)';
+								} else {
+									fitEl.textContent = Math.round(fit * 100) + '%';
+									fitEl.style.color = fit >= 0.8 ? 'var(--income)' : fit >= 0.5 ? 'var(--text2)' : 'var(--commit)';
+								}
+							}
+						})
+						.catch(function() {});
 				}
 
 				// ── Tx panel loader ────────────────────────────────────────────────────
@@ -675,6 +715,9 @@ templ ledgerEntryRow(e store.EntryRow) {
 		class="js-entry-details"
 		data-entry-id={ e.ID }
 		data-entry-status={ e.Status }
+		if e.Scope != nil {
+			data-entry-scope={ *e.Scope }
+		}
 		style="border-bottom:1px solid var(--border)"
 	>
 		<summary style="display:grid;grid-template-columns:28px 1fr 80px 70px 90px 110px 140px;align-items:center;padding:10px 20px;cursor:pointer;list-style:none;user-select:none">
@@ -685,15 +728,18 @@ templ ledgerEntryRow(e store.EntryRow) {
 				} else {
 					<span style="color:var(--text3);font-style:italic">Unlabeled</span>
 				}
+				if e.Scope != nil && *e.Scope == "system" {
+					<span style="margin-left:6px;font-size:10px;font-weight:600;padding:1px 5px;border-radius:10px;background:var(--surface2);color:var(--text3)">System</span>
+				}
 				if e.AlertType != nil {
 					<span style="margin-left:6px;font-size:10px;font-weight:700;padding:1px 5px;border-radius:10px;background:var(--accent);color:#fff">{ alertTypeLabel(e.AlertType) }</span>
 				}
 			</span>
 			<span style="font-size:12px;color:var(--text3)">{ entryTypeLabel(e.EntryType) }</span>
 			<span style={ "font-size:11px;font-weight:600;padding:2px 6px;border-radius:4px;display:inline-block;" + ledgerDirectionBadgeStyle(e.Direction) }>{ directionLabel(e.Direction) }</span>
-			<span style="font-size:12px;color:var(--text2);text-align:right;font-variant-numeric:tabular-nums">{ fmtRateDay(e.ProjectedRatePerDay) }</span>
+			<span class="js-entry-rate" style="font-size:12px;color:var(--text2);text-align:right;font-variant-numeric:tabular-nums">{ fmtRateDay(e.ProjectedRatePerDay) }</span>
 			<span style={ ledgerStatusBadgeStyle(e.Status) }>{ ledgerStatusLabel(e.Status) }</span>
-			<span style={ "font-size:12px;text-align:right;font-variant-numeric:tabular-nums;color:" + fitColor(e.Fitness) }>{ fitPct(e.Fitness) }</span>
+			<span class="js-entry-fitness" style={ "font-size:12px;text-align:right;font-variant-numeric:tabular-nums;color:" + fitColor(e.Fitness) }>{ fitPct(e.Fitness) }</span>
 		</summary>
 		<div>
 			if e.Status == "pending" {
@@ -753,10 +799,21 @@ templ ledgerEntryRow(e store.EntryRow) {
 					<textarea
 						class="js-conditions-ta"
 						data-entry-id={ e.ID }
-						style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:12px;font-family:monospace;color:var(--text);outline:none;resize:vertical;min-height:80px;width:100%;box-sizing:border-box"
+						if e.Scope != nil && *e.Scope == "system" {
+							readonly
+						}
+						style={ func() string {
+							base := "background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:12px;font-family:monospace;color:var(--text);outline:none;resize:vertical;min-height:80px;width:100%;box-sizing:border-box"
+							if e.Scope != nil && *e.Scope == "system" {
+								return base + ";cursor:default;opacity:0.75"
+							}
+							return base
+						}() }
 						spellcheck="false"
 					>{ conditionsFormatted(e.Conditions) }</textarea>
-					<span class="js-conditions-status" style="font-size:11px;color:var(--text3);margin-top:2px"></span>
+					if e.Scope == nil || *e.Scope != "system" {
+						<span class="js-conditions-status" style="font-size:11px;color:var(--text3);margin-top:2px"></span>
+					}
 					if len(e.SampleMerchants) > 0 {
 						<div style="font-size:11px;color:var(--text3);line-height:1.5">
 							{ strings.Join(e.SampleMerchants[:min(3, len(e.SampleMerchants))], " · ") }
