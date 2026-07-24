@@ -1000,7 +1000,7 @@ async fn load_entries(entity_id: Uuid, pool: &PgPool) -> Result<Vec<EntryRow>> {
         conditions:             serde_json::Value,
         direction:              String,
         entry_type:             String,
-        period_days:            i32,
+        period_days:            Option<i32>,
         source:                 String,
         fitness:             Option<sqlx::types::BigDecimal>,
         merchant_fit:        Option<sqlx::types::BigDecimal>,
@@ -1038,7 +1038,7 @@ async fn load_entries(entity_id: Uuid, pool: &PgPool) -> Result<Vec<EntryRow>> {
             conditions:             r.conditions,
             direction:              r.direction,
             entry_type:             r.entry_type,
-            period_days:            r.period_days,
+            period_days:            r.period_days.unwrap_or(30),
             source:                 r.source,
             fitness:             r.fitness
                 .and_then(|v| v.to_string().parse::<f64>().ok()),

@@ -194,12 +194,6 @@ templ AccountPage(shell ShellData, data AccountData) {
 							</div>
 						</div>
 					</details>
-					<div id="upload-preview-wrap" style="display:none;margin-top:8px">
-						<div style="font-size:12px;color:var(--text3);margin-bottom:4px">Preview</div>
-						<div style="overflow-x:auto;border:1px solid var(--border);border-radius:4px">
-							<table id="upload-preview-table" style="border-collapse:collapse;width:100%;font-size:12px"></table>
-						</div>
-					</div>
 					<div id="upload-error-3" style="color:var(--commit);font-size:12px;display:none;margin-top:12px"></div>
 					<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
 						<button
@@ -210,6 +204,13 @@ templ AccountPage(shell ShellData, data AccountData) {
 							id="upload-save-btn"
 							style="background:var(--accent);border:none;border-radius:4px;padding:6px 14px;cursor:pointer;font-size:13px;font-weight:600;color:#fff;font-family:inherit"
 						>Save mapping &amp; upload</button>
+					</div>
+				</div>
+				<!-- Shared CSV preview — visible in both step 2 and step 3 -->
+				<div id="upload-preview-wrap" style="display:none;margin-top:8px">
+					<div style="font-size:12px;color:var(--text3);margin-bottom:4px">Preview</div>
+					<div style="overflow-x:auto;border:1px solid var(--border);border-radius:4px">
+						<table id="upload-preview-table" style="border-collapse:collapse;width:100%;font-size:12px"></table>
 					</div>
 				</div>
 			</div>
@@ -299,9 +300,9 @@ templ AccountPage(shell ShellData, data AccountData) {
 				var dedupInput       = document.getElementById('upload-dedup-days');
 				var settleInput      = document.getElementById('upload-settle-days');
 				var toleranceInput   = document.getElementById('upload-tolerance');
-				var previewWrap      = document.getElementById('upload-preview-wrap');
-				var previewTable     = document.getElementById('upload-preview-table');
-				var backBtn          = document.getElementById('upload-back-btn');
+				var previewWrap  = document.getElementById('upload-preview-wrap');
+				var previewTable = document.getElementById('upload-preview-table');
+				var backBtn      = document.getElementById('upload-back-btn');
 				var saveBtn          = document.getElementById('upload-save-btn');
 
 				// Page data embedded from Go
@@ -536,19 +537,84 @@ templ AccountPage(shell ShellData, data AccountData) {
 					return '<div style="padding:12px;background:var(--surface2);border-radius:4px;border:1px solid var(--border)">' + rows + '</div>';
 				}
 
+				// ─── Step 2 helpers ───────────────────────────────────────────────────────
+				function hasConfiguredMapping(inst) {
+					if (!inst || !inst.mapping_config) return false;
+					var fields = inst.mapping_config.fields;
+					return fields && Object.keys(fields).some(function(k) { return fields[k]; });
+				}
+
+				function computeAutoMapFields(headers, layoutKey) {
+					var src = UP_FIELD_REGISTRY.find(function(s) { return s.key === 'csv'; });
+					if (!src) return {};
+					var layout = src.layouts.find(function(l) { return l.key === (layoutKey || 'signed'); });
+					if (!layout) return {};
+					var fields = {};
+					layout.fields.forEach(function(field) {
+						if (field.kind !== 'column') return;
+						headers.some(function(h) {
+							if (matchesAlias(h, field.aliases)) { fields[field.key] = h; return true; }
+							return false;
+						});
+					});
+					return fields;
+				}
+
+				function populatePreview(csv, fields, layoutKey) {
+					if (!csv || !csv.rows.length) { previewWrap.style.display = 'none'; return; }
+					var src = UP_FIELD_REGISTRY.find(function(s) { return s.key === 'csv'; });
+					if (!src) { previewWrap.style.display = 'none'; return; }
+					var layout = src.layouts.find(function(l) { return l.key === (layoutKey || 'signed'); });
+					if (!layout) { previewWrap.style.display = 'none'; return; }
+					var cols = [];
+					layout.fields.forEach(function(field) {
+						if (field.kind !== 'column') return;
+						var col = fields[field.key];
+						if (col) cols.push({ label: field.label, col: col });
+					});
+					if (!cols.length) { previewWrap.style.display = 'none'; return; }
+					var thead = '<thead><tr>' + cols.map(function(c) {
+						return '<th style="text-align:left;padding:4px 8px;border-bottom:1px solid var(--border)">'
+							+ '<div style="color:var(--text);font-weight:600">' + c.label + '</div>'
+							+ '<div style="color:var(--text3);font-weight:400;font-size:10px">' + c.col + '</div></th>';
+					}).join('') + '</tr></thead>';
+					var tbody = '<tbody>' + csv.rows.map(function(row) {
+						return '<tr>' + cols.map(function(c) {
+							var val = row[c.col];
+							return '<td style="padding:4px 8px;color:var(--text2);border-bottom:1px solid var(--border)">'
+								+ (val !== undefined && val !== '' ? val : '<span style="color:var(--text3);font-style:italic">—</span>')
+								+ '</td>';
+						}).join('') + '</tr>';
+					}).join('') + '</tbody>';
+					previewTable.innerHTML = thead + tbody;
+					previewWrap.style.display = '';
+				}
+
 				// ─── Step 2: choose mode ──────────────────────────────────────────────────
 				function goToStep2(csv) {
 					parsedCsv = csv;
 					fileInfoEl.textContent = csv.file.name + ' — ' + csv.headers.length + ' columns detected';
 					var layoutKey = institution && institution.mapping_config ? (institution.mapping_config.layout || 'signed') : 'signed';
 					var autoMapHtml = renderAutoMapPreview(csv.headers, layoutKey);
-					if (institution) {
+					var autoFields = computeAutoMapFields(csv.headers, layoutKey);
+					if (institution && hasConfiguredMapping(institution)) {
 						mappingPreviewEl.innerHTML = '<div style="font-size:12px;color:var(--text3);margin-bottom:8px">Current mapping for '
 							+ institution.institution_name + ':</div>' + renderMappingPreview(institution)
 							+ '<div style="font-size:12px;color:var(--text3);margin-top:12px;margin-bottom:8px">Auto-detected from your CSV columns:</div>'
 							+ autoMapHtml;
 						useExistingBtn.style.display = '';
+						useExistingBtn.textContent = 'Use existing mapping';
 						editMappingBtn.textContent = 'Edit mapping';
+						populatePreview(csv, institution.mapping_config.fields || {}, layoutKey);
+					} else if (institution && !hasConfiguredMapping(institution)) {
+						mappingPreviewEl.innerHTML = '<div style="font-size:12px;color:var(--text3);margin-bottom:8px">'
+							+ 'Institution "' + institution.institution_name + '" has no column mapping yet. Based on your CSV columns, we detected:</div>'
+							+ autoMapHtml
+							+ '<div style="font-size:12px;color:var(--text3);margin-top:10px">Use the auto-detected mapping or edit it before uploading.</div>';
+						useExistingBtn.style.display = '';
+						useExistingBtn.textContent = 'Use auto-detected mapping';
+						editMappingBtn.textContent = 'Edit mapping';
+						populatePreview(csv, autoFields, layoutKey);
 					} else {
 						mappingPreviewEl.innerHTML = '<div style="font-size:12px;color:var(--text3);margin-bottom:8px">'
 							+ 'No institution configured yet. Based on your CSV columns, we detected:</div>'
@@ -556,6 +622,7 @@ templ AccountPage(shell ShellData, data AccountData) {
 							+ '<div style="font-size:12px;color:var(--text3);margin-top:10px">Review and save the mapping below to continue.</div>';
 						useExistingBtn.style.display = 'none';
 						editMappingBtn.textContent = 'Configure mapping';
+						populatePreview(csv, autoFields, layoutKey);
 					}
 					showStep(2);
 				}
@@ -625,18 +692,53 @@ templ AccountPage(shell ShellData, data AccountData) {
 					});
 				}
 
-				// ─── Use existing mapping ────────────────────────────────────────────────
+				// ─── Use existing / auto-detected mapping ────────────────────────────────
 				useExistingBtn.addEventListener('click', function() {
+					var btnLabel = useExistingBtn.textContent;
 					useExistingBtn.disabled = true;
-					useExistingBtn.textContent = 'Uploading…';
 					err2.style.display = 'none';
-					doUpload(parsedCsv.file)
-						.then(function() { uploadDialog.close(); })
+
+					function doUploadStep() {
+						useExistingBtn.textContent = 'Uploading…';
+						doUpload(parsedCsv.file)
+							.then(function() { uploadDialog.close(); resetUpload(); })
+							.catch(function(err) {
+								showError(2, err.message || 'Something went wrong uploading the file. Please try again.');
+								useExistingBtn.disabled = false;
+								useExistingBtn.textContent = btnLabel;
+							});
+					}
+
+					if (institution && !hasConfiguredMapping(institution)) {
+						// Upsert auto-detected mapping before uploading
+						var layoutKey = institution.mapping_config ? (institution.mapping_config.layout || 'signed') : 'signed';
+						var autoFields = computeAutoMapFields(parsedCsv.headers, layoutKey);
+						var mappingBody = {
+							institution_name:       institution.institution_name,
+							source_type:            'csv',
+							dedup_window_days:      institution.dedup_window_days      || 3,
+							settlement_window_days: institution.settlement_window_days  || 14,
+							amount_tolerance_pct:   institution.amount_tolerance_pct   || 0.5,
+							mapping_config: { layout: layoutKey, fields: autoFields },
+						};
+						useExistingBtn.textContent = 'Saving…';
+						fetch('/api/institutions/' + institution.id, {
+							method: 'PUT',
+							headers: {'Content-Type': 'application/json'},
+							body: JSON.stringify(mappingBody),
+						})
+						.then(function(r) {
+							if (!r.ok) return r.json().then(function(e) { throw new Error(e.detail || 'Failed to save mapping'); });
+						})
+						.then(doUploadStep)
 						.catch(function(err) {
-							showError(2, err.message || 'Something went wrong uploading the file. Please try again.');
+							showError(2, err.message || 'Something went wrong saving the mapping. Please try again.');
 							useExistingBtn.disabled = false;
-							useExistingBtn.textContent = 'Use existing mapping';
+							useExistingBtn.textContent = btnLabel;
 						});
+					} else {
+						doUploadStep();
+					}
 				});
 
 				// ─── Save mapping & upload ────────────────────────────────────────────────
@@ -726,6 +828,7 @@ templ AccountPage(shell ShellData, data AccountData) {
 					parsedCsv = null;
 					pendingInstitution = null;
 					instHintEl.style.display = 'none';
+					previewWrap.style.display = 'none';
 					showStep(1);
 					useExistingBtn.disabled = false;
 					useExistingBtn.textContent = 'Use existing mapping';
