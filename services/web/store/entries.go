@@ -238,6 +238,8 @@ type UpdateEntryInput struct {
 	ProjectTentatively  bool
 	StartDate           time.Time
 	EndDate             *time.Time
+	RecurrenceAnchor    *string
+	NextDueDate         *time.Time
 }
 
 // UpdateEntry updates mutable fields on an entry. When label_id changes, the
@@ -265,7 +267,9 @@ func (s *Store) UpdateEntry(ctx context.Context, entityID, id string, in UpdateE
 			status = $11,
 			project_tentatively = $12,
 			start_date = $13,
-			end_date = $14
+			end_date = $14,
+			recurrence_anchor = $15,
+			next_due_date = $16
 		WHERE entity_id = $1 AND id = $2
 		RETURNING %s,
 		NULL::text AS alert_type, NULL::numeric AS fitness,
@@ -285,6 +289,7 @@ func (s *Store) UpdateEntry(ctx context.Context, entityID, id string, in UpdateE
 		in.LabelID, in.Direction, in.EntryType, in.PeriodDays,
 		in.VariableMethod, in.ProjectedRatePerDay, in.Conditions, in.Priority,
 		in.Status, in.ProjectTentatively, in.StartDate, in.EndDate,
+		in.RecurrenceAnchor, in.NextDueDate,
 	)
 	if err != nil {
 		return EntryRow{}, err

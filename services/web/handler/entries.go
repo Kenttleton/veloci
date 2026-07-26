@@ -274,6 +274,8 @@ func (h *EntriesHandler) UpdateEntry(c echo.Context) error {
 		ProjectTentatively  bool            `json:"project_tentatively"`
 		StartDate           string          `json:"start_date"`
 		EndDate             *string         `json:"end_date"`
+		RecurrenceAnchor    *string         `json:"recurrence_anchor"`
+		NextDueDate         *string         `json:"next_due_date"`
 	}
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid body")
@@ -290,6 +292,14 @@ func (h *EntriesHandler) UpdateEntry(c echo.Context) error {
 			return echo.NewHTTPError(http.StatusUnprocessableEntity, "invalid end_date")
 		}
 		endDate = &t
+	}
+	var nextDueDate *time.Time
+	if body.NextDueDate != nil {
+		t, err := time.Parse("2006-01-02", *body.NextDueDate)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusUnprocessableEntity, "invalid next_due_date")
+		}
+		nextDueDate = &t
 	}
 
 	conditions := body.Conditions
@@ -314,6 +324,8 @@ func (h *EntriesHandler) UpdateEntry(c echo.Context) error {
 		ProjectTentatively:  body.ProjectTentatively,
 		StartDate:           startDate,
 		EndDate:             endDate,
+		RecurrenceAnchor:    body.RecurrenceAnchor,
+		NextDueDate:         nextDueDate,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return echo.NewHTTPError(http.StatusNotFound, "not found")

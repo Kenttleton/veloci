@@ -364,6 +364,13 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 						.then(function(env) {
 							var txns = env.data || [];
 							var verb = entryStatus === 'pending' ? 'will be' : 'are';
+							// Update count in the summary line
+							var det = txPanel.closest('.js-entry-details');
+							var countEl = det && det.querySelector('.js-tx-count');
+							if (countEl) {
+								var n = txns.length;
+								countEl.textContent = n + ' transaction' + (n === 1 ? '' : 's') + ' ' + verb + ' matched';
+							}
 							if (!txns.length) {
 								var msg = entryStatus === 'pending'
 									? 'No transactions matched yet. Run Engine to process this entry.'
@@ -383,10 +390,7 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 									'<td style="padding:5px 8px;font-size:12px;color:var(--text3)">' + t.settlement_status + '</td>' +
 									'</tr>';
 							}).join('');
-							var countLine = '<div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:6px">' +
-								txns.length + ' transaction' + (txns.length === 1 ? '' : 's') + ' ' + verb + ' matched' +
-							'</div>';
-							txPanel.innerHTML = countLine +
+							txPanel.innerHTML =
 								'<table style="width:100%;border-collapse:collapse">' +
 								'<thead><tr>' +
 								'<th style="padding:5px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:600">Date</th>' +
@@ -409,16 +413,21 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 					var txPanel = det.querySelector('.js-tx-panel');
 					if (!txPanel || txPanel.dataset.loaded) return;
 					loadTxPanel(txPanel, entryId, entryStatus);
+					// Initialize Flatpickr on date inputs not yet initialized
+					if (typeof flatpickr !== 'undefined') {
+						det.querySelectorAll('.js-date-fp:not(.flatpickr-input)').forEach(function(inp) {
+							flatpickr(inp, {dateFormat: 'Y-m-d'});
+						});
+					}
 				}, true);
 
 				// ── Label input: rename in place, conflict offers link ────────────────
 				document.addEventListener('focusout', function(e) {
 					var inp = e.target;
 					if (!inp.classList.contains('js-label-input')) return;
-					var panel = inp.closest('.js-review-panel');
-					if (!panel) return;
-					var entryId = panel.dataset.entryId;
-					var entry = JSON.parse(panel.dataset.entry);
+					var det = inp.closest('.js-entry-details');
+					if (!det) return;
+					var entry = JSON.parse(det.dataset.entry || '{}');
 					var name = inp.value.trim();
 					var hint = inp.parentNode.querySelector('.js-label-hint');
 					var origName = (entry.label_name || '').toLowerCase();
@@ -431,7 +440,7 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 						fetchLabels(function(labels) {
 							var found = labels.find(function(l){ return l.name.toLowerCase() === name.toLowerCase(); });
 							if (found) {
-								linkEntryLabel(panel, entry, found.id, found.name, hint);
+								linkEntryLabel(det, entry, found.id, found.name, hint);
 							} else if (hint) {
 								hint.textContent = 'Create labels in Configuration, then assign here.';
 							}
@@ -471,7 +480,7 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 					}).then(function(env) {
 						if (!env) return;
 						_labelCache = null;
-						panel.dataset.entry = JSON.stringify(Object.assign({}, entry, {label_name: env.data.name}));
+						det.dataset.entry = JSON.stringify(Object.assign({}, entry, {label_name: env.data.name}));
 					}).catch(function() {
 						if (hint) hint.textContent = 'Failed to rename.';
 					});
@@ -481,17 +490,17 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 				document.addEventListener('click', function(e) {
 					var btn = e.target.closest('.js-label-link-btn');
 					if (!btn) return;
-					var panel = btn.closest('.js-review-panel');
-					if (!panel) return;
-					var entry = JSON.parse(panel.dataset.entry);
+					var det = btn.closest('.js-entry-details');
+					if (!det) return;
+					var entry = JSON.parse(det.dataset.entry || '{}');
 					var hint = btn.closest('.js-label-hint');
-					linkEntryLabel(panel, entry, btn.dataset.labelId, btn.dataset.labelName, hint);
+					linkEntryLabel(det, entry, btn.dataset.labelId, btn.dataset.labelName, hint);
 				});
 
-				function linkEntryLabel(panel, entry, newLabelId, newLabelName, hint) {
-					var dirSel = panel.querySelector('.js-direction-sel');
-					var typeSel = panel.querySelector('.js-type-sel');
-					fetch('/api/entries/' + panel.dataset.entryId, {
+				function linkEntryLabel(det, entry, newLabelId, newLabelName, hint) {
+					var dirSel = det.querySelector('.js-direction-sel');
+					var typeSel = det.querySelector('.js-type-sel');
+					fetch('/api/entries/' + det.dataset.entryId, {
 						method: 'PUT',
 						headers: {'Content-Type': 'application/json'},
 						credentials: 'same-origin',
@@ -502,9 +511,9 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 						})),
 					}).then(function(r) {
 						if (!r.ok) { if (hint) hint.textContent = 'Failed to update label.'; return; }
-						var inp = panel.querySelector('.js-label-input');
+						var inp = det.querySelector('.js-label-input');
 						if (inp) inp.value = newLabelName || '';
-						panel.dataset.entry = JSON.stringify(Object.assign({}, entry, {label_id: newLabelId, label_name: newLabelName}));
+						det.dataset.entry = JSON.stringify(Object.assign({}, entry, {label_id: newLabelId, label_name: newLabelName}));
 						if (hint) hint.innerHTML = '';
 						_labelCache = null;
 					}).catch(function() {
@@ -516,14 +525,14 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 				document.addEventListener('click', function(e) {
 					var btn = e.target.closest('.js-review-btn');
 					if (!btn) return;
-					var panel = btn.closest('.js-review-panel');
-					if (!panel) return;
-					var entryId = panel.dataset.entryId;
-					var entry = JSON.parse(panel.dataset.entry);
+					var det = btn.closest('.js-entry-details');
+					if (!det) return;
+					var entryId = det.dataset.entryId;
+					var entry = JSON.parse(det.dataset.entry || '{}');
 					var action = btn.dataset.action;
-					var labelInput = panel.querySelector('.js-label-input');
-					var dirSel = panel.querySelector('.js-direction-sel');
-					var typeSel = panel.querySelector('.js-type-sel');
+					var labelInput = det.querySelector('.js-label-input');
+					var dirSel = det.querySelector('.js-direction-sel');
+					var typeSel = det.querySelector('.js-type-sel');
 					var ta = document.querySelector('.js-conditions-ta[data-entry-id="' + entryId + '"]');
 					var conds = entry.conditions || {};
 					try {
@@ -581,6 +590,116 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 							btn.disabled = false;
 							btn.textContent = action==='approve' ? 'Approve' : 'Reject';
 						});
+					});
+				});
+
+				// ── Entry form save ────────────────────────────────────────────────────
+				document.addEventListener('click', function(e) {
+					var btn = e.target.closest('.js-entry-save');
+					if (!btn) return;
+					var det = btn.closest('.js-entry-details');
+					if (!det) return;
+					var entryId = det.dataset.entryId;
+					var entry = JSON.parse(det.dataset.entry || '{}');
+					var hint = det.querySelector('.js-save-hint');
+
+					var labelInp = det.querySelector('.js-label-input');
+					var dirSel = det.querySelector('.js-direction-sel');
+					var typeSel = det.querySelector('.js-type-sel');
+					var startInp = det.querySelector('.js-start-date');
+					var periodInp = det.querySelector('.js-period-days');
+					var priorityInp = det.querySelector('.js-priority');
+					var projCb = det.querySelector('.js-project-tentatively');
+					var ta = document.querySelector('.js-conditions-ta[data-entry-id="' + entryId + '"]');
+
+					var conds = entry.conditions || {};
+					try {
+						if (ta) {
+							var src = (ta._cmView && ta._cmView.state)
+								? ta._cmView.state.doc.toString()
+								: ta.value;
+							conds = JSON.parse(src);
+						}
+					} catch(ex) {}
+
+					function doSave(labelId) {
+						var startVal = startInp ? startInp.value : entry.start_date;
+						// Flatpickr stores selected date in _flatpickr.selectedDates[0]
+						if (startInp && startInp._flatpickr && startInp._flatpickr.selectedDates[0]) {
+							var d = startInp._flatpickr.selectedDates[0];
+							startVal = d.getFullYear() + '-' +
+								String(d.getMonth() + 1).padStart(2, '0') + '-' +
+								String(d.getDate()).padStart(2, '0');
+						}
+						var body = Object.assign({}, entry, {
+							label_id: labelId,
+							direction: dirSel ? dirSel.value : entry.direction,
+							entry_type: typeSel ? typeSel.value : entry.entry_type,
+							start_date: startVal || entry.start_date,
+							period_days: periodInp && periodInp.value ? parseInt(periodInp.value, 10) : entry.period_days,
+							priority: priorityInp && priorityInp.value !== '' ? parseInt(priorityInp.value, 10) : entry.priority,
+							project_tentatively: projCb ? projCb.checked : entry.project_tentatively,
+							conditions: conds,
+						});
+
+						btn.disabled = true;
+						btn.textContent = 'Saving…';
+						if (hint) { hint.style.color = 'var(--text3)'; hint.textContent = ''; }
+
+						fetch('/api/entries/' + entryId, {
+							method: 'PUT',
+							headers: {'Content-Type': 'application/json'},
+							credentials: 'same-origin',
+							body: JSON.stringify(body),
+						})
+						.then(function(r) {
+							if (!r.ok) return r.json().then(function(ev){ throw new Error(ev.detail || 'Save failed'); });
+							return r.json();
+						})
+						.then(function() {
+							det.dataset.entry = JSON.stringify(body);
+							btn.disabled = false;
+							btn.textContent = 'Save';
+							if (hint) { hint.style.color = 'var(--income)'; hint.textContent = 'Saved'; }
+							markDirty();
+							setTimeout(function() { if (hint) hint.textContent = ''; }, 2000);
+						})
+						.catch(function(err) {
+							btn.disabled = false;
+							btn.textContent = 'Save';
+							if (hint) { hint.style.color = 'var(--commit)'; hint.textContent = err.message || 'Save failed'; }
+						});
+					}
+
+					var labelName = labelInp ? labelInp.value.trim() : '';
+					var origLabelName = (entry.label_name || '').toLowerCase();
+					if (!labelName || labelName.toLowerCase() === origLabelName) {
+						doSave(entry.label_id);
+						return;
+					}
+					fetchLabels(function(labels) {
+						var found = labels.find(function(l){ return l.name.toLowerCase() === labelName.toLowerCase(); });
+						if (found) { doSave(found.id); return; }
+						if (entry.label_id) {
+							fetch('/api/labels/' + entry.label_id, {
+								method: 'PUT',
+								headers: {'Content-Type': 'application/json'},
+								credentials: 'same-origin',
+								body: JSON.stringify({name: labelName}),
+							}).then(function(r) {
+								_labelCache = null;
+								if (r.ok) { doSave(entry.label_id); } else { doSave(entry.label_id); }
+							}).catch(function() { doSave(entry.label_id); });
+						} else {
+							fetch('/api/labels', {
+								method: 'POST',
+								headers: {'Content-Type': 'application/json'},
+								credentials: 'same-origin',
+								body: JSON.stringify({name: labelName}),
+							}).then(function(r){ return r.json(); })
+							.then(function(env) { _labelCache = null; doSave(env.data ? env.data.id : null); })
+							.catch(function() { doSave(null); });
+						}
 					});
 				});
 
@@ -791,6 +910,7 @@ templ ledgerEntryRow(e store.EntryRow) {
 		class="js-entry-details"
 		data-entry-id={ e.ID }
 		data-entry-status={ e.Status }
+		data-entry={ entryDataJSON(e) }
 		if e.Source != "" {
 			data-entry-scope={ e.Source }
 		}
@@ -829,84 +949,169 @@ templ ledgerEntryRow(e store.EntryRow) {
 			<span class="js-entry-fitness" style={ "font-size:12px;text-align:right;font-variant-numeric:tabular-nums;color:" + fitColor(e.Fitness) }>{ fitPct(e.Fitness) }</span>
 		</summary>
 		<div>
+			<!-- Pending banner -->
 			if e.Status == "pending" {
-				<div
-					class="js-review-panel"
-					data-entry-id={ e.ID }
-					data-entry={ entryDataJSON(e) }
-					style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 20px;border-top:1px solid var(--border);background:var(--surface2)"
-				>
-					<div style="flex:1;min-width:120px;display:flex;flex-direction:column;gap:3px">
-						<input
-							class="js-label-input"
-							type="text"
-							placeholder="Label name"
-							value={ func() string {
-								if e.LabelName != nil {
-									return *e.LabelName
-								}
-								return ""
-							}() }
-							style="width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:5px 8px;font-size:13px;color:var(--text);outline:none"
-						/>
-						<span class="js-label-hint" style="font-size:11px;color:var(--income);padding-left:2px;min-height:0;line-height:1.3"></span>
-					</div>
-					<select
-						class="js-direction-sel"
-						style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:5px 8px;font-size:13px;color:var(--text);outline:none"
-					>
-						<option value="income" selected?={ e.Direction == "income" }>Income</option>
-						<option value="spend" selected?={ e.Direction == "spend" }>Spend</option>
-					</select>
-					<select
-						class="js-type-sel"
-						style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:5px 8px;font-size:13px;color:var(--text);outline:none"
-					>
-						<option value="standing" selected?={ e.EntryType == "standing" }>Standing</option>
-						<option value="variable" selected?={ e.EntryType == "variable" }>Variable</option>
-						<option value="irregular" selected?={ e.EntryType == "irregular" }>Irregular</option>
-					</select>
-					<div style="display:flex;gap:6px;margin-left:auto">
-						<button
-							class="js-review-btn"
-							data-action="reject"
-							style="padding:5px 14px;border-radius:5px;border:1px solid var(--border);cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;background:transparent;color:var(--text2)"
-						>Reject</button>
-						<button
-							class="js-review-btn"
-							data-action="approve"
-							style="padding:5px 14px;border-radius:5px;border:none;cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;background:var(--income);color:#fff"
-						>Approve</button>
-					</div>
+				<div style="display:flex;align-items:center;gap:10px;padding:8px 20px;border-top:1px solid var(--border);background:color-mix(in srgb,var(--surface) 85%,var(--accent) 15%)">
+					<span style="font-size:12px;font-weight:600;color:var(--accent);flex:1">Engine review required</span>
+					<button
+						class="js-review-btn"
+						data-action="reject"
+						style="padding:5px 14px;border-radius:5px;border:1px solid var(--border);cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;background:transparent;color:var(--text2)"
+					>Reject</button>
+					<button
+						class="js-review-btn"
+						data-action="approve"
+						style="padding:5px 14px;border-radius:5px;border:none;cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;background:var(--income);color:#fff"
+					>Approve</button>
 				</div>
 			}
+			<!-- Main 2-column layout: form+conditions left, fitness right -->
 			<div style="display:flex;border-top:1px solid var(--border);background:var(--surface)">
-				<div style="flex:1;padding:12px 20px;display:flex;flex-direction:column;gap:6px;min-width:0">
-					<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em">Matching Rule</div>
-					<textarea
-						class="js-conditions-ta"
-						data-entry-id={ e.ID }
-						if e.Source == "system" {
-							readonly
-						}
-						style={ func() string {
-							base := "background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:12px;font-family:monospace;color:var(--text);outline:none;resize:vertical;min-height:80px;width:100%;box-sizing:border-box"
-							if e.Source == "system" {
-								return base + ";cursor:default;opacity:0.75"
-							}
-							return base
-						}() }
-						spellcheck="false"
-					>{ conditionsFormatted(e.Conditions) }</textarea>
-					if e.Source != "system" {
-						<span class="js-conditions-status" style="font-size:11px;color:var(--text3);margin-top:2px"></span>
-					}
-					if len(e.SampleMerchants) > 0 {
-						<div style="font-size:11px;color:var(--text3);line-height:1.5">
-							{ strings.Join(e.SampleMerchants[:min(3, len(e.SampleMerchants))], " · ") }
+				<!-- Left: combined form + conditions -->
+				<div style="flex:1;min-width:0;display:flex;flex-direction:column">
+					<!-- Combined form -->
+					<div style="padding:10px 20px 0;border-bottom:1px solid var(--border)">
+						<!-- Row 1: Label | Direction | Type -->
+						<div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:6px">
+							<div style="flex:1;display:flex;flex-direction:column;gap:3px">
+								<input
+									class="js-label-input"
+									type="text"
+									placeholder="Label name"
+									value={ func() string {
+										if e.LabelName != nil { return *e.LabelName }
+										return ""
+									}() }
+									if e.Source == "system" {
+										disabled
+									}
+									style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:4px 7px;font-size:13px;color:var(--text);outline:none;font-family:inherit"
+								/>
+								<span class="js-label-hint" style="font-size:11px;color:var(--income);padding-left:2px;min-height:0;line-height:1.3"></span>
+							</div>
+							<select
+								class="js-direction-sel"
+								if e.Source == "system" {
+									disabled
+								}
+								style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:4px 7px;font-size:13px;color:var(--text);outline:none;font-family:inherit"
+							>
+								<option value="income" selected?={ e.Direction == "income" }>Income</option>
+								<option value="spend" selected?={ e.Direction == "spend" }>Spend</option>
+							</select>
+							<select
+								class="js-type-sel"
+								if e.Source == "system" {
+									disabled
+								}
+								style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:4px 7px;font-size:13px;color:var(--text);outline:none;font-family:inherit"
+							>
+								<option value="standing" selected?={ e.EntryType == "standing" }>Standing</option>
+								<option value="variable" selected?={ e.EntryType == "variable" }>Variable</option>
+								<option value="irregular" selected?={ e.EntryType == "irregular" }>Irregular</option>
+							</select>
 						</div>
-					}
+						<!-- Row 2: Start | Period | Priority | Project tentatively -->
+						<div style="display:flex;gap:12px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+							<input
+								class="js-start-date js-date-fp"
+								type="text"
+								value={ e.StartDate.Format("2006-01-02") }
+								placeholder="Start date"
+								if e.Source == "system" {
+									disabled
+								}
+								style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:4px 24px 4px 7px;font-size:12px;color:var(--text);outline:none;font-family:inherit;width:108px;box-sizing:border-box"
+							/>
+							<div style="display:flex;align-items:center;gap:5px">
+								<label style="font-size:11px;color:var(--text3);white-space:nowrap">Period (days)</label>
+								<input
+									class="js-period-days"
+									type="number"
+									min="1"
+									value={ fmtPeriodDays(e.PeriodDays) }
+									if e.Source == "system" {
+										disabled
+									}
+									style="width:56px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:4px 6px;font-size:12px;color:var(--text);outline:none;font-family:inherit;box-sizing:border-box"
+								/>
+							</div>
+							<div style="display:flex;align-items:center;gap:5px">
+								<label style="font-size:11px;color:var(--text3)">Priority</label>
+								<input
+									class="js-priority"
+									type="number"
+									value={ fmt.Sprintf("%d", e.Priority) }
+									if e.Source == "system" {
+										disabled
+									}
+									style="width:56px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:4px 6px;font-size:12px;color:var(--text);outline:none;font-family:inherit;box-sizing:border-box"
+								/>
+							</div>
+							<label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text2);cursor:pointer;white-space:nowrap">
+								<input
+									class="js-project-tentatively"
+									type="checkbox"
+									checked?={ e.ProjectTentatively }
+									if e.Source == "system" {
+										disabled
+									}
+									style="accent-color:var(--accent);cursor:pointer"
+								/>
+								Project tentatively
+							</label>
+						</div>
+						<!-- Save button + recurrence footnote -->
+						if e.Source != "system" {
+							<div style="display:flex;flex-direction:column;gap:0;padding-bottom:3px">
+								<div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;padding-bottom:5px">
+									<span class="js-save-hint" style="font-size:11px"></span>
+									<button
+										class="js-entry-save"
+										style="background:var(--accent);border:none;border-radius:4px;padding:4px 12px;cursor:pointer;font-size:12px;font-weight:500;color:#fff;font-family:inherit"
+									>Save</button>
+								</div>
+								<div style="display:flex;justify-content:flex-start;gap:16px;line-height:1;padding-top:1px">
+									if e.RecurrenceAnchor != nil {
+										<span style="font-size:11px;color:var(--text3)">recurrence <span style="font-family:ui-monospace,monospace;color:var(--text)">{ *e.RecurrenceAnchor }</span></span>
+									}
+									if e.NextDueDate != nil {
+										<span style="font-size:11px;color:var(--text3)">next due <span style="color:var(--text)">{ e.NextDueDate.Format("2006-01-02") }</span></span>
+									}
+								</div>
+							</div>
+						}
+					</div>
+					<!-- Conditions editor -->
+					<div style="flex:1;padding:12px 20px;display:flex;flex-direction:column;gap:6px;min-width:0">
+						<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em">Matching Rule</div>
+						<textarea
+							class="js-conditions-ta"
+							data-entry-id={ e.ID }
+							if e.Source == "system" {
+								readonly
+							}
+							style={ func() string {
+								base := "background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:12px;font-family:monospace;color:var(--text);outline:none;resize:vertical;min-height:80px;width:100%;box-sizing:border-box"
+								if e.Source == "system" {
+									return base + ";cursor:default;opacity:0.75"
+								}
+								return base
+							}() }
+							spellcheck="false"
+						>{ conditionsFormatted(e.Conditions) }</textarea>
+						if e.Source != "system" {
+							<span class="js-conditions-status" style="font-size:11px;color:var(--text3);margin-top:2px"></span>
+						}
+						if len(e.SampleMerchants) > 0 {
+							<div style="font-size:11px;color:var(--text3);line-height:1.5">
+								{ strings.Join(e.SampleMerchants[:min(3, len(e.SampleMerchants))], " · ") }
+							</div>
+						}
+						<div class="js-conditions-summary" style="font-size:12px;color:var(--text2);line-height:1.7"></div>
+					</div>
 				</div>
+				<!-- Right: fitness bars, full height -->
 				if e.Fitness != nil {
 					<div class="js-conf-panel" data-expanded="true" style="width:230px;transition:width 0.2s;border-left:1px solid var(--border);padding:12px 16px;display:flex;flex-direction:column;gap:8px;overflow:hidden;flex-shrink:0">
 						<div style="display:flex;align-items:center;justify-content:space-between">
@@ -920,9 +1125,25 @@ templ ledgerEntryRow(e store.EntryRow) {
 					</div>
 				}
 			</div>
-			<div style="border-top:1px solid var(--border);background:var(--surface);padding:10px 20px">
-				<div class="js-conditions-summary" style="font-size:12px;color:var(--text2);line-height:1.7"></div>
+			<!-- Transaction summary line -->
+			<div style="display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--border);background:var(--surface);padding:8px 20px;font-variant-numeric:tabular-nums">
+				<div style="display:flex;align-items:center;gap:16px">
+					<span style="font-size:11px;color:var(--text3)">Drift <span style={ driftRateStyle(e.SnapshotDriftPerDay) }>{ fmtRateMoSigned(e.SnapshotDriftPerDay) }</span></span>
+					<span style="font-size:11px;color:var(--text3)">Actual <span style="color:var(--text);font-weight:500">{ fmtRateMo(e.ActualRatePerDay) }</span></span>
+					<span style="font-size:11px;color:var(--text3)">Projected <span style="color:var(--text2)">{ fmtRateMo(e.ProjectedRatePerDay) }</span></span>
+				</div>
+				<span class="js-tx-count" style="font-size:11px;font-weight:600;color:var(--text3)">
+					if e.MatchedTransactionCount != nil {
+						{ fmt.Sprintf("%d transaction%s matched", *e.MatchedTransactionCount, func() string {
+							if *e.MatchedTransactionCount == 1 { return "" }
+							return "s"
+						}()) }
+					} else {
+						Open to load transactions
+					}
+				</span>
 			</div>
+			<!-- Transactions panel -->
 			<div style="border-top:1px solid var(--border);background:var(--surface);padding:10px 20px 12px">
 				<div class="js-tx-panel" data-entry-id={ e.ID }>
 					<p style="color:var(--text3);font-size:12px">Open to load matched transactions.</p>

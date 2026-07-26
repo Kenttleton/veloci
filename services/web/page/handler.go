@@ -850,6 +850,25 @@ func conditionsFormatted(raw json.RawMessage) string {
 	return string(b)
 }
 
+// fmtPeriodDays converts a nullable period_days to a string suitable for a number input.
+func fmtPeriodDays(p *int) string {
+	if p == nil {
+		return ""
+	}
+	return strconv.Itoa(*p)
+}
+
+// driftRateStyle returns a CSS style string for a drift rate value.
+func driftRateStyle(r *float64) string {
+	if r == nil || *r == 0 {
+		return "color:var(--text2)"
+	}
+	if *r > 0 {
+		return "color:var(--income);font-weight:600"
+	}
+	return "color:var(--commit);font-weight:600"
+}
+
 // entryPutBody is the JSON shape expected by PUT /entries/{id}.
 type entryPutBody struct {
 	LabelID             *string         `json:"label_id"`
@@ -864,6 +883,8 @@ type entryPutBody struct {
 	StartDate           string          `json:"start_date"`
 	EndDate             *string         `json:"end_date"`
 	ProjectTentatively  bool            `json:"project_tentatively"`
+	RecurrenceAnchor    *string         `json:"recurrence_anchor"`
+	NextDueDate         *string         `json:"next_due_date"`
 }
 
 // entryDataJSON serializes the entry into the PUT /entries/{id} body format.
@@ -878,6 +899,11 @@ func entryDataJSON(e store.EntryRow) string {
 	if len(conds) == 0 || string(conds) == "null" {
 		conds = json.RawMessage(`{}`)
 	}
+	var nextDueStr *string
+	if e.NextDueDate != nil {
+		s := e.NextDueDate.Format("2006-01-02")
+		nextDueStr = &s
+	}
 	b, _ := json.Marshal(entryPutBody{
 		LabelID:             e.LabelID,
 		Direction:           e.Direction,
@@ -891,6 +917,8 @@ func entryDataJSON(e store.EntryRow) string {
 		StartDate:           e.StartDate.Format("2006-01-02"),
 		EndDate:             endDate,
 		ProjectTentatively:  e.ProjectTentatively,
+		RecurrenceAnchor:    e.RecurrenceAnchor,
+		NextDueDate:         nextDueStr,
 	})
 	return string(b)
 }
