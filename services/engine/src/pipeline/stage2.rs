@@ -151,6 +151,91 @@ pub(crate) fn extract_canonical(merchant: &str) -> String {
 }
 
 // ---------------------------------------------------------------------------
+// Modal-word second pass
+// ---------------------------------------------------------------------------
+
+/// Second pass: merge canonical groups that share the same most-frequent word.
+///
+/// `extract_canonical` runs first on the full transaction list, collapsing noise
+/// words (TLDs, legal suffixes, etc.) and producing one canonical string per
+/// transaction. Some transactions still land in different groups because extra
+/// tokens survived — store codes, location IDs, ordering variations.
+///
+/// This pass operates only on the smaller set of canonical KEY strings already
+/// produced, not on the full transaction list. It counts how many canonical keys
+/// each word appears in, finds words that span 2+ keys (merge signals), then
+/// reassigns each group to the cluster named after its highest-frequency
+/// merge-signal word. Groups that share that word collapse into one.
+///
+/// Word order is irrelevant: "Target", "Target T-2847", and "T-2847 Target"
+/// all find "target" as their dominant merge-signal word and land in one cluster.
+/// A canonical key with no merge-signal word (all its words appear only in that
+/// one key) is left unchanged.
+///
+/// Tie-breaking priority:
+///   1. Higher cross-key count wins.
+///   2. No hyphen (store codes often contain them; brand names rarely do).
+///   3. Shorter word (brand names tend to be concise).
+///   4. Alphabetical (determinism).
+fn merge_by_modal_word(groups: HashMap<String, Vec<UnmatchedTxn>>) -> HashMap<String, Vec<UnmatchedTxn>> {
+    let canonical_keys: Vec<String> = groups.keys().cloned().collect();
+    if canonical_keys.len() <= 1 {
+        return groups;
+    }
+
+    // Count how many canonical key strings each word appears in.
+    let mut word_key_count: HashMap<String, usize> = HashMap::new();
+    for key in &canonical_keys {
+        for word in key.split_whitespace() {
+            *word_key_count.entry(word.to_ascii_lowercase()).or_insert(0) += 1;
+        }
+    }
+
+    // Only words appearing in 2+ canonical keys are merge signals.
+    let merge_signals: std::collections::HashSet<String> = word_key_count
+        .iter()
+        .filter(|(_, &c)| c >= 2)
+        .map(|(w, _)| w.clone())
+        .collect();
+
+    if merge_signals.is_empty() {
+        return groups;
+    }
+
+    let mut merged: HashMap<String, Vec<UnmatchedTxn>> = HashMap::new();
+    for key in &canonical_keys {
+        let modal = key
+            .split_whitespace()
+            .filter(|w| merge_signals.contains(&w.to_ascii_lowercase()))
+            .max_by(|a, b| {
+                let ca = word_key_count[&a.to_ascii_lowercase()];
+                let cb = word_key_count[&b.to_ascii_lowercase()];
+                ca.cmp(&cb)
+                    .then_with(|| b.contains('-').cmp(&a.contains('-')))
+                    .then(b.len().cmp(&a.len()))
+                    .then(a.to_ascii_lowercase().cmp(&b.to_ascii_lowercase()))
+            });
+
+        let cluster_key = modal.map_or_else(
+            || key.clone(),
+            |w| {
+                let mut chars = w.chars();
+                match chars.next() {
+                    None => String::new(),
+                    Some(c) => c.to_uppercase().collect::<String>() + &chars.as_str().to_ascii_lowercase(),
+                }
+            },
+        );
+
+        if let Some(txns) = groups.get(key) {
+            merged.entry(cluster_key).or_default().extend(txns.iter().cloned());
+        }
+    }
+
+    merged
+}
+
+// ---------------------------------------------------------------------------
 // Public entry point
 // ---------------------------------------------------------------------------
 
@@ -162,13 +247,18 @@ pub async fn run(entity_id: Uuid, unmatched_tx_ids: &[Uuid], pool: &PgPool) -> R
 
     let txns = load_unmatched(entity_id, unmatched_tx_ids, pool).await?;
 
-    // Group by canonical brand name — folds store variants and online vs.
-    // brick-and-mortar into one cluster per merchant.
+    // Pass 1: group by canonical brand name — strips noise words (TLDs, legal
+    // suffixes, etc.) from each merchant_normalized string individually.
     let mut groups: HashMap<String, Vec<UnmatchedTxn>> = HashMap::new();
     for txn in txns {
         let canonical = extract_canonical(&txn.merchant_normalized);
         groups.entry(canonical).or_default().push(txn);
     }
+
+    // Pass 2: merge canonical groups whose most-frequent cross-group word is the
+    // same. Operates on the smaller canonical-key pool, not the full transaction
+    // list. Catches residual splits from store codes and ordering variations.
+    let groups = merge_by_modal_word(groups);
     let clusters: Vec<Cluster> = groups
         .into_iter()
         .map(|(merchant, transactions)| Cluster { merchant, transactions })
@@ -758,23 +848,7 @@ mod tests {
 
     // ── Grouping ──────────────────────────────────────────────────────────────
 
-    #[test]
-    fn group_by_canonical_groups_correctly() {
-        let txns = vec![
-            make_unmatched_txn("2026-01-07", -1499, "Netflix"),
-            make_unmatched_txn("2026-02-07", -1499, "Netflix Com"),
-            make_unmatched_txn("2026-01-15", -899,  "Spotify"),
-        ];
-        let mut groups: HashMap<String, Vec<UnmatchedTxn>> = HashMap::new();
-        for txn in txns {
-            let canonical = extract_canonical(&txn.merchant_normalized);
-            groups.entry(canonical).or_default().push(txn);
-        }
-        // "Netflix" and "Netflix Com" both canonicalize to "Netflix"
-        assert_eq!(groups.len(), 2);
-        assert_eq!(groups["Netflix"].len(), 2);
-        assert_eq!(groups["Spotify"].len(), 1);
-    }
+    // ── Pass 1: extract_canonical ─────────────────────────────────────────────
 
     #[test]
     fn extract_canonical_strips_noise_words() {
@@ -786,6 +860,76 @@ mod tests {
         assert_eq!(extract_canonical("Trader Joes"), "Trader Joes");
         // All-noise fallback returns original
         assert_eq!(extract_canonical("Com Org"), "Com Org");
+    }
+
+    // ── Pass 2: merge_by_modal_word ───────────────────────────────────────────
+
+    fn canonical_groups(merchants: &[&str]) -> HashMap<String, Vec<UnmatchedTxn>> {
+        let mut groups: HashMap<String, Vec<UnmatchedTxn>> = HashMap::new();
+        for m in merchants {
+            let canonical = extract_canonical(m);
+            groups.entry(canonical).or_default().push(make_unmatched_txn("2026-01-01", -1000, m));
+        }
+        groups
+    }
+
+    #[test]
+    fn pass2_noise_collapsed_by_pass1_stays_merged() {
+        // "Netflix Com" → "Netflix" by pass 1; pass 2 has only one "Netflix" key,
+        // no merge signal → unchanged.
+        let groups = merge_by_modal_word(canonical_groups(&["Netflix", "Netflix Com", "Spotify"]));
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups["Netflix"].len(), 2);
+        assert_eq!(groups["Spotify"].len(), 1);
+    }
+
+    #[test]
+    fn pass2_trailing_store_code() {
+        // Pass 1: "Target Com"→"Target", "Target T-2847"→"Target T-2847" (two groups).
+        // Pass 2: "target" spans both canonical keys → merge into "Target".
+        let groups = merge_by_modal_word(canonical_groups(&["Target Com", "Target T-2847"]));
+        assert_eq!(groups.len(), 1);
+        assert!(groups.contains_key("Target"));
+        assert_eq!(groups["Target"].len(), 2);
+    }
+
+    #[test]
+    fn pass2_leading_store_code() {
+        // "T-2847 Target" canonicalises to "T-2847 Target" (neither token is noise).
+        // Pass 2: "target" appears in both canonical keys → order-independent merge.
+        let groups = merge_by_modal_word(canonical_groups(&["T-2847 Target", "Target Com"]));
+        assert_eq!(groups.len(), 1);
+        assert!(groups.contains_key("Target"));
+    }
+
+    #[test]
+    fn pass2_mid_string_brand() {
+        let groups = merge_by_modal_word(canonical_groups(&[
+            "Westerville Target T-2847",
+            "Target Com",
+            "Target T-2847",
+        ]));
+        assert_eq!(groups.len(), 1);
+        assert!(groups.contains_key("Target"));
+        assert_eq!(groups["Target"].len(), 3);
+    }
+
+    #[test]
+    fn pass2_distinct_brands_stay_separate() {
+        // Netflix and Spotify share no canonical-key words → no merge signal.
+        let groups = merge_by_modal_word(canonical_groups(&["Netflix", "Spotify"]));
+        assert_eq!(groups.len(), 2);
+    }
+
+    #[test]
+    fn pass2_prefers_no_hyphen_on_count_tie() {
+        // "target"(2) and "t-2847"(2) each appear in both canonical keys.
+        // Tie-break: no hyphen → "Target" wins over "T-2847".
+        let groups = merge_by_modal_word(canonical_groups(&[
+            "Target T-2847",
+            "T-2847 Target",
+        ]));
+        assert!(groups.contains_key("Target"), "no-hyphen word should win tie");
     }
 
     // ── detect_anchor ─────────────────────────────────────────────────────────
