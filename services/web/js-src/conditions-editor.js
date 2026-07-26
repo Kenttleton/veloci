@@ -1,7 +1,7 @@
 import { EditorView, keymap } from "@codemirror/view"
 import { EditorState } from "@codemirror/state"
 import { json } from "@codemirror/lang-json"
-import { autocompletion, snippet, closeBrackets, closeBracketsKeymap, startCompletion } from "@codemirror/autocomplete"
+import { autocompletion, snippet, closeBrackets, closeBracketsKeymap, startCompletion, completionKeymap } from "@codemirror/autocomplete"
 import { syntaxTree, HighlightStyle, syntaxHighlighting } from "@codemirror/language"
 import { tags } from "@lezer/highlight"
 import { linter, lintGutter } from "@codemirror/lint"
@@ -126,6 +126,9 @@ async function fetchInstitutionMap() {
 function getJsonContext(state, pos) {
   const tree = syntaxTree(state)
 
+  // Lezer's JSON grammar uses "PropertyName" for object keys and "String" for values.
+  const isStrNode = name => name === "String" || name === "PropertyName"
+
   function objectDepth(n) {
     let d = 0
     while (n) { if (n.name === "Object") d++; n = n.parent }
@@ -142,12 +145,12 @@ function getJsonContext(state, pos) {
     while (n) {
       if (n.name === "Array" && n.parent?.name === "Property") {
         const k = n.parent.firstChild
-        if (k?.name === "String") return strContent(k)
+        if (isStrNode(k?.name)) return strContent(k)
         break
       }
       if (n.name === "Object" && n.parent?.name === "Property") {
         const k = n.parent.firstChild
-        if (k?.name === "String") return strContent(k)
+        if (isStrNode(k?.name)) return strContent(k)
       }
       n = n.parent
     }
@@ -157,7 +160,7 @@ function getJsonContext(state, pos) {
   let cur = tree.resolveInner(pos, 0)
 
   while (cur) {
-    if (cur.name === "String") {
+    if (isStrNode(cur.name)) {
       const parent = cur.parent
       if (!parent) break
 
@@ -171,7 +174,7 @@ function getJsonContext(state, pos) {
         }
         // Value string — find the owning property key.
         const keyNode = parent.firstChild
-        const key = keyNode?.name === "String" ? strContent(keyNode) : null
+        const key = isStrNode(keyNode?.name) ? strContent(keyNode) : null
         return { type: "value", key, node: cur }
       }
 
@@ -257,7 +260,10 @@ function contextKeyCompleter(context) {
 
   if (!options.length) return null
 
-  return { from: node.from, to: node.to, options, filter: false, validFor: /^"[^"]*/ }
+  // from: node.from — includes the opening " so filter text is never empty.
+  // filter: false — manual per-query filtering above; CM6 must not re-filter.
+  // No validFor — forces a fresh query on each keystroke so narrowing works.
+  return { from: node.from, to: node.to, options, filter: false }
 }
 
 // ── Value completer ────────────────────────────────────────────────────────
@@ -277,7 +283,7 @@ async function valueCompleter(context) {
       view.dispatch({
         changes: {
           from, to: after === '"' ? to + 1 : to,
-          insert: label + (after === '"' ? "" : '"'),
+          insert: label + '"',
         },
       })
     }
@@ -860,7 +866,7 @@ function initEditor(textarea) {
       extensions: [
         history(),
         closeBrackets(),
-        keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...historyKeymap]),
+        keymap.of([...closeBracketsKeymap, ...completionKeymap, ...defaultKeymap, ...historyKeymap]),
         json(),
         syntaxHighlighting(velociHighlightStyle),
         autocompletion({
