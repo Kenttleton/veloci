@@ -400,7 +400,7 @@ func (s *Server) Budget(c echo.Context) error {
 
 	return s.render(c, BudgetPage(titled(s.buildShellData(c.Request()), "Budget"), BudgetData{
 		Summary:         summary,
-		MarginRate:      summary.IncomeRate - summary.SpendRate,
+		MarginRate:      summary.IncomeRate + summary.SpendRate,
 		TotalIncomeRate: totalIncomeRate,
 		Income:          income,
 		CommitGroups:    commitGroups,

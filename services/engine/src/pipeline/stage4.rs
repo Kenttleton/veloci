@@ -76,8 +76,10 @@ pub fn compute_label_rate(label_id: Uuid, rates: &[&EntryRate]) -> LabelRate {
         .max()
         .unwrap_or(30);
 
-    // Direction: income if ANY entry is income (short-circuit, spec §9).
-    let direction = if rates.iter().any(|r| r.direction == Direction::Income) {
+    // Direction: mixed if ALL entries are mixed; otherwise income if any is income; else spend.
+    let direction = if rates.iter().all(|r| r.direction == Direction::Mixed) {
+        Direction::Mixed
+    } else if rates.iter().any(|r| r.direction == Direction::Income) {
         Direction::Income
     } else {
         Direction::Spend

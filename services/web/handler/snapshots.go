@@ -125,7 +125,7 @@ func (h *SnapshotsHandler) GetSnapshotSummary(c echo.Context) error {
 	return c.JSON(http.StatusOK, response.Single(snapshotSummaryView{
 		IncomeRate:      summary.IncomeRate,
 		SpendRate:  summary.SpendRate,
-		MarginRate: summary.IncomeRate - summary.SpendRate,
+		MarginRate: summary.IncomeRate + summary.SpendRate,
 		DriftRate:       summary.DriftRate,
 	}))
 }

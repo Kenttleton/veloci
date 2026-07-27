@@ -1,6 +1,7 @@
 package page
 
 import (
+	"math"
 	"strconv"
 
 	"github.com/veloci/veloci/store"
@@ -390,7 +391,7 @@ func budgetCommitPct(s store.SnapshotSummary) int {
 	if s.IncomeRate <= 0 {
 		return 0
 	}
-	pct := (s.SpendRate / s.IncomeRate) * 100
+	pct := (math.Abs(s.SpendRate) / s.IncomeRate) * 100
 	if pct > 100 {
 		return 100
 	}
@@ -409,7 +410,7 @@ func budgetMarginPct(s store.SnapshotSummary) int {
 }
 
 func budgetIsNegativeMargin(s store.SnapshotSummary) bool {
-	return s.IncomeRate < s.SpendRate
+	return s.IncomeRate+s.SpendRate < 0
 }
 
 func budgetMarginCellBg(s store.SnapshotSummary) string {

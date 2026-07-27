@@ -115,7 +115,7 @@ func (s *Store) ListSnapshotDaySummaries(ctx context.Context, entityID string, l
 			s.snapshot_date,
 			COALESCE(SUM(CASE WHEN e.direction = 'income' THEN s.actual_rate_per_day ELSE 0 END), 0) AS income_rate,
 			COALESCE(SUM(CASE WHEN e.direction = 'spend'  THEN s.actual_rate_per_day ELSE 0 END), 0) AS spend_rate,
-			COALESCE(SUM(CASE WHEN e.direction = 'income' THEN s.actual_rate_per_day ELSE -s.actual_rate_per_day END), 0) AS margin_rate,
+			COALESCE(SUM(CASE WHEN e.direction IN ('income','spend') THEN s.actual_rate_per_day ELSE 0 END), 0) AS margin_rate,
 			COALESCE(SUM(s.drift_per_day), 0) AS drift_rate
 		FROM snapshots s
 		JOIN entries e ON e.id = s.node_id AND s.node_type = 'entry'

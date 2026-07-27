@@ -179,12 +179,14 @@ pub(crate) fn compute_entry_rate(
 // Rate formula implementations (pure)
 // ---------------------------------------------------------------------------
 
-/// Unified rolling window rate: Σ|amount_i| for t_i in [t−W, t] / W.
+/// Unified rolling window rate: Σ amount_i for t_i in [t−W, t] / W.
+/// Rates are signed: income entries produce positive rates, spend entries produce
+/// negative rates, mixed entries produce the signed net margin.
 fn compute_actual_rate(rolling_window_total_cents: i64, window_days_used: i32) -> f64 {
     if window_days_used == 0 {
         return 0.0;
     }
-    rolling_window_total_cents.abs() as f64 / f64::from(window_days_used)
+    rolling_window_total_cents as f64 / f64::from(window_days_used)
 }
 
 // ---------------------------------------------------------------------------
@@ -336,17 +338,17 @@ async fn load_prior_snapshot_rates(
 mod tests {
     use super::*;
 
-    // rolling window: Σ|amount_i| / W
+    // rolling window: Σ amount_i / W (signed — spend entries produce negative rates)
     #[test]
     fn rolling_window_single_txn() {
         let rate = compute_actual_rate(-3000, 30);
-        assert!((rate - 100.0).abs() < 0.01, "expected 100.0, got {rate}");
+        assert!((rate - (-100.0)).abs() < 0.01, "expected -100.0, got {rate}");
     }
 
     #[test]
     fn rolling_window_multi_txn() {
         let rate = compute_actual_rate(-8000, 30);
-        assert!((rate - (8000.0 / 30.0)).abs() < 0.01, "got {rate}");
+        assert!((rate - (-8000.0 / 30.0)).abs() < 0.01, "got {rate}");
     }
 
     #[test]

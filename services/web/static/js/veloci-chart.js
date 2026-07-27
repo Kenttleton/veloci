@@ -127,20 +127,23 @@
     var granMult = this._gran === 'year' ? 365 / 100 : this._gran === 'month' ? 30.44 / 100 : 1 / 100;
     function toRate(v) { return v * granMult; }
 
-    // Y range from visible data + projection
-    var vals = [];
+    // Y range from visible data + projection; zero is always anchored so signed
+    // rates (spend = negative, income = positive) render from a common baseline.
+    var vals = [0];
     visible.forEach(function (d) {
       vals.push(toRate(d.actual_rate_per_day));
       if (d.high_rate != null) vals.push(toRate(d.high_rate));
       if (d.low_rate  != null) vals.push(toRate(d.low_rate));
     });
     if (this.projection != null) vals.push(toRate(this.projection));
-    if (!vals.length) return;
+    if (vals.length === 1) return; // only zero — no data
 
-    var yMin = Math.min.apply(null, vals);
-    var yMax = Math.max.apply(null, vals);
-    var pad  = Math.max((yMax - yMin) * 0.12, 5);
-    yMin -= pad; yMax += pad;
+    // Symmetric range: zero is pinned at the vertical center.
+    var absMax = Math.max.apply(null, vals.map(Math.abs));
+    var pad    = Math.max(absMax * 0.12, 5);
+    absMax    += pad;
+    var yMin   = -absMax;
+    var yMax   =  absMax;
 
     function toY(v) { return cB - ((v - yMin) / (yMax - yMin)) * cH; }
 
@@ -164,7 +167,8 @@
     ctx.rect(cL, cT, cW, cH + 1);
     ctx.clip();
 
-    var proj = this.projection;
+    var proj   = this.projection;
+    var zeroY  = toY(0);
 
     visible.forEach(function (d, i) {
       var x      = cR - subPx - (visible.length - i) * activeCellW;
@@ -193,15 +197,23 @@
         ctx.fillStyle = col;
         ctx.fillRect(x, bodyT, activeBw, bodyH);
       } else {
-        // Daily bar — grows from chart bottom
-        var barT = toY(actual);
-        var barH = Math.max(cB - barT, 1);
+        // Daily bar — grows from zero baseline (handles signed rates)
+        var barT = Math.min(toY(actual), zeroY);
+        var barH = Math.max(Math.abs(toY(actual) - zeroY), 1);
         ctx.fillStyle = col;
         ctx.fillRect(x, barT, activeBw, barH);
       }
     });
 
     ctx.restore();
+
+    // Zero reference line — always at vertical center with symmetric range
+    ctx.strokeStyle = c.grid;
+    ctx.lineWidth   = 1;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(cL, zeroY); ctx.lineTo(cR, zeroY);
+    ctx.stroke();
 
     // Projection dashed line
     if (proj != null) {
@@ -292,9 +304,10 @@
 
   function _fmtMoney(v) {
     var abs = Math.abs(v);
-    if (abs >= 10000) return '$' + (v / 1000).toFixed(0) + 'k';
-    if (abs >= 1000)  return '$' + (v / 1000).toFixed(1) + 'k';
-    return '$' + v.toFixed(0);
+    var sign = v < 0 ? '-' : '';
+    if (abs >= 10000) return sign + '$' + (abs / 1000).toFixed(0) + 'k';
+    if (abs >= 1000)  return sign + '$' + (abs / 1000).toFixed(1) + 'k';
+    return sign + '$' + abs.toFixed(0);
   }
 
   function _fmtPeriod(p, gran) {
