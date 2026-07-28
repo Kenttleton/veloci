@@ -15,7 +15,7 @@ templ BudgetPage(shell ShellData, data BudgetData) {
 			@budgetSummaryStrip(data)
 			<!-- Scrollable body: horizon chart + stack panel -->
 			<div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;min-height:0">
-				@budgetHorizonGraph()
+				@budgetHorizonGraph(data.AllEntryID, data.IncomeEntryID, data.SpendEntryID)
 				@budgetStackPanel(data)
 			</div>
 		</div>
@@ -96,13 +96,61 @@ templ BudgetPage(shell ShellData, data BudgetData) {
 					}
 				});
 
-				// ── Chart init ────────────────────────────────────────────────────
-				var canvas = document.getElementById('budget-canvas');
+				// ── Chart init (read system entry IDs from canvas data attrs) ────
+				var canvas        = document.getElementById('budget-canvas');
+				var allEntryId    = canvas ? (canvas.dataset.allEntryId    || null) : null;
+				var incomeEntryId = canvas ? (canvas.dataset.incomeEntryId || null) : null;
+				var spendEntryId  = canvas ? (canvas.dataset.spendEntryId  || null) : null;
+
+				// ── Summary strip cells (Income / Spend / Margin) ─────────────────
+				document.addEventListener('click', function (e) {
+					var cell = e.target.closest('.js-summary-cell');
+					if (!cell) return;
+					var entryId = cell.dataset.entryId;
+					if (!entryId || !chart) return;
+					activeEntryId = entryId;
+					var empty = document.getElementById('chart-empty');
+					if (empty) empty.style.display = 'none';
+					loadHistory(entryId, null);
+					document.querySelectorAll('.js-selectable-entry').forEach(function (r) {
+						r.style.borderLeft = '3px solid transparent';
+						r.style.background = '';
+					});
+					var label = document.getElementById('stack-period-label');
+					if (label) label.textContent = '';
+				});
+
+				// ── Stack Income / Margin anchor → reset chart to All ─────────────
+				document.addEventListener('click', function (e) {
+					if (!e.target.closest('.js-income-anchor') && !e.target.closest('.js-margin-anchor')) return;
+					if (!allEntryId) return;
+					activeEntryId = allEntryId;
+					loadHistory(allEntryId, null);
+					var label = document.getElementById('stack-period-label');
+					if (label) label.textContent = '';
+					document.querySelectorAll('.js-selectable-entry').forEach(function (r) {
+						r.style.borderLeft = '3px solid transparent';
+						r.style.background = '';
+					});
+				});
 				if (canvas) {
 					chart = new VelociChart(canvas);
 					chart.onNeedMore = function (oldest) {
 						if (!activeEntryId || !oldest) return;
 						loadHistory(activeEntryId, oldest);
+					};
+					chart.onPeriodClick = function (period) {
+						var url = '/budget/stack?date=' + period + '&gran=' + activeGran;
+						fetch(url)
+							.then(function (r) { if (!r.ok) throw new Error(); return r.text(); })
+							.then(function (html) {
+								var body = document.getElementById('stack-panel-body');
+								if (body) body.innerHTML = html;
+								var label = document.getElementById('stack-period-label');
+								if (label) label.textContent = period;
+								updateRateDisplays();
+							})
+							.catch(function () {});
 					};
 				}
 
@@ -120,6 +168,14 @@ templ BudgetPage(shell ShellData, data BudgetData) {
 						.catch(function () {});
 				}
 
+				// ── Auto-load All entry on init ───────────────────────────────────
+				if (allEntryId) {
+					activeEntryId = allEntryId;
+					var empty = document.getElementById('chart-empty');
+					if (empty) empty.style.display = 'none';
+					loadHistory(allEntryId, null);
+				}
+
 				// Sync button state and display to persisted gran on load
 				applyGran(activeGran);
 			})();
@@ -132,7 +188,7 @@ templ budgetSummaryStrip(data BudgetData) {
 		<!-- Equation row -->
 		<div style="display:flex;gap:8px;align-items:stretch">
 			<!-- Income cell -->
-			<div style="flex:1;padding:12px 16px;background:var(--surface);border-radius:6px;min-width:0">
+			<div class="js-summary-cell" data-entry-id={ data.IncomeEntryID } style="flex:1;padding:12px 16px;background:var(--surface);border-radius:6px;min-width:0;cursor:pointer">
 				<div style="font-size:11px;color:var(--text3);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em">Income</div>
 				<div style="font-size:22px;font-weight:600;color:var(--text);line-height:1.2">
 					<span
@@ -149,7 +205,7 @@ templ budgetSummaryStrip(data BudgetData) {
 			<!-- Minus operator -->
 			<div style="display:flex;align-items:center;color:var(--text3);font-size:18px;flex-shrink:0">−</div>
 			<!-- Spend cell -->
-			<div style="flex:1;padding:12px 16px;background:var(--surface);border-radius:6px;min-width:0">
+			<div class="js-summary-cell" data-entry-id={ data.SpendEntryID } style="flex:1;padding:12px 16px;background:var(--surface);border-radius:6px;min-width:0;cursor:pointer">
 				<div style="font-size:11px;color:var(--text3);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em">Spend</div>
 				<div style="font-size:22px;font-weight:600;color:var(--text);line-height:1.2">
 					<span
@@ -166,7 +222,7 @@ templ budgetSummaryStrip(data BudgetData) {
 			<!-- Equals operator -->
 			<div style="display:flex;align-items:center;color:var(--text3);font-size:18px;flex-shrink:0">=</div>
 			<!-- Margin cell -->
-			<div style={ "flex:1;padding:12px 16px;border-radius:6px;min-width:0;" + budgetMarginCellBg(data.Summary) }>
+			<div class="js-summary-cell" data-entry-id={ data.AllEntryID } style={ "flex:1;padding:12px 16px;border-radius:6px;min-width:0;cursor:pointer;" + budgetMarginCellBg(data.Summary) }>
 				<div style="font-size:11px;color:var(--text3);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em">Margin</div>
 				<div style={ "font-size:22px;font-weight:600;line-height:1.2;" + budgetMarginTextColor(data.Summary) }>
 					<span
@@ -202,7 +258,7 @@ templ budgetSummaryStrip(data BudgetData) {
 	</div>
 }
 
-templ budgetHorizonGraph() {
+templ budgetHorizonGraph(allEntryID, incomeEntryID, spendEntryID string) {
 	<div style="padding:8px 20px;display:flex;flex-direction:column;min-height:280px">
 		<!-- Legend -->
 		<div style="display:flex;gap:16px;align-items:center;margin-bottom:6px;font-size:11px;color:var(--text3);flex-shrink:0">
@@ -218,11 +274,11 @@ templ budgetHorizonGraph() {
 				<span style="width:16px;height:0;display:inline-block;border-top:2px dashed var(--accent)"></span>
 				Projection
 			</span>
-			<span>body = drift · drag to scroll</span>
+			<span>body = drift · drag to scroll · click = period</span>
 		</div>
 		<!-- Chart container -->
 		<div style="position:relative;flex:1;min-height:220px">
-			<canvas id="budget-canvas" style="display:block"></canvas>
+			<canvas id="budget-canvas" data-all-entry-id={ allEntryID } data-income-entry-id={ incomeEntryID } data-spend-entry-id={ spendEntryID } style="display:block"></canvas>
 			<div
 				id="chart-empty"
 				style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:13px;pointer-events:none"
@@ -239,75 +295,80 @@ templ budgetStackPanel(data BudgetData) {
 			style="display:flex;align-items:center;gap:8px;padding:10px 20px;border-bottom:1px solid var(--border);cursor:pointer;user-select:none"
 		>
 			<span style="font-weight:600;font-size:13px;color:var(--text)">Stack</span>
+			<span id="stack-period-label" style="font-size:12px;color:var(--accent)"></span>
 			<div style="flex:1"></div>
 			<span style="font-size:11px;color:var(--text3)">entry · type · actual <span class="js-gran-label">/day</span> · drift <span class="js-gran-label">/day</span></span>
 			<span id="stack-chevron" style="color:var(--text3);font-size:12px">▼</span>
 		</div>
 		<div id="stack-panel-body">
-			<!-- Column headers -->
-			<div style="display:flex;align-items:center;padding:6px 20px;border-bottom:1px solid var(--border);gap:8px">
-				<div style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;width:148px">Entry / type</div>
-				<div style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;flex:1">Track</div>
-				<div style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;width:80px;text-align:right">Actual</div>
-				<div style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;width:72px;text-align:right">Drift</div>
-			</div>
-			<!-- Income anchor -->
-			if len(data.Income) > 0 {
-				<div style="display:flex;align-items:center;padding:8px 20px;border-bottom:1px solid var(--border);gap:8px;background:var(--surface)">
-					<div style="width:148px">
-						<div style="font-size:13px;font-weight:600;color:var(--income)">Income</div>
-						<div style="font-size:11px;color:var(--text3)">anchor</div>
-					</div>
-					<div style="flex:1">
-						<div style="height:4px;border-radius:2px;background:var(--income);width:100%"></div>
-					</div>
-					<div style="width:80px;text-align:right;color:var(--income);font-weight:600;font-size:13px">
-						<span
-							data-fmt-day={ fmtRateDay(&data.TotalIncomeRate) }
-							data-fmt-mo={ fmtRateMo(&data.TotalIncomeRate) }
-							data-fmt-yr={ fmtRateYr(&data.TotalIncomeRate) }
-						>{ fmtRateDay(&data.TotalIncomeRate) }</span>
-					</div>
-					<div style="width:72px;text-align:right;color:var(--text3);font-size:12px">—</div>
-				</div>
-			}
-			<!-- Spend label groups -->
-			for _, group := range data.CommitGroups {
-				@budgetLabelGroupRow(group, data.TotalIncomeRate)
-			}
-			<!-- Margin anchor -->
-			<div style="display:flex;align-items:center;padding:8px 20px;gap:8px;background:var(--surface)">
-				<div style="width:148px">
-					<div style={ "font-size:13px;font-weight:600;" + budgetMarginColor(data.MarginRate) }>Margin</div>
-					<div style="font-size:11px;color:var(--text3)">anchor</div>
-				</div>
-				<div style="flex:1">
-					if data.TotalIncomeRate > 0 && data.MarginRate > 0 {
-						<div style={ "height:4px;border-radius:2px;background:var(--margin-pos);width:" + strconv.Itoa(budgetMarginPct(data.Summary)) + "%" }></div>
-					}
-				</div>
-				<div style={ "width:80px;text-align:right;font-weight:600;font-size:13px;" + budgetMarginColor(data.MarginRate) }>
-					<span
-						data-fmt-day={ fmtRateDaySigned(&data.MarginRate) }
-						data-fmt-mo={ fmtRateMoSigned(&data.MarginRate) }
-						data-fmt-yr={ fmtRateYrSigned(&data.MarginRate) }
-					>{ fmtRateDaySigned(&data.MarginRate) }</span>
-				</div>
-				<div style="width:72px;text-align:right;font-size:12px">
-					<span
-						data-fmt-day={ fmtRateDaySigned(&data.Summary.DriftRate) }
-						data-fmt-mo={ fmtRateMoSigned(&data.Summary.DriftRate) }
-						data-fmt-yr={ fmtRateYrSigned(&data.Summary.DriftRate) }
-					>{ fmtRateDaySigned(&data.Summary.DriftRate) }</span>
-				</div>
-			</div>
-			if len(data.Income) == 0 && len(data.CommitGroups) == 0 {
-				<div style="padding:32px 20px;color:var(--text3);font-size:13px;text-align:center">
-					No active entries. Run the engine on the Ledger page to generate budget data.
-				</div>
-			}
+			@budgetStackBody(data)
 		</div>
 	</div>
+}
+
+templ budgetStackBody(data BudgetData) {
+	<!-- Column headers -->
+	<div style="display:flex;align-items:center;padding:6px 20px;border-bottom:1px solid var(--border);gap:8px">
+		<div style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;width:148px">Entry / type</div>
+		<div style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;flex:1">Track</div>
+		<div style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;width:80px;text-align:right">Actual</div>
+		<div style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;width:72px;text-align:right">Drift</div>
+	</div>
+	<!-- Income anchor -->
+	if len(data.Income) > 0 {
+		<div class="js-income-anchor" style="display:flex;align-items:center;padding:8px 20px;border-bottom:1px solid var(--border);gap:8px;background:var(--surface);cursor:pointer">
+			<div style="width:148px">
+				<div style="font-size:13px;font-weight:600;color:var(--income)">Income</div>
+				<div style="font-size:11px;color:var(--text3)">anchor</div>
+			</div>
+			<div style="flex:1">
+				<div style="height:4px;border-radius:2px;background:var(--income);width:100%"></div>
+			</div>
+			<div style="width:80px;text-align:right;color:var(--income);font-weight:600;font-size:13px">
+				<span
+					data-fmt-day={ fmtRateDay(&data.TotalIncomeRate) }
+					data-fmt-mo={ fmtRateMo(&data.TotalIncomeRate) }
+					data-fmt-yr={ fmtRateYr(&data.TotalIncomeRate) }
+				>{ fmtRateDay(&data.TotalIncomeRate) }</span>
+			</div>
+			<div style="width:72px;text-align:right;color:var(--text3);font-size:12px">—</div>
+		</div>
+	}
+	<!-- Spend label groups -->
+	for _, group := range data.CommitGroups {
+		@budgetLabelGroupRow(group, data.TotalIncomeRate)
+	}
+	<!-- Margin anchor -->
+	<div class="js-margin-anchor" style="display:flex;align-items:center;padding:8px 20px;gap:8px;background:var(--surface);cursor:pointer">
+		<div style="width:148px">
+			<div style={ "font-size:13px;font-weight:600;" + budgetMarginColor(data.MarginRate) }>Margin</div>
+			<div style="font-size:11px;color:var(--text3)">anchor</div>
+		</div>
+		<div style="flex:1">
+			if data.TotalIncomeRate > 0 && data.MarginRate > 0 {
+				<div style={ "height:4px;border-radius:2px;background:var(--margin-pos);width:" + strconv.Itoa(budgetMarginPct(data.Summary)) + "%" }></div>
+			}
+		</div>
+		<div style={ "width:80px;text-align:right;font-weight:600;font-size:13px;" + budgetMarginColor(data.MarginRate) }>
+			<span
+				data-fmt-day={ fmtRateDaySigned(&data.MarginRate) }
+				data-fmt-mo={ fmtRateMoSigned(&data.MarginRate) }
+				data-fmt-yr={ fmtRateYrSigned(&data.MarginRate) }
+			>{ fmtRateDaySigned(&data.MarginRate) }</span>
+		</div>
+		<div style="width:72px;text-align:right;font-size:12px">
+			<span
+				data-fmt-day={ fmtRateDaySigned(&data.Summary.DriftRate) }
+				data-fmt-mo={ fmtRateMoSigned(&data.Summary.DriftRate) }
+				data-fmt-yr={ fmtRateYrSigned(&data.Summary.DriftRate) }
+			>{ fmtRateDaySigned(&data.Summary.DriftRate) }</span>
+		</div>
+	</div>
+	if len(data.Income) == 0 && len(data.CommitGroups) == 0 {
+		<div style="padding:32px 20px;color:var(--text3);font-size:13px;text-align:center">
+			No active entries. Run the engine on the Ledger page to generate budget data.
+		</div>
+	}
 }
 
 templ budgetLabelGroupRow(group BudgetGroup, totalIncomePerDay float64) {

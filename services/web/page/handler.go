@@ -340,6 +340,9 @@ type BudgetData struct {
 	TotalIncomeRate float64
 	Income          []store.EntryRow
 	CommitGroups    []BudgetGroup
+	AllEntryID      string
+	IncomeEntryID   string
+	SpendEntryID    string
 }
 
 func (s *Server) Budget(c echo.Context) error {
@@ -348,6 +351,104 @@ func (s *Server) Budget(c echo.Context) error {
 
 	summary, _ := s.store.GetSnapshotSummary(ctx, entityID)
 	entries, _ := s.store.ListEntries(ctx, entityID, store.DateRange{}, "", "live", 500, "")
+
+	var income []store.EntryRow
+	groupIdx := make(map[string]int)
+	var commitGroups []BudgetGroup
+
+	for _, e := range entries {
+		if e.Direction == "mixed" {
+			continue
+		}
+		if e.Direction == "income" {
+			income = append(income, e)
+			continue
+		}
+		key := "__null__"
+		if e.LabelID != nil {
+			key = *e.LabelID
+		}
+		if idx, ok := groupIdx[key]; ok {
+			commitGroups[idx].Entries = append(commitGroups[idx].Entries, e)
+			if e.ActualRatePerDay != nil {
+				commitGroups[idx].ActualRatePerDay += *e.ActualRatePerDay
+			}
+			if e.SnapshotDriftPerDay != nil {
+				commitGroups[idx].DriftPerDay += *e.SnapshotDriftPerDay
+			}
+		} else {
+			groupIdx[key] = len(commitGroups)
+			g := BudgetGroup{Entries: []store.EntryRow{e}}
+			if e.LabelID != nil {
+				lid := *e.LabelID
+				g.LabelID = &lid
+			}
+			if e.LabelName != nil {
+				lname := *e.LabelName
+				g.LabelName = &lname
+			}
+			if e.ActualRatePerDay != nil {
+				g.ActualRatePerDay = *e.ActualRatePerDay
+			}
+			if e.SnapshotDriftPerDay != nil {
+				g.DriftPerDay = *e.SnapshotDriftPerDay
+			}
+			commitGroups = append(commitGroups, g)
+		}
+	}
+
+	var totalIncomeRate float64
+	for _, e := range income {
+		if e.ActualRatePerDay != nil {
+			totalIncomeRate += *e.ActualRatePerDay
+		}
+	}
+
+	allEntryID, _    := s.store.GetSystemEntryID(ctx, entityID, "mixed")
+	incomeEntryID, _ := s.store.GetSystemEntryID(ctx, entityID, "income")
+	spendEntryID, _  := s.store.GetSystemEntryID(ctx, entityID, "spend")
+
+	return s.render(c, BudgetPage(titled(s.buildShellData(c.Request()), "Budget"), BudgetData{
+		Summary:         summary,
+		MarginRate:      summary.IncomeRate + summary.SpendRate,
+		TotalIncomeRate: totalIncomeRate,
+		Income:          income,
+		CommitGroups:    commitGroups,
+		AllEntryID:      allEntryID,
+		IncomeEntryID:   incomeEntryID,
+		SpendEntryID:    spendEntryID,
+	}))
+}
+
+// BudgetStack renders the stack panel body fragment for a historical period.
+// GET /budget/stack?date=YYYY-MM-DD&gran=day|month|year
+func (s *Server) BudgetStack(c echo.Context) error {
+	ctx := c.Request().Context()
+	entityID := middleware.EntityID(ctx)
+
+	dateStr := c.QueryParam("date")
+	gran := c.QueryParam("gran")
+	if gran == "" {
+		gran = "day"
+	}
+
+	periodEnd := time.Now()
+	if dateStr != "" {
+		t, err := time.Parse("2006-01-02", dateStr)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "invalid date")
+		}
+		switch gran {
+		case "month":
+			periodEnd = time.Date(t.Year(), t.Month()+1, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, -1)
+		case "year":
+			periodEnd = time.Date(t.Year(), 12, 31, 0, 0, 0, 0, time.UTC)
+		default:
+			periodEnd = t
+		}
+	}
+
+	entries, _ := s.store.ListEntriesForPeriod(ctx, entityID, periodEnd)
 
 	var income []store.EntryRow
 	groupIdx := make(map[string]int)
@@ -398,13 +499,25 @@ func (s *Server) Budget(c echo.Context) error {
 		}
 	}
 
-	return s.render(c, BudgetPage(titled(s.buildShellData(c.Request()), "Budget"), BudgetData{
-		Summary:         summary,
-		MarginRate:      summary.IncomeRate + summary.SpendRate,
+	var totalDrift float64
+	for _, g := range commitGroups {
+		totalDrift += g.DriftPerDay
+	}
+
+	var marginRate float64 = totalIncomeRate
+	for _, g := range commitGroups {
+		marginRate += g.ActualRatePerDay
+	}
+
+	data := BudgetData{
+		Summary:         store.SnapshotSummary{DriftRate: totalDrift},
+		MarginRate:      marginRate,
 		TotalIncomeRate: totalIncomeRate,
 		Income:          income,
 		CommitGroups:    commitGroups,
-	}))
+	}
+
+	return s.render(c, budgetStackBody(data))
 }
 
 // LedgerData is passed to the Ledger page template.

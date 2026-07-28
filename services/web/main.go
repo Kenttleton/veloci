@@ -183,6 +183,7 @@ func runServe(_ *cobra.Command, _ []string) error {
 	pageGroup.POST("/logout", pages.PostLogout)
 	pageGroup.GET("/", func(c echo.Context) error { return c.Redirect(http.StatusFound, "/budget") })
 	pageGroup.GET("/budget", pages.Budget)
+	pageGroup.GET("/budget/stack", pages.BudgetStack)
 	pageGroup.GET("/reports", pages.Reports)
 	pageGroup.GET("/ledger", pages.Ledger)
 	pageGroup.GET("/activity", pages.Activity)

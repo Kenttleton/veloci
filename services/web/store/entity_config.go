@@ -70,11 +70,8 @@ func (s *Store) EnsureSystemData(ctx context.Context, entityID string) error {
 		return err
 	}
 
-	for _, dir := range []string{"income", "spend"} {
-		labelName := "Income"
-		if dir == "spend" {
-			labelName = "Spend"
-		}
+	for _, dir := range []string{"income", "spend", "mixed"} {
+		labelName := map[string]string{"income": "Income", "spend": "Spend", "mixed": "All"}[dir]
 		conds := `{"type": "entry_direction", "direction": "` + dir + `"}`
 
 		_, err := s.pool.Exec(ctx, `

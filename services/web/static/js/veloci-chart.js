@@ -39,10 +39,12 @@
     this.data         = [];
     this.projection   = null;  // float: rate_per_day (cents)
     this._gran        = 'day'; // 'day' | 'month' | 'year'
-    this._panPx       = 0;
+    this._panOffset   = 0;   // integer: periods from the right edge (0 = latest)
     this._drag        = null;
+    this._dragDist    = 0;
     this._loadingMore = false;
     this.onNeedMore   = null;  // fn(oldestPeriod: string)
+    this.onPeriodClick = null; // fn(period: string)
 
     this._initEvents();
     this._measure();
@@ -52,7 +54,7 @@
 
   VelociChart.prototype.load = function (points) {
     this.data         = _sort(points);
-    this._panPx       = 0;
+    this._panOffset   = 0;
     this._loadingMore = false;
     this._render();
   };
@@ -73,11 +75,14 @@
 
   VelociChart.prototype.setGranularity = function (g) {
     this._gran        = g;
-    this.o.barWidth   = g === 'month' ? 16 : g === 'year' ? 24 : 5;
     this.data         = [];
-    this._panPx       = 0;
+    this._panOffset   = 0;
     this._loadingMore = false;
     this._render();
+  };
+
+  VelociChart.prototype._windowSize = function () {
+    return this._gran === 'year' ? 10 : this._gran === 'month' ? 12 : 14;
   };
 
   VelociChart.prototype.destroy = function () { /* ResizeObserver GC'd with element */ };
@@ -104,24 +109,17 @@
     var cL = o.padLeft, cR = W - o.padRight;
     var cT = o.padTop,  cB = H - o.padBottom;
     var cW = cR - cL,   cH = cB - cT;
-    var bw = o.barWidth, cellW = bw + o.barGap;
-    var visCnt = Math.max(1, Math.floor(cW / cellW));
 
-    // Viewport: right edge shows latest data, pan left shows older
-    var rightOffset = Math.floor(this._panPx / cellW);
-    var endIdx      = data.length - rightOffset;
-    var startIdx    = Math.max(0, endIdx - visCnt);
-    endIdx          = Math.min(data.length, Math.max(startIdx + 1, endIdx));
-    var visible     = data.slice(startIdx, endIdx);
-    var subPx       = this._panPx % cellW;
+    // Fixed window: 14 days / 12 months / 10 years — bars auto-size to fill width
+    var windowSize  = this._windowSize();
+    var activeCellW = Math.max(4, Math.floor(cW / windowSize));
+    var activeBw    = Math.max(1, activeCellW - o.barGap);
 
-    // Auto-scale bar width to fill the chart when fewer bars than capacity
-    var activeCellW = cellW, activeBw = bw;
-    if (visible.length > 0 && visible.length < visCnt) {
-      activeCellW = Math.floor(cW / visible.length);
-      activeBw    = Math.max(1, activeCellW - o.barGap);
-      subPx       = 0;
-    }
+    // Viewport: right edge = latest, pan left (increase _panOffset) shows older data
+    var endIdx   = data.length - this._panOffset;
+    var startIdx = Math.max(0, endIdx - windowSize);
+    endIdx       = Math.min(data.length, Math.max(startIdx + 1, endIdx));
+    var visible  = data.slice(startIdx, endIdx);
 
     // Convert cents/day to dollars at the active granularity
     var granMult = this._gran === 'year' ? 365 / 100 : this._gran === 'month' ? 30.44 / 100 : 1 / 100;
@@ -171,7 +169,7 @@
     var zeroY  = toY(0);
 
     visible.forEach(function (d, i) {
-      var x      = cR - subPx - (visible.length - i) * activeCellW;
+      var x      = cR - (visible.length - i) * activeCellW;
       var actual = toRate(d.actual_rate_per_day);
       var col    = proj != null
         ? (actual >= toRate(proj) ? c.income : c.commit)
@@ -236,7 +234,7 @@
     ctx.textBaseline = 'top';
     visible.forEach(function (d, i) {
       if (i % labelEvery !== 0) return;
-      var lx = cR - subPx - (visible.length - i) * activeCellW + activeBw / 2;
+      var lx = cR - (visible.length - i) * activeCellW + activeBw / 2;
       if (lx < cL || lx > cR) return;
       ctx.fillText(_fmtPeriod(d.period, gran), lx, cB + 5);
     });
@@ -269,15 +267,27 @@
   VelociChart.prototype._initEvents = function () {
     var self = this, canvas = this.canvas;
 
-    function onDown(cx) { self._drag = { sx: cx, sp: self._panPx }; }
+    function onDown(cx) { self._drag = { sx: cx, sp: self._panOffset }; self._dragDist = 0; }
     function onMove(cx) {
       if (!self._drag) return;
-      var dx  = self._drag.sx - cx;
-      var max = Math.max(0, (self.data.length - 4) * (self.o.barWidth + self.o.barGap));
-      self._panPx = Math.min(max, Math.max(0, self._drag.sp + dx));
+      var dx = self._drag.sx - cx;  // positive = drag left = older data
+      self._dragDist = Math.abs(dx);
+      var cW = self.w - self.o.padLeft - self.o.padRight;
+      var activeCellW = Math.max(4, Math.floor(cW / self._windowSize()));
+      var delta = Math.round(dx / activeCellW);
+      var max   = Math.max(0, self.data.length - self._windowSize());
+      self._panOffset = Math.min(max, Math.max(0, self._drag.sp + delta));
       self._render();
     }
-    function onUp() { self._drag = null; canvas.style.cursor = 'grab'; }
+    function onUp() {
+      if (self._drag && self._dragDist < 4 && self.onPeriodClick) {
+        var p = self._periodAtX(self._drag.sx);
+        if (p) self.onPeriodClick(p);
+      }
+      self._drag = null;
+      self._dragDist = 0;
+      canvas.style.cursor = 'grab';
+    }
 
     canvas.addEventListener('mousedown', function (e) {
       onDown(e.clientX);
@@ -292,6 +302,33 @@
     new ResizeObserver(function () { self._measure(); self._render(); }).observe(canvas.parentElement);
 
     canvas.style.cursor = 'grab';
+  };
+
+  // ── Period hit-test ──────────────────────────────────────────────────────────
+
+  VelociChart.prototype._periodAtX = function (clientX) {
+    if (!this.data.length) return null;
+    var rect = this.canvas.getBoundingClientRect();
+    var x    = clientX - rect.left;
+    var o    = this.o;
+    var cL   = o.padLeft;
+    var cR   = this.w - o.padRight;
+    if (x < cL || x > cR) return null;
+
+    var data        = this.data;
+    var windowSize  = this._windowSize();
+    var cW          = cR - cL;
+    var activeCellW = Math.max(4, Math.floor(cW / windowSize));
+
+    var endIdx   = data.length - this._panOffset;
+    var startIdx = Math.max(0, endIdx - windowSize);
+    endIdx       = Math.min(data.length, Math.max(startIdx + 1, endIdx));
+    var visible  = data.slice(startIdx, endIdx);
+
+    // bar i is at x = cR - (visible.length - i) * activeCellW
+    var visIdx = visible.length - 1 - Math.floor((cR - x) / activeCellW);
+    if (visIdx < 0 || visIdx >= visible.length) return null;
+    return visible[visIdx].period;
   };
 
   // ── Helpers ──────────────────────────────────────────────────────────────────

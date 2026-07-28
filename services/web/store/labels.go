@@ -154,7 +154,8 @@ func (s *Store) EnsureSystemLabels(ctx context.Context, entityID string) error {
 		INSERT INTO labels (id, entity_id, name, source, created_at)
 		VALUES
 			(gen_random_uuid(), $1::uuid, 'Income', 'system', NOW()),
-			(gen_random_uuid(), $1::uuid, 'Spend',  'system', NOW())
+			(gen_random_uuid(), $1::uuid, 'Spend',  'system', NOW()),
+			(gen_random_uuid(), $1::uuid, 'All',    'system', NOW())
 		ON CONFLICT (entity_id, name) DO UPDATE SET source = 'system'
 	`, entityID)
 	return err

@@ -152,6 +152,44 @@ func (s *Store) ListEntries(ctx context.Context, entityID string, dr DateRange, 
 	return pgx.CollectRows(rows, pgx.RowToStructByName[EntryRow])
 }
 
+// GetSystemEntryID returns the UUID of the system entry for the given direction.
+// Returns an empty string when no system entry exists yet.
+func (s *Store) GetSystemEntryID(ctx context.Context, entityID, direction string) (string, error) {
+	var id string
+	err := s.pool.QueryRow(ctx, `
+		SELECT id::text FROM entries
+		WHERE entity_id = $1 AND source = 'system' AND direction = $2
+		LIMIT 1
+	`, entityID, direction).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	return id, err
+}
+
+// ListEntriesForPeriod returns live non-mixed entries with their most-recent snapshot
+// on or before periodEnd. Used by the BudgetStack fragment to show historical data.
+func (s *Store) ListEntriesForPeriod(ctx context.Context, entityID string, periodEnd time.Time) ([]EntryRow, error) {
+	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
+		SELECT %s
+		FROM entries e
+		LEFT JOIN labels l ON l.id = e.label_id
+		LEFT JOIN LATERAL (
+			SELECT actual_rate_per_day, drift_per_day
+			FROM snapshots
+			WHERE entity_id = e.entity_id AND node_id = e.id AND node_type = 'entry'
+			  AND snapshot_date <= $2::date
+			ORDER BY snapshot_date DESC LIMIT 1
+		) s ON true
+		WHERE e.entity_id = $1 AND e.status = 'live' AND e.direction != 'mixed'
+		ORDER BY e.start_date DESC, e.id DESC
+	`, entryCols), entityID, periodEnd)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowToStructByName[EntryRow])
+}
+
 // GetEntry fetches a single entry with budget-view fields.
 func (s *Store) GetEntry(ctx context.Context, entityID, id string) (EntryRow, error) {
 	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
