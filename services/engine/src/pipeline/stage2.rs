@@ -47,20 +47,10 @@ const TIMING_VARIANCE_THRESHOLD_DAYS: f64 = 5.0;
 // composite gate. Each component answers a specific question shown to the user.
 //
 // Standing requires: tight timing + tight amounts + enough observations.
-// Variable requires: regular timing, amounts may vary.
-// irregular: fallthrough — no periodic cadence detected.
+// standing: detectable timing cadence (≥2 observations, timing_fit ≥ 0.45). Amount may vary.
+// variable: fallthrough — no periodic cadence detected.
 
 /// Minimum timing_fit required to classify as Standing.
-const STANDING_TIMING_GATE: f64 = 0.75;
-
-/// Minimum amount_fit required to classify as Standing.
-const STANDING_AMOUNT_GATE: f64 = 0.80;
-
-/// Minimum observations needed for Standing. 2 transactions produce 1 interval
-/// with std_dev = 0, which would always pass the timing gate.
-const STANDING_MIN_OBSERVATIONS: usize = 3;
-
-/// Minimum timing_fit required to classify as Variable.
 const VARIABLE_TIMING_GATE: f64 = 0.45;
 
 // ---------------------------------------------------------------------------
@@ -373,28 +363,19 @@ pub fn score_cluster(cluster: &Cluster) -> ClusterScore {
         (score, Some(mean))
     };
 
-    // Classification: gates on component thresholds, not a composite gate.
-    // Standing requires tight timing AND tight amounts AND ≥ 3 observations
-    // (2 transactions give 1 interval with std_dev=0, always passing timing).
+    // Two-branch classification: standing has detectable cadence, variable does not.
+    // Amount variance does not affect the type — standing may have fixed or range-bound amounts.
     let (entry_type, fitness) =
-        if n >= STANDING_MIN_OBSERVATIONS
-            && timing_fit >= STANDING_TIMING_GATE
-            && amount_fit >= STANDING_AMOUNT_GATE
-        {
-            let c = (merchant_fit * 0.20
-                   + timing_fit  * 0.40
-                   + amount_fit  * 0.40).clamp(0.0, 1.0);
-            ("standing", c)
-        } else if n >= 2 && timing_fit >= VARIABLE_TIMING_GATE {
+        if n >= 2 && timing_fit >= VARIABLE_TIMING_GATE {
             let c = (merchant_fit * 0.30
                    + timing_fit  * 0.55
                    + amount_fit  * 0.15).clamp(0.0, 1.0);
-            ("variable", c)
+            ("standing", c)
         } else {
             let c = (merchant_fit * 0.60
                    + timing_fit  * 0.20
                    + amount_fit  * 0.20).clamp(0.0, 1.0);
-            ("irregular", c)
+            ("variable", c)
         };
 
     ClusterScore {
@@ -688,8 +669,8 @@ async fn persist_cluster(
     sorted_dates.sort_unstable();
     let last_tx_date = sorted_dates.last().copied();
 
-    // Detect recurrence anchor; skip for irregular entries (no reliable cadence).
-    let anchor: Option<String> = if score.entry_type == "irregular" {
+    // Detect recurrence anchor; skip for variable entries (no reliable cadence).
+    let anchor: Option<String> = if score.entry_type == "variable" {
         None
     } else {
         score.mean_interval_days.and_then(|mid| detect_anchor(&sorted_dates, mid))
@@ -1115,7 +1096,7 @@ mod tests {
     }
 
     #[test]
-    fn score_irregular_income_detection() {
+    fn score_variable_income_detection() {
         let cluster = Cluster {
             merchant: "IRS Treas 310".to_string(),
             transactions: vec![make_txn(
@@ -1126,11 +1107,11 @@ mod tests {
             )],
         };
         let score = score_cluster(&cluster);
-        assert_eq!(score.entry_type, "irregular", "no-cadence income should be irregular");
+        assert_eq!(score.entry_type, "variable", "no-cadence income should be variable");
     }
 
     #[test]
-    fn score_irregular_single_transaction_low_confidence() {
+    fn score_variable_single_transaction_low_confidence() {
         let cluster = Cluster {
             merchant: "OneTime".to_string(),
             transactions: vec![make_txn(
@@ -1141,13 +1122,13 @@ mod tests {
             )],
         };
         let score = score_cluster(&cluster);
-        assert_eq!(score.entry_type, "irregular");
-        // Irregular observation: merchant=1.0, timing=0.0 (no cadence), amount=1.0
+        assert_eq!(score.entry_type, "variable");
+        // Variable observation: merchant=1.0, timing=0.0 (no cadence), amount=1.0
         // → fitness = 1.0*0.60 + 0.0*0.20 + 1.0*0.20 = 0.80.
         // timing=0.0 is the honest signal — no cadence data yet.
-        assert!(score.fitness >= MIN_FITNESS, "irregular observation dropped below creation threshold: {}", score.fitness);
-        assert_eq!(score.timing_fit, 0.0, "irregular txn must have timing=0.0 (no cadence)");
-        assert_eq!(score.merchant_fit, 1.0, "irregular txn must have merchant=1.0");
+        assert!(score.fitness >= MIN_FITNESS, "variable observation dropped below creation threshold: {}", score.fitness);
+        assert_eq!(score.timing_fit, 0.0, "variable txn must have timing=0.0 (no cadence)");
+        assert_eq!(score.merchant_fit, 1.0, "variable txn must have merchant=1.0");
     }
 
     #[test]
@@ -1167,8 +1148,9 @@ mod tests {
     }
 
     #[test]
-    fn score_variable_amounts_with_regular_timing_classify_as_variable() {
-        // Weekly grocery runs with varying amounts — timing is regular, amounts differ.
+    fn score_variable_amounts_with_regular_timing_classify_as_standing() {
+        // Weekly grocery runs with varying amounts — regular timing classifies as standing.
+        // Amount variance doesn't change the type; rate_method (median/max) handles projection.
         let cluster = Cluster {
             merchant: "Grocery".to_string(),
             transactions: vec![
@@ -1178,7 +1160,7 @@ mod tests {
             ],
         };
         let score = score_cluster(&cluster);
-        assert_eq!(score.entry_type, "variable");
+        assert_eq!(score.entry_type, "standing");
     }
 
     #[test]
@@ -1209,9 +1191,9 @@ mod tests {
     }
 
     #[test]
-    fn two_same_amount_transactions_do_not_classify_as_standing() {
-        // With only 2 txns there is exactly 1 interval → std_dev = 0 → timing_score = 1.0.
-        // This would falsely pass the timing gate, so STANDING_MIN_OBSERVATIONS = 3 blocks it.
+    fn two_transactions_with_consistent_timing_classify_as_standing() {
+        // 2 transactions produce 1 interval → std_dev = 0 → timing_fit = 1.0.
+        // The minimum-observations guard is removed; n ≥ 2 with timing_fit ≥ 0.45 is standing.
         let cluster = Cluster {
             merchant: "Uber Eats".to_string(),
             transactions: vec![
@@ -1220,12 +1202,12 @@ mod tests {
             ],
         };
         let score = score_cluster(&cluster);
-        assert_ne!(score.entry_type, "standing", "2 transactions should not qualify as standing");
+        assert_eq!(score.entry_type, "standing", "2 transactions with consistent timing should qualify as standing");
     }
 
     #[test]
-    fn consistent_amount_irregular_timing_falls_through_to_one_time() {
-        // Same amount every time but random gaps — should not be standing or variable.
+    fn consistent_amount_with_irregular_timing_falls_through_to_variable() {
+        // Same amount every time but random gaps — no detectable cadence → variable.
         let cluster = Cluster {
             merchant: "DoorDash".to_string(),
             transactions: vec![
@@ -1236,7 +1218,7 @@ mod tests {
             ],
         };
         let score = score_cluster(&cluster);
-        assert_eq!(score.entry_type, "irregular", "consistent amount with irregular timing should be irregular");
+        assert_eq!(score.entry_type, "variable", "consistent amount with irregular timing should be variable");
     }
 
     #[test]

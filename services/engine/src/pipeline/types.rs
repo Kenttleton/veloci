@@ -15,40 +15,38 @@ use uuid::Uuid;
 /// Entry type of an entry — determines rate computation semantics.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EntryType {
-    /// Recurring spend with consistent timing and amount. Rate = amount / period_days.
+    /// Recurring entry with consistent cadence and timing; amount may be fixed or range-bound.
+    /// Rate projection uses rate_method (median or max of matched transaction amounts / period_days).
     Standing,
-    /// Recurring spend with variable amounts. Rate = rolling_window_total / window_days.
-    Variable,
     /// No detectable cadence or consistent amount. Groups by merchant; amortized over period_days.
-    Irregular,
+    Variable,
 }
 
 impl EntryType {
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
-            "standing"  => Some(Self::Standing),
-            "variable"  => Some(Self::Variable),
-            "irregular" => Some(Self::Irregular),
-            _           => None,
+            "standing" => Some(Self::Standing),
+            "variable" => Some(Self::Variable),
+            _          => None,
         }
     }
 }
 
-/// Variable entry projection method.
+/// Projected rate computation method for standing entries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VariableMethod {
-    /// Project the mean of recent observed amounts.
-    Avg,
-    /// Project the maximum of recent observed amounts (conservative).
+    /// Project using the median of matched transaction amounts ÷ period_days.
+    Median,
+    /// Project using the maximum of matched transaction amounts ÷ period_days (conservative).
     Max,
 }
 
 impl VariableMethod {
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
-            "avg" => Some(Self::Avg),
-            "max" => Some(Self::Max),
-            _     => None,
+            "median" => Some(Self::Median),
+            "max"    => Some(Self::Max),
+            _        => None,
         }
     }
 }
@@ -250,11 +248,19 @@ mod tests {
     fn entry_type_from_str() {
         assert_eq!(EntryType::from_str("standing"),  Some(EntryType::Standing));
         assert_eq!(EntryType::from_str("variable"),  Some(EntryType::Variable));
-        assert_eq!(EntryType::from_str("irregular"), Some(EntryType::Irregular));
+        assert_eq!(EntryType::from_str("irregular"), None); // removed — use "variable"
         assert_eq!(EntryType::from_str("single"),    None); // old name removed
         assert_eq!(EntryType::from_str("one_time"),  None); // older name removed
         assert_eq!(EntryType::from_str("hit"),       None);
         assert_eq!(EntryType::from_str("boost"),     None);
+    }
+
+    #[test]
+    fn variable_method_from_str() {
+        assert_eq!(VariableMethod::from_str("median"), Some(VariableMethod::Median));
+        assert_eq!(VariableMethod::from_str("max"),    Some(VariableMethod::Max));
+        assert_eq!(VariableMethod::from_str("avg"),    None); // removed — use "median"
+        assert_eq!(VariableMethod::from_str(""),       None);
     }
 
     #[test]

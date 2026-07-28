@@ -1926,7 +1926,7 @@ mod tests {
     #[test]
     fn entry_type_no_match_wrong_type() {
         let txn = any_txn();
-        let meta = make_meta(Direction::Spend, EntryType::Irregular, 30, EntrySource::User);
+        let meta = make_meta(Direction::Spend, EntryType::Variable, 30, EntrySource::User);
         assert!(!eval_with_accumulated(
             json!({"type": "entry_type", "entry_type": "standing"}),
             &txn,
