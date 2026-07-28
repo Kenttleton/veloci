@@ -198,9 +198,10 @@ CREATE TABLE entries (
   label_id               UUID          REFERENCES labels(id) ON DELETE SET NULL,
   direction              TEXT          NOT NULL CHECK (direction IN ('income', 'spend', 'mixed')),
   entry_type             TEXT          NOT NULL
-                         CHECK (entry_type IN ('standing', 'variable', 'irregular')),
+                         CHECK (entry_type IN ('standing', 'variable')),
   period_days            INTEGER,
-  variable_method        TEXT          CHECK (variable_method IN ('avg', 'max')),
+  rate_method            TEXT          NOT NULL DEFAULT 'median'
+                         CHECK (rate_method IN ('median', 'max')),
   projected_rate_per_day NUMERIC(12,4),
   conditions             JSONB,
   priority               INTEGER       NOT NULL DEFAULT 100,
@@ -287,8 +288,8 @@ CREATE TABLE snapshots (
   transaction_count      INTEGER       NOT NULL,
   window_days_used       INTEGER       NOT NULL,
   -- SUM(matched amount_cents) for the snapshot_date - period_days window.
-  -- Basis for actual_rate_per_day. For variable entries, also feeds projected_rate_per_day
-  -- via variable_method over the 3*period_days projection lookback window.
+  -- Basis for actual_rate_per_day. For standing entries, also feeds projected_rate_per_day
+  -- via rate_method ('median' or 'max') over the 3*period_days projection lookback window.
   rolling_window_total_cents BIGINT    NOT NULL DEFAULT 0,
   -- running balance at this snapshot date; secondary to rates, used for bank account comparison.
   balance_cents          BIGINT        NOT NULL DEFAULT 0,
