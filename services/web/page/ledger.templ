@@ -11,17 +11,20 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 	@Shell(shell) {
 		<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
 			<div style="display:flex;gap:6px;padding:8px 20px;border-bottom:1px solid var(--border);flex-shrink:0;align-items:center;flex-wrap:wrap">
-				@ledgerPill("all", "All", data, data.Counts.Pending+data.Counts.Live+data.Counts.Ended)
+				@ledgerPill("all", "All", data, data.Counts.Pending+data.Counts.Live+data.Counts.Ended+data.Counts.System)
 				@ledgerPill("pending", "Review", data, data.Counts.Pending)
 				@ledgerPill("live", "Live", data, data.Counts.Live)
 				@ledgerPill("ended", "Ended", data, data.Counts.Ended)
-				<div style="width:1px;height:16px;background:var(--border);margin:0 4px"></div>
-				@ledgerDirectionPill("income", "Income", data)
-				@ledgerDirectionPill("spend", "Spend", data)
-				<div style="width:1px;height:16px;background:var(--border);margin:0 4px"></div>
-				@ledgerTypePill("standing", "Standing", data)
-				@ledgerTypePill("variable", "Variable", data)
-				@ledgerTypePill("irregular", "Irregular", data)
+				@ledgerSystemPill(data)
+				if data.Filter != "system" {
+					<div style="width:1px;height:16px;background:var(--border);margin:0 4px"></div>
+					@ledgerDirectionPill("income", "Income", data)
+					@ledgerDirectionPill("spend", "Spend", data)
+					<div style="width:1px;height:16px;background:var(--border);margin:0 4px"></div>
+					@ledgerTypePill("standing", "Standing", data)
+					@ledgerTypePill("variable", "Variable", data)
+					@ledgerTypePill("irregular", "Irregular", data)
+				}
 				if data.LabelFilter != "" {
 					<div style="width:1px;height:16px;background:var(--border);margin:0 4px"></div>
 					<a
@@ -39,17 +42,19 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 				}
 				<div style="margin-left:auto;display:flex;align-items:center;gap:6px">
 					<span id="dirty-indicator" style="display:none;font-size:11px;font-weight:600;color:var(--commit);padding:2px 8px;border-radius:10px;background:color-mix(in srgb,var(--surface2) 60%,var(--commit) 40%)">Changes pending — reprocess to apply</span>
-					<label style="font-size:11px;color:var(--text3)">Sort:</label>
-					<select
-						id="ledger-sort"
-						style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:12px;color:var(--text);outline:none;cursor:pointer;font-family:inherit"
-					>
-						<option value="label" selected?={ data.Sort == "label" || data.Sort == "" }>Label name</option>
-						<option value="start_date" selected?={ data.Sort == "start_date" }>Start date</option>
-						<option value="rate" selected?={ data.Sort == "rate" }>Rate/day</option>
-						<option value="fitness" selected?={ data.Sort == "fitness" }>Fitness</option>
-					</select>
-					<div style="width:1px;height:16px;background:var(--border)"></div>
+					if data.Filter != "system" {
+						<label style="font-size:11px;color:var(--text3)">Sort:</label>
+						<select
+							id="ledger-sort"
+							style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:12px;color:var(--text);outline:none;cursor:pointer;font-family:inherit"
+						>
+							<option value="label" selected?={ data.Sort == "label" || data.Sort == "" }>Label name</option>
+							<option value="start_date" selected?={ data.Sort == "start_date" }>Start date</option>
+							<option value="rate" selected?={ data.Sort == "rate" }>Rate/day</option>
+							<option value="fitness" selected?={ data.Sort == "fitness" }>Fitness</option>
+						</select>
+						<div style="width:1px;height:16px;background:var(--border)"></div>
+					}
 					<button
 						id="add-entry-btn"
 						style="background:var(--accent);border:none;border-radius:5px;padding:4px 12px;cursor:pointer;font-size:12px;font-weight:500;color:#fff;font-family:inherit"
@@ -881,6 +886,13 @@ templ ledgerPill(value, label string, data LedgerData, count int) {
 	</a>
 }
 
+templ ledgerSystemPill(data LedgerData) {
+	<a
+		href={ templ.SafeURL(ledgerFilterURL(data, "filter", "system")) }
+		style={ ledgerPillStyle("system", data.Filter == "system") }
+	>System</a>
+}
+
 templ ledgerDirectionPill(value, label string, data LedgerData) {
 	<a
 		href={ templ.SafeURL(func() string {
@@ -1170,6 +1182,8 @@ func ledgerPillColor(value string) string {
 	case "live":
 		return "var(--income)"
 	case "ended":
+		return "var(--text3)"
+	case "system":
 		return "var(--text3)"
 	default:
 		return "var(--text2)"
