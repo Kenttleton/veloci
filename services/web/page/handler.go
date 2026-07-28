@@ -578,14 +578,17 @@ func (s *Server) Ledger(c echo.Context) error {
 	counts, _ := s.store.CountEntriesByStatus(ctx, entityID)
 
 	var entries []store.EntryRow
-	if filter == "all" {
+	switch filter {
+	case "all":
 		entries, _ = s.store.ListAllEntriesSorted(ctx, entityID)
-	} else {
+	case "system":
+		entries, _ = s.store.ListSystemEntries(ctx, entityID)
+	default:
 		entries, _ = s.store.ListEntries(ctx, entityID, store.DateRange{}, "", filter, 500, "")
 	}
 
 	// Apply additional filters (label, direction, type) in Go after fetch.
-	if labelFilter != "" || dirFilter != "" || typeFilter != "" {
+	if filter != "system" && (labelFilter != "" || dirFilter != "" || typeFilter != "") {
 		filtered := entries[:0]
 		for _, e := range entries {
 			if labelFilter != "" && (e.LabelID == nil || *e.LabelID != labelFilter) {
@@ -603,46 +606,48 @@ func (s *Server) Ledger(c echo.Context) error {
 	}
 
 	// Apply non-default sort.
-	switch srt {
-	case "rate":
-		sort.SliceStable(entries, func(i, j int) bool {
-			ri, rj := entries[i].ActualRatePerDay, entries[j].ActualRatePerDay
-			if ri == nil && rj == nil {
-				return false
-			}
-			if ri == nil {
-				return false
-			}
-			if rj == nil {
-				return true
-			}
-			return *ri > *rj
-		})
-	case "fitness":
-		sort.SliceStable(entries, func(i, j int) bool {
-			ci, cj := entries[i].Fitness, entries[j].Fitness
-			if ci == nil && cj == nil {
-				return false
-			}
-			if ci == nil {
-				return false
-			}
-			if cj == nil {
-				return true
-			}
-			return *ci > *cj
-		})
-	case "label":
-		sort.SliceStable(entries, func(i, j int) bool {
-			li, lj := "", ""
-			if entries[i].LabelName != nil {
-				li = *entries[i].LabelName
-			}
-			if entries[j].LabelName != nil {
-				lj = *entries[j].LabelName
-			}
-			return li < lj
-		})
+	if filter != "system" {
+		switch srt {
+		case "rate":
+			sort.SliceStable(entries, func(i, j int) bool {
+				ri, rj := entries[i].ActualRatePerDay, entries[j].ActualRatePerDay
+				if ri == nil && rj == nil {
+					return false
+				}
+				if ri == nil {
+					return false
+				}
+				if rj == nil {
+					return true
+				}
+				return *ri > *rj
+			})
+		case "fitness":
+			sort.SliceStable(entries, func(i, j int) bool {
+				ci, cj := entries[i].Fitness, entries[j].Fitness
+				if ci == nil && cj == nil {
+					return false
+				}
+				if ci == nil {
+					return false
+				}
+				if cj == nil {
+					return true
+				}
+				return *ci > *cj
+			})
+		case "label":
+			sort.SliceStable(entries, func(i, j int) bool {
+				li, lj := "", ""
+				if entries[i].LabelName != nil {
+					li = *entries[i].LabelName
+				}
+				if entries[j].LabelName != nil {
+					lj = *entries[j].LabelName
+				}
+				return li < lj
+			})
+		}
 	}
 
 	for i := range entries {
