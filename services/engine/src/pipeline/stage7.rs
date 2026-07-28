@@ -8,12 +8,11 @@
 //!
 //! ## Eligibility
 //!
-//! | Status    | project_tentatively | Stage 7 |
-//! |-----------|---------------------|---------|
-//! | `live`    | —                   | Include |
-//! | `pending` | `TRUE`              | Include |
-//! | `pending` | `FALSE`             | Exclude |
-//! | `ended`   | —                   | Exclude |
+//! | Status    | Stage 7 |
+//! |-----------|---------|
+//! | `live`    | Include |
+//! | `pending` | Include |
+//! | `ended`   | Exclude |
 //!
 //! ## Algorithm
 //!
@@ -404,11 +403,7 @@ async fn load_eligible_entries(entity_id: Uuid, pool: &PgPool) -> Result<Vec<Eli
                projected_rate_per_day
         FROM entries
         WHERE entity_id = $1
-          AND (
-            (status = 'live' AND end_date IS NULL)
-            OR
-            (status = 'pending' AND project_tentatively = TRUE)
-          )
+          AND status IN ('live', 'pending')
         "#,
     )
     .bind(entity_id)

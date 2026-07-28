@@ -30,7 +30,6 @@ type EntryRow struct {
 	Source              string          `db:"source"`
 	RecurrenceAnchor    *string         `db:"recurrence_anchor"`
 	NextDueDate         *time.Time      `db:"next_due_date"`
-	ProjectTentatively  bool            `db:"project_tentatively"`
 	PendingAmountCents  *int64          `db:"pending_amount_cents"`
 	PendingEffectiveDate *time.Time     `db:"pending_effective_date"`
 	StartDate           time.Time       `db:"start_date"`
@@ -55,7 +54,7 @@ const entryCols = `
 	e.id::text, e.entity_id::text, e.label_id::text, l.name AS label_name,
 	e.direction, e.entry_type, e.period_days, e.variable_method,
 	e.projected_rate_per_day, e.conditions, e.priority, e.status, e.source,
-	e.recurrence_anchor, e.next_due_date, e.project_tentatively,
+	e.recurrence_anchor, e.next_due_date,
 	e.pending_amount_cents, e.pending_effective_date,
 	e.start_date, e.end_date, e.created_at,
 	e.alert_type, e.fitness, e.merchant_fit, e.timing_fit,
@@ -222,7 +221,6 @@ type CreateEntryInput struct {
 	Conditions           json.RawMessage
 	Priority             int
 	Source               string
-	ProjectTentatively   bool
 	StartDate            time.Time
 	EndDate              *time.Time
 }
@@ -233,11 +231,11 @@ func (s *Store) CreateEntry(ctx context.Context, entityID string, in CreateEntry
 		INSERT INTO entries (
 			id, entity_id, label_id, direction, entry_type, period_days,
 			variable_method, projected_rate_per_day, conditions, priority,
-			status, source, project_tentatively, start_date, end_date, created_at
+			status, source, start_date, end_date, created_at
 		) VALUES (
 			gen_random_uuid(), $1, $2::uuid, $3, $4, $5,
 			$6, $7, $8, $9,
-			'pending', $10, $11, $12, $13, NOW()
+			'pending', $10, $11, $12, NOW()
 		)
 		RETURNING %s,
 		NULL::text AS alert_type, NULL::numeric AS fitness,
@@ -249,13 +247,13 @@ func (s *Store) CreateEntry(ctx context.Context, entityID string, in CreateEntry
 		id::text, entity_id::text, label_id::text,
 		NULL AS label_name, direction, entry_type, period_days,
 		variable_method, projected_rate_per_day, conditions, priority, status, source,
-		recurrence_anchor, next_due_date, project_tentatively,
+		recurrence_anchor, next_due_date,
 		pending_amount_cents, pending_effective_date,
 		start_date, end_date, created_at
 	`),
 		entityID, in.LabelID, in.Direction, in.EntryType, in.PeriodDays,
 		in.VariableMethod, in.ProjectedRatePerDay, in.Conditions, in.Priority,
-		in.Source, in.ProjectTentatively, in.StartDate, in.EndDate,
+		in.Source, in.StartDate, in.EndDate,
 	)
 	if err != nil {
 		return EntryRow{}, err
@@ -274,7 +272,6 @@ type UpdateEntryInput struct {
 	Conditions          json.RawMessage
 	Priority            int
 	Status              string
-	ProjectTentatively  bool
 	StartDate           time.Time
 	EndDate             *time.Time
 	RecurrenceAnchor    *string
@@ -304,11 +301,10 @@ func (s *Store) UpdateEntry(ctx context.Context, entityID, id string, in UpdateE
 			conditions = $9,
 			priority = $10,
 			status = $11,
-			project_tentatively = $12,
-			start_date = $13,
-			end_date = $14,
-			recurrence_anchor = $15,
-			next_due_date = $16
+			start_date = $12,
+			end_date = $13,
+			recurrence_anchor = $14,
+			next_due_date = $15
 		WHERE entity_id = $1 AND id = $2
 		RETURNING %s,
 		NULL::text AS alert_type, NULL::numeric AS fitness,
@@ -320,14 +316,14 @@ func (s *Store) UpdateEntry(ctx context.Context, entityID, id string, in UpdateE
 		id::text, entity_id::text, label_id::text,
 		NULL AS label_name, direction, entry_type, period_days,
 		variable_method, projected_rate_per_day, conditions, priority, status, source,
-		recurrence_anchor, next_due_date, project_tentatively,
+		recurrence_anchor, next_due_date,
 		pending_amount_cents, pending_effective_date,
 		start_date, end_date, created_at
 	`),
 		entityID, id,
 		in.LabelID, in.Direction, in.EntryType, in.PeriodDays,
 		in.VariableMethod, in.ProjectedRatePerDay, in.Conditions, in.Priority,
-		in.Status, in.ProjectTentatively, in.StartDate, in.EndDate,
+		in.Status, in.StartDate, in.EndDate,
 		in.RecurrenceAnchor, in.NextDueDate,
 	)
 	if err != nil {

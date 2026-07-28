@@ -614,7 +614,6 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 					var startInp = det.querySelector('.js-start-date');
 					var periodInp = det.querySelector('.js-period-days');
 					var priorityInp = det.querySelector('.js-priority');
-					var projCb = det.querySelector('.js-project-tentatively');
 					var ta = document.querySelector('.js-conditions-ta[data-entry-id="' + entryId + '"]');
 
 					var conds = entry.conditions || {};
@@ -643,7 +642,6 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 							start_date: startVal || entry.start_date,
 							period_days: periodInp && periodInp.value ? parseInt(periodInp.value, 10) : entry.period_days,
 							priority: priorityInp && priorityInp.value !== '' ? parseInt(priorityInp.value, 10) : entry.priority,
-							project_tentatively: projCb ? projCb.checked : entry.project_tentatively,
 							conditions: conds,
 						});
 
@@ -810,7 +808,6 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 								conditions: conds,
 								projected_rate_per_day: ratePerDay,
 								priority: 0,
-								project_tentatively: false,
 							};
 							fetch('/api/entries', {
 								method: 'POST',
@@ -1023,7 +1020,7 @@ templ ledgerEntryRow(e store.EntryRow) {
 								<option value="irregular" selected?={ e.EntryType == "irregular" }>Irregular</option>
 							</select>
 						</div>
-						<!-- Row 2: Start | Period | Priority | Project tentatively -->
+						<!-- Row 2: Start | Period | Priority -->
 						<div style="display:flex;gap:12px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
 							<input
 								class="js-start-date js-date-fp"
@@ -1060,18 +1057,6 @@ templ ledgerEntryRow(e store.EntryRow) {
 									style="width:56px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:4px 6px;font-size:12px;color:var(--text);outline:none;font-family:inherit;box-sizing:border-box"
 								/>
 							</div>
-							<label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text2);cursor:pointer;white-space:nowrap">
-								<input
-									class="js-project-tentatively"
-									type="checkbox"
-									checked?={ e.ProjectTentatively }
-									if e.Source == "system" {
-										disabled
-									}
-									style="accent-color:var(--accent);cursor:pointer"
-								/>
-								Project tentatively
-							</label>
 						</div>
 						<!-- Save button + recurrence footnote -->
 						if e.Source != "system" {

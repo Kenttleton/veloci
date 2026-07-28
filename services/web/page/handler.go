@@ -1000,7 +1000,6 @@ type entryPutBody struct {
 	Status              string          `json:"status"`
 	StartDate           string          `json:"start_date"`
 	EndDate             *string         `json:"end_date"`
-	ProjectTentatively  bool            `json:"project_tentatively"`
 	RecurrenceAnchor    *string         `json:"recurrence_anchor"`
 	NextDueDate         *string         `json:"next_due_date"`
 }
@@ -1034,7 +1033,6 @@ func entryDataJSON(e store.EntryRow) string {
 		Status:              e.Status,
 		StartDate:           e.StartDate.Format("2006-01-02"),
 		EndDate:             endDate,
-		ProjectTentatively:  e.ProjectTentatively,
 		RecurrenceAnchor:    e.RecurrenceAnchor,
 		NextDueDate:         nextDueStr,
 	})

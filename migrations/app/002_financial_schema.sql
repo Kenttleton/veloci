@@ -210,10 +210,6 @@ CREATE TABLE entries (
                          CHECK (source IN ('user', 'engine', 'system')),
   recurrence_anchor      TEXT,
   next_due_date          DATE,
-  -- TRUE = include in Stage 7 projection before user approval.
-  -- Stage 2 sets this when a pending_review entry has next_due_date + recurrence_anchor.
-  -- Cleared on rejection; superseded by active status on approval.
-  project_tentatively    BOOLEAN       NOT NULL DEFAULT FALSE,
   -- Forward versioning: user-known future price change. veloci-api applies
   -- pending_amount_cents automatically when computed_as_of >= pending_effective_date,
   -- then clears both fields. Engine reads projected_rate_per_day after API applies.

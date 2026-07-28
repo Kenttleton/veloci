@@ -761,13 +761,13 @@ async fn persist_cluster(
             "INSERT INTO entries (
                entity_id, label_id, direction, entry_type, period_days, next_due_date,
                recurrence_anchor, conditions, projected_rate_per_day,
-               status, source, project_tentatively, start_date,
+               status, source, start_date,
                alert_type, fitness, merchant_fit, timing_fit, amount_fit,
                sample_merchants, matched_transaction_count
              ) VALUES (
                $1, $2, $3, $4, $5, $6,
                $7, $8, $9,
-               'pending', 'engine', false, $10,
+               'pending', 'engine', $10,
                'new', $11, $12, $13, $14,
                $15, $16
              )

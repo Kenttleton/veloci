@@ -210,7 +210,6 @@ func (h *EntriesHandler) CreateEntry(c echo.Context) error {
 		Conditions          json.RawMessage `json:"conditions"`
 		Priority            int             `json:"priority"`
 		Source              string          `json:"source"`
-		ProjectTentatively  bool            `json:"project_tentatively"`
 		StartDate           string          `json:"start_date"`
 		EndDate             *string         `json:"end_date"`
 	}
@@ -246,7 +245,6 @@ func (h *EntriesHandler) CreateEntry(c echo.Context) error {
 		Conditions:          body.Conditions,
 		Priority:            body.Priority,
 		Source:              source,
-		ProjectTentatively:  body.ProjectTentatively,
 		StartDate:           startDate,
 		EndDate:             endDate,
 	})
@@ -271,7 +269,6 @@ func (h *EntriesHandler) UpdateEntry(c echo.Context) error {
 		Conditions          json.RawMessage `json:"conditions"`
 		Priority            int             `json:"priority"`
 		Status              string          `json:"status"`
-		ProjectTentatively  bool            `json:"project_tentatively"`
 		StartDate           string          `json:"start_date"`
 		EndDate             *string         `json:"end_date"`
 		RecurrenceAnchor    *string         `json:"recurrence_anchor"`
@@ -321,7 +318,6 @@ func (h *EntriesHandler) UpdateEntry(c echo.Context) error {
 		Conditions:          conditions,
 		Priority:            body.Priority,
 		Status:              body.Status,
-		ProjectTentatively:  body.ProjectTentatively,
 		StartDate:           startDate,
 		EndDate:             endDate,
 		RecurrenceAnchor:    body.RecurrenceAnchor,
