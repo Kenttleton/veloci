@@ -39,7 +39,7 @@ pub(crate) struct ActiveEntry {
     entry_type:             String,
     source:                 String,
     period_days:            Option<i32>,
-    variable_method:        Option<String>,
+    rate_method:            String,
     projected_rate_per_day: Option<f64>,
     start_date:             NaiveDate,
 }
@@ -152,13 +152,18 @@ pub(crate) fn compute_entry_rate(
 
     let actual_rate_per_day = compute_actual_rate(rolling_window_total_cents, window_days_used);
 
-    // User-set projected rate takes precedence. Otherwise use the prior snapshot
-    // as a baseline (smooths one-import spikes). New entries with no prior default
-    // to current actual.
+    // User-set projected rate takes precedence. When no user override and transactions
+    // exist, use rate_method (median or max of matched amounts / period_days) as the
+    // forward-looking projection. With no transactions fall back to prior snapshot or actual.
     let projected_rate_per_day = if let Some(user_rate) = entry.projected_rate_per_day {
         user_rate
-    } else {
+    } else if active_txns.is_empty() {
         prior_projected_rate.unwrap_or(actual_rate_per_day)
+    } else {
+        match entry.rate_method.as_str() {
+            "max" => max_rate(&active_txns, period_days),
+            _     => median_rate(&active_txns, period_days), // "median" is the default
+        }
     };
 
     EntryRate {
@@ -189,6 +194,33 @@ fn compute_actual_rate(rolling_window_total_cents: i64, window_days_used: i32) -
     rolling_window_total_cents as f64 / f64::from(window_days_used)
 }
 
+/// Projected rate using the median of matched transaction absolute amounts ÷ period_days.
+/// Signed by the entry's direction separately; this returns the absolute magnitude.
+fn median_rate(txns: &[&AssignedTxn], period_days: i32) -> f64 {
+    if txns.is_empty() || period_days <= 0 {
+        return 0.0;
+    }
+    let mut amounts: Vec<i64> = txns.iter().map(|t| t.amount_cents.abs()).collect();
+    amounts.sort_unstable();
+    let n = amounts.len();
+    let median = if n % 2 == 0 {
+        (amounts[n / 2 - 1] + amounts[n / 2]) / 2
+    } else {
+        amounts[n / 2]
+    };
+    median as f64 / f64::from(period_days)
+}
+
+/// Projected rate using the maximum matched transaction absolute amount ÷ period_days.
+/// Conservative upper-bound projection for budget planning.
+fn max_rate(txns: &[&AssignedTxn], period_days: i32) -> f64 {
+    if txns.is_empty() || period_days <= 0 {
+        return 0.0;
+    }
+    let max = txns.iter().map(|t| t.amount_cents.abs()).max().unwrap_or(0);
+    max as f64 / f64::from(period_days)
+}
+
 // ---------------------------------------------------------------------------
 // DB loaders
 // ---------------------------------------------------------------------------
@@ -202,7 +234,7 @@ async fn load_active_entries(entity_id: Uuid, pool: &PgPool) -> Result<Vec<Activ
         entry_type:             String,
         source:                 String,
         period_days:            Option<i32>,
-        variable_method:        Option<String>,
+        rate_method:            String,
         projected_rate_per_day: Option<sqlx::types::BigDecimal>,
         start_date:             NaiveDate,
     }
@@ -210,7 +242,7 @@ async fn load_active_entries(entity_id: Uuid, pool: &PgPool) -> Result<Vec<Activ
     let rows: Vec<Row> = sqlx::query_as(
         r#"
         SELECT id, label_id, direction, entry_type, source, period_days,
-               variable_method, projected_rate_per_day, start_date
+               rate_method, projected_rate_per_day, start_date
         FROM entries
         WHERE entity_id = $1
           AND status = 'live'
@@ -231,7 +263,7 @@ async fn load_active_entries(entity_id: Uuid, pool: &PgPool) -> Result<Vec<Activ
             entry_type:             r.entry_type,
             source:                 r.source,
             period_days:            r.period_days,
-            variable_method:        r.variable_method,
+            rate_method:            r.rate_method,
             projected_rate_per_day: r.projected_rate_per_day
                 .and_then(|v| v.to_string().parse::<f64>().ok()),
             start_date:             r.start_date,
@@ -362,5 +394,42 @@ mod tests {
         let r1 = compute_actual_rate(-3000, 30);
         let r2 = compute_actual_rate(-3000, 30);
         assert!((r1 - r2).abs() < 1e-10, "rate must be deterministic");
+    }
+
+    fn make_txn(amount_cents: i64) -> AssignedTxn {
+        AssignedTxn {
+            entry_id:     Uuid::nil(),
+            txn_date:     chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
+            amount_cents,
+        }
+    }
+
+    #[test]
+    fn median_rate_odd() {
+        let txns = vec![make_txn(-1000), make_txn(-3000), make_txn(-2000)];
+        let refs: Vec<&AssignedTxn> = txns.iter().collect();
+        // median of [1000, 2000, 3000] = 2000; rate = 2000 / 30
+        assert!((median_rate(&refs, 30) - 2000.0 / 30.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn median_rate_even() {
+        let txns = vec![make_txn(-1000), make_txn(-2000), make_txn(-3000), make_txn(-4000)];
+        let refs: Vec<&AssignedTxn> = txns.iter().collect();
+        // median of [1000, 2000, 3000, 4000] = (2000+3000)/2 = 2500; rate = 2500 / 30
+        assert!((median_rate(&refs, 30) - 2500.0 / 30.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn max_rate_picks_largest() {
+        let txns = vec![make_txn(-1000), make_txn(-5000), make_txn(-2000)];
+        let refs: Vec<&AssignedTxn> = txns.iter().collect();
+        // max = 5000; rate = 5000 / 30
+        assert!((max_rate(&refs, 30) - 5000.0 / 30.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn median_rate_empty_returns_zero() {
+        assert_eq!(median_rate(&[], 30), 0.0);
     }
 }
