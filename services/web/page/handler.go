@@ -826,7 +826,7 @@ func alertTypeLabel(t *string) string {
 		return ""
 	}
 	switch *t {
-	case "new_recurring":
+	case "new":
 		return "New"
 	case "drift":
 		return "Drift"

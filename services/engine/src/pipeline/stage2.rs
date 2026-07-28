@@ -732,7 +732,7 @@ async fn persist_cluster(
             "UPDATE entries SET
                direction = $2, entry_type = $3, period_days = $4, next_due_date = $5,
                recurrence_anchor = $6, conditions = $7, projected_rate_per_day = $8,
-               start_date = $9, alert_type = 'new',
+               start_date = $9,
                fitness = $10, merchant_fit = $11, timing_fit = $12,
                amount_fit = $13, sample_merchants = $14, matched_transaction_count = $15
              WHERE id = $1",
