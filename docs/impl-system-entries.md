@@ -5,7 +5,7 @@
 Three related changes shipped together:
 
 1. **Status rename** — entry status values renamed: `pending_review` → `pending`, `active` → `live`, `inactive` → `ended`
-2. **Unified rolling window rate** — Stage 3 rate calculation replaces standing/variable/irregular branch logic with a single formula
+2. **Unified rolling window rate** — Stage 3 rate calculation replaces standing/variable branch logic with a single formula
 3. **System entries** — Income and Spend engine-managed entries created per entity; `entity_config` table stores the configurable window width
 
 ---
@@ -82,7 +82,7 @@ Where:
 - `W` = `entry.period_days` for named entries (`scope IS NULL`)
 - `W` = `entity_config.system_window_days` for system entries (`scope = 'system'`)
 
-`variable_method` (`avg` / `max`) is removed from the rate calculation. The rolling window naturally averages variable amounts. If `variable_method = 'max'` behaviour is needed it can be added as a future flag but is not part of this implementation.
+`rate_method` (`median` / `max`) controls projected rate for standing entries. The rolling window total is used for `actual_rate_per_day` regardless; `rate_method` only affects `projected_rate_per_day` when no user override is set.
 
 ### Stage 3 changes in Rust
 
@@ -116,7 +116,7 @@ System entry upsert uses `ON CONFLICT (entity_id, label_id) WHERE scope = 'syste
 | --- | --- | --- |
 | `label_id` | Income system label ID | Spend system label ID |
 | `direction` | `income` | `spend` |
-| `entry_type` | `irregular` | `irregular` |
+| `entry_type` | `variable` | `variable` |
 | `scope` | `system` | `system` |
 | `period_days` | NULL (uses system_window_days) | NULL |
 | `conditions` | `{"entry_direction": "income"}` | `{"entry_direction": "spend"}` |

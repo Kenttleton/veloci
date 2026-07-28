@@ -68,7 +68,6 @@ Name resolved to/from UUID at the API boundary. In the summary view, label names
 
 {"entry_type": "standing"}
 {"entry_type": "variable"}
-{"entry_type": "irregular"}
 
 {"entry_period": {"min_days": 25, "max_days": 35}}
 
@@ -152,7 +151,7 @@ Three completers run in parallel via `autocompletion({ override: [...] })`:
 | --- | --- |
 | `payee_*` | Live search: `QUERY /api/transactions/merchant` with typed prefix; returns `merchant_normalized` strings by frequency |
 | `entry_direction` | Inline enum: `income`, `spend` |
-| `entry_type` | Inline enum: `standing`, `variable`, `irregular` |
+| `entry_type` | Inline enum: `standing`, `variable` |
 | `label_matched` | Cached fetch `/api/labels?limit=500`, filtered by name |
 | `account` | Cached fetch `/api/accounts?limit=500`, filtered by name |
 | `institution` | Cached fetch `/api/institutions`, filtered by `institution_name` |
@@ -167,7 +166,7 @@ Runs 600ms after last keystroke. Reports diagnostics on the relevant key or valu
 | --- | --- |
 | Unknown key | Warning |
 | `entry_direction` not `"income"` or `"spend"` | Error |
-| `entry_type` not `"standing"`, `"variable"`, or `"irregular"` | Error |
+| `entry_type` not `"standing"` or `"variable"` | Error |
 | `and`/`or` value is not an array | Error |
 | `payee_*` value is an empty string | Warning |
 | `amount_range` value is not an object with at least one of `min`/`max` | Error |

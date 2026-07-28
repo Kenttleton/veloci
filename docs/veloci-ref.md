@@ -13,7 +13,7 @@ Concept-centric quick reference. Each section is self-contained: definition, sch
 actual_rate_per_day(t) = Σ |amount_i| for t_i in [t − W, t] / W
 ```
 - `W = period_days` for named entries; `W = entity_config.system_window_days` for system entries
-- Entry type (standing/variable/irregular) affects how `period_days` is detected, not the formula
+- Entry type (standing/variable) affects how `period_days` is detected, not the formula
 
 **Three lanes:**
 - `Projection` — expected rate from detected patterns
@@ -23,9 +23,8 @@ actual_rate_per_day(t) = Σ |amount_i| for t_i in [t − W, t] / W
 **Margin** = income rate − spend rate (all Active accounts)
 
 **Entry types** — affect pattern detection only, not rate formula:
-- `standing` — regular cadence, consistent amount (≥3 obs); `period_days` from recurrence interval
-- `variable` — regular cadence, inconsistent amount; `variable_method` = `avg` or `max`
-- `irregular` — no detectable cadence; `period_days` from mean observed interval (default 30)
+- `standing` — regular cadence; amount may be fixed or range-bound. `rate_method` = `median` (default) or `max` controls the projected rate.
+- `variable` — no detectable cadence; `period_days` from mean observed interval (default 30)
 
 **Account status:**
 - `active` — flows contribute to Income/Spend/Margin
@@ -60,10 +59,10 @@ actual_rate_per_day(t) = Σ |amount_i| for t_i in [t − W, t] / W
 - `entity_id` UUID FK → entity
 - `label_id` UUID FK → labels — required
 - `direction` TEXT — `income` | `spend`
-- `entry_type` TEXT — `standing` | `variable` | `irregular`
+- `entry_type` TEXT — `standing` | `variable`
 - `scope` TEXT — NULL = user/engine; `system` = built-in
 - `period_days` INTEGER — rolling window W; default 30
-- `variable_method` TEXT — `avg` | `max`; variable entries only
+- `rate_method` TEXT — `median` | `max`; standing entries only; default `median`
 - `projected_rate_per_day` NUMERIC(12,4)
 - `conditions` JSONB — auto-match rules; nullable for manual entries
 - `priority` INTEGER — lower = matched first; default 100
@@ -186,23 +185,19 @@ entry_recurrence_anchor{"type":"entry_recurrence_anchor",  "recurrence_anchor":"
 
 **Composite (`fitness`):** A type-weighted blend of the three components. Weights are higher on the dimensions that matter most for each entry type:
 
-| Type | merchant | timing | amount |
-|------|----------|--------|--------|
-| standing | 0.20 | 0.40 | 0.40 |
-| variable | 0.30 | 0.55 | 0.15 |
-| irregular | 0.60 | 0.20 | 0.20 |
+| Type       | merchant | timing | amount |
+|------------|----------|--------|--------|
+| standing   | 0.30     | 0.55   | 0.15   |
+| variable   | 0.60     | 0.20   | 0.20   |
 
-**Stage 2 classification thresholds** (component-driven, not a composite gate):
+**Stage 2 classification thresholds:**
 
-| Type | Requires |
-|------|----------|
-| `standing` | `timing ≥ 0.75` AND `amount ≥ 0.80` AND `observations ≥ 3` |
-| `variable` | `observations ≥ 2` AND `timing ≥ 0.45` |
-| `irregular` | Fallthrough — no reliable cadence |
+| Type         | Requires                                    |
+|--------------|---------------------------------------------|
+| `standing`   | `observations ≥ 2` AND `timing ≥ 0.45`     |
+| `variable`   | Fallthrough — no detectable cadence         |
 
-Minimum 3 observations for standing prevents two identical transactions (1 interval, std_dev = 0) from falsely passing the timing gate with a perfect score.
-
-**Stage 2 surfacing gate:** New clusters with `fitness < 0.3` are silently discarded — no entry created. A single new irregular transaction scores `merchant_fit=1.0, timing_fit=0.0, amount_fit=1.0` → fitness = 0.80, which clears the gate.
+**Stage 2 surfacing gate:** New clusters with `fitness < 0.3` are silently discarded — no entry created. A single new variable transaction scores `merchant_fit=1.0, timing_fit=0.0, amount_fit=1.0` → fitness = 0.80, which clears the gate.
 
 **Recurrence anchor format** (stored in `entries.recurrence_anchor`):
 

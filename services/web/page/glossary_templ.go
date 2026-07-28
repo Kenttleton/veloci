@@ -111,7 +111,7 @@ func GlossaryPage(data ShellData) templ.Component {
 			}
 			templ_7745c5c3_Err = glossaryTerm("Entry",
 				"A named pattern that matches transactions and converts them to a $/day rate.",
-				"An Entry is the core signal unit in Veloci. Each entry has conditions that match transactions (by merchant, amount, timing), converts the matched transactions into a $/day rate, and is associated with a label. Entries are created during the Review process and can be edited in the entry editor. An entry's type (standing, variable, irregular) determines how its rate is computed.",
+				"An Entry is the core signal unit in Veloci. Each entry has conditions that match transactions (by merchant, amount, timing), converts the matched transactions into a $/day rate, and is associated with a label. Entries are created during the Review process and can be edited in the entry editor. An entry's type (standing or variable) determines how its rate is computed. Standing entries recur on a regular cadence with a consistent or range-bound amount; their projected rate uses the median or max of matched transaction amounts (controlled by rate_method). Variable entries are irregular with no predictable cadence or timing.",
 				"").Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err

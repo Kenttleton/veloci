@@ -67,9 +67,8 @@ Every entry has a signal type. The type tells the engine how to detect recurrenc
 
 | **Type** | **Description** |
 | --- | --- |
-| **Standing** | Regular cadence, consistent amount. Rent, subscriptions, loan payments, salary. The engine detects the interval and sets `period_days` from the recurrence pattern. |
-| **Variable** | Regular cadence, inconsistent amount. Groceries, utilities, fuel. The engine detects the interval; `period_days` is set from the recurrence pattern. `variable_method` controls whether the rate window uses average or maximum. |
-| **Irregular** | No regular cadence — timing confidence falls below the thresholds required for Standing or Variable. The engine groups matching transactions by merchant and sets `period_days` from the mean observed interval if more than one transaction is found; defaults to 30 with only one data point. Car repairs, gas stations, freelance income, annual insurance. |
+| **Standing** | Regular cadence; amount may be fixed or range-bound. Rent, subscriptions, utilities, groceries, salary. The engine detects the interval and sets `period_days` from the recurrence pattern. `rate_method` (`median` or `max`) controls how the projected rate is computed from matched transaction amounts. |
+| **Variable** | No detectable cadence. The engine groups matching transactions by merchant and sets `period_days` from the mean observed interval if more than one transaction is found; defaults to 30 with only one data point. Car repairs, freelance income, annual insurance. |
 
 ## 2.4 Rate Calculation
 
@@ -81,14 +80,14 @@ actual_rate_per_day(t) = Σ amount_i for transactions in [t − W, t] / W
 
 `W` is the rolling window width in days. For named entries `W = period_days`; for system entries `W` is an entity-level configuration value. Without this formula, a $500 car repair would appear as $500/day on the day it posts and $0 afterward. With W=30, it spreads to $16.67/day across the window — the honest answer to "what does maintaining a car actually cost per day."
 
-This formula is uniform across all entry types. Entry types (Standing, Variable, Irregular) determine how `period_days` is detected and what default `W` applies — they do not change the formula itself.
+This formula is uniform across all entry types. Entry types (Standing, Variable) determine how `period_days` is detected and what default `W` applies — they do not change the formula itself.
 
 One-time events spike on the day they hit and amortize naturally over the window as they age out. Recurring transactions produce a stable rate once the window captures a representative sample. Cancellations cause the rate to decay naturally to zero as old transactions exit the window without replacements arriving.
 
 `period_days` is set by the engine from detected recurrence and can be overridden per entry:
 
-- **Standing and Variable entries**: detected automatically from the transaction pattern — 30 for a monthly subscription, 7 for a weekly grocery run, 91 for a quarterly payment.
-- **Irregular entries**: set from the mean observed interval when 2 or more transactions are available; defaults to 30 when only one exists. Users can override — for example, setting 365 for a known annual spend like insurance or registration.
+- **Standing entries**: detected automatically from the transaction pattern — 30 for a monthly subscription, 7 for a weekly grocery run, 91 for a quarterly payment.
+- **Variable entries**: set from the mean observed interval when 2 or more transactions are available; defaults to 30 when only one exists. Users can override — for example, setting 365 for a known annual spend like insurance or registration.
 
 > `period_days` is a per-entry setting. Users can inspect and override it in the entry editor.
 
@@ -110,7 +109,7 @@ Version 1 supports checking and savings accounts. Three additional account types
 
 **Debt accounts (v1.1)** — Credit cards, auto loans, personal loans, mortgages. Treated as Passive. Expose minimum payment rate (the committed /day outflow from the Active budget), true cost rate (principal plus interest over remaining term as /day), and payoff projection (what-if modeling for accelerated payments).
 
-**Interest-bearing accounts (v1.2)** — High-yield savings and similar accrual accounts. Can be added as Active in v1 but interest income appears as irregular entries with no special modeling. v1.2 introduces proper interest accrual: the projected interest rate is computed continuously and contributes to the income lane as a standing rate rather than as sporadic deposits.
+**Interest-bearing accounts (v1.2)** — High-yield savings and similar accrual accounts. Can be added as Active in v1 but interest income appears as variable entries with no special modeling. v1.2 introduces proper interest accrual: the projected interest rate is computed continuously and contributes to the income lane as a standing rate rather than as sporadic deposits.
 
 **Market-based accounts (v1.3)** — Money market, investment brokerage, and cryptocurrency accounts. These carry market risk and require return-rate modeling distinct from fixed-rate accrual. Cryptocurrency may ship as a separate feature track within v1.3.
 
@@ -140,10 +139,10 @@ An Entry is the atomic unit of the financial model. Every income source and spen
 | **entity_id** | Owning entity (household or individual) |
 | **label_id** | Reference to the label naming this signal — every entry must have a label |
 | **direction** | `income` · `spend` |
-| **entry_type** | `standing` · `variable` · `irregular` |
+| **entry_type** | `standing` · `variable` |
 | **scope** | NULL = user-created or engine-detected; `system` = built-in (Income, Spend) |
 | **period_days** | Rolling window width W in days. Default 30. Drives rate calculation and projection timing |
-| **variable_method** | `avg` · `max` — applicable to Variable entries only |
+| **rate_method** | `median` · `max` — standing entries only; controls projected rate computation; default `median` |
 | **projected_rate_per_day** | Expected /day rate — set by the engine from pattern detection or by the user |
 | **conditions** | JSONB matching rules for transaction auto-assignment — nullable for manual entries |
 | **priority** | Lower value = matched first when multiple entries compete for a transaction |
@@ -227,7 +226,7 @@ Unmatched transactions are clustered by normalized merchant name and scored acro
 - **Timing** — how regular the intervals between occurrences are
 - **Amount** — how consistent the transaction amounts are
 
-The scores determine entry type: clusters with tight timing and tight amounts are classified as Standing; tight timing with variable amounts as Variable; everything else as Irregular. Each cluster that clears a minimum confidence threshold produces a `pending` entry in the `entries` table.
+The scores determine entry type: clusters with detectable timing cadence (≥2 observations, timing_fit ≥ 0.45) are classified as Standing regardless of amount variance; everything else as Variable. Each cluster that clears a minimum confidence threshold produces a `pending` entry in the `entries` table.
 
 ## 4.5 User Review
 
@@ -307,9 +306,8 @@ Veloci uses a consistent naming system across all surfaces. Terms are plain noun
 
 | **Term** | **Definition** |
 | --- | --- |
-| **Standing** | Regular cadence, consistent amount. Engine detects interval; sets `period_days` from recurrence |
-| **Variable** | Regular cadence, inconsistent amount. Engine detects interval; `variable_method` controls avg vs max within the window |
-| **Irregular** | No detectable cadence. Engine sets `period_days` from mean observed interval; defaults to 30 |
+| **Standing** | Regular cadence; amount may be fixed or range-bound. Engine detects interval; `rate_method` (`median`/`max`) controls projected rate |
+| **Variable** | No detectable cadence. Engine sets `period_days` from mean observed interval; defaults to 30 |
 
 ## 6.3 Account Status
 
@@ -329,7 +327,7 @@ Veloci uses a consistent naming system across all surfaces. Terms are plain noun
 
 | **Term** | **Definition** |
 | --- | --- |
-| **Smoothing** | The rolling window (`period_days`) on an entry. Engine-detected for Standing and Variable; user-configured for Irregular. The actual rate is always the rolling window total ÷ `period_days` |
+| **Smoothing** | The rolling window (`period_days`) on an entry. Engine-detected for Standing entries; user-configured or defaulted (mean interval) for Variable. The actual rate is always the rolling window total ÷ `period_days` |
 
 ## 6.6 Views
 
@@ -560,10 +558,10 @@ One row per continuous rate signal instance.
 | entity_id | UUID | FK → entities |
 | label_id | UUID | FK → labels — every entry must have a label |
 | direction | TEXT | `income` · `spend` |
-| entry_type | TEXT | `standing` · `variable` · `irregular` |
+| entry_type | TEXT | `standing` · `variable` |
 | scope | TEXT | NULL = user or engine; `system` = built-in (Income, Spend) |
 | period_days | INTEGER | Rolling window width W in days. Default 30 |
-| variable_method | TEXT | `avg` · `max` — variable entries only |
+| rate_method | TEXT | `median` · `max` — standing entries only; default `median` |
 | projected_rate_per_day | NUMERIC(12,4) | Engine or user-set expected /day rate |
 | conditions | JSONB | Auto-match rules — nullable for manual entries |
 | priority | INTEGER | Lower = matched first. Default 100 |
@@ -695,7 +693,7 @@ Clusters unmatched transactions by merchant name similarity, amount consistency,
 
 For each accepted cluster: upserts a label (by name, unique per entity), creates an entry with `source = 'engine'`, `alert_type = 'new'`, and `start_date` set to the earliest transaction in the cluster. Review metadata (confidence scores, sample merchants, matched transaction count) is written directly to the `entries` row — there is no separate review table. Sets `next_due_date` and `project_tentatively = TRUE` when the recurrence pattern is clear enough to project before user approval.
 
-Entry type assignment: `standing` for clusters with regular timing and consistent amounts (≥3 observations); `variable` for clusters with regular timing and variable amounts; `irregular` as the fallthrough when timing confidence is below the gates. For irregular clusters, `period_days` is set to the mean observed interval when 2+ transactions are present, or 30 for a single-transaction cluster.
+Entry type assignment: `standing` for clusters with detectable timing cadence (≥2 observations, timing_fit ≥ 0.45) regardless of amount variance; `variable` as the fallthrough when no reliable cadence is detected. For variable clusters, `period_days` is set to the mean observed interval when 2+ transactions are present, or 30 for a single-transaction cluster.
 
 ---
 
