@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -68,12 +69,12 @@ const entryCols = `
 // accountID limits to entries with transactions in that account.
 // statusFilter defaults to active-only; pass "all" for every status.
 func (s *Store) ListEntries(ctx context.Context, entityID string, dr DateRange, accountID, statusFilter string, limit int, cursor string) ([]EntryRow, error) {
-	statusCond := `e.status = 'live'`
+	statusCond := `e.status = 'live' AND e.source != 'system'`
 	switch statusFilter {
 	case "all":
-		statusCond = `1=1`
+		statusCond = `e.source != 'system'`
 	case "pending", "ended":
-		statusCond = `e.status = '` + statusFilter + `'`
+		statusCond = `e.status = '` + statusFilter + `' AND e.source != 'system'`
 	}
 
 	args := []any{entityID}
@@ -536,14 +537,17 @@ type EntryCounts struct {
 	Pending int
 	Live    int
 	Ended   int
+	System  int
 }
 
 // CountEntriesByStatus returns the number of entries per status for a given entity.
+// System entries are counted separately so the All pill can include them while
+// Review/Live/Ended pill counts reflect workflow entries only.
 func (s *Store) CountEntriesByStatus(ctx context.Context, entityID string) (EntryCounts, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT status, COUNT(*)::int
 		FROM entries
-		WHERE entity_id = $1
+		WHERE entity_id = $1 AND source != 'system'
 		GROUP BY status
 	`, entityID)
 	if err != nil {
@@ -566,7 +570,15 @@ func (s *Store) CountEntriesByStatus(ctx context.Context, entityID string) (Entr
 			c.Ended = count
 		}
 	}
-	return c, rows.Err()
+	if err := rows.Err(); err != nil {
+		return EntryCounts{}, err
+	}
+	if err := s.pool.QueryRow(ctx, `
+		SELECT COUNT(*)::int FROM entries WHERE entity_id = $1 AND source = 'system'
+	`, entityID).Scan(&c.System); err != nil {
+		return EntryCounts{}, err
+	}
+	return c, nil
 }
 
 // ListAllEntriesSorted returns up to 1000 entries sorted so pending
@@ -598,4 +610,53 @@ func (s *Store) ListAllEntriesSorted(ctx context.Context, entityID string) ([]En
 		return nil, err
 	}
 	return pgx.CollectRows(rows, pgx.RowToStructByName[EntryRow])
+}
+
+// systemEntryOrder defines the display rank for system entries by label name.
+// Unmapped entries sort after all mapped ones, preserving DB retrieval order.
+var systemEntryOrder = map[string]int{
+	"All":    0,
+	"Income": 1,
+	"Spend":  2,
+}
+
+func sortSystemEntries(entries []EntryRow) {
+	rank := func(e EntryRow) int {
+		if e.LabelName != nil {
+			if r, ok := systemEntryOrder[*e.LabelName]; ok {
+				return r
+			}
+		}
+		return len(systemEntryOrder) + 1
+	}
+	sort.SliceStable(entries, func(i, j int) bool {
+		return rank(entries[i]) < rank(entries[j])
+	})
+}
+
+// ListSystemEntries returns all entries with source='system' for the entity,
+// sorted by the hardcoded systemEntryOrder map (All → Income → Spend).
+// Unmapped future system entries appear after the known ones in retrieval order.
+func (s *Store) ListSystemEntries(ctx context.Context, entityID string) ([]EntryRow, error) {
+	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
+		SELECT %s
+		FROM entries e
+		LEFT JOIN labels l ON l.id = e.label_id
+		LEFT JOIN LATERAL (
+			SELECT actual_rate_per_day, drift_per_day
+			FROM snapshots
+			WHERE entity_id = e.entity_id AND node_id = e.id AND node_type = 'entry'
+			ORDER BY snapshot_date DESC LIMIT 1
+		) s ON true
+		WHERE e.entity_id = $1 AND e.source = 'system'
+	`, entryCols), entityID)
+	if err != nil {
+		return nil, err
+	}
+	entries, err := pgx.CollectRows(rows, pgx.RowToStructByName[EntryRow])
+	if err != nil {
+		return nil, err
+	}
+	sortSystemEntries(entries)
+	return entries, nil
 }
