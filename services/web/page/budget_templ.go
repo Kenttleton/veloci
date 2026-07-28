@@ -1282,8 +1282,6 @@ func budgetEntryTypeName(e store.EntryRow) string {
 		return "Standing"
 	case "variable":
 		return "Variable"
-	case "irregular":
-		return "Irregular"
 	}
 	return e.EntryType
 }

@@ -243,7 +243,7 @@ function contextKeyCompleter(context) {
     // Entry-target leaves
     { label: "label_matched", detail: "entry has this label", apply: snippet('"label_matched": "${}"') },
     { label: "entry_direction", detail: "income, spend, or mixed", apply: snippet('"entry_direction": "${spend}"') },
-    { label: "entry_type", detail: "standing, variable, or irregular", apply: snippet('"entry_type": "${standing}"') },
+    { label: "entry_type", detail: "standing or variable", apply: snippet('"entry_type": "${standing}"') },
     { label: "entry_period", detail: "recurrence period in days", apply: snippet('"entry_period": {"min_days": ${25}, "max_days": ${35}}') },
     { label: "entry_fitness", detail: "fitness score gates", apply: snippet('"entry_fitness": {"overall": {"min": ${0.8}}}') },
     { label: "entry_projected_rate", detail: "projected rate (percent)", apply: snippet('"entry_projected_rate": {"min": ${1.5}}') },
@@ -305,7 +305,7 @@ async function valueCompleter(context) {
   if (key === "entry_type") {
     return {
       from: valueStart,
-      options: ["standing", "variable", "irregular"].map(v => ({ label: v, type: "enum", apply: makeApply(v) })),
+      options: ["standing", "variable"].map(v => ({ label: v, type: "enum", apply: makeApply(v) })),
     }
   }
 
@@ -410,12 +410,12 @@ function conditionsLinter(view) {
         })
       }
 
-      if (key === "entry_type" && !["standing", "variable", "irregular"].includes(val)) {
+      if (key === "entry_type" && !["standing", "variable"].includes(val)) {
         const pos = findValueRange(key, String(val))
         if (pos) diagnostics.push({
           ...pos,
           severity: "error",
-          message: `${label(key)} must be "standing", "variable", or "irregular".`,
+          message: `${label(key)} must be "standing" or "variable".`,
         })
       }
 

@@ -23,8 +23,7 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 					<div style="width:1px;height:16px;background:var(--border);margin:0 4px"></div>
 					@ledgerTypePill("standing", "Standing", data)
 					@ledgerTypePill("variable", "Variable", data)
-					@ledgerTypePill("irregular", "Irregular", data)
-				}
+					}
 				if data.LabelFilter != "" {
 					<div style="width:1px;height:16px;background:var(--border);margin:0 4px"></div>
 					<a
@@ -126,8 +125,7 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 							<option value="">— select —</option>
 							<option value="standing">Standing</option>
 							<option value="variable">Variable</option>
-							<option value="irregular">Irregular</option>
-						</select>
+							</select>
 					</div>
 				</div>
 				<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -1017,8 +1015,7 @@ templ ledgerEntryRow(e store.EntryRow) {
 							>
 								<option value="standing" selected?={ e.EntryType == "standing" }>Standing</option>
 								<option value="variable" selected?={ e.EntryType == "variable" }>Variable</option>
-								<option value="irregular" selected?={ e.EntryType == "irregular" }>Irregular</option>
-							</select>
+								</select>
 						</div>
 						<!-- Row 2: Start | Period | Priority -->
 						<div style="display:flex;gap:12px;align-items:center;margin-bottom:8px;flex-wrap:wrap">

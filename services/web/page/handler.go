@@ -528,7 +528,7 @@ type LedgerData struct {
 	LabelFilter     string // ?label=<uuid> — filter by label_id
 	LabelName       string // display name for active label filter
 	DirectionFilter string // ?direction=income|spend
-	TypeFilter      string // ?entry_type=standing|variable|irregular
+	TypeFilter      string // ?entry_type=standing|variable
 	Sort            string // ?sort=start_date|rate|fitness|label
 }
 
@@ -813,8 +813,6 @@ func entryTypeLabel(t string) string {
 		return "Standing"
 	case "variable":
 		return "Variable"
-	case "irregular":
-		return "Irregular"
 	default:
 		return t
 	}
