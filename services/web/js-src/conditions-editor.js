@@ -15,27 +15,27 @@ const PAYEE_KEYS = new Set([
 ])
 
 const KEY_LABELS = {
-  and:                    "All of these",
-  or:                     "Any of these",
-  not:                    "None of these",
-  payee_contains:         "Description contains",
-  payee_exact:            "Description is exactly",
-  payee_starts_with:      "Description starts with",
-  payee_ends_with:        "Description ends with",
-  payee_not_contains:     "Description does not contain",
-  payee_regex:            "Description matches pattern",
-  payee_one_of:           "Description is one of",
-  amount_range:           "Amount is between",
-  date_day_of_month:      "Day of month is",
-  date_range:             "Date is between",
-  account:                "From account",
-  institution:            "From institution",
-  label_matched:          "Tagged as",
-  entry_direction:        "Direction is",
-  entry_type:             "Type is",
-  entry_period:           "Period is between",
-  entry_projected_rate:   "Projected rate is between",
-  entry_fitness:          "Fitness is",
+  and: "All of these",
+  or: "Any of these",
+  not: "None of these",
+  payee_contains: "Description contains",
+  payee_exact: "Description is exactly",
+  payee_starts_with: "Description starts with",
+  payee_ends_with: "Description ends with",
+  payee_not_contains: "Description does not contain",
+  payee_regex: "Description matches pattern",
+  payee_one_of: "Description is one of",
+  amount_range: "Amount is between",
+  date_day_of_month: "Day of month is",
+  date_range: "Date is between",
+  account: "From account",
+  institution: "From institution",
+  label_matched: "Tagged as",
+  entry_direction: "Direction is",
+  entry_type: "Type is",
+  entry_period: "Period is between",
+  entry_projected_rate: "Projected rate is between",
+  entry_fitness: "Fitness is",
   entry_recurrence_anchor: "Anchor is",
 }
 
@@ -226,27 +226,27 @@ function contextKeyCompleter(context) {
 
   const conditionOptions = [
     // Payee (transaction-target)
-    { label: "payee_contains",     detail: "description contains text",            apply: snippet('"payee_contains": "${}"') },
-    { label: "payee_exact",        detail: "description is exactly this",          apply: snippet('"payee_exact": "${}"') },
-    { label: "payee_starts_with",  detail: "description starts with",              apply: snippet('"payee_starts_with": "${}"') },
-    { label: "payee_ends_with",    detail: "description ends with",                apply: snippet('"payee_ends_with": "${}"') },
-    { label: "payee_not_contains", detail: "description does not contain",         apply: snippet('"payee_not_contains": "${}"') },
-    { label: "payee_regex",        detail: "description matches regex",            apply: snippet('"payee_regex": "${}"') },
-    { label: "payee_one_of",       detail: "description is one of several values", apply: snippet('"payee_one_of": ["${}"]') },
+    { label: "payee_contains", detail: "description contains text", apply: snippet('"payee_contains": "${}"') },
+    { label: "payee_exact", detail: "description is exactly this", apply: snippet('"payee_exact": "${}"') },
+    { label: "payee_starts_with", detail: "description starts with", apply: snippet('"payee_starts_with": "${}"') },
+    { label: "payee_ends_with", detail: "description ends with", apply: snippet('"payee_ends_with": "${}"') },
+    { label: "payee_not_contains", detail: "description does not contain", apply: snippet('"payee_not_contains": "${}"') },
+    { label: "payee_regex", detail: "description matches regex", apply: snippet('"payee_regex": "${}"') },
+    { label: "payee_one_of", detail: "description is one of several values", apply: snippet('"payee_one_of": ["${}"]') },
     // Amount / date (transaction-target)
-    { label: "amount_range",       detail: "amount between values (dollars)",      apply: snippet('"amount_range": {"min": ${-50}, "max": ${-10}}') },
-    { label: "date_day_of_month",  detail: "day of month (1–28)",                  apply: snippet('"date_day_of_month": {"day": ${15}}') },
-    { label: "date_range",         detail: "date is within a range",               apply: snippet('"date_range": {"start": "${2026-01-01}", "end": "${2026-12-31}"}') },
+    { label: "amount_range", detail: "amount between values (dollars)", apply: snippet('"amount_range": {"min": ${-50}, "max": ${-10}}') },
+    { label: "date_day_of_month", detail: "day of month (1–28)", apply: snippet('"date_day_of_month": {"day": ${15}}') },
+    { label: "date_range", detail: "date is within a range", apply: snippet('"date_range": {"start": "${2026-01-01}", "end": "${2026-12-31}"}') },
     // Account / institution (transaction-target)
-    { label: "account",            detail: "from a specific account",              apply: snippet('"account": "${}"') },
-    { label: "institution",        detail: "from a specific institution",          apply: snippet('"institution": "${}"') },
+    { label: "account", detail: "from a specific account", apply: snippet('"account": "${}"') },
+    { label: "institution", detail: "from a specific institution", apply: snippet('"institution": "${}"') },
     // Entry-target leaves
-    { label: "label_matched",      detail: "entry has this label",                 apply: snippet('"label_matched": "${}"') },
-    { label: "entry_direction",    detail: "income or spend",                      apply: snippet('"entry_direction": "${spend}"') },
-    { label: "entry_type",         detail: "standing, variable, or irregular",     apply: snippet('"entry_type": "${standing}"') },
-    { label: "entry_period",       detail: "recurrence period in days",            apply: snippet('"entry_period": {"min_days": ${25}, "max_days": ${35}}') },
-    { label: "entry_fitness",      detail: "fitness score gates",                  apply: snippet('"entry_fitness": {"overall": {"min": ${0.8}}}') },
-    { label: "entry_projected_rate", detail: "projected rate (percent)",           apply: snippet('"entry_projected_rate": {"min": ${1.5}}') },
+    { label: "label_matched", detail: "entry has this label", apply: snippet('"label_matched": "${}"') },
+    { label: "entry_direction", detail: "income, spend, or mixed", apply: snippet('"entry_direction": "${spend}"') },
+    { label: "entry_type", detail: "standing, variable, or irregular", apply: snippet('"entry_type": "${standing}"') },
+    { label: "entry_period", detail: "recurrence period in days", apply: snippet('"entry_period": {"min_days": ${25}, "max_days": ${35}}') },
+    { label: "entry_fitness", detail: "fitness score gates", apply: snippet('"entry_fitness": {"overall": {"min": ${0.8}}}') },
+    { label: "entry_projected_rate", detail: "projected rate (percent)", apply: snippet('"entry_projected_rate": {"min": ${1.5}}') },
     { label: "entry_recurrence_anchor", detail: "anchor: dom:N, dow:N, interval:N", apply: snippet('"entry_recurrence_anchor": "${dom:15}"') },
   ]
 
@@ -298,7 +298,7 @@ async function valueCompleter(context) {
   if (key === "entry_direction") {
     return {
       from: valueStart,
-      options: ["income", "spend"].map(v => ({ label: v, type: "enum", apply: makeApply(v) })),
+      options: ["income", "spend", "mixed"].map(v => ({ label: v, type: "enum", apply: makeApply(v) })),
     }
   }
 
@@ -311,14 +311,14 @@ async function valueCompleter(context) {
 
   if (key === "entry_recurrence_anchor") {
     const anchors = [
-      { label: "dom:1",      detail: "1st of month" },
-      { label: "dom:15",     detail: "15th of month" },
-      { label: "dom:-1",     detail: "last day of month" },
-      { label: "dom:-7",     detail: "7 days before month end" },
-      { label: "dom:1,15",   detail: "1st and 15th (semi-monthly)" },
-      { label: "dow:0",      detail: "every Monday" },
-      { label: "dow:4",      detail: "every Friday" },
-      { label: "interval:7",  detail: "every 7 days" },
+      { label: "dom:1", detail: "1st of month" },
+      { label: "dom:15", detail: "15th of month" },
+      { label: "dom:-1", detail: "last day of month" },
+      { label: "dom:-7", detail: "7 days before month end" },
+      { label: "dom:1,15", detail: "1st and 15th (semi-monthly)" },
+      { label: "dow:0", detail: "every Monday" },
+      { label: "dow:4", detail: "every Friday" },
+      { label: "interval:7", detail: "every 7 days" },
       { label: "interval:14", detail: "every 14 days" },
       { label: "interval:30", detail: "every 30 days" },
     ]
@@ -401,12 +401,12 @@ function conditionsLinter(view) {
         continue
       }
 
-      if (key === "entry_direction" && !["income", "spend"].includes(val)) {
+      if (key === "entry_direction" && !["income", "spend", "mixed"].includes(val)) {
         const pos = findValueRange(key, String(val))
         if (pos) diagnostics.push({
           ...pos,
           severity: "error",
-          message: `${label(key)} must be "income" or "spend".`,
+          message: `${label(key)} must be "income", "spend", or "mixed".`,
         })
       }
 
@@ -448,7 +448,7 @@ function conditionsLinter(view) {
 
       if (key === "amount_range") {
         if (!val || typeof val !== "object" || Array.isArray(val) ||
-            (val.min === undefined && val.max === undefined)) {
+          (val.min === undefined && val.max === undefined)) {
           const pos = findKeyRange(key)
           if (pos) diagnostics.push({
             ...pos,
@@ -471,7 +471,7 @@ function conditionsLinter(view) {
 
       if (key === "date_range") {
         if (!val || typeof val !== "object" || Array.isArray(val) ||
-            val.start === undefined || val.end === undefined) {
+          val.start === undefined || val.end === undefined) {
           const pos = findKeyRange(key)
           if (pos) diagnostics.push({
             ...pos,
@@ -483,7 +483,7 @@ function conditionsLinter(view) {
 
       if (key === "entry_period") {
         if (!val || typeof val !== "object" || Array.isArray(val) ||
-            (val.min_days === undefined && val.max_days === undefined)) {
+          (val.min_days === undefined && val.max_days === undefined)) {
           const pos = findKeyRange(key)
           if (pos) diagnostics.push({
             ...pos,
@@ -504,7 +504,7 @@ function conditionsLinter(view) {
 
       if (key === "entry_projected_rate") {
         if (!val || typeof val !== "object" || Array.isArray(val) ||
-            (val.min === undefined && val.max === undefined)) {
+          (val.min === undefined && val.max === undefined)) {
           const pos = findKeyRange(key)
           if (pos) diagnostics.push({
             ...pos,
@@ -525,7 +525,7 @@ function conditionsLinter(view) {
 
       // Recurse into logical containers.
       if (key === "and" && Array.isArray(val)) val.forEach(checkObj)
-      if (key === "or"  && Array.isArray(val)) val.forEach(checkObj)
+      if (key === "or" && Array.isArray(val)) val.forEach(checkObj)
       if (key === "not" && val && typeof val === "object") checkObj(val)
     }
   }
@@ -541,7 +541,7 @@ async function summaryHTML(conditions) {
     return ""
   }
 
-  const labelMap   = await fetchLabelMap()
+  const labelMap = await fetchLabelMap()
   const accountMap = await fetchAccountMap()
   await fetchInstitutionMap()
 
@@ -551,7 +551,7 @@ async function summaryHTML(conditions) {
     .replace(/>/g, "&gt;")
 
   const AND_SEP = ` <span style="color:var(--text3);font-weight:600">AND</span> `
-  const OR_SEP  = ` <span style="color:var(--text3);font-weight:600">OR</span> `
+  const OR_SEP = ` <span style="color:var(--text3);font-weight:600">OR</span> `
   const NOT_PFX = `<span style="color:var(--text3);font-weight:600">NOT</span> `
 
   function strong(s) { return `<strong style="color:var(--text)">${esc(s)}</strong>` }
@@ -771,7 +771,7 @@ const velociTheme = EditorView.theme({
     minWidth: "20px",
   },
   ".cm-lintRange-warning": { backgroundImage: "none", borderBottom: "2px solid var(--commit)" },
-  ".cm-lintRange-error":   { backgroundImage: "none", borderBottom: "2px solid var(--neg)" },
+  ".cm-lintRange-error": { backgroundImage: "none", borderBottom: "2px solid var(--neg)" },
   // Lint tooltip contrast fix — CM6 defaults to light gray; match app surface.
   ".cm-tooltip.cm-tooltip-lint": {
     background: "var(--bg-secondary, var(--bg))",
