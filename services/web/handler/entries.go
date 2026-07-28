@@ -205,7 +205,7 @@ func (h *EntriesHandler) CreateEntry(c echo.Context) error {
 		Direction           string          `json:"direction"`
 		EntryType           string          `json:"entry_type"`
 		PeriodDays          int             `json:"period_days"`
-		VariableMethod      *string         `json:"variable_method"`
+		RateMethod          *string         `json:"rate_method"`
 		ProjectedRatePerDay *float64        `json:"projected_rate_per_day"`
 		Conditions          json.RawMessage `json:"conditions"`
 		Priority            int             `json:"priority"`
@@ -240,7 +240,7 @@ func (h *EntriesHandler) CreateEntry(c echo.Context) error {
 		Direction:           body.Direction,
 		EntryType:           body.EntryType,
 		PeriodDays:          body.PeriodDays,
-		VariableMethod:      body.VariableMethod,
+		RateMethod:          body.RateMethod,
 		ProjectedRatePerDay: body.ProjectedRatePerDay,
 		Conditions:          body.Conditions,
 		Priority:            body.Priority,
@@ -264,7 +264,7 @@ func (h *EntriesHandler) UpdateEntry(c echo.Context) error {
 		Direction           string          `json:"direction"`
 		EntryType           string          `json:"entry_type"`
 		PeriodDays          int             `json:"period_days"`
-		VariableMethod      *string         `json:"variable_method"`
+		RateMethod          *string         `json:"rate_method"`
 		ProjectedRatePerDay *float64        `json:"projected_rate_per_day"`
 		Conditions          json.RawMessage `json:"conditions"`
 		Priority            int             `json:"priority"`
@@ -308,12 +308,21 @@ func (h *EntriesHandler) UpdateEntry(c echo.Context) error {
 		conditions = resolved
 	}
 
+	// Fetch current rate_method before update to detect changes.
+	existing, fetchErr := h.s.GetEntry(ctx, entityID, id)
+	if errors.Is(fetchErr, pgx.ErrNoRows) {
+		return echo.NewHTTPError(http.StatusNotFound, "not found")
+	}
+	if fetchErr != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
+	}
+
 	item, err := h.s.UpdateEntry(ctx, entityID, id, store.UpdateEntryInput{
 		LabelID:             body.LabelID,
 		Direction:           body.Direction,
 		EntryType:           body.EntryType,
 		PeriodDays:          body.PeriodDays,
-		VariableMethod:      body.VariableMethod,
+		RateMethod:          body.RateMethod,
 		ProjectedRatePerDay: body.ProjectedRatePerDay,
 		Conditions:          conditions,
 		Priority:            body.Priority,
@@ -332,6 +341,29 @@ func (h *EntriesHandler) UpdateEntry(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
+
+	// Trigger engine recompute when rate_method changes.
+	oldMethod := ""
+	if existing.RateMethod != nil {
+		oldMethod = *existing.RateMethod
+	}
+	newMethod := ""
+	if body.RateMethod != nil {
+		newMethod = *body.RateMethod
+	}
+	if newMethod != "" && newMethod != oldMethod {
+		userID := middleware.UserID(ctx)
+		meta, _ := json.Marshal(map[string]string{})
+		if job, jobErr := h.s.CreateJob(ctx, entityID, "account.analyze", userID, meta); jobErr == nil {
+			h.pub.Publish(ctx, queue.Job{ //nolint:errcheck
+				JobID:    job.ID,
+				Type:     "account.analyze",
+				EntityID: entityID,
+				Metadata: meta,
+			})
+		}
+	}
+
 	item.Conditions = h.s.ConditionsForDisplay(ctx, entityID, item.Conditions)
 	return c.JSON(http.StatusOK, response.Single(toEntryView(item)))
 }

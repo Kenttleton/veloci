@@ -22,7 +22,7 @@ type EntryRow struct {
 	Direction           string          `db:"direction"`
 	EntryType           string          `db:"entry_type"`
 	PeriodDays          *int            `db:"period_days"`
-	VariableMethod      *string         `db:"variable_method"`
+	RateMethod          *string         `db:"rate_method"`
 	ProjectedRatePerDay *float64        `db:"projected_rate_per_day"`
 	Conditions          json.RawMessage `db:"conditions"`
 	Priority            int             `db:"priority"`
@@ -52,7 +52,7 @@ type EntryRow struct {
 
 const entryCols = `
 	e.id::text, e.entity_id::text, e.label_id::text, l.name AS label_name,
-	e.direction, e.entry_type, e.period_days, e.variable_method,
+	e.direction, e.entry_type, e.period_days, e.rate_method,
 	e.projected_rate_per_day, e.conditions, e.priority, e.status, e.source,
 	e.recurrence_anchor, e.next_due_date,
 	e.pending_amount_cents, e.pending_effective_date,
@@ -216,7 +216,7 @@ type CreateEntryInput struct {
 	Direction            string
 	EntryType            string
 	PeriodDays           int
-	VariableMethod       *string
+	RateMethod           *string
 	ProjectedRatePerDay  *float64
 	Conditions           json.RawMessage
 	Priority             int
@@ -230,7 +230,7 @@ func (s *Store) CreateEntry(ctx context.Context, entityID string, in CreateEntry
 	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
 		INSERT INTO entries (
 			id, entity_id, label_id, direction, entry_type, period_days,
-			variable_method, projected_rate_per_day, conditions, priority,
+			rate_method, projected_rate_per_day, conditions, priority,
 			status, source, start_date, end_date, created_at
 		) VALUES (
 			gen_random_uuid(), $1, $2::uuid, $3, $4, $5,
@@ -246,13 +246,13 @@ func (s *Store) CreateEntry(ctx context.Context, entityID string, in CreateEntry
 	`, `
 		id::text, entity_id::text, label_id::text,
 		NULL AS label_name, direction, entry_type, period_days,
-		variable_method, projected_rate_per_day, conditions, priority, status, source,
+		rate_method, projected_rate_per_day, conditions, priority, status, source,
 		recurrence_anchor, next_due_date,
 		pending_amount_cents, pending_effective_date,
 		start_date, end_date, created_at
 	`),
 		entityID, in.LabelID, in.Direction, in.EntryType, in.PeriodDays,
-		in.VariableMethod, in.ProjectedRatePerDay, in.Conditions, in.Priority,
+		in.RateMethod, in.ProjectedRatePerDay, in.Conditions, in.Priority,
 		in.Source, in.StartDate, in.EndDate,
 	)
 	if err != nil {
@@ -267,7 +267,7 @@ type UpdateEntryInput struct {
 	Direction           string
 	EntryType           string
 	PeriodDays          int
-	VariableMethod      *string
+	RateMethod          *string
 	ProjectedRatePerDay *float64
 	Conditions          json.RawMessage
 	Priority            int
@@ -296,7 +296,7 @@ func (s *Store) UpdateEntry(ctx context.Context, entityID, id string, in UpdateE
 			direction = $4,
 			entry_type = $5,
 			period_days = $6,
-			variable_method = $7,
+			rate_method = $7,
 			projected_rate_per_day = $8,
 			conditions = $9,
 			priority = $10,
@@ -315,14 +315,14 @@ func (s *Store) UpdateEntry(ctx context.Context, entityID, id string, in UpdateE
 	`, `
 		id::text, entity_id::text, label_id::text,
 		NULL AS label_name, direction, entry_type, period_days,
-		variable_method, projected_rate_per_day, conditions, priority, status, source,
+		rate_method, projected_rate_per_day, conditions, priority, status, source,
 		recurrence_anchor, next_due_date,
 		pending_amount_cents, pending_effective_date,
 		start_date, end_date, created_at
 	`),
 		entityID, id,
 		in.LabelID, in.Direction, in.EntryType, in.PeriodDays,
-		in.VariableMethod, in.ProjectedRatePerDay, in.Conditions, in.Priority,
+		in.RateMethod, in.ProjectedRatePerDay, in.Conditions, in.Priority,
 		in.Status, in.StartDate, in.EndDate,
 		in.RecurrenceAnchor, in.NextDueDate,
 	)

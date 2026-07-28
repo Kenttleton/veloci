@@ -991,7 +991,7 @@ type entryPutBody struct {
 	Direction           string          `json:"direction"`
 	EntryType           string          `json:"entry_type"`
 	PeriodDays          int             `json:"period_days"`
-	VariableMethod      *string         `json:"variable_method"`
+	RateMethod          *string         `json:"rate_method"`
 	ProjectedRatePerDay *float64        `json:"projected_rate_per_day"`
 	Conditions          json.RawMessage `json:"conditions"`
 	Priority            int             `json:"priority"`
@@ -1024,7 +1024,7 @@ func entryDataJSON(e store.EntryRow) string {
 		Direction:           e.Direction,
 		EntryType:           e.EntryType,
 		PeriodDays:          func() int { if e.PeriodDays != nil { return *e.PeriodDays }; return 0 }(),
-		VariableMethod:      e.VariableMethod,
+		RateMethod:          e.RateMethod,
 		ProjectedRatePerDay: e.ProjectedRatePerDay,
 		Conditions:          conds,
 		Priority:            e.Priority,
