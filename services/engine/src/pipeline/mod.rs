@@ -38,6 +38,20 @@ use uuid::Uuid;
 use crate::db::Pools;
 
 // ---------------------------------------------------------------------------
+// Pipeline-wide constants
+// ---------------------------------------------------------------------------
+
+/// Timing tolerance in days used uniformly across all pipeline stages:
+/// - Stage 2: `timing_fit` scoring and `interval:N` chain detection
+/// - Stage 1: `RecurrenceAnchor` condition evaluation
+/// - Stage 7: ended-entry lapse detection
+///
+/// Chosen to absorb billing cycle drift: weekend shifts, bank settlement
+/// delays, and month-end rounding. ±5 days matches the window used in
+/// `detect_anchor` DOM grouping.
+pub const TIMING_VARIANCE_THRESHOLD_DAYS: f64 = 5.0;
+
+// ---------------------------------------------------------------------------
 // Pipeline entry points
 // ---------------------------------------------------------------------------
 

@@ -24,6 +24,7 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use uuid::Uuid;
 
+use super::TIMING_VARIANCE_THRESHOLD_DAYS;
 use crate::pipeline::types::Stage2Output;
 
 // ---------------------------------------------------------------------------
@@ -36,10 +37,6 @@ const MIN_FITNESS: f64 = 0.3;
 /// Amount variance threshold for standing classification.
 /// All transactions must be within ±2% of the cluster median.
 const AMOUNT_VARIANCE_THRESHOLD_PCT: f64 = 0.02;
-
-/// Base timing sensitivity: std dev ≤ this many days → timing_score = 1.0.
-/// Chosen to absorb billing cycle drift (weekend shifts, month-end rounding).
-const TIMING_VARIANCE_THRESHOLD_DAYS: f64 = 5.0;
 
 // --- Classification thresholds (component-driven) ---
 //
