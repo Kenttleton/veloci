@@ -38,23 +38,25 @@ All `payee_*` comparisons are case-insensitive except `payee_regex` (case contro
 
 `amount_range` values are in **dollars** (positive = inflow/credit, negative = outflow/debit). Both bounds are optional; omitting a bound leaves it open. The translation layer converts dollars ↔ cents (`× 100`) when writing to / reading from Schema A.
 
-```json
-{"cadence": "monthly:15"}
-{"cadence": "weekly:monday"}
-{"cadence": "every:7"}
-```
-
-`cadence` is the recommended way to match recurring schedules. It maps to `recurrence_anchor` in Schema A. Supported formats:
-
-- `"monthly:N"` — day N of the month (1–28; e.g. `"monthly:15"` = 15th)
-- `"monthly:last"` — last day of the month
-- `"semimonthly:N,M"` — either day N or M of the month
-- `"weekly:monday"` … `"weekly:sunday"` — exact day of week (0=Monday … 6=Sunday names accepted)
-- `"every:N"` — every N days (e.g. `"every:7"` = weekly interval)
-
-Tolerance is always ±5 days (`TIMING_VARIANCE_THRESHOLD_DAYS`) and not exposed in Schema B.
-
 > **Deprecated:** `date_day_of_month` — use `cadence` instead. Existing entries evaluate correctly; no new entries should use this type.
+
+### cadence — Recurring schedule (transaction-target, Pass 1)
+
+Matches transactions whose date falls within ±5 days of a recurring schedule anchor.
+
+**Schema B** (editor): `{"cadence": "monthly:15"}`
+
+**Schema A** (storage/engine): `{"type":"recurrence_anchor","recurrence_anchor":"dom:15","tolerance_days":5}`
+
+| Schema B | Schema A | Meaning |
+| --- | --- | --- |
+| `"monthly:N"` | `dom:N` | Day N of the month |
+| `"monthly:last"` | `dom:-1` | Last day of the month |
+| `"semimonthly:N,M"` | `dom:N,M` | Either day N or M |
+| `"weekly:monday"` | `dow:0` | Every Monday |
+| `"every:N"` | `interval:N` | Every N days (group chain detection) |
+
+`tolerance_days` is always 5 and not exposed in Schema B.
 
 ```json
 {"date_day_of_month": {"day": 15, "tolerance_days": 2}}
