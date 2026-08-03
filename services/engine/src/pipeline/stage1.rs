@@ -300,7 +300,7 @@ pub(crate) fn apply_interval_timing<'a>(
 
 /// Extract the `RecurrenceAnchor` node from the top-level AND tree, if present.
 /// Returns `None` if no timing condition exists or the tree is not a flat AND.
-fn extract_anchor_node(tree: &CompiledConditionTree) -> Option<&str> {
+pub(crate) fn extract_anchor_node(tree: &CompiledConditionTree) -> Option<&str> {
     let children = match tree {
         CompiledConditionTree::And(c) => c,
         CompiledConditionTree::RecurrenceAnchor { anchor } => return Some(anchor.as_str()),
@@ -421,11 +421,15 @@ pub(crate) fn evaluate_entry_phases(
         return vec![];
     }
 
-    // Phase 3: amount filter
+    // Phase 3: full-tree evaluation to enforce remaining conditions
+    // (AccountId, InstitutionId, DateRange, AmountRange, etc.).
+    // Payee and timing already passed Phases 1 and 2, so the AND still returns
+    // Some(fit) for those — the only new exclusions are amount/account/date gates.
     candidates
         .into_iter()
         .filter_map(|(txn, fit)| {
-            eval_amount_conditions(&entry.conditions, txn).map(|af| (txn.id, fit.min(af)))
+            evaluate(&entry.conditions, txn, &Default::default(), &[])
+                .map(|ef| (txn.id, fit.min(ef)))
         })
         .collect()
 }
@@ -535,6 +539,11 @@ pub async fn run(entity_id: Uuid, pool: &PgPool) -> Result<Stage1Output> {
                 let mut cycle_detected = false;
 
                 for entry in &entry_entries {
+                    // Skip entries already assigned in a prior pass.
+                    if matched_set.contains(&entry.entry_id) {
+                        continue;
+                    }
+
                     if let Some(fit) = evaluate(&entry.conditions, txn, &label_index, &accumulated) {
                         if let Some(label_id) = entry.label_id {
                             if label_index.contains(&label_id) {
