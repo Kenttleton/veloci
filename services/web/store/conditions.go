@@ -5,8 +5,79 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 )
+
+// ── Cadence ↔ recurrence_anchor helpers ───────────────────────────────────
+
+// timingVarianceThresholdDays is the tolerance_days value written into
+// recurrence_anchor Schema A nodes produced from cadence Schema B nodes.
+const timingVarianceThresholdDays = 5
+
+// dowNames maps day-of-week index (0=monday … 6=sunday) to its lowercase name.
+// This matches the Rust engine's num_days_from_monday() convention.
+var dowNames = [7]string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"}
+
+// cadenceToAnchor converts a Schema B cadence string to a Schema A
+// recurrence_anchor string. Returns an error if the cadence is unrecognised.
+func cadenceToAnchor(cadence string) (string, error) {
+	switch {
+	case strings.HasPrefix(cadence, "monthly:"):
+		val := cadence[len("monthly:"):]
+		if val == "last" {
+			return "dom:-1", nil
+		}
+		if _, err := strconv.Atoi(val); err != nil {
+			return "", fmt.Errorf("invalid monthly cadence %q", val)
+		}
+		return "dom:" + val, nil
+	case strings.HasPrefix(cadence, "semimonthly:"):
+		return "dom:" + cadence[len("semimonthly:"):], nil
+	case strings.HasPrefix(cadence, "weekly:"):
+		day := strings.ToLower(cadence[len("weekly:"):])
+		for i, name := range dowNames {
+			if name == day {
+				return fmt.Sprintf("dow:%d", i), nil
+			}
+		}
+		return "", fmt.Errorf("unknown weekday %q", day)
+	case strings.HasPrefix(cadence, "every:"):
+		n := cadence[len("every:"):]
+		if _, err := strconv.Atoi(n); err != nil {
+			return "", fmt.Errorf("invalid every cadence %q", n)
+		}
+		return "interval:" + n, nil
+	default:
+		return "", fmt.Errorf("unrecognised cadence %q", cadence)
+	}
+}
+
+// anchorToCadence converts a Schema A recurrence_anchor string to a Schema B
+// cadence string. Returns an error if the anchor is unrecognised.
+func anchorToCadence(anchor string) (string, error) {
+	switch {
+	case strings.HasPrefix(anchor, "dom:"):
+		parts := anchor[4:]
+		if strings.Contains(parts, ",") {
+			return "semimonthly:" + parts, nil
+		}
+		if parts == "-1" {
+			return "monthly:last", nil
+		}
+		return "monthly:" + parts, nil
+	case strings.HasPrefix(anchor, "dow:"):
+		idx, err := strconv.Atoi(anchor[4:])
+		if err != nil || idx < 0 || idx > 6 {
+			return "", fmt.Errorf("invalid dow %q", anchor)
+		}
+		return "weekly:" + dowNames[idx], nil
+	case strings.HasPrefix(anchor, "interval:"):
+		return "every:" + anchor[len("interval:"):], nil
+	default:
+		return "", fmt.Errorf("unrecognised anchor %q", anchor)
+	}
+}
 
 // ── Schema reference ───────────────────────────────────────────────────────
 //
@@ -173,10 +244,17 @@ func displayNode(node map[string]any, lu displayLookups) map[string]any {
 			}
 			return map[string]any{"entry_projected_rate": inner}
 
-		// Both old ("recurrence_anchor") and new ("entry_recurrence_anchor") Schema A types.
-		case "entry_recurrence_anchor", "recurrence_anchor":
+		case "entry_recurrence_anchor":
 			anchor, _ := node["recurrence_anchor"].(string)
 			return map[string]any{"entry_recurrence_anchor": anchor}
+
+		case "recurrence_anchor":
+			anchor, _ := node["recurrence_anchor"].(string)
+			cadence, err := anchorToCadence(anchor)
+			if err != nil {
+				return node
+			}
+			return map[string]any{"cadence": cadence}
 		}
 		// Unknown Schema A type — pass through as-is.
 		return node
@@ -330,6 +408,19 @@ func storageNode(
 				out["tolerance_days"] = int(tol)
 			}
 			return out
+
+		case "cadence":
+			cadenceStr, _ := val.(string)
+			anchor, err := cadenceToAnchor(cadenceStr)
+			if err != nil {
+				*resolveErr = fmt.Errorf("invalid cadence: %w", err)
+				return node
+			}
+			return map[string]any{
+				"type":              "recurrence_anchor",
+				"recurrence_anchor": anchor,
+				"tolerance_days":    timingVarianceThresholdDays,
+			}
 
 		case "date_range":
 			obj, _ := val.(map[string]any)

@@ -2,6 +2,7 @@ package store
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 )
 
@@ -318,11 +319,14 @@ func TestDisplayNode_EntryRecurrenceAnchor(t *testing.T) {
 }
 
 func TestDisplayNode_LegacyRecurrenceAnchorType(t *testing.T) {
-	// Old Schema A type "recurrence_anchor" should produce canonical Schema B key.
+	// Schema A type "recurrence_anchor" now maps to the cadence Schema B key.
 	a := mustUnmarshal(t, `{"type":"recurrence_anchor","recurrence_anchor":"dom:15"}`)
 	b := displayNode(a, emptyLU)
-	if _, ok := b["entry_recurrence_anchor"]; !ok {
-		t.Fatalf("expected entry_recurrence_anchor key: %v", mustMarshal(t, b))
+	if b["cadence"] != "monthly:15" {
+		t.Fatalf("expected cadence=monthly:15, got %v", mustMarshal(t, b))
+	}
+	if _, has := b["entry_recurrence_anchor"]; has {
+		t.Fatalf("entry_recurrence_anchor key must not appear: %v", mustMarshal(t, b))
 	}
 }
 
@@ -502,5 +506,126 @@ func TestRoundTrip_NotWrapped(t *testing.T) {
 	inner, _ := out["not"].(map[string]any)
 	if inner["payee_contains"] != "REFUND" {
 		t.Fatalf("round-trip NOT failed: %v", mustMarshal(t, out))
+	}
+}
+
+// ── cadenceToAnchor / anchorToCadence unit tests ───────────────────────────
+
+func TestCadenceToAnchor(t *testing.T) {
+	cases := []struct{ cadence, want string }{
+		{"monthly:15", "dom:15"},
+		{"monthly:1", "dom:1"},
+		{"monthly:last", "dom:-1"},
+		{"semimonthly:1,15", "dom:1,15"},
+		{"weekly:monday", "dow:0"},
+		{"weekly:tuesday", "dow:1"},
+		{"weekly:wednesday", "dow:2"},
+		{"weekly:thursday", "dow:3"},
+		{"weekly:friday", "dow:4"},
+		{"weekly:saturday", "dow:5"},
+		{"weekly:sunday", "dow:6"},
+		{"every:30", "interval:30"},
+		{"every:91", "interval:91"},
+	}
+	for _, tc := range cases {
+		got, err := cadenceToAnchor(tc.cadence)
+		if err != nil {
+			t.Errorf("cadenceToAnchor(%q): %v", tc.cadence, err)
+			continue
+		}
+		if got != tc.want {
+			t.Errorf("cadenceToAnchor(%q) = %q, want %q", tc.cadence, got, tc.want)
+		}
+	}
+}
+
+func TestAnchorToCadence(t *testing.T) {
+	cases := []struct{ anchor, want string }{
+		{"dom:15", "monthly:15"},
+		{"dom:-1", "monthly:last"},
+		{"dom:1,15", "semimonthly:1,15"},
+		{"dow:0", "weekly:monday"},
+		{"dow:4", "weekly:friday"},
+		{"interval:91", "every:91"},
+	}
+	for _, tc := range cases {
+		got, err := anchorToCadence(tc.anchor)
+		if err != nil {
+			t.Errorf("anchorToCadence(%q): %v", tc.anchor, err)
+			continue
+		}
+		if got != tc.want {
+			t.Errorf("anchorToCadence(%q) = %q, want %q", tc.anchor, got, tc.want)
+		}
+	}
+}
+
+func TestStorageNodeCadence(t *testing.T) {
+	lu := storageLookups{
+		accountsByName: map[string]string{},
+		accountsByID:   map[string]bool{},
+		instByName:     map[string]string{},
+		instByID:       map[string]bool{},
+	}
+	var resolveErr error
+	noLabel := func(string) (string, error) { return "", fmt.Errorf("no label") }
+
+	cases := []struct {
+		schemaB    map[string]any
+		wantAnchor string
+	}{
+		{map[string]any{"cadence": "monthly:15"}, "dom:15"},
+		{map[string]any{"cadence": "monthly:last"}, "dom:-1"},
+		{map[string]any{"cadence": "semimonthly:1,15"}, "dom:1,15"},
+		{map[string]any{"cadence": "weekly:monday"}, "dow:0"},
+		{map[string]any{"cadence": "every:91"}, "interval:91"},
+	}
+	for _, tc := range cases {
+		resolveErr = nil
+		got := storageNode(tc.schemaB, lu, noLabel, &resolveErr)
+		if resolveErr != nil {
+			t.Fatalf("%v: %v", tc.schemaB, resolveErr)
+		}
+		if got["type"] != "recurrence_anchor" {
+			t.Errorf("%v: type = %v", tc.schemaB, got["type"])
+		}
+		if got["recurrence_anchor"] != tc.wantAnchor {
+			t.Errorf("%v: anchor = %v, want %v", tc.schemaB, got["recurrence_anchor"], tc.wantAnchor)
+		}
+		if got["tolerance_days"] != timingVarianceThresholdDays {
+			t.Errorf("%v: tolerance_days = %v", tc.schemaB, got["tolerance_days"])
+		}
+	}
+}
+
+func TestDisplayNodeRecurrenceAnchor(t *testing.T) {
+	lu := displayLookups{labelsByID: map[string]string{}, accountsByID: map[string]string{}, instByID: map[string]string{}}
+	cases := []struct {
+		schemaA map[string]any
+		want    string
+	}{
+		{map[string]any{"type": "recurrence_anchor", "recurrence_anchor": "dom:15"}, "monthly:15"},
+		{map[string]any{"type": "recurrence_anchor", "recurrence_anchor": "dom:-1"}, "monthly:last"},
+		{map[string]any{"type": "recurrence_anchor", "recurrence_anchor": "dom:1,15"}, "semimonthly:1,15"},
+		{map[string]any{"type": "recurrence_anchor", "recurrence_anchor": "dow:0"}, "weekly:monday"},
+		{map[string]any{"type": "recurrence_anchor", "recurrence_anchor": "interval:91"}, "every:91"},
+	}
+	for _, tc := range cases {
+		got := displayNode(tc.schemaA, lu)
+		if got["cadence"] != tc.want {
+			t.Errorf("%v: cadence = %v, want %v", tc.schemaA, got["cadence"], tc.want)
+		}
+		if _, has := got["recurrence_anchor"]; has {
+			t.Errorf("%v: should not have recurrence_anchor key", tc.schemaA)
+		}
+	}
+}
+
+func TestEntryRecurrenceAnchorUnchanged(t *testing.T) {
+	lu := displayLookups{labelsByID: map[string]string{}, accountsByID: map[string]string{}, instByID: map[string]string{}}
+	node := map[string]any{"type": "entry_recurrence_anchor", "recurrence_anchor": "dom:15"}
+	got := displayNode(node, lu)
+	if got["entry_recurrence_anchor"] != "dom:15" {
+		t.Errorf("entry_recurrence_anchor should pass through, got %v", got)
 	}
 }
