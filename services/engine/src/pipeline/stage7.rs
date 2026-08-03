@@ -35,6 +35,17 @@ use crate::db::Pools;
 /// Projection horizon in days.
 const PROJECTION_DAYS: i64 = 90;
 
+/// Returns true when `computed_as_of` has passed `next_due_date` by more than
+/// `tolerance_days`. Called by Phase 1's `detect_ended_entries`.
+/// Pass `super::TIMING_VARIANCE_THRESHOLD_DAYS as i64` for the tolerance.
+pub(crate) fn entry_has_lapsed(
+    next_due:       chrono::NaiveDate,
+    computed_as_of: chrono::NaiveDate,
+    tolerance_days: i64,
+) -> bool {
+    computed_as_of > next_due + chrono::Duration::days(tolerance_days)
+}
+
 // ---------------------------------------------------------------------------
 // Internal types
 // ---------------------------------------------------------------------------
@@ -970,4 +981,30 @@ mod tests {
         );
         assert!(rows[0].projected_balance_cents > 1_000_000, "balance should increase with income");
     }
+}
+
+#[cfg(test)]
+mod lapse_tests {
+    use super::*;
+    use chrono::NaiveDate;
+
+    fn d(s: &str) -> NaiveDate { s.parse().unwrap() }
+
+    #[test]
+    fn on_next_due_not_lapsed() { assert!(!entry_has_lapsed(d("2026-03-15"), d("2026-03-15"), 5)); }
+
+    #[test]
+    fn within_tolerance_not_lapsed() { assert!(!entry_has_lapsed(d("2026-03-15"), d("2026-03-18"), 5)); }
+
+    #[test]
+    fn at_boundary_not_lapsed() { assert!(!entry_has_lapsed(d("2026-03-15"), d("2026-03-20"), 5)); }
+
+    #[test]
+    fn one_past_tolerance_lapsed() { assert!(entry_has_lapsed(d("2026-03-15"), d("2026-03-21"), 5)); }
+
+    #[test]
+    fn far_past_lapsed() { assert!(entry_has_lapsed(d("2026-03-01"), d("2026-04-15"), 5)); }
+
+    #[test]
+    fn before_next_due_not_lapsed() { assert!(!entry_has_lapsed(d("2026-03-15"), d("2026-03-01"), 5)); }
 }
