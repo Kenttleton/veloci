@@ -132,6 +132,7 @@ payee_ends_with       {"type":"payee_ends_with",       "value":".COM"}
 payee_regex           {"type":"payee_regex",           "value":"^Netflix"}
 imported_payee_one_of {"type":"imported_payee_one_of", "value":["Netflix","Hulu"]}
 amount_range          {"type":"amount_range",          "min_cents":-2000, "max_cents":-1000}
+recurrence_anchor     {"type":"recurrence_anchor",     "recurrence_anchor":"dom:15","tolerance_days":5}
 date_day_of_month     {"type":"date_day_of_month",     "day":15, "tolerance_days":2}
 date_range            {"type":"date_range",            "start":"2026-01-01","end":"2026-12-31"}
 account_id            {"type":"account_id",            "value":"<uuid>"}
@@ -139,7 +140,21 @@ institution_id        {"type":"institution_id",        "value":"<uuid>"}
 ```
 - All `payee_*` comparisons are case-insensitive except `payee_regex` (case controlled by inline flags, e.g. `(?i)`)
 - `amount_range` bounds are both optional; omitting a bound leaves it open
-- `date_day_of_month` `tolerance_days` defaults to 0; wrap-around month-end not handled
+- `recurrence_anchor`: transaction-target cadence condition — matches transactions whose
+  `date` falls within `tolerance_days` of the anchor's expected fire date. Replaces
+  `date_day_of_month`. Supported anchors: `dom:N` (1–28; `-1` = last day), `dom:N,M`
+  (semi-monthly), `dow:N` (0=Mon … 6=Sun; exact), `interval:N` (every N days — evaluated
+  via consecutive-spacing chain detection in stage1's group timing phase, not per-transaction).
+  `tolerance_days` should always equal `TIMING_VARIANCE_THRESHOLD_DAYS` (5).
+- `cadence`: human-readable scheduling condition (Schema B form). Maps to `recurrence_anchor` Schema A at
+  the store boundary. `tolerance_days` always 5 (implicit). Forms:
+  - `"monthly:N"` → `dom:N`   — day N of month
+  - `"monthly:last"` → `dom:-1` — last day of month
+  - `"semimonthly:N,M"` → `dom:N,M`
+  - `"weekly:monday"` … `"weekly:sunday"` → `dow:0` … `dow:6`
+  - `"every:N"` → `interval:N` — every N days
+- `date_day_of_month` is **deprecated** — do not use in new conditions. Evaluator is kept
+  for existing user entries.
 
 **Entry-target leaves** (Pass 2+ — evaluated against entries already matched for this transaction in earlier passes):
 ```
@@ -180,7 +195,7 @@ entry_recurrence_anchor{"type":"entry_recurrence_anchor",  "recurrence_anchor":"
 | Field | Question it answers | How it's computed |
 |-------|--------------------|--------------------|
 | `merchant_fit` | Does this entry's payee pattern consistently resolve to one business? | 1.0 when all matched transactions share the same normalized merchant; Stage 2 always starts at 1.0 because it clusters by exact `merchant_normalized` |
-| `timing_fit` | Do matched transactions arrive on the cadence described by `period_days` and `recurrence_anchor`? | 1.0 when interval std dev ≤ 5 days; decays as `5 / std_dev`; 0.0 for single-transaction entries (no interval yet) |
+| `timing_fit` | Do matched transactions arrive on the cadence described by `period_days` and `recurrence_anchor`? | 1.0 when interval std dev ≤ TIMING_VARIANCE_THRESHOLD_DAYS (5 days); decays as `TIMING_VARIANCE_THRESHOLD_DAYS / std_dev`; 0.0 for single-transaction entries (no interval yet) |
 | `amount_fit` | Are matched transaction amounts consistent with `projected_rate_per_day`? | 1.0 when identical or single transaction; decays as `1 − max_deviation_from_median / median`; clamped to [0, 1] |
 
 **Composite (`fitness`):** A type-weighted blend of the three components. Weights are higher on the dimensions that matter most for each entry type:
@@ -409,6 +424,7 @@ Stages 3–6 run once per calendar day in `[flux_start .. flux_end]`. Stage 7 ru
 - Input: entity ID, transactions
 - Output: rows in `transaction_entry_assignments`; list of unmatched tx IDs
 - Evaluates live entries (status=`live`, end_date IS NULL, has conditions) in ascending `priority` order
+- Per-entry evaluation phases: payee match (Schema B `payee_*` filters) → timing window (Schema B `cadence` / `date_*` filters) → amount range. `interval:N` anchors use group chain detection on the payee-scoped candidate set during the timing phase.
 - Updates `next_due_date` on entries where new matches advance recurrence
 
 **Stage 2 — Pattern Detection:**

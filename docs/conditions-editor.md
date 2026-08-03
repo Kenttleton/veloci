@@ -39,6 +39,24 @@ All `payee_*` comparisons are case-insensitive except `payee_regex` (case contro
 `amount_range` values are in **dollars** (positive = inflow/credit, negative = outflow/debit). Both bounds are optional; omitting a bound leaves it open. The translation layer converts dollars ↔ cents (`× 100`) when writing to / reading from Schema A.
 
 ```json
+{"cadence": "monthly:15"}
+{"cadence": "weekly:monday"}
+{"cadence": "every:7"}
+```
+
+`cadence` is the recommended way to match recurring schedules. It maps to `recurrence_anchor` in Schema A. Supported formats:
+
+- `"monthly:N"` — day N of the month (1–28; e.g. `"monthly:15"` = 15th)
+- `"monthly:last"` — last day of the month
+- `"semimonthly:N,M"` — either day N or M of the month
+- `"weekly:monday"` … `"weekly:sunday"` — exact day of week (0=Monday … 6=Sunday names accepted)
+- `"every:N"` — every N days (e.g. `"every:7"` = weekly interval)
+
+Tolerance is always ±5 days (`TIMING_VARIANCE_THRESHOLD_DAYS`) and not exposed in Schema B.
+
+> **Deprecated:** `date_day_of_month` — use `cadence` instead. Existing entries evaluate correctly; no new entries should use this type.
+
+```json
 {"date_day_of_month": {"day": 15, "tolerance_days": 2}}
 {"date_range": {"start": "2026-01-01", "end": "2026-12-31"}}
 ```
@@ -111,6 +129,7 @@ The editor and summary use these display names. JSON type keys are never shown.
 | `payee_regex` | Description matches pattern |
 | `payee_one_of` | Description is one of |
 | `amount_range` | Amount is between |
+| `cadence` | Recurring schedule |
 | `date_day_of_month` | Day of month is |
 | `date_range` | Date is between |
 | `account` | From account |
