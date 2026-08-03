@@ -631,25 +631,62 @@ async fn load_unmatched(
         .collect())
 }
 
+/// Build the conditions JSONB for a cluster entry.
+///
+/// Standing entries get all three conditions: payee + recurrence_anchor + amount_range.
+/// Variable entries get payee only.
+///
+/// Amount clamp: raw observed min/max from the cluster — no buffer.
+/// Drift proposals handle future expansion if a new transaction falls outside the clamp.
+pub(crate) fn build_conditions(cluster: &Cluster, score: &ClusterScore) -> serde_json::Value {
+    let canonical_lower = cluster.merchant.to_ascii_lowercase();
+    let all_start_with = cluster.transactions.iter().all(|t| {
+        t.merchant_normalized.to_ascii_lowercase().starts_with(&canonical_lower)
+    });
+    let payee_type = if all_start_with { "payee_starts_with" } else { "payee_contains" };
+
+    let payee_node = serde_json::json!({"type": payee_type, "value": &cluster.merchant});
+
+    if score.entry_type == "variable" {
+        return serde_json::json!({"op": "AND", "children": [payee_node]});
+    }
+
+    // Standing: add timing + amount.
+    let mut children = vec![payee_node];
+
+    // Timing: recurrence_anchor if an anchor was detected.
+    if let Some(mean_interval) = score.mean_interval_days {
+        let mut dates: Vec<_> = cluster.transactions.iter().map(|t| t.date).collect();
+        dates.sort_unstable();
+        if let Some(anchor) = detect_anchor(&dates, mean_interval) {
+            children.push(serde_json::json!({
+                "type":              "recurrence_anchor",
+                "recurrence_anchor": anchor,
+                "tolerance_days":    TIMING_VARIANCE_THRESHOLD_DAYS as u8,
+            }));
+        }
+    }
+
+    // Amount: observed min/max clamp (cents, always negative for spend).
+    let amounts: Vec<i64> = cluster.transactions.iter().map(|t| t.amount_cents).collect();
+    let min_cents = *amounts.iter().min().unwrap();
+    let max_cents = *amounts.iter().max().unwrap();
+    children.push(serde_json::json!({
+        "type":      "amount_range",
+        "min_cents": min_cents,
+        "max_cents": max_cents,
+    }));
+
+    serde_json::json!({"op": "AND", "children": children})
+}
+
 async fn persist_cluster(
     entity_id: Uuid,
     cluster: &Cluster,
     score: &ClusterScore,
     pool: &PgPool,
 ) -> Result<Uuid> {
-    // Determine condition type by checking whether all merchant_normalized values
-    // in the cluster start with the canonical brand name.
-    // payee_starts_with  → higher fit score (0.85–1.0) when canonical is a prefix.
-    // payee_contains     → lower fit score (0.75–0.90) for broader matching.
-    let canonical_lower = cluster.merchant.to_ascii_lowercase();
-    let all_start_with = cluster.transactions.iter().all(|t| {
-        t.merchant_normalized.to_ascii_lowercase().starts_with(&canonical_lower)
-    });
-    let condition_type = if all_start_with { "payee_starts_with" } else { "payee_contains" };
-    let conditions = serde_json::json!({
-        "op": "AND",
-        "children": [{"type": condition_type, "value": &cluster.merchant}]
-    });
+    let conditions = build_conditions(cluster, score);
 
     // Use the detected interval as period_days; fall back to 30 for single-
     // transaction clusters where no interval can be measured.
@@ -1260,5 +1297,88 @@ mod tests {
     fn normalize_dom_day_28_in_28day_feb_stays_positive() {
         // Feb 28 (non-leap year): day=28, NOT > 28 → stays as 28
         assert_eq!(normalize_dom(date("2026-02-28")), 28);
+    }
+}
+
+#[cfg(test)]
+mod condition_generation_tests {
+    use super::*;
+    use chrono::NaiveDate;
+
+    fn d(s: &str) -> NaiveDate { s.parse().unwrap() }
+
+    fn cluster(merchant: &str, txns: Vec<(&str, i64)>) -> Cluster {
+        Cluster {
+            merchant: merchant.to_string(),
+            transactions: txns.into_iter().map(|(date, amount)| UnmatchedTxn {
+                id:                  uuid::Uuid::new_v4(),
+                date:                d(date),
+                amount_cents:        amount,
+                merchant_normalized: merchant.to_string(),
+            }).collect(),
+        }
+    }
+
+    #[test]
+    fn standing_dom_conditions_include_all_three() {
+        // Monthly cluster on the 15th, consistent amounts
+        let c = cluster("NETFLIX", vec![
+            ("2026-01-15", -1599),
+            ("2026-02-15", -1599),
+            ("2026-03-15", -1599),
+        ]);
+        let conditions = build_conditions(&c, &score_cluster(&c));
+        let children = conditions["children"].as_array().unwrap();
+        assert_eq!(children.len(), 3, "standing entry must have payee + timing + amount");
+
+        let types: Vec<_> = children.iter()
+            .filter_map(|c| c["type"].as_str())
+            .collect();
+        assert!(types.iter().any(|&t| t.starts_with("payee_")));
+        assert!(types.contains(&"recurrence_anchor"));
+        assert!(types.contains(&"amount_range"));
+    }
+
+    #[test]
+    fn standing_amount_clamp_is_observed_min_max() {
+        let c = cluster("PSEG", vec![
+            ("2026-01-01", -8000),
+            ("2026-02-01", -12000),
+            ("2026-03-01", -9500),
+        ]);
+        let conds = build_conditions(&c, &score_cluster(&c));
+        let amount = conds["children"].as_array().unwrap()
+            .iter().find(|c| c["type"] == "amount_range").unwrap();
+        assert_eq!(amount["min_cents"].as_i64().unwrap(), -12000);
+        assert_eq!(amount["max_cents"].as_i64().unwrap(), -8000);
+    }
+
+    #[test]
+    fn variable_conditions_payee_only() {
+        // Single transaction — no interval, falls to variable
+        let c = cluster("AMAZON", vec![
+            ("2026-01-10", -2999),
+        ]);
+        let conds = build_conditions(&c, &score_cluster(&c));
+        let children = conds["children"].as_array().unwrap();
+        assert_eq!(children.len(), 1);
+        assert!(children[0]["type"].as_str().unwrap().starts_with("payee_"));
+    }
+
+    #[test]
+    fn interval_anchor_included_for_standing() {
+        // Quarterly cluster
+        let c = cluster("AWS ANNUAL", vec![
+            ("2026-01-05", -50000),
+            ("2026-04-07", -52000),
+        ]);
+        let score = score_cluster(&c);
+        let conds = build_conditions(&c, &score);
+        let anchor_node = conds["children"].as_array().unwrap()
+            .iter().find(|c| c["type"] == "recurrence_anchor");
+        assert!(anchor_node.is_some());
+        let anchor = anchor_node.unwrap()["recurrence_anchor"].as_str().unwrap();
+        assert!(anchor.starts_with("interval:"));
+        assert_eq!(anchor_node.unwrap()["tolerance_days"].as_i64().unwrap(), 5);
     }
 }
