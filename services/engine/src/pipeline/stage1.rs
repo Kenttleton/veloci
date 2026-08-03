@@ -257,6 +257,179 @@ pub(crate) struct TransactionRow {
 // Public entry point
 // ---------------------------------------------------------------------------
 
+/// Find all transactions in `candidates` that participate in an interval:N chain.
+///
+/// Sorts candidates by date, then marks both members of any pair whose date gap
+/// is within [n - tol, n + tol). Transactions not paired with any adjacent
+/// interval-spaced neighbour are excluded.
+///
+/// O(k²) in the number of payee-scoped candidates — acceptable because
+/// per-entry candidate sets are small (typically < 20 transactions).
+pub(crate) fn apply_interval_timing<'a>(
+    n:          i64,
+    tol:        i64,
+    mut candidates: Vec<(&'a TransactionRow, f64)>,
+) -> Vec<(&'a TransactionRow, f64)> {
+    if n <= 0 || candidates.len() < 2 {
+        return vec![];
+    }
+
+    candidates.sort_by_key(|(txn, _)| txn.date);
+    let k = candidates.len();
+    let mut in_chain = vec![false; k];
+
+    for i in 0..k {
+        for j in (i + 1)..k {
+            let gap = (candidates[j].0.date - candidates[i].0.date).num_days();
+            if gap > n + tol {
+                break; // sorted — no further j can be closer to n
+            }
+            if (gap - n).abs() < tol {
+                in_chain[i] = true;
+                in_chain[j] = true;
+            }
+        }
+    }
+
+    candidates
+        .into_iter()
+        .zip(in_chain)
+        .filter_map(|(c, keep)| if keep { Some(c) } else { None })
+        .collect()
+}
+
+/// Extract the `RecurrenceAnchor` node from the top-level AND tree, if present.
+/// Returns `None` if no timing condition exists or the tree is not a flat AND.
+fn extract_anchor_node(tree: &CompiledConditionTree) -> Option<&str> {
+    let children = match tree {
+        CompiledConditionTree::And(c) => c,
+        CompiledConditionTree::RecurrenceAnchor { anchor } => return Some(anchor.as_str()),
+        _ => return None,
+    };
+    for child in children {
+        if let CompiledConditionTree::RecurrenceAnchor { anchor } = child {
+            return Some(anchor.as_str());
+        }
+    }
+    None
+}
+
+/// Evaluate all payee-type conditions in `tree` against `txn`.
+/// Returns `Some(fit)` if all payee conditions pass, `None` if any fail.
+/// Non-payee conditions in the tree are ignored (treated as pass).
+pub(crate) fn eval_payee_conditions(tree: &CompiledConditionTree, txn: &TransactionRow) -> Option<f64> {
+    match tree {
+        CompiledConditionTree::And(children) => {
+            let mut fit = 1.0_f64;
+            for child in children {
+                match child {
+                    CompiledConditionTree::PayeeExact(_)
+                    | CompiledConditionTree::PayeeContains(_)
+                    | CompiledConditionTree::PayeeNotContains(_)
+                    | CompiledConditionTree::PayeeStartsWith(_)
+                    | CompiledConditionTree::PayeeEndsWith(_)
+                    | CompiledConditionTree::PayeeRegex(_)
+                    | CompiledConditionTree::PayeeOneOf(_) => {
+                        match evaluate(child, txn, &Default::default(), &[]) {
+                            None    => return None,
+                            Some(f) => fit = fit.min(f),
+                        }
+                    }
+                    _ => {} // non-payee conditions skipped in this phase
+                }
+            }
+            Some(if fit == 1.0 { 1.0 } else { fit })
+        }
+        // Bare payee leaf
+        CompiledConditionTree::PayeeExact(_)
+        | CompiledConditionTree::PayeeContains(_)
+        | CompiledConditionTree::PayeeStartsWith(_)
+        | CompiledConditionTree::PayeeEndsWith(_)
+        | CompiledConditionTree::PayeeNotContains(_)
+        | CompiledConditionTree::PayeeRegex(_)
+        | CompiledConditionTree::PayeeOneOf(_) => {
+            evaluate(tree, txn, &Default::default(), &[])
+        }
+        _ => Some(1.0), // no payee condition → pass all
+    }
+}
+
+/// Evaluate all amount-type conditions in `tree` against `txn`.
+pub(crate) fn eval_amount_conditions(tree: &CompiledConditionTree, txn: &TransactionRow) -> Option<f64> {
+    match tree {
+        CompiledConditionTree::And(children) => {
+            let mut fit = 1.0_f64;
+            for child in children {
+                if let CompiledConditionTree::AmountRange { .. } = child {
+                    match evaluate(child, txn, &Default::default(), &[]) {
+                        None    => return None,
+                        Some(f) => fit = fit.min(f),
+                    }
+                }
+            }
+            Some(fit)
+        }
+        CompiledConditionTree::AmountRange { .. } => {
+            evaluate(tree, txn, &Default::default(), &[])
+        }
+        _ => Some(1.0),
+    }
+}
+
+/// Evaluate one entry against all transactions using ordered phases:
+/// payee → timing → amount.
+///
+/// Returns matched `(txn_id, fit)` pairs.
+pub(crate) fn evaluate_entry_phases(
+    entry: &CompiledEntry,
+    txns:  &[TransactionRow],
+) -> Vec<(Uuid, f64)> {
+    // Phase 1: payee filter
+    let mut candidates: Vec<(&TransactionRow, f64)> = txns
+        .iter()
+        .filter_map(|txn| eval_payee_conditions(&entry.conditions, txn).map(|f| (txn, f)))
+        .collect();
+
+    if candidates.is_empty() {
+        return vec![];
+    }
+
+    // Phase 2: timing
+    // Note: for calendar anchors we evaluate the full tree (not just the timing node).
+    // This is intentional: payee already passed Phase 1 and amount re-runs in Phase 3.
+    let anchor = extract_anchor_node(&entry.conditions);
+    candidates = match anchor {
+        None => candidates,
+        Some(a) if a.starts_with("interval:") => {
+            let n: i64 = a[9..].parse().unwrap_or(0);
+            let tol = super::TIMING_VARIANCE_THRESHOLD_DAYS as i64;
+            apply_interval_timing(n, tol, candidates)
+        }
+        Some(_) => {
+            // Calendar anchor (dom:N, dow:N) — per-candidate evaluation
+            candidates
+                .into_iter()
+                .filter_map(|(txn, fit)| {
+                    evaluate(&entry.conditions, txn, &Default::default(), &[])
+                        .map(|tf| (txn, fit.min(tf)))
+                })
+                .collect()
+        }
+    };
+
+    if candidates.is_empty() {
+        return vec![];
+    }
+
+    // Phase 3: amount filter
+    candidates
+        .into_iter()
+        .filter_map(|(txn, fit)| {
+            eval_amount_conditions(&entry.conditions, txn).map(|af| (txn.id, fit.min(af)))
+        })
+        .collect()
+}
+
 /// Run Stage 1 for an entity: load transactions + entries, compile, match.
 pub async fn run(entity_id: Uuid, pool: &PgPool) -> Result<Stage1Output> {
     // Load all transactions for the entity.
@@ -295,81 +468,81 @@ pub async fn run(entity_id: Uuid, pool: &PgPool) -> Result<Stage1Output> {
     let (txn_entries, entry_entries): (Vec<&CompiledEntry>, Vec<&CompiledEntry>) =
         compiled_entries.iter().partition(|e| !tree_has_entry_targets(&e.conditions));
 
-    // Parallel two-pass evaluation — each transaction is fully independent.
-    // Returns (txn_id, matched_entries_with_fit, was_unmatched) per transaction.
+    // Pass 1: per-entry ordered phase evaluation (payee → timing → amount).
+    // Parallelises over entries; each entry independently evaluates against all transactions.
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+
+    let pass1_map: Mutex<HashMap<Uuid, Vec<(Uuid, f64)>>> = Mutex::new(HashMap::new());
+
+    txn_entries.par_iter().for_each(|entry| {
+        let matches = evaluate_entry_phases(entry, &txns);
+        if !matches.is_empty() {
+            let mut map = pass1_map.lock().unwrap();
+            for (txn_id, fit) in matches {
+                map.entry(txn_id)
+                   .or_default()
+                   .push((entry.entry_id, fit));
+            }
+        }
+    });
+
+    let pass1_assignments = pass1_map.into_inner().unwrap();
+
+    // Pass 2+: per-transaction, evaluate entry-target conditions using accumulated
+    // Pass 1 metadata as context.
     let results: Vec<(Uuid, Vec<(Uuid, f64)>, bool)> = txns
         .par_iter()
         .map(|txn| {
-            let mut matched: Vec<(Uuid, f64)> = Vec::new();
-            let mut accumulated: Vec<AccumulatedEntryMeta> = Vec::new();
-            let mut label_index: HashSet<Uuid> = HashSet::new();
+            let mut matched: Vec<(Uuid, f64)> = pass1_assignments
+                .get(&txn.id)
+                .cloned()
+                .unwrap_or_default();
 
-            // --- Pass 1: transaction-target entries ---
-            // Evaluated against transaction fields only. Each match contributes
-            // (entry_id, fit) to `matched`, label_id to `label_index`, and full
-            // metadata to `accumulated`.
-            for entry in &txn_entries {
-                if let Some(fit) = evaluate(&entry.conditions, txn, &label_index, &accumulated) {
-                    matched.push((entry.entry_id, fit));
-                    if let Some(label_id) = entry.label_id {
-                        label_index.insert(label_id);
-                    }
-                    accumulated.push(AccumulatedEntryMeta {
-                        label_id:               entry.label_id,
-                        direction:              entry.direction,
-                        entry_type:             entry.entry_type,
-                        period_days:            entry.period_days,
-                        source:                 entry.source,
-                        fitness:             entry.fitness,
-                        merchant_fit:        entry.merchant_fit,
-                        timing_fit:          entry.timing_fit,
-                        amount_fit:          entry.amount_fit,
-                        projected_rate_per_day: entry.projected_rate_per_day,
-                        recurrence_anchor:      entry.recurrence_anchor.clone(),
-                    });
-                }
-            }
+            // Reconstruct accumulated metadata from Pass 1 entries that matched this txn.
+            let mut accumulated: Vec<AccumulatedEntryMeta> = matched
+                .iter()
+                .filter_map(|(entry_id, _)| {
+                    txn_entries.iter().find(|e| e.entry_id == *entry_id).map(|e| AccumulatedEntryMeta {
+                        label_id:               e.label_id,
+                        direction:              e.direction,
+                        entry_type:             e.entry_type,
+                        period_days:            e.period_days,
+                        source:                 e.source,
+                        fitness:             e.fitness,
+                        merchant_fit:        e.merchant_fit,
+                        timing_fit:          e.timing_fit,
+                        amount_fit:          e.amount_fit,
+                        projected_rate_per_day: e.projected_rate_per_day,
+                        recurrence_anchor:      e.recurrence_anchor.clone(),
+                    })
+                })
+                .collect();
 
-            // --- Pass 2+: iterative expansion via entry-target conditions ---
-            //
-            // Evaluate entry-target entries against the accumulated metadata.
-            // Batched semantics: metadata accumulated in pass N becomes visible in
-            // pass N+1, not mid-pass. This prevents order-dependency within a
-            // single iteration.
-            //
-            // `matched_set` tracks already-assigned entries across passes to
-            // prevent duplicate assignments when an entry's conditions remain
-            // satisfied in subsequent iterations.
-            let mut matched_set: HashSet<Uuid> =
-                HashSet::from_iter(matched.iter().map(|(id, _)| *id));
+            let mut label_index: HashSet<Uuid> = accumulated
+                .iter()
+                .filter_map(|m| m.label_id)
+                .collect();
+
+            // Pass 2+ iterations: entry-target conditions
+            let mut matched_set: HashSet<Uuid> = matched.iter().map(|(id, _)| *id).collect();
 
             loop {
-                // Snapshot the accumulated state at the start of this pass.
-                let pass_accumulated = accumulated.clone();
-                let pass_label_index = label_index.clone();
+                let pass_accumulated = accumulated.len();
                 let mut newly_matched: Vec<(Uuid, f64)> = Vec::new();
                 let mut new_meta: Vec<AccumulatedEntryMeta> = Vec::new();
                 let mut new_labels: HashSet<Uuid> = HashSet::new();
                 let mut cycle_detected = false;
 
                 for entry in &entry_entries {
-                    // Skip entries already assigned in a prior pass.
-                    if matched_set.contains(&entry.entry_id) {
-                        continue;
-                    }
-
-                    if let Some(fit) = evaluate(&entry.conditions, txn, &pass_label_index, &pass_accumulated) {
+                    if let Some(fit) = evaluate(&entry.conditions, txn, &label_index, &accumulated) {
                         if let Some(label_id) = entry.label_id {
-                            if pass_label_index.contains(&label_id) {
-                                // Cycle: this entry would re-add a label already
-                                // in the accumulated set. Per spec, log and
-                                // terminate expansion for this transaction.
-                                // Pre-cycle matches from this pass are committed.
+                            if label_index.contains(&label_id) {
                                 tracing::info!(
                                     txn_id   = %txn.id,
                                     entry_id = %entry.entry_id,
                                     %label_id,
-                                    "stage 1: label cycle detected, terminating expansion for transaction"
+                                    "stage 1: label cycle detected, terminating expansion"
                                 );
                                 cycle_detected = true;
                                 break;
@@ -393,7 +566,6 @@ pub async fn run(entity_id: Uuid, pool: &PgPool) -> Result<Stage1Output> {
                     }
                 }
 
-                // Commit newly matched entries from this pass.
                 for (entry_id, fit) in newly_matched {
                     if matched_set.insert(entry_id) {
                         matched.push((entry_id, fit));
@@ -402,8 +574,7 @@ pub async fn run(entity_id: Uuid, pool: &PgPool) -> Result<Stage1Output> {
                 label_index.extend(new_labels);
                 accumulated.extend(new_meta);
 
-                // Termination: cycle detected OR accumulated set is stable (no growth).
-                if cycle_detected || accumulated.len() == pass_accumulated.len() {
+                if cycle_detected || accumulated.len() == pass_accumulated {
                     break;
                 }
             }
@@ -2372,5 +2543,70 @@ mod recurrence_anchor_cond_tests {
     fn is_not_entry_target() {
         let tree = compile_tree(&json!({"type":"recurrence_anchor","recurrence_anchor":"dom:15"})).unwrap();
         assert!(!tree_has_entry_targets(&tree));
+    }
+}
+
+#[cfg(test)]
+mod interval_timing_tests {
+    use super::*;
+    use chrono::NaiveDate;
+
+    fn d(s: &str) -> NaiveDate { s.parse().unwrap() }
+
+    fn make_txns(dates: &[&str]) -> Vec<TransactionRow> {
+        dates.iter().map(|s| TransactionRow {
+            id:                  uuid::Uuid::new_v4(),
+            account_id:          uuid::Uuid::new_v4(),
+            institution_id:      None,
+            date:                d(s),
+            amount_cents:        -50000,
+            merchant_normalized: "quarterly".to_string(),
+        }).collect()
+    }
+
+    #[test]
+    fn chain_of_three_quarterly() {
+        let txns = make_txns(&["2026-01-05", "2026-04-03", "2026-07-02"]);
+        let refs: Vec<(&TransactionRow, f64)> = txns.iter().map(|t| (t, 1.0)).collect();
+        let result = apply_interval_timing(91, 5, refs);
+        assert_eq!(result.len(), 3);
+    }
+
+    #[test]
+    fn random_interloper_excluded() {
+        // Regular quarterly + one random charge in between
+        let txns = make_txns(&["2026-01-05", "2026-03-01", "2026-04-03", "2026-07-02"]);
+        let refs: Vec<(&TransactionRow, f64)> = txns.iter().map(|t| (t, 1.0)).collect();
+        let result = apply_interval_timing(91, 5, refs);
+        // 2026-03-01 is 55 days after Jan 5 and 33 days before Apr 3 — not ~91 from either
+        assert_eq!(result.len(), 3);
+        let matched_dates: Vec<_> = result.iter().map(|(t, _)| t.date.to_string()).collect();
+        assert!(!matched_dates.contains(&"2026-03-01".to_string()));
+    }
+
+    #[test]
+    fn within_tolerance_matches() {
+        // 93 days apart — within ±5 of 91
+        let txns = make_txns(&["2026-01-05", "2026-04-08"]);
+        let refs: Vec<(&TransactionRow, f64)> = txns.iter().map(|t| (t, 1.0)).collect();
+        let result = apply_interval_timing(91, 5, refs);
+        assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn outside_tolerance_no_chain() {
+        // 120 days apart — outside ±5 of 91
+        let txns = make_txns(&["2026-01-05", "2026-05-05"]);
+        let refs: Vec<(&TransactionRow, f64)> = txns.iter().map(|t| (t, 1.0)).collect();
+        let result = apply_interval_timing(91, 5, refs);
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn single_candidate_returns_empty() {
+        let txns = make_txns(&["2026-01-05"]);
+        let refs: Vec<(&TransactionRow, f64)> = txns.iter().map(|t| (t, 1.0)).collect();
+        let result = apply_interval_timing(91, 5, refs);
+        assert_eq!(result.len(), 0);
     }
 }
