@@ -95,6 +95,10 @@ func GlossaryPage(data ShellData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<div style=\"padding:16px 0;border-bottom:1px solid var(--border)\"><div style=\"display:flex;gap:24px;align-items:flex-start\"><div style=\"width:160px;flex-shrink:0\"><span style=\"font-size:14px;font-weight:700;color:var(--text)\">Cadence</span></div><div style=\"flex:1\"><p style=\"margin:0 0 6px;font-size:13px;color:var(--text2)\">The human-readable form of a recurring schedule in the conditions editor. Maps to a <code>recurrence_anchor</code> Schema A condition at the store boundary. Forms: <code>monthly:15</code>, <code>monthly:last</code>, <code>semimonthly:1,15</code>, <code>weekly:monday</code>, <code>every:91</code>. The 5-day timing tolerance is always implied — not configurable per-condition. See also: <strong>Timing Tolerance</strong>.</p></div></div></div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
 			templ_7745c5c3_Err = glossaryTerm("Stack",
 				"Waterfall breakdown of the Pulse period showing each spend entry's rate and drift.",
 				"The Stack is the expandable panel below the Horizon graph. It shows each spend entry's actual rate and drift for the selected Pulse period, organized by label group. The top row is the income anchor; the bottom row shows the remaining margin after all spend.",
@@ -165,14 +169,14 @@ func GlossaryPage(data ShellData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = glossaryTermLast("Job",
+			templ_7745c5c3_Err = glossaryTerm("Job",
 				"A unit of background work triggered by an import or a rule change. Jobs run through multiple stages before completing.",
 				"A Job is a unit of asynchronous processing work. Three job types exist: Import (processes a CSV file through all stages), Entries reprocess (reprocesses all transactions against the current entry set), and Recalculate (recalculates snapshots and projections for an account). Jobs run through up to 8 stages and update the UI via SSE events as each stage completes.",
 				"").Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</div></div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<div style=\"padding:16px 0\"><div style=\"display:flex;gap:24px;align-items:flex-start\"><div style=\"width:160px;flex-shrink:0\"><span style=\"font-size:14px;font-weight:700;color:var(--text)\">Timing Tolerance</span></div><div style=\"flex:1\"><p style=\"margin:0 0 6px;font-size:13px;color:var(--text2)\">A 5-day window (<code>TIMING_VARIANCE_THRESHOLD_DAYS</code>) applied uniformly across all schedule-aware operations:</p><ul style=\"margin:0 0 6px;font-size:13px;color:var(--text2);padding-left:20px\"><li><strong>Condition matching:</strong> <code>recurrence_anchor</code> conditions match transactions within ±5 days of the expected anchor date.</li><li><strong>Interval chain detection:</strong> consecutive transactions are considered part of the same <code>interval:N</code> chain when their gap is within N ± 5 days.</li><li><strong>Fitness scoring:</strong> <code>timing_fit = 1.0</code> when matched transaction interval std dev ≤ 5 days.</li><li><strong>Ended detection:</strong> an entry lapses when <code>computed_as_of > next_due_date + 5 days</code>.</li></ul></div></div></div></div></div></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -207,7 +211,7 @@ func glossaryTerm(term, shortDef, fullDef, examples string) templ.Component {
 			templ_7745c5c3_Var3 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<div style=\"padding:16px 0;border-bottom:1px solid var(--border)\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<div style=\"padding:16px 0;border-bottom:1px solid var(--border)\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -215,7 +219,7 @@ func glossaryTerm(term, shortDef, fullDef, examples string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -244,7 +248,7 @@ func glossaryTermLast(term, shortDef, fullDef, examples string) templ.Component 
 			templ_7745c5c3_Var4 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<div style=\"padding:16px 0\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<div style=\"padding:16px 0\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -252,7 +256,7 @@ func glossaryTermLast(term, shortDef, fullDef, examples string) templ.Component 
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -281,20 +285,20 @@ func glossaryTermRow(term, shortDef, fullDef, examples string) templ.Component {
 			templ_7745c5c3_Var5 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<div style=\"display:flex;gap:24px;align-items:flex-start\"><div style=\"width:160px;flex-shrink:0\"><span style=\"font-size:14px;font-weight:700;color:var(--text)\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<div style=\"display:flex;gap:24px;align-items:flex-start\"><div style=\"width:160px;flex-shrink:0\"><span style=\"font-size:14px;font-weight:700;color:var(--text)\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var6 string
 		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(term)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/glossary.templ`, Line: 107, Col: 72}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/glossary.templ`, Line: 143, Col: 72}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</span></div><div style=\"flex:1\"><p style=\"margin:0 0 6px;font-size:13px;color:var(--text2)\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</span></div><div style=\"flex:1\"><p style=\"margin:0 0 6px;font-size:13px;color:var(--text2)\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -302,7 +306,7 @@ func glossaryTermRow(term, shortDef, fullDef, examples string) templ.Component {
 			var templ_7745c5c3_Var7 string
 			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(fullDef)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/glossary.templ`, Line: 112, Col: 14}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/glossary.templ`, Line: 148, Col: 14}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 			if templ_7745c5c3_Err != nil {
@@ -312,37 +316,37 @@ func glossaryTermRow(term, shortDef, fullDef, examples string) templ.Component {
 			var templ_7745c5c3_Var8 string
 			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(shortDef)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/glossary.templ`, Line: 114, Col: 15}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/glossary.templ`, Line: 150, Col: 15}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</p>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</p>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if examples != "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<p style=\"margin:0;font-size:12px;color:var(--text3);font-style:italic\">Example: ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<p style=\"margin:0;font-size:12px;color:var(--text3);font-style:italic\">Example: ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var9 string
 			templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(examples)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/glossary.templ`, Line: 119, Col: 24}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/glossary.templ`, Line: 155, Col: 24}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

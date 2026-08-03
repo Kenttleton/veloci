@@ -39,6 +39,23 @@ templ GlossaryPage(data ShellData) {
 						"An unexpected positive — a spend entry cost less, or income exceeded expectation.",
 						"A Boost occurs when a spend entry's actual spending came in below projection, or when income exceeded expectations. Boosts are tagged with a green pill in the Stack panel and correspond to green candles on the Horizon.",
 						"A lower-than-expected utility bill, a refund, or a month where a variable spend entry was unusually low.")
+					<div style="padding:16px 0;border-bottom:1px solid var(--border)">
+						<div style="display:flex;gap:24px;align-items:flex-start">
+							<div style="width:160px;flex-shrink:0">
+								<span style="font-size:14px;font-weight:700;color:var(--text)">Cadence</span>
+							</div>
+							<div style="flex:1">
+								<p style="margin:0 0 6px;font-size:13px;color:var(--text2)">
+									The human-readable form of a recurring schedule in the conditions editor.
+									Maps to a <code>recurrence_anchor</code> Schema A condition at the store boundary.
+									Forms: <code>monthly:15</code>, <code>monthly:last</code>,
+									<code>semimonthly:1,15</code>, <code>weekly:monday</code>, <code>every:91</code>.
+									The 5-day timing tolerance is always implied — not configurable per-condition.
+									See also: <strong>Timing Tolerance</strong>.
+								</p>
+							</div>
+						</div>
+					</div>
 					@glossaryTerm("Stack",
 						"Waterfall breakdown of the Pulse period showing each spend entry's rate and drift.",
 						"The Stack is the expandable panel below the Horizon graph. It shows each spend entry's actual rate and drift for the selected Pulse period, organized by label group. The top row is the income anchor; the bottom row shows the remaining margin after all spend.",
@@ -79,10 +96,29 @@ templ GlossaryPage(data ShellData) {
 						"The log of all processing jobs — imports, reprocesses, and recalculations — for your account.",
 						"The Activity panel shows the full history of all processing jobs for your entity. Jobs are listed in reverse-chronological order with no time cutoff. You can expand any job to see its stage-by-stage timeline. Failed jobs show the error detail and a Retry option if applicable.",
 						"")
-					@glossaryTermLast("Job",
+					@glossaryTerm("Job",
 						"A unit of background work triggered by an import or a rule change. Jobs run through multiple stages before completing.",
 						"A Job is a unit of asynchronous processing work. Three job types exist: Import (processes a CSV file through all stages), Entries reprocess (reprocesses all transactions against the current entry set), and Recalculate (recalculates snapshots and projections for an account). Jobs run through up to 8 stages and update the UI via SSE events as each stage completes.",
 						"")
+					<div style="padding:16px 0">
+						<div style="display:flex;gap:24px;align-items:flex-start">
+							<div style="width:160px;flex-shrink:0">
+								<span style="font-size:14px;font-weight:700;color:var(--text)">Timing Tolerance</span>
+							</div>
+							<div style="flex:1">
+								<p style="margin:0 0 6px;font-size:13px;color:var(--text2)">
+									A 5-day window (<code>TIMING_VARIANCE_THRESHOLD_DAYS</code>) applied uniformly
+									across all schedule-aware operations:
+								</p>
+								<ul style="margin:0 0 6px;font-size:13px;color:var(--text2);padding-left:20px">
+									<li><strong>Condition matching:</strong> <code>recurrence_anchor</code> conditions match transactions within ±5 days of the expected anchor date.</li>
+									<li><strong>Interval chain detection:</strong> consecutive transactions are considered part of the same <code>interval:N</code> chain when their gap is within N ± 5 days.</li>
+									<li><strong>Fitness scoring:</strong> <code>timing_fit = 1.0</code> when matched transaction interval std dev ≤ 5 days.</li>
+									<li><strong>Ended detection:</strong> an entry lapses when <code>computed_as_of > next_due_date + 5 days</code>.</li>
+								</ul>
+							</div>
+						</div>
+					</div>
 				</div>
 			</div>
 		</div>
