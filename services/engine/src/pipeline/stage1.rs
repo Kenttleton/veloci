@@ -169,6 +169,22 @@ pub enum CompiledConditionTree {
     },
     AccountId(Uuid),
     InstitutionId(Uuid),
+    // --- Transaction-target cadence condition (Pass 1) ---
+    /// Matches transactions whose `date` falls within `TIMING_VARIANCE_THRESHOLD_DAYS`
+    /// of the anchor's expected fire date.
+    ///
+    /// Calendar anchors (`dom:N`, `dow:N`) are evaluated per-transaction.
+    /// Interval anchors (`interval:N`) return `None` here — the ordered timing
+    /// phase in stage1's `run()` handles them via group evaluation.
+    ///
+    /// Anchor formats:
+    /// - `dom:N`   — day N of month; -1 = last day
+    /// - `dom:N,M` — semi-monthly; within tolerance of either
+    /// - `dow:N`   — weekday 0=Mon … 6=Sun; exact match, no tolerance
+    /// - `interval:N` — every N days; not evaluated per-transaction
+    RecurrenceAnchor {
+        anchor: String,
+    },
     // --- Entry targets (Pass 2+) ---
     /// Matches when the transaction's accumulated label set contains this label UUID.
     ///
@@ -633,6 +649,42 @@ fn evaluate(
             if txn.date >= *start && txn.date <= *end { Some(1.0) } else { None }
         }
 
+        CompiledConditionTree::RecurrenceAnchor { anchor } => {
+            let tol     = super::TIMING_VARIANCE_THRESHOLD_DAYS as i32;
+            let txn_day = txn.date.day() as i32;
+            let year    = txn.date.year();
+            let month   = txn.date.month();
+
+            if let Some(rest) = anchor.strip_prefix("dom:") {
+                if let Some(comma) = rest.find(',') {
+                    let a: i32 = rest[..comma].parse().ok()?;
+                    let b: i32 = rest[comma + 1..].parse().ok()?;
+                    let resolve = |t: i32| -> i32 {
+                        if t > 0 { t } else { days_in_month_local(year, month) as i32 + t + 1 }
+                    };
+                    if (txn_day - resolve(a)).abs() < tol || (txn_day - resolve(b)).abs() < tol {
+                        Some(1.0)
+                    } else {
+                        None
+                    }
+                } else {
+                    let target: i32 = rest.parse().ok()?;
+                    let resolved = if target > 0 {
+                        target
+                    } else {
+                        days_in_month_local(year, month) as i32 + target + 1
+                    };
+                    if (txn_day - resolved).abs() < tol { Some(1.0) } else { None }
+                }
+            } else if let Some(rest) = anchor.strip_prefix("dow:") {
+                let target_dow: u32 = rest.parse().ok()?;
+                if txn.date.weekday().num_days_from_monday() == target_dow { Some(1.0) } else { None }
+            } else {
+                // interval:N — group evaluation in the ordered timing phase; None here
+                None
+            }
+        }
+
         // --- Account / institution conditions (binary gates) ---
         CompiledConditionTree::AccountId(id) => {
             if txn.account_id == *id { Some(1.0) } else { None }
@@ -885,6 +937,10 @@ pub fn compile_tree(v: &serde_json::Value) -> Result<CompiledConditionTree> {
                 tolerance_days,
             })
         }
+        "recurrence_anchor" => {
+            let anchor = string_value(v, "recurrence_anchor")?;
+            Ok(CompiledConditionTree::RecurrenceAnchor { anchor })
+        }
         "date_range" => {
             let start_str = string_value(v, "start")?;
             let end_str   = string_value(v, "end")?;
@@ -966,6 +1022,16 @@ pub fn compile_tree(v: &serde_json::Value) -> Result<CompiledConditionTree> {
         }
         other => bail!("unknown leaf type: {other}"),
     }
+}
+
+fn days_in_month_local(year: i32, month: u32) -> u32 {
+    let start = NaiveDate::from_ymd_opt(year, month, 1).unwrap();
+    let next = if month == 12 {
+        NaiveDate::from_ymd_opt(year + 1, 1, 1).unwrap()
+    } else {
+        NaiveDate::from_ymd_opt(year, month + 1, 1).unwrap()
+    };
+    next.signed_duration_since(start).num_days() as u32
 }
 
 fn string_value(v: &serde_json::Value, key: &str) -> Result<String> {
@@ -2209,5 +2275,102 @@ mod tests {
             CompiledConditionTree::EntryDirection(Direction::Income),
         ]);
         assert!(tree_has_entry_targets(&nested));
+    }
+}
+
+#[cfg(test)]
+mod recurrence_anchor_cond_tests {
+    use super::*;
+    use serde_json::json;
+
+    fn make_txn(date_str: &str) -> TransactionRow {
+        TransactionRow {
+            id:                  uuid::Uuid::new_v4(),
+            account_id:          uuid::Uuid::new_v4(),
+            institution_id:      None,
+            date:                date_str.parse().unwrap(),
+            amount_cents:        -5000,
+            merchant_normalized: "Test".to_string(),
+        }
+    }
+
+    fn eval_anchor(anchor: &str, date_str: &str) -> bool {
+        let v = json!({"type": "recurrence_anchor", "recurrence_anchor": anchor});
+        let tree = compile_tree(&v).unwrap();
+        let txn = make_txn(date_str);
+        evaluate(&tree, &txn, &std::collections::HashSet::new(), &[]).is_some()
+    }
+
+    #[test]
+    fn dom_exact() { assert!(eval_anchor("dom:15", "2026-03-15")); }
+
+    #[test]
+    fn dom_within_tolerance() {
+        assert!(eval_anchor("dom:15", "2026-03-18")); // 3 days after
+    }
+
+    #[test]
+    fn dom_outside_tolerance() {
+        assert!(!eval_anchor("dom:15", "2026-03-21")); // 6 days after
+    }
+
+    #[test]
+    fn dom_last_march() {
+        assert!(eval_anchor("dom:-1", "2026-03-31"));
+        assert!(eval_anchor("dom:-1", "2026-03-29")); // within 5 of 31st
+        assert!(!eval_anchor("dom:-1", "2026-03-24")); // 7 days before 31st
+    }
+
+    #[test]
+    fn dom_last_february() {
+        assert!(eval_anchor("dom:-1", "2026-02-28"));
+    }
+
+    #[test]
+    fn dom_semimonthly_first() { assert!(eval_anchor("dom:1,15", "2026-03-01")); }
+
+    #[test]
+    fn dom_semimonthly_second() { assert!(eval_anchor("dom:1,15", "2026-03-15")); }
+
+    #[test]
+    fn dom_semimonthly_within_tolerance_of_second() {
+        assert!(eval_anchor("dom:1,15", "2026-03-17")); // 2 after 15th
+    }
+
+    #[test]
+    fn dom_semimonthly_between_no_match() {
+        // March 10: 9 days after 1st (outside), 5 days before 15th (boundary — exclusive)
+        assert!(!eval_anchor("dom:1,15", "2026-03-10"));
+    }
+
+    #[test]
+    fn dow_monday() {
+        assert!(eval_anchor("dow:0", "2026-03-16")); // Monday
+        assert!(!eval_anchor("dow:0", "2026-03-17")); // Tuesday
+    }
+
+    #[test]
+    fn dow_friday() { assert!(eval_anchor("dow:4", "2026-03-20")); }
+
+    #[test]
+    fn interval_returns_none_per_transaction() {
+        // interval:N cannot evaluate per-transaction; group timing pass handles it
+        assert!(!eval_anchor("interval:91", "2026-03-15"));
+    }
+
+    #[test]
+    fn compile_succeeds() {
+        assert!(compile_tree(&json!({"type":"recurrence_anchor","recurrence_anchor":"dom:15"})).is_ok());
+    }
+
+    #[test]
+    fn compile_missing_field_errors() {
+        assert!(compile_tree(&json!({"type":"recurrence_anchor"})).is_err());
+    }
+
+    #[test]
+    fn is_not_entry_target() {
+        let tree = compile_tree(&json!({"type":"recurrence_anchor","recurrence_anchor":"dom:15"})).unwrap();
+        assert!(!tree_has_entry_targets(&tree));
     }
 }
