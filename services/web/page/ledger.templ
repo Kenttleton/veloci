@@ -11,7 +11,7 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 	@Shell(shell) {
 		<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
 			<div style="display:flex;gap:6px;padding:8px 20px;border-bottom:1px solid var(--border);flex-shrink:0;align-items:center;flex-wrap:wrap">
-				@ledgerPill("all", "All", data, data.Counts.Pending+data.Counts.Live+data.Counts.Ended)
+				@ledgerPill("all", "All", data, data.Counts.Pending+data.Counts.Live+data.Counts.Ended+data.Counts.System)
 				@ledgerPill("pending", "Review", data, data.Counts.Pending)
 				@ledgerPill("live", "Live", data, data.Counts.Live)
 				@ledgerPill("ended", "Ended", data, data.Counts.Ended)
