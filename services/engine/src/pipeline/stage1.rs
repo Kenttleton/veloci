@@ -423,12 +423,15 @@ pub(crate) fn evaluate_entry_phases(
 
     // Phase 3: full-tree evaluation to enforce remaining conditions
     // (AccountId, InstitutionId, DateRange, AmountRange, etc.).
-    // Payee and timing already passed Phases 1 and 2, so the AND still returns
-    // Some(fit) for those — the only new exclusions are amount/account/date gates.
+    // Payee and timing already passed Phases 1 and 2.  For interval:N entries
+    // the RecurrenceAnchor node always returns None from evaluate() (group timing
+    // is handled in Phase 2), which would collapse the AND to None and filter every
+    // candidate.  evaluate_skip_anchor() treats timing-gate nodes as already-passed
+    // so only amount/account/date gates can still exclude a candidate.
     candidates
         .into_iter()
         .filter_map(|(txn, fit)| {
-            evaluate(&entry.conditions, txn, &Default::default(), &[])
+            evaluate_skip_anchor(&entry.conditions, txn, &Default::default(), &[])
                 .map(|ef| (txn.id, fit.min(ef)))
         })
         .collect()
@@ -949,6 +952,66 @@ fn evaluate(
                 .any(|e| e.recurrence_anchor.as_deref() == Some(anchor.as_str()));
             if matched { Some(1.0) } else { None }
         }
+    }
+}
+
+/// Like [`evaluate`], but treats timing-gate nodes (`RecurrenceAnchor`,
+/// `DateDayOfMonth`) as already-passed (`Some(1.0)`).
+///
+/// Used in Phase 3 of [`evaluate_entry_phases`] after timing has already been
+/// enforced in Phase 2.  `interval:N` entries carry a `RecurrenceAnchor` node
+/// that always returns `None` from `evaluate()` (group timing is a Phase 2
+/// concern), which would collapse the wrapping AND and filter every candidate.
+/// This helper skips those nodes so only remaining gates (amount, account, date
+/// range, etc.) can still exclude a transaction.
+fn evaluate_skip_anchor(
+    node:        &CompiledConditionTree,
+    txn:         &TransactionRow,
+    label_index: &HashSet<Uuid>,
+    accumulated: &[AccumulatedEntryMeta],
+) -> Option<f64> {
+    match node {
+        // Timing nodes — already evaluated in Phase 2; treat as pass.
+        CompiledConditionTree::RecurrenceAnchor { .. } => Some(1.0),
+        CompiledConditionTree::DateDayOfMonth { .. }   => Some(1.0),
+
+        // Logical operators — recurse through evaluate_skip_anchor so that
+        // timing nodes nested at any depth are also treated as pass.
+        CompiledConditionTree::And(children) => {
+            let mut fit = 1.0_f64;
+            for child in children {
+                match evaluate_skip_anchor(child, txn, label_index, accumulated) {
+                    None    => return None,
+                    Some(f) => fit = fit.min(f),
+                }
+            }
+            Some(fit)
+        }
+        CompiledConditionTree::Or(children) => {
+            children
+                .iter()
+                .filter_map(|c| evaluate_skip_anchor(c, txn, label_index, accumulated))
+                .reduce(f64::max)
+        }
+        CompiledConditionTree::Not(child) => {
+            if evaluate_skip_anchor(child, txn, label_index, accumulated).is_some() {
+                None
+            } else {
+                Some(1.0)
+            }
+        }
+        CompiledConditionTree::Xor(a, b) => {
+            let ra = evaluate_skip_anchor(a, txn, label_index, accumulated);
+            let rb = evaluate_skip_anchor(b, txn, label_index, accumulated);
+            match (ra, rb) {
+                (Some(fa), None) => Some(fa),
+                (None, Some(fb)) => Some(fb),
+                _                => None,
+            }
+        }
+
+        // All other nodes — delegate to the regular evaluate.
+        other => evaluate(other, txn, label_index, accumulated),
     }
 }
 
@@ -2617,5 +2680,76 @@ mod interval_timing_tests {
         let refs: Vec<(&TransactionRow, f64)> = txns.iter().map(|t| (t, 1.0)).collect();
         let result = apply_interval_timing(91, 5, refs);
         assert_eq!(result.len(), 0);
+    }
+
+    /// Regression: interval:N entries used to match zero transactions in Phase 3
+    /// because RecurrenceAnchor::interval always returned None from evaluate(),
+    /// collapsing the wrapping AND and filtering every candidate after Phase 2
+    /// had already enforced the timing.  evaluate_skip_anchor() fixes this.
+    #[test]
+    fn interval_entry_phases_matches_all_three_spaced_txns() {
+        use serde_json::json;
+
+        // Three transactions ~91 days apart, payee = "AWS Services", amount = -50_000.
+        let txns: Vec<TransactionRow> = vec![
+            TransactionRow {
+                id:                  uuid::Uuid::new_v4(),
+                account_id:          uuid::Uuid::new_v4(),
+                institution_id:      None,
+                date:                "2026-01-05".parse().unwrap(),
+                amount_cents:        -50_000,
+                merchant_normalized: "AWS Services".to_string(),
+            },
+            TransactionRow {
+                id:                  uuid::Uuid::new_v4(),
+                account_id:          uuid::Uuid::new_v4(),
+                institution_id:      None,
+                date:                "2026-04-06".parse().unwrap(), // +91 days
+                amount_cents:        -50_000,
+                merchant_normalized: "AWS Services".to_string(),
+            },
+            TransactionRow {
+                id:                  uuid::Uuid::new_v4(),
+                account_id:          uuid::Uuid::new_v4(),
+                institution_id:      None,
+                date:                "2026-07-06".parse().unwrap(), // +91 days
+                amount_cents:        -50_000,
+                merchant_normalized: "AWS Services".to_string(),
+            },
+        ];
+
+        let conditions = compile_tree(&json!({
+            "op": "AND",
+            "children": [
+                {"type": "payee_contains",      "value": "AWS"},
+                {"type": "recurrence_anchor",   "recurrence_anchor": "interval:91"},
+                {"type": "amount_range",        "min_cents": -60000, "max_cents": -40000}
+            ]
+        }))
+        .unwrap();
+
+        let entry = CompiledEntry {
+            entry_id:               uuid::Uuid::new_v4(),
+            label_id:               None,
+            priority:               100,
+            conditions,
+            direction:              Direction::Spend,
+            entry_type:             EntryType::Standing,
+            period_days:            91,
+            source:                 EntrySource::User,
+            fitness:             None,
+            merchant_fit:        None,
+            timing_fit:          None,
+            amount_fit:          None,
+            projected_rate_per_day: None,
+            recurrence_anchor:      Some("interval:91".to_string()),
+        };
+
+        let results = evaluate_entry_phases(&entry, &txns);
+        assert_eq!(
+            results.len(),
+            3,
+            "all three interval-spaced transactions must match (was zero before fix)"
+        );
     }
 }

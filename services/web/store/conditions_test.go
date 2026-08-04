@@ -539,6 +539,27 @@ func TestCadenceToAnchor(t *testing.T) {
 	}
 }
 
+func TestCadenceToAnchorValidation(t *testing.T) {
+	// semimonthly: must have exactly two comma-separated integer days.
+	if _, err := cadenceToAnchor("semimonthly:garbage"); err == nil {
+		t.Error("expected error for semimonthly:garbage, got nil")
+	}
+	if _, err := cadenceToAnchor("semimonthly:1"); err == nil {
+		t.Error("expected error for semimonthly:1 (missing second value), got nil")
+	}
+	if _, err := cadenceToAnchor("semimonthly:1,x"); err == nil {
+		t.Error("expected error for semimonthly:1,x (non-integer second day), got nil")
+	}
+	// Valid form must still pass.
+	got, err := cadenceToAnchor("semimonthly:1,15")
+	if err != nil {
+		t.Fatalf("unexpected error for valid semimonthly:1,15: %v", err)
+	}
+	if got != "dom:1,15" {
+		t.Errorf("semimonthly:1,15 → %q, want %q", got, "dom:1,15")
+	}
+}
+
 func TestAnchorToCadence(t *testing.T) {
 	cases := []struct{ anchor, want string }{
 		{"dom:15", "monthly:15"},

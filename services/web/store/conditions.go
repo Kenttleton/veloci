@@ -33,7 +33,18 @@ func cadenceToAnchor(cadence string) (string, error) {
 		}
 		return "dom:" + val, nil
 	case strings.HasPrefix(cadence, "semimonthly:"):
-		return "dom:" + cadence[len("semimonthly:"):], nil
+		rest := cadence[len("semimonthly:"):]
+		parts := strings.SplitN(rest, ",", 2)
+		if len(parts) != 2 {
+			return "", fmt.Errorf("semimonthly cadence requires two comma-separated days, got %q", rest)
+		}
+		if _, err := strconv.Atoi(strings.TrimSpace(parts[0])); err != nil {
+			return "", fmt.Errorf("invalid semimonthly day %q", parts[0])
+		}
+		if _, err := strconv.Atoi(strings.TrimSpace(parts[1])); err != nil {
+			return "", fmt.Errorf("invalid semimonthly day %q", parts[1])
+		}
+		return "dom:" + rest, nil
 	case strings.HasPrefix(cadence, "weekly:"):
 		day := strings.ToLower(cadence[len("weekly:"):])
 		for i, name := range dowNames {
