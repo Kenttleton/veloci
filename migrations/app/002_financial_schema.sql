@@ -205,8 +205,6 @@ CREATE TABLE entries (
   projected_rate_per_day NUMERIC(12,4),
   conditions             JSONB,
   priority               INTEGER       NOT NULL DEFAULT 100,
-  status                 TEXT          NOT NULL DEFAULT 'pending'
-                         CHECK (status IN ('pending', 'live', 'ended')),
   source                 TEXT          NOT NULL DEFAULT 'engine'
                          CHECK (source IN ('user', 'engine', 'system')),
   recurrence_anchor      TEXT,
@@ -221,8 +219,6 @@ CREATE TABLE entries (
   end_date               DATE,
   created_at             TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
   -- Engine review metadata (populated by Stage 2; NULL on user-created entries).
-  -- alert_type: 'new' = first detection, 'drift' = rate changed, 'ended' = signal gone.
-  alert_type                TEXT          CHECK (alert_type IN ('new', 'drift', 'ended')),
   fitness                   NUMERIC(4,3),
   merchant_fit              NUMERIC(4,3),
   timing_fit                NUMERIC(4,3),
@@ -233,10 +229,44 @@ CREATE TABLE entries (
   reviewed_at               TIMESTAMPTZ
 );
 
-CREATE INDEX ON entries (entity_id, status);
 CREATE INDEX ON entries (entity_id, priority);
 CREATE INDEX ON entries (entity_id, next_due_date);
 CREATE INDEX ON entries (entity_id, label_id);
+
+-- ── ENTRY PROPOSALS ──────────────────────────────────────────────────────────
+-- entry_proposals holds the engine's review queue.
+-- A proposal is created when the engine detects a new pattern ('new') or
+-- a missed expected transaction ('ended'). Proposals link to a live entry
+-- via reference_entry_id. Users approve or dismiss each proposal; the
+-- outcome updates the referenced entry.
+--
+-- Re-trigger thresholds:
+--   new/ended dismissed: re-propose when dismissed_transaction_count < current
+--     matched_transaction_count on the live entry (new), or when
+--     dismissed_computed_as_of < current computed_as_of (ended).
+CREATE TABLE entry_proposals (
+  id                          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  entity_id                   UUID        NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+  proposal_type               TEXT        NOT NULL CHECK (proposal_type IN ('new', 'ended')),
+  status                      TEXT        NOT NULL DEFAULT 'pending'
+                              CHECK (status IN ('pending', 'dismissed', 'accepted')),
+  reference_entry_id          UUID        NOT NULL REFERENCES entries(id) ON DELETE CASCADE,
+
+  -- ended proposal only
+  proposed_end_date           DATE,
+
+  -- re-trigger thresholds (set on dismissal)
+  dismissed_transaction_count INTEGER,    -- new: re-propose when live entry matched_transaction_count > this
+  dismissed_computed_as_of    DATE,       -- ended: re-propose when computed_as_of advances past this
+
+  -- audit
+  reviewed_by                 UUID        REFERENCES users(id),
+  reviewed_at                 TIMESTAMPTZ,
+  created_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX ON entry_proposals (entity_id, status);
+CREATE INDEX ON entry_proposals (reference_entry_id, proposal_type, status);
 
 -- ── TRANSACTION ENTRY ASSIGNMENTS ────────────────────────────────────────────
 -- Many-to-many. A transaction may match multiple entries.
