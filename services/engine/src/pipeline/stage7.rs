@@ -8,11 +8,8 @@
 //!
 //! ## Eligibility
 //!
-//! | Status    | Stage 7 |
-//! |-----------|---------|
-//! | `live`    | Include |
-//! | `pending` | Include |
-//! | `ended`   | Exclude |
+//! Entries are eligible when `end_date IS NULL OR end_date >= computed_as_of`.
+//! Entries whose `end_date` has passed are excluded.
 //!
 //! ## Algorithm
 //!
@@ -317,7 +314,7 @@ pub async fn run(
     let write_pool = &pools.write;
 
     // Load eligible entries.
-    let entries = load_eligible_entries(entity_id, pool).await?;
+    let entries = load_eligible_entries(entity_id, computed_as_of, pool).await?;
 
     // Load starting balance per account.
     let balances = load_account_balances(entity_id, pool).await?;
@@ -341,7 +338,9 @@ pub async fn run(
         &snapshot_rates,
     );
 
-    write_projections(entity_id, job_id, rows, write_pool).await
+    write_projections(entity_id, job_id, rows, write_pool).await?;
+    detect_ended_entries(entity_id, computed_as_of, &entries, write_pool).await?;
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -393,11 +392,68 @@ fn project_account(
     rows
 }
 
+/// Lapse check: for each live entry where computed_as_of > next_due_date,
+/// the expected transaction has not arrived since the last matched one.
+/// Inserts an ended proposal unless one is already pending or was recently dismissed.
+///
+/// next_due_date is maintained by stage1 as (last_matched_txn_date + period_days).
+/// Passing the lapse check means we are past the date the next transaction was due.
+async fn detect_ended_entries(
+    entity_id: Uuid,
+    computed_as_of: NaiveDate,
+    entries: &[EligibleEntry],
+    pool: &PgPool,
+) -> Result<()> {
+    for entry in entries {
+        let Some(next_due) = entry.next_due_date else { continue };
+
+        // Lapse check: use tolerance window — entry has not lapsed until computed_as_of
+        // is more than TIMING_VARIANCE_THRESHOLD_DAYS past next_due.
+        if !entry_has_lapsed(next_due, computed_as_of, super::TIMING_VARIANCE_THRESHOLD_DAYS as i64) {
+            continue;
+        }
+
+        // Skip if a pending ended proposal already exists, or if a dismissed one
+        // was recorded at or after computed_as_of (user already dismissed this lapse).
+        let already_blocked: Option<(i32,)> = sqlx::query_as(
+            "SELECT 1 FROM entry_proposals
+             WHERE reference_entry_id = $1
+               AND proposal_type = 'ended'
+               AND (status = 'pending'
+                    OR (status = 'dismissed'
+                        AND dismissed_computed_as_of >= $2))",
+        )
+        .bind(entry.id)
+        .bind(computed_as_of)
+        .fetch_optional(pool)
+        .await
+        .context("failed to check existing ended proposal")?;
+
+        if already_blocked.is_some() {
+            continue;
+        }
+
+        // proposed_end_date = next_due (the date the pattern was expected but didn't arrive).
+        sqlx::query(
+            "INSERT INTO entry_proposals
+               (entity_id, proposal_type, status, reference_entry_id, proposed_end_date)
+             VALUES ($1, 'ended', 'pending', $2, $3)",
+        )
+        .bind(entity_id)
+        .bind(entry.id)
+        .bind(next_due)
+        .execute(pool)
+        .await
+        .context("failed to insert ended proposal")?;
+    }
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // DB loaders
 // ---------------------------------------------------------------------------
 
-async fn load_eligible_entries(entity_id: Uuid, pool: &PgPool) -> Result<Vec<EligibleEntry>> {
+async fn load_eligible_entries(entity_id: Uuid, computed_as_of: NaiveDate, pool: &PgPool) -> Result<Vec<EligibleEntry>> {
     #[derive(sqlx::FromRow)]
     struct Row {
         id:                     Uuid,
@@ -414,10 +470,11 @@ async fn load_eligible_entries(entity_id: Uuid, pool: &PgPool) -> Result<Vec<Eli
                projected_rate_per_day
         FROM entries
         WHERE entity_id = $1
-          AND status IN ('live', 'pending')
+          AND (end_date IS NULL OR end_date >= $2)
         "#,
     )
     .bind(entity_id)
+    .bind(computed_as_of)
     .fetch_all(pool)
     .await
     .context("failed to load eligible entries for stage 7")?;
