@@ -2,9 +2,9 @@
 //!
 //! **Input:** UUIDs of transactions that produced no Stage 1 assignments.
 //!
-//! **Output:** Candidate `entries` with `status = 'pending'` and review
-//! metadata (alert_type, confidence, sample_merchants, etc.) written directly
-//! to the entries row.
+//! **Output:** Live `entries` rows (source = 'engine') paired with a pending
+//! `entry_proposals` row (proposal_type = 'new', status = 'pending') written to
+//! the entry_proposals table for user review.
 //!
 //! ## Algorithm
 //!
@@ -268,13 +268,19 @@ pub async fn run(entity_id: Uuid, unmatched_tx_ids: &[Uuid], pool: &PgPool) -> R
         clusters_created += 1;
     }
 
-    // Remove engine pending entries that have no transaction assignments —
-    // they have no backing data and the pattern is no longer present.
+    // Remove engine-created live entries whose pending new proposal has no
+    // backing transaction assignments — the pattern is no longer present.
     sqlx::query(
         "DELETE FROM entries
          WHERE entity_id = $1
            AND source = 'engine'
-           AND status = 'pending'
+           AND end_date IS NULL
+           AND EXISTS (
+               SELECT 1 FROM entry_proposals ep
+               WHERE ep.reference_entry_id = entries.id
+                 AND ep.proposal_type = 'new'
+                 AND ep.status = 'pending'
+           )
            AND NOT EXISTS (
                SELECT 1 FROM transaction_entry_assignments
                WHERE entry_id = entries.id
@@ -729,12 +735,17 @@ async fn persist_cluster(
     .await
     .context("failed to upsert label for merchant entry")?;
 
-    // Look up an existing engine-generated pending entry for this label.
-    // If one exists, update it in place to preserve the stable UUID.
-    // Only create a new entry if none exists yet.
+    // Look up an existing engine-created live entry for this label that still
+    // has a pending new proposal. If one exists, update it in place to preserve
+    // the stable UUID. If an engine entry exists but its proposal was already
+    // accepted or dismissed, skip re-classification. If none exists, insert both.
     let existing: Option<(Uuid,)> = sqlx::query_as(
-        "SELECT id FROM entries
-         WHERE entity_id = $1 AND label_id = $2 AND source = 'engine' AND status = 'pending'",
+        "SELECT e.id FROM entries e
+         JOIN entry_proposals ep ON ep.reference_entry_id = e.id
+         WHERE e.entity_id = $1 AND e.label_id = $2 AND e.source = 'engine'
+           AND e.end_date IS NULL
+           AND ep.proposal_type = 'new' AND ep.status = 'pending'
+         LIMIT 1",
     )
     .bind(entity_id)
     .bind(label_id)
@@ -776,14 +787,14 @@ async fn persist_cluster(
             "INSERT INTO entries (
                entity_id, label_id, direction, entry_type, period_days, next_due_date,
                recurrence_anchor, conditions, projected_rate_per_day,
-               status, source, start_date, rate_method,
-               alert_type, fitness, merchant_fit, timing_fit, amount_fit,
+               source, start_date, rate_method,
+               fitness, merchant_fit, timing_fit, amount_fit,
                sample_merchants, matched_transaction_count
              ) VALUES (
                $1, $2, $3, $4, $5, $6,
                $7, $8, $9,
-               'pending', 'engine', $10, 'median',
-               'new', $11, $12, $13, $14,
+               'engine', $10, 'median',
+               $11, $12, $13, $14,
                $15, $16
              )
              RETURNING id",
@@ -806,7 +817,18 @@ async fn persist_cluster(
         .bind(cluster.transactions.len() as i32)
         .fetch_one(pool)
         .await
-        .context("failed to insert pending entry")?;
+        .context("failed to insert live entry")?;
+
+        sqlx::query(
+            "INSERT INTO entry_proposals (entity_id, proposal_type, status, reference_entry_id)
+             VALUES ($1, 'new', 'pending', $2)",
+        )
+        .bind(entity_id)
+        .bind(id)
+        .execute(pool)
+        .await
+        .context("failed to insert new proposal for entry")?;
+
         id
     };
 
