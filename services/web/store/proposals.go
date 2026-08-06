@@ -38,6 +38,10 @@ type EntryProposalRow struct {
 	EntryProjectedRate   *float64  `db:"entry_projected_rate"`
 	EntryPeriodDays      *int      `db:"entry_period_days"`
 	EntrySource          string    `db:"entry_source"`
+
+	// drift proposal fields
+	ProposedRate    *float64 `db:"proposed_rate_per_day"`
+	DriftDeltaRatio *float64 `db:"drift_delta_ratio"`
 }
 
 // ListPendingProposals returns all pending proposals for an entity,
@@ -58,7 +62,9 @@ func (s *Store) ListPendingProposals(ctx context.Context, entityID string) ([]En
 			e.sample_merchants     AS entry_sample_merchants,
 			e.projected_rate_per_day::float8 AS entry_projected_rate,
 			e.period_days          AS entry_period_days,
-			e.source               AS entry_source
+			e.source               AS entry_source,
+			ep.proposed_rate_per_day::float8 AS proposed_rate_per_day,
+			ep.drift_delta_ratio::float8     AS drift_delta_ratio
 		FROM entry_proposals ep
 		JOIN entries e ON e.id = ep.reference_entry_id
 		LEFT JOIN labels l ON l.id = e.label_id

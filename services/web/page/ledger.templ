@@ -81,7 +81,11 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 						<div style="padding:48px 20px;text-align:center;color:var(--text3);font-size:13px">No pending proposals.</div>
 					}
 					for _, p := range data.Proposals {
-						@proposalCard(p)
+						if p.ProposalType == "drift" {
+							@driftProposalCard(p)
+						} else {
+							@proposalCard(p)
+						}
 					}
 				} else {
 					if len(data.Entries) == 0 {
@@ -535,13 +539,20 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 					if (!btn) return;
 					var proposalId = btn.dataset.proposalId;
 					var action = btn.dataset.action;
+					var path = btn.dataset.path; // set on drift buttons; undefined for new/ended
 					var card = btn.closest('div[style*="border-bottom"]');
 					btn.disabled = true;
 					btn.textContent = '…';
 					var ep = action === 'approve'
 						? '/api/proposals/' + proposalId + '/approve'
 						: '/api/proposals/' + proposalId + '/reject';
-					fetch(ep, {method: 'POST', credentials: 'same-origin'})
+					var body = path ? JSON.stringify({path: path}) : '{}';
+					fetch(ep, {
+						method: 'POST',
+						credentials: 'same-origin',
+						headers: {'Content-Type': 'application/json'},
+						body: body,
+					})
 						.then(function(r) {
 							if (!r.ok) throw new Error('failed');
 							markDirty();
@@ -1129,6 +1140,61 @@ templ proposalCard(p store.EntryProposalRow) {
 				data-action="approve"
 				style="padding:5px 14px;border-radius:5px;border:none;cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;background:var(--income);color:#fff"
 			>Approve</button>
+		</div>
+	</div>
+}
+
+templ driftProposalCard(p store.EntryProposalRow) {
+	<div style="border-bottom:1px solid var(--border);padding:12px 20px">
+		<div style="display:flex;align-items:flex-start;gap:12px">
+			<div style="flex:1;min-width:0">
+				<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+					<span style="font-size:13px;font-weight:600;color:var(--text)">
+						if p.EntryLabelName != nil {
+							{ *p.EntryLabelName }
+						} else {
+							<span style="color:var(--text3);font-style:italic">Unlabeled</span>
+						}
+					</span>
+					<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:10px;background:#f59e0b;color:#fff">
+						Drift
+					</span>
+					<span style="font-size:11px;color:var(--text3)">{ p.EntryDirection } · { p.EntryType }</span>
+				</div>
+				<div style="font-size:11px;color:var(--text3);display:flex;gap:12px">
+					if p.EntryProjectedRate != nil {
+						<span>Current: { fmt.Sprintf("$%.2f/day", *p.EntryProjectedRate) }</span>
+					}
+					if p.ProposedRate != nil {
+						<span style="color:var(--accent)">Proposed: { fmt.Sprintf("$%.2f/day", *p.ProposedRate) }</span>
+					}
+					if p.DriftDeltaRatio != nil {
+						<span>({ fmt.Sprintf("%.0f%%", *p.DriftDeltaRatio*100) } change)</span>
+					}
+				</div>
+			</div>
+			<div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+				<button
+					class="js-proposal-btn"
+					data-proposal-id={ p.ID }
+					data-action="reject"
+					style="padding:5px 14px;border-radius:5px;border:1px solid var(--border);cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;background:transparent;color:var(--text2)"
+				>Reject</button>
+				<button
+					class="js-proposal-btn"
+					data-proposal-id={ p.ID }
+					data-action="approve"
+					data-path="inplace"
+					style="padding:5px 14px;border-radius:5px;border:1px solid var(--income);cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;background:transparent;color:var(--income)"
+				>Update rate</button>
+				<button
+					class="js-proposal-btn"
+					data-proposal-id={ p.ID }
+					data-action="approve"
+					data-path="close_new"
+					style="padding:5px 14px;border-radius:5px;border:none;cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;background:var(--income);color:#fff"
+				>Close &amp; new</button>
+			</div>
 		</div>
 	</div>
 }
