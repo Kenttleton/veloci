@@ -13,3 +13,9 @@ func TestProposalTypeConstants(t *testing.T) {
 		t.Errorf("expected 'ended', got %q", proposalTypeEnded)
 	}
 }
+
+func TestDriftProposalTypeConstant(t *testing.T) {
+	if proposalTypeDrift != "drift" {
+		t.Errorf("expected 'drift', got %q", proposalTypeDrift)
+	}
+}

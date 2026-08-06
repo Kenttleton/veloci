@@ -10,6 +10,7 @@ import (
 const (
 	proposalTypeNew   = "new"
 	proposalTypeEnded = "ended"
+	proposalTypeDrift = "drift"
 )
 
 // EntryProposalRow is a full entry_proposals row joined with enough entry data
@@ -180,4 +181,169 @@ func (s *Store) RejectEndedProposal(ctx context.Context, entityID, proposalID, u
 		  AND proposal_type = 'ended' AND status = 'pending'
 	`, entityID, proposalID, computedAsOf, userID)
 	return err
+}
+
+// ApproveDriftProposalInPlace accepts a drift proposal by updating the
+// entry's projected_rate_per_day to the proposed value in place.
+// The entry keeps its start_date, label, and all other fields unchanged.
+func (s *Store) ApproveDriftProposalInPlace(ctx context.Context, entityID, proposalID, userID string) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	var entryID string
+	var proposedRate float64
+	err = tx.QueryRow(ctx, `
+		SELECT ep.reference_entry_id::text, ep.proposed_rate_per_day::float8
+		FROM entry_proposals ep
+		WHERE ep.entity_id = $1 AND ep.id = $2::uuid
+		  AND ep.proposal_type = 'drift' AND ep.status = 'pending'
+	`, entityID, proposalID).Scan(&entryID, &proposedRate)
+	if err != nil {
+		return err
+	}
+
+	if _, err = tx.Exec(ctx, `
+		UPDATE entries SET projected_rate_per_day = $2
+		WHERE entity_id = $1 AND id = $3::uuid
+	`, entityID, proposedRate, entryID); err != nil {
+		return err
+	}
+
+	if _, err = tx.Exec(ctx, `
+		UPDATE entry_proposals
+		SET status = 'accepted', reviewed_by = $3::uuid, reviewed_at = NOW()
+		WHERE entity_id = $1 AND id = $2::uuid
+	`, entityID, proposalID, userID); err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
+}
+
+// ApproveDriftProposalCloseNew accepts a drift proposal by closing the current
+// entry (end_date = yesterday) and creating a new entry that inherits all fields
+// except projected_rate_per_day, start_date, end_date, and next_due_date.
+// Returns the new entry's ID.
+func (s *Store) ApproveDriftProposalCloseNew(ctx context.Context, entityID, proposalID, userID string) (string, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	var entryID string
+	var proposedRate float64
+	err = tx.QueryRow(ctx, `
+		SELECT ep.reference_entry_id::text, ep.proposed_rate_per_day::float8
+		FROM entry_proposals ep
+		WHERE ep.entity_id = $1 AND ep.id = $2::uuid
+		  AND ep.proposal_type = 'drift' AND ep.status = 'pending'
+	`, entityID, proposalID).Scan(&entryID, &proposedRate)
+	if err != nil {
+		return "", err
+	}
+
+	var (
+		labelID          *string
+		direction        string
+		entryType        string
+		periodDays       *int
+		recurrenceAnchor *string
+		conditions       *string
+		rateMethod       string
+		fitness          *float64
+		source           string
+	)
+	err = tx.QueryRow(ctx, `
+		SELECT
+			label_id::text, direction, entry_type, period_days,
+			recurrence_anchor, conditions::text, rate_method,
+			fitness, source
+		FROM entries
+		WHERE entity_id = $1 AND id = $2::uuid
+	`, entityID, entryID).Scan(
+		&labelID, &direction, &entryType, &periodDays,
+		&recurrenceAnchor, &conditions, &rateMethod,
+		&fitness, &source,
+	)
+	if err != nil {
+		return "", err
+	}
+
+	// Close the old entry: set end_date to yesterday.
+	if _, err = tx.Exec(ctx, `
+		UPDATE entries
+		SET end_date = (NOW()::date - 1)
+		WHERE entity_id = $1 AND id = $2::uuid
+	`, entityID, entryID); err != nil {
+		return "", err
+	}
+
+	var newEntryID string
+	err = tx.QueryRow(ctx, `
+		INSERT INTO entries (
+			entity_id, label_id, direction, entry_type, period_days,
+			recurrence_anchor, conditions, projected_rate_per_day,
+			rate_method, fitness, source, start_date
+		) VALUES (
+			$1, $2::uuid, $3, $4, $5,
+			$6, $7::jsonb, $8,
+			$9, $10, $11, NOW()::date
+		)
+		RETURNING id::text
+	`, entityID, labelID, direction, entryType, periodDays,
+		recurrenceAnchor, conditions, proposedRate,
+		rateMethod, fitness, source,
+	).Scan(&newEntryID)
+	if err != nil {
+		return "", err
+	}
+
+	if _, err = tx.Exec(ctx, `
+		UPDATE entry_proposals
+		SET status = 'accepted', reviewed_by = $3::uuid, reviewed_at = NOW()
+		WHERE entity_id = $1 AND id = $2::uuid
+	`, entityID, proposalID, userID); err != nil {
+		return "", err
+	}
+
+	return newEntryID, tx.Commit(ctx)
+}
+
+// RejectDriftProposal dismisses a drift proposal and records the current
+// matched_transaction_count as the re-trigger threshold.
+func (s *Store) RejectDriftProposal(ctx context.Context, entityID, proposalID, userID string) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	var matchedCount int
+	err = tx.QueryRow(ctx, `
+		SELECT COALESCE(e.matched_transaction_count, 0)
+		FROM entry_proposals ep
+		JOIN entries e ON e.id = ep.reference_entry_id
+		WHERE ep.entity_id = $1 AND ep.id = $2::uuid
+		  AND ep.proposal_type = 'drift' AND ep.status = 'pending'
+	`, entityID, proposalID).Scan(&matchedCount)
+	if err != nil {
+		return err
+	}
+
+	if _, err = tx.Exec(ctx, `
+		UPDATE entry_proposals
+		SET status = 'dismissed',
+			dismissed_transaction_count = $3,
+			reviewed_by = $4::uuid,
+			reviewed_at = NOW()
+		WHERE entity_id = $1 AND id = $2::uuid
+	`, entityID, proposalID, matchedCount, userID); err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
 }
