@@ -241,9 +241,9 @@ CREATE INDEX ON entries (entity_id, label_id);
 -- outcome updates the referenced entry.
 --
 -- Re-trigger thresholds:
---   new/ended dismissed: re-propose when dismissed_transaction_count < current
---     matched_transaction_count on the live entry (new), or when
---     dismissed_computed_as_of < current computed_as_of (ended).
+--   ended dismissed: re-propose when dismissed_computed_as_of < current computed_as_of.
+--   dismissed_transaction_count is reserved for Phase 2 (new proposal re-trigger);
+--   in Phase 1, rejecting a 'new' proposal hard-deletes the entry, so this column is unused.
 CREATE TABLE entry_proposals (
   id                          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   entity_id                   UUID        NOT NULL REFERENCES entities(id) ON DELETE CASCADE,

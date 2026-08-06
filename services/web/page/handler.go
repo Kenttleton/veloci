@@ -935,18 +935,6 @@ func entryRowStatus(e store.EntryRow) string {
 	return "ended"
 }
 
-// entryStatusColor returns a CSS color for an entry status.
-func entryStatusColor(status string) string {
-	switch status {
-	case "live":
-		return "var(--income)"
-	case "pending":
-		return "var(--accent)"
-	default:
-		return "var(--text3)"
-	}
-}
-
 // conditionsFormatted returns pretty-printed JSON conditions or an empty object.
 func conditionsFormatted(raw json.RawMessage) string {
 	if len(raw) == 0 || string(raw) == "null" {

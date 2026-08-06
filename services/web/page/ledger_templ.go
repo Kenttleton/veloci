@@ -231,7 +231,7 @@ func LedgerPage(shell ShellData, data LedgerData) templ.Component {
 					}
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "</div></div><!-- Add Entry Dialog — must appear before the script so getElementById finds it --> <dialog id=\"add-entry-dialog\" style=\"border:1px solid var(--border);border-radius:8px;padding:0;background:var(--surface);color:var(--text);max-width:480px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.3)\"><div style=\"display:flex;align-items:center;padding:14px 18px;border-bottom:1px solid var(--border)\"><span style=\"font-size:14px;font-weight:700;flex:1\">Add Entry</span> <button id=\"add-entry-close\" style=\"background:none;border:none;cursor:pointer;font-size:18px;color:var(--text3);line-height:1;padding:2px 6px\">&times;</button></div><div style=\"padding:16px 18px;display:grid;gap:12px\"><div><label style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px\">Label</label> <input id=\"ae-label\" type=\"text\" placeholder=\"e.g. Rent\" style=\"width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit\"></div><div style=\"display:grid;grid-template-columns:1fr 1fr;gap:10px\"><div><label style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px\">Direction</label> <select id=\"ae-direction\" style=\"width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit\"><option value=\"\">— select —</option> <option value=\"spend\">Spend</option> <option value=\"income\">Income</option></select></div><div><label style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px\">Type</label> <select id=\"ae-type\" style=\"width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit\"><option value=\"\">— select —</option> <option value=\"standing\">Standing</option> <option value=\"variable\">Variable</option></select></div></div><div style=\"display:grid;grid-template-columns:1fr 1fr;gap:10px\"><div><label style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px\">Projected $/mo <span style=\"font-weight:400;color:var(--text3)\">(optional)</span></label> <input id=\"ae-rate\" type=\"number\" min=\"0\" step=\"0.01\" placeholder=\"e.g. 1500\" style=\"width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit\"></div><div><label style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px\">Start date</label> <input id=\"ae-start-date\" type=\"date\" style=\"width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit\"></div></div><div><label style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px\">Conditions JSON <span style=\"font-weight:400;color:var(--text3)\">(optional — you can add via the editor after saving)</span></label> <textarea id=\"ae-conditions\" rows=\"4\" placeholder=\"{}\" style=\"width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:12px;color:var(--text);font-family:monospace;resize:vertical\"></textarea></div><div id=\"add-entry-error\" style=\"font-size:12px;color:var(--commit);min-height:16px\"></div></div><div style=\"display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--border)\"><button id=\"add-entry-cancel\" style=\"background:none;border:1px solid var(--border);border-radius:5px;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit\">Cancel</button> <button id=\"add-entry-save\" style=\"background:var(--accent);border:none;border-radius:5px;padding:6px 16px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit\">Save</button></div></dialog><script>\n\t\t\t(function() {\n\t\t\t\t// ── Granularity toggle ─────────────────────────────────────────────────────\n\t\t\t\tvar activeGran = localStorage.getItem('veloci-gran') || 'day';\n\t\t\t\tfunction updateRateDisplays() {\n\t\t\t\t\tvar attr = activeGran === 'day' ? 'fmtDay' : activeGran === 'year' ? 'fmtYr' : 'fmtMo';\n\t\t\t\t\tdocument.querySelectorAll('[data-fmt-day]').forEach(function (el) {\n\t\t\t\t\t\tel.textContent = el.dataset[attr] || el.dataset.fmtDay;\n\t\t\t\t\t});\n\t\t\t\t\tvar label = activeGran === 'day' ? 'day' : activeGran === 'year' ? 'yr' : 'mo';\n\t\t\t\t\tdocument.querySelectorAll('.js-gran-label').forEach(function (el) {\n\t\t\t\t\t\tel.textContent = label;\n\t\t\t\t\t});\n\t\t\t\t}\n\t\t\t\tfunction applyGran(gran) {\n\t\t\t\t\tactiveGran = gran;\n\t\t\t\t\tlocalStorage.setItem('veloci-gran', activeGran);\n\t\t\t\t\tdocument.querySelectorAll('.js-gran').forEach(function (b) {\n\t\t\t\t\t\tvar on   = b.dataset.gran === activeGran;\n\t\t\t\t\t\tb.style.background = on ? 'var(--accent)' : 'var(--surface2)';\n\t\t\t\t\t\tb.style.color      = on ? '#fff' : 'var(--text2)';\n\t\t\t\t\t\tb.style.border     = on ? 'none' : '1px solid var(--border)';\n\t\t\t\t\t});\n\t\t\t\t\tupdateRateDisplays();\n\t\t\t\t}\n\t\t\t\tdocument.addEventListener('click', function (e) {\n\t\t\t\t\tvar btn = e.target.closest('.js-gran');\n\t\t\t\t\tif (!btn) return;\n\t\t\t\t\tapplyGran(btn.dataset.gran);\n\t\t\t\t});\n\t\t\t\tvar activeGranInit = window.__velociGran ? window.__velociGran() : activeGran;\n\t\t\t\tif (activeGranInit !== activeGran) { applyGran(activeGranInit); } else { applyGran(activeGran); }\n\t\t\t\tdocument.addEventListener('veloci:granchange', function(e) { applyGran(e.detail.gran); });\n\n\t\t\t\t// ── Dirty state ───────────────────────────────────────────────────────────\n\t\t\t\tvar _dirty = false;\n\t\t\t\tfunction markDirty() {\n\t\t\t\t\tif (_dirty) return;\n\t\t\t\t\t_dirty = true;\n\t\t\t\t\tvar ind = document.getElementById('dirty-indicator');\n\t\t\t\t\tif (ind) ind.style.display = '';\n\t\t\t\t\tvar runBtn = document.getElementById('run-engine-btn');\n\t\t\t\t\tif (runBtn) {\n\t\t\t\t\t\trunBtn.style.background = 'var(--commit)';\n\t\t\t\t\t\trunBtn.style.color = '#fff';\n\t\t\t\t\t\trunBtn.style.borderColor = 'var(--commit)';\n\t\t\t\t\t\trunBtn.textContent = 'Reprocess';\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t\tfunction clearDirty() {\n\t\t\t\t\t_dirty = false;\n\t\t\t\t\tvar ind = document.getElementById('dirty-indicator');\n\t\t\t\t\tif (ind) ind.style.display = 'none';\n\t\t\t\t\tvar runBtn = document.getElementById('run-engine-btn');\n\t\t\t\t\tif (runBtn) {\n\t\t\t\t\t\trunBtn.style.background = '';\n\t\t\t\t\t\trunBtn.style.color = '';\n\t\t\t\t\t\trunBtn.style.borderColor = '';\n\t\t\t\t\t\trunBtn.textContent = 'Run Engine';\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t\t// Conditions saved → auto-reprocess, then reload the tx panel and entry stats.\n\t\t\t\tdocument.addEventListener('veloci:conditions-saved', function(e) {\n\t\t\t\t\tvar entryId = e.detail && e.detail.entryId;\n\t\t\t\t\tfetch('/api/jobs/reprocess', {method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin', body:'{}'})\n\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\tif (r.ok) clearDirty();\n\t\t\t\t\t\t\tsetTimeout(function() {\n\t\t\t\t\t\t\t\tif (!entryId) return;\n\t\t\t\t\t\t\t\tvar det = document.querySelector('.js-entry-details[data-entry-id=\"'+entryId+'\"]');\n\t\t\t\t\t\t\t\tif (!det) return;\n\t\t\t\t\t\t\t\tif (det.open) {\n\t\t\t\t\t\t\t\t\tvar txPanel = det.querySelector('.js-tx-panel');\n\t\t\t\t\t\t\t\t\tif (txPanel) {\n\t\t\t\t\t\t\t\t\t\tdelete txPanel.dataset.loaded;\n\t\t\t\t\t\t\t\t\t\tloadTxPanel(txPanel, entryId, det.dataset.entryStatus || 'live');\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\tloadEntryStats(entryId, det);\n\t\t\t\t\t\t\t}, 2000);\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function() { markDirty(); });\n\t\t\t\t});\n\t\t\t\t// Navigate-away warning when dirty.\n\t\t\t\twindow.addEventListener('beforeunload', function(e) {\n\t\t\t\t\tif (!_dirty) return;\n\t\t\t\t\te.preventDefault();\n\t\t\t\t\te.returnValue = '';\n\t\t\t\t});\n\n\t\t\t\t// ── Run Engine / Reprocess ─────────────────────────────────────────────\n\t\t\t\tvar runBtn = document.getElementById('run-engine-btn');\n\t\t\t\tif (runBtn) {\n\t\t\t\t\trunBtn.addEventListener('click', function() {\n\t\t\t\t\t\trunBtn.disabled = true;\n\t\t\t\t\t\tvar origText = runBtn.textContent;\n\t\t\t\t\t\trunBtn.textContent = 'Running…';\n\t\t\t\t\t\tfetch('/api/jobs/reprocess', {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})\n\t\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\t\tif (r.ok) {\n\t\t\t\t\t\t\t\t\tclearDirty();\n\t\t\t\t\t\t\t\t\trunBtn.textContent = 'Engine started';\n\t\t\t\t\t\t\t\t} else {\n\t\t\t\t\t\t\t\t\trunBtn.textContent = 'Failed';\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\tsetTimeout(function(){ runBtn.disabled=false; runBtn.textContent=_dirty?'Reprocess':'Run Engine'; }, 3000);\n\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t.catch(function(){ runBtn.disabled=false; runBtn.textContent=origText; });\n\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\t// ── Sort selector ──────────────────────────────────────────────────────\n\t\t\t\tvar sortSel = document.getElementById('ledger-sort');\n\t\t\t\tif (sortSel) {\n\t\t\t\t\tsortSel.addEventListener('change', function() {\n\t\t\t\t\t\tvar url = new URL(window.location.href);\n\t\t\t\t\t\tif (sortSel.value === 'label') {\n\t\t\t\t\t\t\turl.searchParams.delete('sort');\n\t\t\t\t\t\t} else {\n\t\t\t\t\t\t\turl.searchParams.set('sort', sortSel.value);\n\t\t\t\t\t\t}\n\t\t\t\t\t\twindow.location.href = url.toString();\n\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\t// ── Chevron rotation ───────────────────────────────────────────────────\n\t\t\t\tdocument.addEventListener('toggle', function(e) {\n\t\t\t\t\tvar det = e.target;\n\t\t\t\t\tif (!det.classList.contains('js-entry-details')) return;\n\t\t\t\t\tvar chev = det.querySelector('.entry-chevron');\n\t\t\t\t\tif (chev) chev.style.transform = det.open ? 'rotate(90deg)' : '';\n\t\t\t\t}, true);\n\n\t\t\t\t// ── Label cache (shared between hint + blur-save) ─────────────────────\n\t\t\t\tvar _labelCache = null;\n\t\t\t\tfunction fetchLabels(cb) {\n\t\t\t\t\tif (_labelCache) { cb(_labelCache); return; }\n\t\t\t\t\tfetch('/api/labels?limit=500', {credentials:'same-origin'})\n\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t.then(function(env){ _labelCache = env.data || []; cb(_labelCache); })\n\t\t\t\t\t\t.catch(function(){ cb([]); });\n\t\t\t\t}\n\n\t\t\t\t// ── Entry stats reload (rate/day + fitness) ───────────────────────────\n\t\t\t\tfunction loadEntryStats(entryId, det) {\n\t\t\t\t\tfetch('/api/entries/' + entryId, {credentials:'same-origin'})\n\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t.then(function(env) {\n\t\t\t\t\t\t\tvar entry = env.data;\n\t\t\t\t\t\t\tif (!entry) return;\n\n\t\t\t\t\t\t\t// Rate: prefer projected_rate_per_day (set by engine for system entries).\n\t\t\t\t\t\t\tvar rateEl = det.querySelector('.js-entry-rate');\n\t\t\t\t\t\t\tif (rateEl) {\n\t\t\t\t\t\t\t\tvar rate = entry.projected_rate_per_day;\n\t\t\t\t\t\t\t\tif (rate == null) {\n\t\t\t\t\t\t\t\t\trateEl.dataset.fmtDay = '—';\n\t\t\t\t\t\t\t\t\trateEl.dataset.fmtMo  = '—';\n\t\t\t\t\t\t\t\t\trateEl.dataset.fmtYr  = '—';\n\t\t\t\t\t\t\t\t} else {\n\t\t\t\t\t\t\t\t\tvar d = Math.abs(rate / 100);\n\t\t\t\t\t\t\t\t\trateEl.dataset.fmtDay = '$' + d.toFixed(2) + '/day';\n\t\t\t\t\t\t\t\t\trateEl.dataset.fmtMo  = '$' + Math.round(d * 30.44) + '/mo';\n\t\t\t\t\t\t\t\t\trateEl.dataset.fmtYr  = '$' + Math.round(d * 365.25) + '/yr';\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\tvar attr = activeGran === 'day' ? 'fmtDay' : activeGran === 'year' ? 'fmtYr' : 'fmtMo';\n\t\t\t\t\t\t\t\trateEl.textContent = rateEl.dataset[attr] || rateEl.dataset.fmtDay;\n\t\t\t\t\t\t\t}\n\n\t\t\t\t\t\t\t// Fitness %.\n\t\t\t\t\t\t\tvar fitEl = det.querySelector('.js-entry-fitness');\n\t\t\t\t\t\t\tif (fitEl) {\n\t\t\t\t\t\t\t\tvar fit = entry.fitness;\n\t\t\t\t\t\t\t\tif (fit == null) {\n\t\t\t\t\t\t\t\t\tfitEl.textContent = '—';\n\t\t\t\t\t\t\t\t\tfitEl.style.color = 'var(--text3)';\n\t\t\t\t\t\t\t\t} else {\n\t\t\t\t\t\t\t\t\tfitEl.textContent = Math.round(fit * 100) + '%';\n\t\t\t\t\t\t\t\t\tfitEl.style.color = fit >= 0.8 ? 'var(--income)' : fit >= 0.5 ? 'var(--text2)' : 'var(--commit)';\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function() {});\n\t\t\t\t}\n\n\t\t\t\t// ── Tx panel loader ────────────────────────────────────────────────────\n\t\t\t\tfunction loadTxPanel(txPanel, entryId, entryStatus) {\n\t\t\t\t\ttxPanel.dataset.loaded = '1';\n\t\t\t\t\ttxPanel.innerHTML = '<p style=\"color:var(--text3);font-size:12px\">Loading…</p>';\n\t\t\t\t\tfetch('/api/transactions?entry_id=' + entryId + '&limit=50', {credentials:'same-origin'})\n\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t.then(function(env) {\n\t\t\t\t\t\t\tvar txns = env.data || [];\n\t\t\t\t\t\t\tvar verb = entryStatus === 'pending' ? 'will be' : 'are';\n\t\t\t\t\t\t\t// Update count in the summary line\n\t\t\t\t\t\t\tvar det = txPanel.closest('.js-entry-details');\n\t\t\t\t\t\t\tvar countEl = det && det.querySelector('.js-tx-count');\n\t\t\t\t\t\t\tif (countEl) {\n\t\t\t\t\t\t\t\tvar n = txns.length;\n\t\t\t\t\t\t\t\tcountEl.textContent = n + ' transaction' + (n === 1 ? '' : 's') + ' ' + verb + ' matched';\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\tif (!txns.length) {\n\t\t\t\t\t\t\t\tvar msg = entryStatus === 'pending'\n\t\t\t\t\t\t\t\t\t? 'No transactions matched yet. Run Engine to process this entry.'\n\t\t\t\t\t\t\t\t\t: 'No matched transactions.';\n\t\t\t\t\t\t\t\ttxPanel.innerHTML = '<p style=\"color:var(--text3);font-size:12px\">' + msg + '</p>';\n\t\t\t\t\t\t\t\treturn;\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\tvar rows = txns.map(function(t) {\n\t\t\t\t\t\t\t\tvar abs = Math.abs(t.amount_cents);\n\t\t\t\t\t\t\t\tvar s = (t.amount_cents < 0 ? '-' : '') + '$' + (abs/100).toFixed(2);\n\t\t\t\t\t\t\t\tvar col = t.amount_cents >= 0 ? 'var(--income)' : 'var(--commit)';\n\t\t\t\t\t\t\t\tvar merch = t.merchant_normalized || t.imported_payee || '';\n\t\t\t\t\t\t\t\treturn '<tr style=\"border-top:1px solid var(--border)\">' +\n\t\t\t\t\t\t\t\t\t'<td style=\"padding:5px 8px;font-size:12px;color:var(--text2)\">' + t.date + '</td>' +\n\t\t\t\t\t\t\t\t\t'<td style=\"padding:5px 8px;font-size:12px;color:var(--text)\">' + merch + '</td>' +\n\t\t\t\t\t\t\t\t\t'<td style=\"padding:5px 8px;font-size:12px;color:' + col + ';text-align:right;font-variant-numeric:tabular-nums\">' + s + '</td>' +\n\t\t\t\t\t\t\t\t\t'<td style=\"padding:5px 8px;font-size:12px;color:var(--text3)\">' + t.settlement_status + '</td>' +\n\t\t\t\t\t\t\t\t\t'</tr>';\n\t\t\t\t\t\t\t}).join('');\n\t\t\t\t\t\t\ttxPanel.innerHTML =\n\t\t\t\t\t\t\t\t'<table style=\"width:100%;border-collapse:collapse\">' +\n\t\t\t\t\t\t\t\t'<thead><tr>' +\n\t\t\t\t\t\t\t\t'<th style=\"padding:5px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:600\">Date</th>' +\n\t\t\t\t\t\t\t\t'<th style=\"padding:5px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:600\">Description</th>' +\n\t\t\t\t\t\t\t\t'<th style=\"padding:5px 8px;text-align:right;font-size:11px;color:var(--text3);font-weight:600\">Amount</th>' +\n\t\t\t\t\t\t\t\t'<th style=\"padding:5px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:600\">Status</th>' +\n\t\t\t\t\t\t\t\t'</tr></thead><tbody>' + rows + '</tbody></table>';\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function() {\n\t\t\t\t\t\t\ttxPanel.innerHTML = '<p style=\"color:var(--commit);font-size:12px\">Failed to load.</p>';\n\t\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\t// ── Lazy-load transactions when entry opened ────────────────────────────\n\t\t\t\tdocument.addEventListener('toggle', function(e) {\n\t\t\t\t\tvar det = e.target;\n\t\t\t\t\tif (!det.classList.contains('js-entry-details') || !det.open) return;\n\t\t\t\t\tvar entryId = det.dataset.entryId;\n\t\t\t\t\tvar entryStatus = det.dataset.entryStatus || 'live';\n\t\t\t\t\tvar txPanel = det.querySelector('.js-tx-panel');\n\t\t\t\t\tif (!txPanel || txPanel.dataset.loaded) return;\n\t\t\t\t\tloadTxPanel(txPanel, entryId, entryStatus);\n\t\t\t\t\t// Initialize Flatpickr on date inputs not yet initialized\n\t\t\t\t\tif (typeof flatpickr !== 'undefined') {\n\t\t\t\t\t\tdet.querySelectorAll('.js-date-fp:not(.flatpickr-input)').forEach(function(inp) {\n\t\t\t\t\t\t\tflatpickr(inp, {dateFormat: 'Y-m-d'});\n\t\t\t\t\t\t});\n\t\t\t\t\t}\n\t\t\t\t}, true);\n\n\t\t\t\t// ── Label input: rename in place, conflict offers link ────────────────\n\t\t\t\tdocument.addEventListener('focusout', function(e) {\n\t\t\t\t\tvar inp = e.target;\n\t\t\t\t\tif (!inp.classList.contains('js-label-input')) return;\n\t\t\t\t\tvar det = inp.closest('.js-entry-details');\n\t\t\t\t\tif (!det) return;\n\t\t\t\t\tvar entry = JSON.parse(det.dataset.entry || '{}');\n\t\t\t\t\tvar name = inp.value.trim();\n\t\t\t\t\tvar hint = inp.parentNode.querySelector('.js-label-hint');\n\t\t\t\t\tvar origName = (entry.label_name || '').toLowerCase();\n\t\t\t\t\tif (name.toLowerCase() === origName) return;\n\t\t\t\t\tif (hint) { hint.innerHTML = ''; }\n\n\t\t\t\t\t// No label assigned — only allow linking to an existing label.\n\t\t\t\t\tif (!entry.label_id) {\n\t\t\t\t\t\tif (!name) return;\n\t\t\t\t\t\tfetchLabels(function(labels) {\n\t\t\t\t\t\t\tvar found = labels.find(function(l){ return l.name.toLowerCase() === name.toLowerCase(); });\n\t\t\t\t\t\t\tif (found) {\n\t\t\t\t\t\t\t\tlinkEntryLabel(det, entry, found.id, found.name, hint);\n\t\t\t\t\t\t\t} else if (hint) {\n\t\t\t\t\t\t\t\thint.textContent = 'Create labels in Configuration, then assign here.';\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t});\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\n\t\t\t\t\t// Label assigned — rename it, detect conflict.\n\t\t\t\t\tfetch('/api/labels/' + entry.label_id, {\n\t\t\t\t\t\tmethod: 'PUT',\n\t\t\t\t\t\theaders: {'Content-Type': 'application/json'},\n\t\t\t\t\t\tcredentials: 'same-origin',\n\t\t\t\t\t\tbody: JSON.stringify({name: name}),\n\t\t\t\t\t}).then(function(r) {\n\t\t\t\t\t\tif (r.status === 409) {\n\t\t\t\t\t\t\t// Another label already has this name — offer to link to it.\n\t\t\t\t\t\t\t_labelCache = null;\n\t\t\t\t\t\t\tfetchLabels(function(labels) {\n\t\t\t\t\t\t\t\tvar conflict = labels.find(function(l){ return l.name.toLowerCase() === name.toLowerCase(); });\n\t\t\t\t\t\t\t\tif (!conflict || !hint) return;\n\t\t\t\t\t\t\t\tvar btn = document.createElement('button');\n\t\t\t\t\t\t\t\tbtn.className = 'js-label-link-btn';\n\t\t\t\t\t\t\t\tbtn.dataset.labelId = conflict.id;\n\t\t\t\t\t\t\t\tbtn.dataset.labelName = conflict.name;\n\t\t\t\t\t\t\t\tbtn.style.cssText = 'background:none;border:none;cursor:pointer;color:var(--accent);font-size:11px;font-family:inherit;padding:0;text-decoration:underline';\n\t\t\t\t\t\t\t\tbtn.textContent = 'Link to ‘' + conflict.name + '’ instead?';\n\t\t\t\t\t\t\t\thint.textContent = 'Name already taken. ';\n\t\t\t\t\t\t\t\thint.appendChild(btn);\n\t\t\t\t\t\t\t});\n\t\t\t\t\t\t\treturn null;\n\t\t\t\t\t\t}\n\t\t\t\t\t\tif (!r.ok) {\n\t\t\t\t\t\t\tif (hint) hint.textContent = 'Failed to rename.';\n\t\t\t\t\t\t\treturn null;\n\t\t\t\t\t\t}\n\t\t\t\t\t\treturn r.json();\n\t\t\t\t\t}).then(function(env) {\n\t\t\t\t\t\tif (!env) return;\n\t\t\t\t\t\t_labelCache = null;\n\t\t\t\t\t\tdet.dataset.entry = JSON.stringify(Object.assign({}, entry, {label_name: env.data.name}));\n\t\t\t\t\t}).catch(function() {\n\t\t\t\t\t\tif (hint) hint.textContent = 'Failed to rename.';\n\t\t\t\t\t});\n\t\t\t\t});\n\n\t\t\t\t// Link-instead button: re-associate entry with an existing label.\n\t\t\t\tdocument.addEventListener('click', function(e) {\n\t\t\t\t\tvar btn = e.target.closest('.js-label-link-btn');\n\t\t\t\t\tif (!btn) return;\n\t\t\t\t\tvar det = btn.closest('.js-entry-details');\n\t\t\t\t\tif (!det) return;\n\t\t\t\t\tvar entry = JSON.parse(det.dataset.entry || '{}');\n\t\t\t\t\tvar hint = btn.closest('.js-label-hint');\n\t\t\t\t\tlinkEntryLabel(det, entry, btn.dataset.labelId, btn.dataset.labelName, hint);\n\t\t\t\t});\n\n\t\t\t\tfunction linkEntryLabel(det, entry, newLabelId, newLabelName, hint) {\n\t\t\t\t\tvar dirSel = det.querySelector('.js-direction-sel');\n\t\t\t\t\tvar typeSel = det.querySelector('.js-type-sel');\n\t\t\t\t\tfetch('/api/entries/' + det.dataset.entryId, {\n\t\t\t\t\t\tmethod: 'PUT',\n\t\t\t\t\t\theaders: {'Content-Type': 'application/json'},\n\t\t\t\t\t\tcredentials: 'same-origin',\n\t\t\t\t\t\tbody: JSON.stringify(Object.assign({}, entry, {\n\t\t\t\t\t\t\tlabel_id: newLabelId,\n\t\t\t\t\t\t\tdirection: dirSel ? dirSel.value : entry.direction,\n\t\t\t\t\t\t\tentry_type: typeSel ? typeSel.value : entry.entry_type,\n\t\t\t\t\t\t})),\n\t\t\t\t\t}).then(function(r) {\n\t\t\t\t\t\tif (!r.ok) { if (hint) hint.textContent = 'Failed to update label.'; return; }\n\t\t\t\t\t\tvar inp = det.querySelector('.js-label-input');\n\t\t\t\t\t\tif (inp) inp.value = newLabelName || '';\n\t\t\t\t\t\tdet.dataset.entry = JSON.stringify(Object.assign({}, entry, {label_id: newLabelId, label_name: newLabelName}));\n\t\t\t\t\t\tif (hint) hint.innerHTML = '';\n\t\t\t\t\t\t_labelCache = null;\n\t\t\t\t\t}).catch(function() {\n\t\t\t\t\t\tif (hint) hint.textContent = 'Failed to update label.';\n\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\t// ── Proposal approve / reject ──────────────────────────────────────────\n\t\t\t\tdocument.addEventListener('click', function(e) {\n\t\t\t\t\tvar btn = e.target.closest('.js-proposal-btn');\n\t\t\t\t\tif (!btn) return;\n\t\t\t\t\tvar proposalId = btn.dataset.proposalId;\n\t\t\t\t\tvar action = btn.dataset.action;\n\t\t\t\t\tvar card = btn.closest('div[style*=\"border-bottom\"]');\n\t\t\t\t\tbtn.disabled = true;\n\t\t\t\t\tbtn.textContent = '…';\n\t\t\t\t\tvar ep = action === 'approve'\n\t\t\t\t\t\t? '/api/proposals/' + proposalId + '/approve'\n\t\t\t\t\t\t: '/api/proposals/' + proposalId + '/reject';\n\t\t\t\t\tfetch(ep, {method: 'POST', credentials: 'same-origin'})\n\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\tif (!r.ok) throw new Error('failed');\n\t\t\t\t\t\t\tif (action === 'approve') { markDirty(); }\n\t\t\t\t\t\t\tif (card) card.remove();\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function() {\n\t\t\t\t\t\t\tbtn.disabled = false;\n\t\t\t\t\t\t\tbtn.textContent = action === 'approve' ? 'Approve' : 'Reject';\n\t\t\t\t\t\t});\n\t\t\t\t});\n\n\t\t\t\t// ── Entry form save ────────────────────────────────────────────────────\n\t\t\t\tdocument.addEventListener('click', function(e) {\n\t\t\t\t\tvar btn = e.target.closest('.js-entry-save');\n\t\t\t\t\tif (!btn) return;\n\t\t\t\t\tvar det = btn.closest('.js-entry-details');\n\t\t\t\t\tif (!det) return;\n\t\t\t\t\tvar entryId = det.dataset.entryId;\n\t\t\t\t\tvar entry = JSON.parse(det.dataset.entry || '{}');\n\t\t\t\t\tvar hint = det.querySelector('.js-save-hint');\n\n\t\t\t\t\tvar labelInp = det.querySelector('.js-label-input');\n\t\t\t\t\tvar dirSel = det.querySelector('.js-direction-sel');\n\t\t\t\t\tvar typeSel = det.querySelector('.js-type-sel');\n\t\t\t\t\tvar startInp = det.querySelector('.js-start-date');\n\t\t\t\t\tvar periodInp = det.querySelector('.js-period-days');\n\t\t\t\t\tvar priorityInp = det.querySelector('.js-priority');\n\t\t\t\t\tvar ta = document.querySelector('.js-conditions-ta[data-entry-id=\"' + entryId + '\"]');\n\n\t\t\t\t\tvar conds = entry.conditions || {};\n\t\t\t\t\ttry {\n\t\t\t\t\t\tif (ta) {\n\t\t\t\t\t\t\tvar src = (ta._cmView && ta._cmView.state)\n\t\t\t\t\t\t\t\t? ta._cmView.state.doc.toString()\n\t\t\t\t\t\t\t\t: ta.value;\n\t\t\t\t\t\t\tconds = JSON.parse(src);\n\t\t\t\t\t\t}\n\t\t\t\t\t} catch(ex) {}\n\n\t\t\t\t\tfunction doSave(labelId) {\n\t\t\t\t\t\tvar startVal = startInp ? startInp.value : entry.start_date;\n\t\t\t\t\t\t// Flatpickr stores selected date in _flatpickr.selectedDates[0]\n\t\t\t\t\t\tif (startInp && startInp._flatpickr && startInp._flatpickr.selectedDates[0]) {\n\t\t\t\t\t\t\tvar d = startInp._flatpickr.selectedDates[0];\n\t\t\t\t\t\t\tstartVal = d.getFullYear() + '-' +\n\t\t\t\t\t\t\t\tString(d.getMonth() + 1).padStart(2, '0') + '-' +\n\t\t\t\t\t\t\t\tString(d.getDate()).padStart(2, '0');\n\t\t\t\t\t\t}\n\t\t\t\t\t\tvar body = Object.assign({}, entry, {\n\t\t\t\t\t\t\tlabel_id: labelId,\n\t\t\t\t\t\t\tdirection: dirSel ? dirSel.value : entry.direction,\n\t\t\t\t\t\t\tentry_type: typeSel ? typeSel.value : entry.entry_type,\n\t\t\t\t\t\t\tstart_date: startVal || entry.start_date,\n\t\t\t\t\t\t\tperiod_days: periodInp && periodInp.value ? parseInt(periodInp.value, 10) : entry.period_days,\n\t\t\t\t\t\t\tpriority: priorityInp && priorityInp.value !== '' ? parseInt(priorityInp.value, 10) : entry.priority,\n\t\t\t\t\t\t\tconditions: conds,\n\t\t\t\t\t\t});\n\n\t\t\t\t\t\tbtn.disabled = true;\n\t\t\t\t\t\tbtn.textContent = 'Saving…';\n\t\t\t\t\t\tif (hint) { hint.style.color = 'var(--text3)'; hint.textContent = ''; }\n\n\t\t\t\t\t\tfetch('/api/entries/' + entryId, {\n\t\t\t\t\t\t\tmethod: 'PUT',\n\t\t\t\t\t\t\theaders: {'Content-Type': 'application/json'},\n\t\t\t\t\t\t\tcredentials: 'same-origin',\n\t\t\t\t\t\t\tbody: JSON.stringify(body),\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\tif (!r.ok) return r.json().then(function(ev){ throw new Error(ev.detail || 'Save failed'); });\n\t\t\t\t\t\t\treturn r.json();\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.then(function() {\n\t\t\t\t\t\t\tdet.dataset.entry = JSON.stringify(body);\n\t\t\t\t\t\t\tbtn.disabled = false;\n\t\t\t\t\t\t\tbtn.textContent = 'Save';\n\t\t\t\t\t\t\tif (hint) { hint.style.color = 'var(--income)'; hint.textContent = 'Saved'; }\n\t\t\t\t\t\t\tmarkDirty();\n\t\t\t\t\t\t\tsetTimeout(function() { if (hint) hint.textContent = ''; }, 2000);\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function(err) {\n\t\t\t\t\t\t\tbtn.disabled = false;\n\t\t\t\t\t\t\tbtn.textContent = 'Save';\n\t\t\t\t\t\t\tif (hint) { hint.style.color = 'var(--commit)'; hint.textContent = err.message || 'Save failed'; }\n\t\t\t\t\t\t});\n\t\t\t\t\t}\n\n\t\t\t\t\tvar labelName = labelInp ? labelInp.value.trim() : '';\n\t\t\t\t\tvar origLabelName = (entry.label_name || '').toLowerCase();\n\t\t\t\t\tif (!labelName || labelName.toLowerCase() === origLabelName) {\n\t\t\t\t\t\tdoSave(entry.label_id);\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tfetchLabels(function(labels) {\n\t\t\t\t\t\tvar found = labels.find(function(l){ return l.name.toLowerCase() === labelName.toLowerCase(); });\n\t\t\t\t\t\tif (found) { doSave(found.id); return; }\n\t\t\t\t\t\tif (entry.label_id) {\n\t\t\t\t\t\t\tfetch('/api/labels/' + entry.label_id, {\n\t\t\t\t\t\t\t\tmethod: 'PUT',\n\t\t\t\t\t\t\t\theaders: {'Content-Type': 'application/json'},\n\t\t\t\t\t\t\t\tcredentials: 'same-origin',\n\t\t\t\t\t\t\t\tbody: JSON.stringify({name: labelName}),\n\t\t\t\t\t\t\t}).then(function(r) {\n\t\t\t\t\t\t\t\t_labelCache = null;\n\t\t\t\t\t\t\t\tif (r.ok) { doSave(entry.label_id); } else { doSave(entry.label_id); }\n\t\t\t\t\t\t\t}).catch(function() { doSave(entry.label_id); });\n\t\t\t\t\t\t} else {\n\t\t\t\t\t\t\tfetch('/api/labels', {\n\t\t\t\t\t\t\t\tmethod: 'POST',\n\t\t\t\t\t\t\t\theaders: {'Content-Type': 'application/json'},\n\t\t\t\t\t\t\t\tcredentials: 'same-origin',\n\t\t\t\t\t\t\t\tbody: JSON.stringify({name: labelName}),\n\t\t\t\t\t\t\t}).then(function(r){ return r.json(); })\n\t\t\t\t\t\t\t.then(function(env) { _labelCache = null; doSave(env.data ? env.data.id : null); })\n\t\t\t\t\t\t\t.catch(function() { doSave(null); });\n\t\t\t\t\t\t}\n\t\t\t\t\t});\n\t\t\t\t});\n\n\t\t\t\t// ── Confidence panel collapse ──────────────────────────────────────────\n\t\t\t\tdocument.addEventListener('click', function(e) {\n\t\t\t\t\tvar btn = e.target.closest('.js-conf-toggle');\n\t\t\t\t\tif (!btn) return;\n\t\t\t\t\tvar panel = btn.closest('.js-conf-panel');\n\t\t\t\t\tif (!panel) return;\n\t\t\t\t\tvar expanded = panel.dataset.expanded === 'true';\n\t\t\t\t\tpanel.dataset.expanded = expanded ? 'false' : 'true';\n\t\t\t\t\tpanel.style.width = expanded ? '120px' : '230px';\n\t\t\t\t\tpanel.querySelectorAll('.js-conf-bar').forEach(function(b) {\n\t\t\t\t\t\tb.style.display = expanded ? 'none' : '';\n\t\t\t\t\t});\n\t\t\t\t\tbtn.textContent = expanded ? '▶' : '◀';\n\t\t\t\t});\n\n\t\t\t\t// ── Add Entry modal ────────────────────────────────────────────────────\n\t\t\t\tvar addEntryBtn = document.getElementById('add-entry-btn');\n\t\t\t\tvar addEntryDialog = document.getElementById('add-entry-dialog');\n\t\t\t\tvar addEntryClose = document.getElementById('add-entry-close');\n\t\t\t\tvar addEntryCancel = document.getElementById('add-entry-cancel');\n\t\t\t\tvar addEntrySave = document.getElementById('add-entry-save');\n\t\t\t\tvar addEntryError = document.getElementById('add-entry-error');\n\n\t\t\t\tif (addEntryBtn && addEntryDialog) {\n\t\t\t\t\taddEntryBtn.addEventListener('click', function() {\n\t\t\t\t\t\taddEntryDialog.showModal();\n\t\t\t\t\t\tvar startInput = document.getElementById('ae-start-date');\n\t\t\t\t\t\tif (startInput && !startInput.value) {\n\t\t\t\t\t\t\tstartInput.value = new Date().toISOString().slice(0, 10);\n\t\t\t\t\t\t}\n\t\t\t\t\t});\n\t\t\t\t}\n\t\t\t\tif (addEntryClose) addEntryClose.addEventListener('click', function() { addEntryDialog.close(); });\n\t\t\t\tif (addEntryCancel) addEntryCancel.addEventListener('click', function() { addEntryDialog.close(); });\n\t\t\t\tif (addEntryDialog) addEntryDialog.addEventListener('click', function(e) {\n\t\t\t\t\tif (e.target === addEntryDialog) addEntryDialog.close();\n\t\t\t\t});\n\n\t\t\t\tfunction getAeField(id) {\n\t\t\t\t\tvar el = document.getElementById(id);\n\t\t\t\t\treturn el ? el.value.trim() : '';\n\t\t\t\t}\n\n\t\t\t\tfunction resolveAddEntryLabel(name, cb) {\n\t\t\t\t\tif (!name) { cb(null); return; }\n\t\t\t\t\tfetch('/api/labels?limit=500')\n\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t.then(function(env) {\n\t\t\t\t\t\t\tvar found = (env.data||[]).find(function(l){ return l.name.toLowerCase()===name.toLowerCase(); });\n\t\t\t\t\t\t\tif (found) { cb(found.id); return; }\n\t\t\t\t\t\t\tfetch('/api/labels',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})\n\t\t\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t\t\t.then(function(c){ cb(c.data ? c.data.id : null); });\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function(){ cb(null); });\n\t\t\t\t}\n\n\t\t\t\tif (addEntrySave) {\n\t\t\t\t\taddEntrySave.addEventListener('click', function() {\n\t\t\t\t\t\tvar labelName = getAeField('ae-label');\n\t\t\t\t\t\tvar direction = getAeField('ae-direction');\n\t\t\t\t\t\tvar entryType = getAeField('ae-type');\n\t\t\t\t\t\tvar rateStr = getAeField('ae-rate');\n\t\t\t\t\t\tvar startDate = getAeField('ae-start-date');\n\t\t\t\t\t\tvar condsStr = getAeField('ae-conditions');\n\n\t\t\t\t\t\tif (!direction || !entryType || !startDate) {\n\t\t\t\t\t\t\tif (addEntryError) addEntryError.textContent = 'Direction, type, and start date are required.';\n\t\t\t\t\t\t\treturn;\n\t\t\t\t\t\t}\n\n\t\t\t\t\t\tvar conds = {};\n\t\t\t\t\t\tif (condsStr) {\n\t\t\t\t\t\t\ttry { conds = JSON.parse(condsStr); }\n\t\t\t\t\t\t\tcatch(ex) {\n\t\t\t\t\t\t\t\tif (addEntryError) addEntryError.textContent = 'Conditions must be valid JSON.';\n\t\t\t\t\t\t\t\treturn;\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t}\n\n\t\t\t\t\t\t// Rate: user enters $/mo, convert to cents/day (÷ 30.44 × 100).\n\t\t\t\t\t\tvar ratePerDay = null;\n\t\t\t\t\t\tif (rateStr) {\n\t\t\t\t\t\t\tvar rateVal = parseFloat(rateStr);\n\t\t\t\t\t\t\tif (!isNaN(rateVal)) { ratePerDay = (rateVal / 30.44) * 100; }\n\t\t\t\t\t\t}\n\n\t\t\t\t\t\taddEntrySave.disabled = true;\n\t\t\t\t\t\taddEntrySave.textContent = 'Saving…';\n\t\t\t\t\t\tif (addEntryError) addEntryError.textContent = '';\n\n\t\t\t\t\t\tresolveAddEntryLabel(labelName, function(labelId) {\n\t\t\t\t\t\t\tvar body = {\n\t\t\t\t\t\t\t\tlabel_id: labelId,\n\t\t\t\t\t\t\t\tdirection: direction,\n\t\t\t\t\t\t\t\tentry_type: entryType,\n\t\t\t\t\t\t\t\tperiod_days: entryType === 'standing' ? 30 : 1,\n\t\t\t\t\t\t\t\tsource: 'user',\n\t\t\t\t\t\t\t\tstart_date: startDate,\n\t\t\t\t\t\t\t\tconditions: conds,\n\t\t\t\t\t\t\t\tprojected_rate_per_day: ratePerDay,\n\t\t\t\t\t\t\t\tpriority: 0,\n\t\t\t\t\t\t\t};\n\t\t\t\t\t\t\tfetch('/api/entries', {\n\t\t\t\t\t\t\t\tmethod: 'POST',\n\t\t\t\t\t\t\t\theaders: {'Content-Type': 'application/json'},\n\t\t\t\t\t\t\t\tcredentials: 'same-origin',\n\t\t\t\t\t\t\t\tbody: JSON.stringify(body),\n\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\t\tif (!r.ok) return r.json().then(function(e){ throw new Error(e.detail||'Save failed'); });\n\t\t\t\t\t\t\t\tmarkDirty();\n\t\t\t\t\t\t\t\taddEntryDialog.close();\n\t\t\t\t\t\t\t\tlocation.reload();\n\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t.catch(function(err) {\n\t\t\t\t\t\t\t\taddEntrySave.disabled = false;\n\t\t\t\t\t\t\t\taddEntrySave.textContent = 'Save';\n\t\t\t\t\t\t\t\tif (addEntryError) addEntryError.textContent = err.message || 'Failed to create entry.';\n\t\t\t\t\t\t\t});\n\t\t\t\t\t\t});\n\t\t\t\t\t});\n\t\t\t\t}\n\t\t\t\t// ── Entry checkbox tracking ───────────────────────────────────────────────\n\t\t\t\t(function() {\n\t\t\t\t\tvar checkedIds = new Set();\n\t\t\t\t\tvar selectAll  = document.querySelector('.js-check-all');\n\n\t\t\t\t\tfunction syncSelectAll() {\n\t\t\t\t\t\tvar cbs     = Array.from(document.querySelectorAll('.js-entry-check'));\n\t\t\t\t\t\tvar checked = cbs.filter(function(c) { return c.checked; });\n\t\t\t\t\t\tif (selectAll) {\n\t\t\t\t\t\t\tselectAll.checked       = checked.length > 0 && checked.length === cbs.length;\n\t\t\t\t\t\t\tselectAll.indeterminate = checked.length > 0 && checked.length < cbs.length;\n\t\t\t\t\t\t}\n\t\t\t\t\t\twindow.__velociCheckedEntries = Array.from(checkedIds);\n\t\t\t\t\t}\n\n\t\t\t\t\tdocument.addEventListener('change', function(e) {\n\t\t\t\t\t\tvar cb = e.target.closest('.js-entry-check');\n\t\t\t\t\t\tif (!cb) return;\n\t\t\t\t\t\tvar id = cb.dataset.entryId;\n\t\t\t\t\t\tif (!id) return;\n\t\t\t\t\t\tif (cb.checked) { checkedIds.add(id); } else { checkedIds.delete(id); }\n\t\t\t\t\t\tsyncSelectAll();\n\t\t\t\t\t});\n\n\t\t\t\t\tif (selectAll) {\n\t\t\t\t\t\tselectAll.addEventListener('change', function() {\n\t\t\t\t\t\t\tdocument.querySelectorAll('.js-entry-check').forEach(function(cb) {\n\t\t\t\t\t\t\t\tcb.checked = selectAll.checked;\n\t\t\t\t\t\t\t\tvar id = cb.dataset.entryId;\n\t\t\t\t\t\t\t\tif (!id) return;\n\t\t\t\t\t\t\t\tif (selectAll.checked) { checkedIds.add(id); } else { checkedIds.delete(id); }\n\t\t\t\t\t\t\t});\n\t\t\t\t\t\t\tsyncSelectAll();\n\t\t\t\t\t\t});\n\t\t\t\t\t}\n\n\t\t\t\t\twindow.__velociCheckedEntries = [];\n\t\t\t\t})();\n\t\t\t})();\n\t\t</script> <script type=\"module\" src=\"/static/js/conditions-editor.js\"></script>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "</div></div><!-- Add Entry Dialog — must appear before the script so getElementById finds it --> <dialog id=\"add-entry-dialog\" style=\"border:1px solid var(--border);border-radius:8px;padding:0;background:var(--surface);color:var(--text);max-width:480px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.3)\"><div style=\"display:flex;align-items:center;padding:14px 18px;border-bottom:1px solid var(--border)\"><span style=\"font-size:14px;font-weight:700;flex:1\">Add Entry</span> <button id=\"add-entry-close\" style=\"background:none;border:none;cursor:pointer;font-size:18px;color:var(--text3);line-height:1;padding:2px 6px\">&times;</button></div><div style=\"padding:16px 18px;display:grid;gap:12px\"><div><label style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px\">Label</label> <input id=\"ae-label\" type=\"text\" placeholder=\"e.g. Rent\" style=\"width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit\"></div><div style=\"display:grid;grid-template-columns:1fr 1fr;gap:10px\"><div><label style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px\">Direction</label> <select id=\"ae-direction\" style=\"width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit\"><option value=\"\">— select —</option> <option value=\"spend\">Spend</option> <option value=\"income\">Income</option></select></div><div><label style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px\">Type</label> <select id=\"ae-type\" style=\"width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit\"><option value=\"\">— select —</option> <option value=\"standing\">Standing</option> <option value=\"variable\">Variable</option></select></div></div><div style=\"display:grid;grid-template-columns:1fr 1fr;gap:10px\"><div><label style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px\">Projected $/mo <span style=\"font-weight:400;color:var(--text3)\">(optional)</span></label> <input id=\"ae-rate\" type=\"number\" min=\"0\" step=\"0.01\" placeholder=\"e.g. 1500\" style=\"width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit\"></div><div><label style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px\">Start date</label> <input id=\"ae-start-date\" type=\"date\" style=\"width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit\"></div></div><div><label style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px\">Conditions JSON <span style=\"font-weight:400;color:var(--text3)\">(optional — you can add via the editor after saving)</span></label> <textarea id=\"ae-conditions\" rows=\"4\" placeholder=\"{}\" style=\"width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:12px;color:var(--text);font-family:monospace;resize:vertical\"></textarea></div><div id=\"add-entry-error\" style=\"font-size:12px;color:var(--commit);min-height:16px\"></div></div><div style=\"display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--border)\"><button id=\"add-entry-cancel\" style=\"background:none;border:1px solid var(--border);border-radius:5px;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit\">Cancel</button> <button id=\"add-entry-save\" style=\"background:var(--accent);border:none;border-radius:5px;padding:6px 16px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit\">Save</button></div></dialog><script>\n\t\t\t(function() {\n\t\t\t\t// ── Granularity toggle ─────────────────────────────────────────────────────\n\t\t\t\tvar activeGran = localStorage.getItem('veloci-gran') || 'day';\n\t\t\t\tfunction updateRateDisplays() {\n\t\t\t\t\tvar attr = activeGran === 'day' ? 'fmtDay' : activeGran === 'year' ? 'fmtYr' : 'fmtMo';\n\t\t\t\t\tdocument.querySelectorAll('[data-fmt-day]').forEach(function (el) {\n\t\t\t\t\t\tel.textContent = el.dataset[attr] || el.dataset.fmtDay;\n\t\t\t\t\t});\n\t\t\t\t\tvar label = activeGran === 'day' ? 'day' : activeGran === 'year' ? 'yr' : 'mo';\n\t\t\t\t\tdocument.querySelectorAll('.js-gran-label').forEach(function (el) {\n\t\t\t\t\t\tel.textContent = label;\n\t\t\t\t\t});\n\t\t\t\t}\n\t\t\t\tfunction applyGran(gran) {\n\t\t\t\t\tactiveGran = gran;\n\t\t\t\t\tlocalStorage.setItem('veloci-gran', activeGran);\n\t\t\t\t\tdocument.querySelectorAll('.js-gran').forEach(function (b) {\n\t\t\t\t\t\tvar on   = b.dataset.gran === activeGran;\n\t\t\t\t\t\tb.style.background = on ? 'var(--accent)' : 'var(--surface2)';\n\t\t\t\t\t\tb.style.color      = on ? '#fff' : 'var(--text2)';\n\t\t\t\t\t\tb.style.border     = on ? 'none' : '1px solid var(--border)';\n\t\t\t\t\t});\n\t\t\t\t\tupdateRateDisplays();\n\t\t\t\t}\n\t\t\t\tdocument.addEventListener('click', function (e) {\n\t\t\t\t\tvar btn = e.target.closest('.js-gran');\n\t\t\t\t\tif (!btn) return;\n\t\t\t\t\tapplyGran(btn.dataset.gran);\n\t\t\t\t});\n\t\t\t\tvar activeGranInit = window.__velociGran ? window.__velociGran() : activeGran;\n\t\t\t\tif (activeGranInit !== activeGran) { applyGran(activeGranInit); } else { applyGran(activeGran); }\n\t\t\t\tdocument.addEventListener('veloci:granchange', function(e) { applyGran(e.detail.gran); });\n\n\t\t\t\t// ── Dirty state ───────────────────────────────────────────────────────────\n\t\t\t\tvar _dirty = false;\n\t\t\t\tfunction markDirty() {\n\t\t\t\t\tif (_dirty) return;\n\t\t\t\t\t_dirty = true;\n\t\t\t\t\tvar ind = document.getElementById('dirty-indicator');\n\t\t\t\t\tif (ind) ind.style.display = '';\n\t\t\t\t\tvar runBtn = document.getElementById('run-engine-btn');\n\t\t\t\t\tif (runBtn) {\n\t\t\t\t\t\trunBtn.style.background = 'var(--commit)';\n\t\t\t\t\t\trunBtn.style.color = '#fff';\n\t\t\t\t\t\trunBtn.style.borderColor = 'var(--commit)';\n\t\t\t\t\t\trunBtn.textContent = 'Reprocess';\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t\tfunction clearDirty() {\n\t\t\t\t\t_dirty = false;\n\t\t\t\t\tvar ind = document.getElementById('dirty-indicator');\n\t\t\t\t\tif (ind) ind.style.display = 'none';\n\t\t\t\t\tvar runBtn = document.getElementById('run-engine-btn');\n\t\t\t\t\tif (runBtn) {\n\t\t\t\t\t\trunBtn.style.background = '';\n\t\t\t\t\t\trunBtn.style.color = '';\n\t\t\t\t\t\trunBtn.style.borderColor = '';\n\t\t\t\t\t\trunBtn.textContent = 'Run Engine';\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t\t// Conditions saved → auto-reprocess, then reload the tx panel and entry stats.\n\t\t\t\tdocument.addEventListener('veloci:conditions-saved', function(e) {\n\t\t\t\t\tvar entryId = e.detail && e.detail.entryId;\n\t\t\t\t\tfetch('/api/jobs/reprocess', {method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin', body:'{}'})\n\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\tif (r.ok) clearDirty();\n\t\t\t\t\t\t\tsetTimeout(function() {\n\t\t\t\t\t\t\t\tif (!entryId) return;\n\t\t\t\t\t\t\t\tvar det = document.querySelector('.js-entry-details[data-entry-id=\"'+entryId+'\"]');\n\t\t\t\t\t\t\t\tif (!det) return;\n\t\t\t\t\t\t\t\tif (det.open) {\n\t\t\t\t\t\t\t\t\tvar txPanel = det.querySelector('.js-tx-panel');\n\t\t\t\t\t\t\t\t\tif (txPanel) {\n\t\t\t\t\t\t\t\t\t\tdelete txPanel.dataset.loaded;\n\t\t\t\t\t\t\t\t\t\tloadTxPanel(txPanel, entryId, det.dataset.entryStatus || 'live');\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\tloadEntryStats(entryId, det);\n\t\t\t\t\t\t\t}, 2000);\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function() { markDirty(); });\n\t\t\t\t});\n\t\t\t\t// Navigate-away warning when dirty.\n\t\t\t\twindow.addEventListener('beforeunload', function(e) {\n\t\t\t\t\tif (!_dirty) return;\n\t\t\t\t\te.preventDefault();\n\t\t\t\t\te.returnValue = '';\n\t\t\t\t});\n\n\t\t\t\t// ── Run Engine / Reprocess ─────────────────────────────────────────────\n\t\t\t\tvar runBtn = document.getElementById('run-engine-btn');\n\t\t\t\tif (runBtn) {\n\t\t\t\t\trunBtn.addEventListener('click', function() {\n\t\t\t\t\t\trunBtn.disabled = true;\n\t\t\t\t\t\tvar origText = runBtn.textContent;\n\t\t\t\t\t\trunBtn.textContent = 'Running…';\n\t\t\t\t\t\tfetch('/api/jobs/reprocess', {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})\n\t\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\t\tif (r.ok) {\n\t\t\t\t\t\t\t\t\tclearDirty();\n\t\t\t\t\t\t\t\t\trunBtn.textContent = 'Engine started';\n\t\t\t\t\t\t\t\t} else {\n\t\t\t\t\t\t\t\t\trunBtn.textContent = 'Failed';\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\tsetTimeout(function(){ runBtn.disabled=false; runBtn.textContent=_dirty?'Reprocess':'Run Engine'; }, 3000);\n\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t.catch(function(){ runBtn.disabled=false; runBtn.textContent=origText; });\n\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\t// ── Sort selector ──────────────────────────────────────────────────────\n\t\t\t\tvar sortSel = document.getElementById('ledger-sort');\n\t\t\t\tif (sortSel) {\n\t\t\t\t\tsortSel.addEventListener('change', function() {\n\t\t\t\t\t\tvar url = new URL(window.location.href);\n\t\t\t\t\t\tif (sortSel.value === 'label') {\n\t\t\t\t\t\t\turl.searchParams.delete('sort');\n\t\t\t\t\t\t} else {\n\t\t\t\t\t\t\turl.searchParams.set('sort', sortSel.value);\n\t\t\t\t\t\t}\n\t\t\t\t\t\twindow.location.href = url.toString();\n\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\t// ── Chevron rotation ───────────────────────────────────────────────────\n\t\t\t\tdocument.addEventListener('toggle', function(e) {\n\t\t\t\t\tvar det = e.target;\n\t\t\t\t\tif (!det.classList.contains('js-entry-details')) return;\n\t\t\t\t\tvar chev = det.querySelector('.entry-chevron');\n\t\t\t\t\tif (chev) chev.style.transform = det.open ? 'rotate(90deg)' : '';\n\t\t\t\t}, true);\n\n\t\t\t\t// ── Label cache (shared between hint + blur-save) ─────────────────────\n\t\t\t\tvar _labelCache = null;\n\t\t\t\tfunction fetchLabels(cb) {\n\t\t\t\t\tif (_labelCache) { cb(_labelCache); return; }\n\t\t\t\t\tfetch('/api/labels?limit=500', {credentials:'same-origin'})\n\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t.then(function(env){ _labelCache = env.data || []; cb(_labelCache); })\n\t\t\t\t\t\t.catch(function(){ cb([]); });\n\t\t\t\t}\n\n\t\t\t\t// ── Entry stats reload (rate/day + fitness) ───────────────────────────\n\t\t\t\tfunction loadEntryStats(entryId, det) {\n\t\t\t\t\tfetch('/api/entries/' + entryId, {credentials:'same-origin'})\n\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t.then(function(env) {\n\t\t\t\t\t\t\tvar entry = env.data;\n\t\t\t\t\t\t\tif (!entry) return;\n\n\t\t\t\t\t\t\t// Rate: prefer projected_rate_per_day (set by engine for system entries).\n\t\t\t\t\t\t\tvar rateEl = det.querySelector('.js-entry-rate');\n\t\t\t\t\t\t\tif (rateEl) {\n\t\t\t\t\t\t\t\tvar rate = entry.projected_rate_per_day;\n\t\t\t\t\t\t\t\tif (rate == null) {\n\t\t\t\t\t\t\t\t\trateEl.dataset.fmtDay = '—';\n\t\t\t\t\t\t\t\t\trateEl.dataset.fmtMo  = '—';\n\t\t\t\t\t\t\t\t\trateEl.dataset.fmtYr  = '—';\n\t\t\t\t\t\t\t\t} else {\n\t\t\t\t\t\t\t\t\tvar d = Math.abs(rate / 100);\n\t\t\t\t\t\t\t\t\trateEl.dataset.fmtDay = '$' + d.toFixed(2) + '/day';\n\t\t\t\t\t\t\t\t\trateEl.dataset.fmtMo  = '$' + Math.round(d * 30.44) + '/mo';\n\t\t\t\t\t\t\t\t\trateEl.dataset.fmtYr  = '$' + Math.round(d * 365.25) + '/yr';\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\tvar attr = activeGran === 'day' ? 'fmtDay' : activeGran === 'year' ? 'fmtYr' : 'fmtMo';\n\t\t\t\t\t\t\t\trateEl.textContent = rateEl.dataset[attr] || rateEl.dataset.fmtDay;\n\t\t\t\t\t\t\t}\n\n\t\t\t\t\t\t\t// Fitness %.\n\t\t\t\t\t\t\tvar fitEl = det.querySelector('.js-entry-fitness');\n\t\t\t\t\t\t\tif (fitEl) {\n\t\t\t\t\t\t\t\tvar fit = entry.fitness;\n\t\t\t\t\t\t\t\tif (fit == null) {\n\t\t\t\t\t\t\t\t\tfitEl.textContent = '—';\n\t\t\t\t\t\t\t\t\tfitEl.style.color = 'var(--text3)';\n\t\t\t\t\t\t\t\t} else {\n\t\t\t\t\t\t\t\t\tfitEl.textContent = Math.round(fit * 100) + '%';\n\t\t\t\t\t\t\t\t\tfitEl.style.color = fit >= 0.8 ? 'var(--income)' : fit >= 0.5 ? 'var(--text2)' : 'var(--commit)';\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function() {});\n\t\t\t\t}\n\n\t\t\t\t// ── Tx panel loader ────────────────────────────────────────────────────\n\t\t\t\tfunction loadTxPanel(txPanel, entryId, entryStatus) {\n\t\t\t\t\ttxPanel.dataset.loaded = '1';\n\t\t\t\t\ttxPanel.innerHTML = '<p style=\"color:var(--text3);font-size:12px\">Loading…</p>';\n\t\t\t\t\tfetch('/api/transactions?entry_id=' + entryId + '&limit=50', {credentials:'same-origin'})\n\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t.then(function(env) {\n\t\t\t\t\t\t\tvar txns = env.data || [];\n\t\t\t\t\t\t\t// Update count in the summary line\n\t\t\t\t\t\t\tvar det = txPanel.closest('.js-entry-details');\n\t\t\t\t\t\t\tvar countEl = det && det.querySelector('.js-tx-count');\n\t\t\t\t\t\t\tif (countEl) {\n\t\t\t\t\t\t\t\tvar n = txns.length;\n\t\t\t\t\t\t\t\tcountEl.textContent = n + ' transaction' + (n === 1 ? '' : 's') + ' are matched';\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\tif (!txns.length) {\n\t\t\t\t\t\t\t\ttxPanel.innerHTML = '<p style=\"color:var(--text3);font-size:12px\">No matched transactions.</p>';\n\t\t\t\t\t\t\t\treturn;\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\tvar rows = txns.map(function(t) {\n\t\t\t\t\t\t\t\tvar abs = Math.abs(t.amount_cents);\n\t\t\t\t\t\t\t\tvar s = (t.amount_cents < 0 ? '-' : '') + '$' + (abs/100).toFixed(2);\n\t\t\t\t\t\t\t\tvar col = t.amount_cents >= 0 ? 'var(--income)' : 'var(--commit)';\n\t\t\t\t\t\t\t\tvar merch = t.merchant_normalized || t.imported_payee || '';\n\t\t\t\t\t\t\t\treturn '<tr style=\"border-top:1px solid var(--border)\">' +\n\t\t\t\t\t\t\t\t\t'<td style=\"padding:5px 8px;font-size:12px;color:var(--text2)\">' + t.date + '</td>' +\n\t\t\t\t\t\t\t\t\t'<td style=\"padding:5px 8px;font-size:12px;color:var(--text)\">' + merch + '</td>' +\n\t\t\t\t\t\t\t\t\t'<td style=\"padding:5px 8px;font-size:12px;color:' + col + ';text-align:right;font-variant-numeric:tabular-nums\">' + s + '</td>' +\n\t\t\t\t\t\t\t\t\t'<td style=\"padding:5px 8px;font-size:12px;color:var(--text3)\">' + t.settlement_status + '</td>' +\n\t\t\t\t\t\t\t\t\t'</tr>';\n\t\t\t\t\t\t\t}).join('');\n\t\t\t\t\t\t\ttxPanel.innerHTML =\n\t\t\t\t\t\t\t\t'<table style=\"width:100%;border-collapse:collapse\">' +\n\t\t\t\t\t\t\t\t'<thead><tr>' +\n\t\t\t\t\t\t\t\t'<th style=\"padding:5px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:600\">Date</th>' +\n\t\t\t\t\t\t\t\t'<th style=\"padding:5px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:600\">Description</th>' +\n\t\t\t\t\t\t\t\t'<th style=\"padding:5px 8px;text-align:right;font-size:11px;color:var(--text3);font-weight:600\">Amount</th>' +\n\t\t\t\t\t\t\t\t'<th style=\"padding:5px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:600\">Status</th>' +\n\t\t\t\t\t\t\t\t'</tr></thead><tbody>' + rows + '</tbody></table>';\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function() {\n\t\t\t\t\t\t\ttxPanel.innerHTML = '<p style=\"color:var(--commit);font-size:12px\">Failed to load.</p>';\n\t\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\t// ── Lazy-load transactions when entry opened ────────────────────────────\n\t\t\t\tdocument.addEventListener('toggle', function(e) {\n\t\t\t\t\tvar det = e.target;\n\t\t\t\t\tif (!det.classList.contains('js-entry-details') || !det.open) return;\n\t\t\t\t\tvar entryId = det.dataset.entryId;\n\t\t\t\t\tvar entryStatus = det.dataset.entryStatus || 'live';\n\t\t\t\t\tvar txPanel = det.querySelector('.js-tx-panel');\n\t\t\t\t\tif (!txPanel || txPanel.dataset.loaded) return;\n\t\t\t\t\tloadTxPanel(txPanel, entryId, entryStatus);\n\t\t\t\t\t// Initialize Flatpickr on date inputs not yet initialized\n\t\t\t\t\tif (typeof flatpickr !== 'undefined') {\n\t\t\t\t\t\tdet.querySelectorAll('.js-date-fp:not(.flatpickr-input)').forEach(function(inp) {\n\t\t\t\t\t\t\tflatpickr(inp, {dateFormat: 'Y-m-d'});\n\t\t\t\t\t\t});\n\t\t\t\t\t}\n\t\t\t\t}, true);\n\n\t\t\t\t// ── Label input: rename in place, conflict offers link ────────────────\n\t\t\t\tdocument.addEventListener('focusout', function(e) {\n\t\t\t\t\tvar inp = e.target;\n\t\t\t\t\tif (!inp.classList.contains('js-label-input')) return;\n\t\t\t\t\tvar det = inp.closest('.js-entry-details');\n\t\t\t\t\tif (!det) return;\n\t\t\t\t\tvar entry = JSON.parse(det.dataset.entry || '{}');\n\t\t\t\t\tvar name = inp.value.trim();\n\t\t\t\t\tvar hint = inp.parentNode.querySelector('.js-label-hint');\n\t\t\t\t\tvar origName = (entry.label_name || '').toLowerCase();\n\t\t\t\t\tif (name.toLowerCase() === origName) return;\n\t\t\t\t\tif (hint) { hint.innerHTML = ''; }\n\n\t\t\t\t\t// No label assigned — only allow linking to an existing label.\n\t\t\t\t\tif (!entry.label_id) {\n\t\t\t\t\t\tif (!name) return;\n\t\t\t\t\t\tfetchLabels(function(labels) {\n\t\t\t\t\t\t\tvar found = labels.find(function(l){ return l.name.toLowerCase() === name.toLowerCase(); });\n\t\t\t\t\t\t\tif (found) {\n\t\t\t\t\t\t\t\tlinkEntryLabel(det, entry, found.id, found.name, hint);\n\t\t\t\t\t\t\t} else if (hint) {\n\t\t\t\t\t\t\t\thint.textContent = 'Create labels in Configuration, then assign here.';\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t});\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\n\t\t\t\t\t// Label assigned — rename it, detect conflict.\n\t\t\t\t\tfetch('/api/labels/' + entry.label_id, {\n\t\t\t\t\t\tmethod: 'PUT',\n\t\t\t\t\t\theaders: {'Content-Type': 'application/json'},\n\t\t\t\t\t\tcredentials: 'same-origin',\n\t\t\t\t\t\tbody: JSON.stringify({name: name}),\n\t\t\t\t\t}).then(function(r) {\n\t\t\t\t\t\tif (r.status === 409) {\n\t\t\t\t\t\t\t// Another label already has this name — offer to link to it.\n\t\t\t\t\t\t\t_labelCache = null;\n\t\t\t\t\t\t\tfetchLabels(function(labels) {\n\t\t\t\t\t\t\t\tvar conflict = labels.find(function(l){ return l.name.toLowerCase() === name.toLowerCase(); });\n\t\t\t\t\t\t\t\tif (!conflict || !hint) return;\n\t\t\t\t\t\t\t\tvar btn = document.createElement('button');\n\t\t\t\t\t\t\t\tbtn.className = 'js-label-link-btn';\n\t\t\t\t\t\t\t\tbtn.dataset.labelId = conflict.id;\n\t\t\t\t\t\t\t\tbtn.dataset.labelName = conflict.name;\n\t\t\t\t\t\t\t\tbtn.style.cssText = 'background:none;border:none;cursor:pointer;color:var(--accent);font-size:11px;font-family:inherit;padding:0;text-decoration:underline';\n\t\t\t\t\t\t\t\tbtn.textContent = 'Link to ‘' + conflict.name + '’ instead?';\n\t\t\t\t\t\t\t\thint.textContent = 'Name already taken. ';\n\t\t\t\t\t\t\t\thint.appendChild(btn);\n\t\t\t\t\t\t\t});\n\t\t\t\t\t\t\treturn null;\n\t\t\t\t\t\t}\n\t\t\t\t\t\tif (!r.ok) {\n\t\t\t\t\t\t\tif (hint) hint.textContent = 'Failed to rename.';\n\t\t\t\t\t\t\treturn null;\n\t\t\t\t\t\t}\n\t\t\t\t\t\treturn r.json();\n\t\t\t\t\t}).then(function(env) {\n\t\t\t\t\t\tif (!env) return;\n\t\t\t\t\t\t_labelCache = null;\n\t\t\t\t\t\tdet.dataset.entry = JSON.stringify(Object.assign({}, entry, {label_name: env.data.name}));\n\t\t\t\t\t}).catch(function() {\n\t\t\t\t\t\tif (hint) hint.textContent = 'Failed to rename.';\n\t\t\t\t\t});\n\t\t\t\t});\n\n\t\t\t\t// Link-instead button: re-associate entry with an existing label.\n\t\t\t\tdocument.addEventListener('click', function(e) {\n\t\t\t\t\tvar btn = e.target.closest('.js-label-link-btn');\n\t\t\t\t\tif (!btn) return;\n\t\t\t\t\tvar det = btn.closest('.js-entry-details');\n\t\t\t\t\tif (!det) return;\n\t\t\t\t\tvar entry = JSON.parse(det.dataset.entry || '{}');\n\t\t\t\t\tvar hint = btn.closest('.js-label-hint');\n\t\t\t\t\tlinkEntryLabel(det, entry, btn.dataset.labelId, btn.dataset.labelName, hint);\n\t\t\t\t});\n\n\t\t\t\tfunction linkEntryLabel(det, entry, newLabelId, newLabelName, hint) {\n\t\t\t\t\tvar dirSel = det.querySelector('.js-direction-sel');\n\t\t\t\t\tvar typeSel = det.querySelector('.js-type-sel');\n\t\t\t\t\tfetch('/api/entries/' + det.dataset.entryId, {\n\t\t\t\t\t\tmethod: 'PUT',\n\t\t\t\t\t\theaders: {'Content-Type': 'application/json'},\n\t\t\t\t\t\tcredentials: 'same-origin',\n\t\t\t\t\t\tbody: JSON.stringify(Object.assign({}, entry, {\n\t\t\t\t\t\t\tlabel_id: newLabelId,\n\t\t\t\t\t\t\tdirection: dirSel ? dirSel.value : entry.direction,\n\t\t\t\t\t\t\tentry_type: typeSel ? typeSel.value : entry.entry_type,\n\t\t\t\t\t\t})),\n\t\t\t\t\t}).then(function(r) {\n\t\t\t\t\t\tif (!r.ok) { if (hint) hint.textContent = 'Failed to update label.'; return; }\n\t\t\t\t\t\tvar inp = det.querySelector('.js-label-input');\n\t\t\t\t\t\tif (inp) inp.value = newLabelName || '';\n\t\t\t\t\t\tdet.dataset.entry = JSON.stringify(Object.assign({}, entry, {label_id: newLabelId, label_name: newLabelName}));\n\t\t\t\t\t\tif (hint) hint.innerHTML = '';\n\t\t\t\t\t\t_labelCache = null;\n\t\t\t\t\t}).catch(function() {\n\t\t\t\t\t\tif (hint) hint.textContent = 'Failed to update label.';\n\t\t\t\t\t});\n\t\t\t\t}\n\n\t\t\t\t// ── Proposal approve / reject ──────────────────────────────────────────\n\t\t\t\tdocument.addEventListener('click', function(e) {\n\t\t\t\t\tvar btn = e.target.closest('.js-proposal-btn');\n\t\t\t\t\tif (!btn) return;\n\t\t\t\t\tvar proposalId = btn.dataset.proposalId;\n\t\t\t\t\tvar action = btn.dataset.action;\n\t\t\t\t\tvar card = btn.closest('div[style*=\"border-bottom\"]');\n\t\t\t\t\tbtn.disabled = true;\n\t\t\t\t\tbtn.textContent = '…';\n\t\t\t\t\tvar ep = action === 'approve'\n\t\t\t\t\t\t? '/api/proposals/' + proposalId + '/approve'\n\t\t\t\t\t\t: '/api/proposals/' + proposalId + '/reject';\n\t\t\t\t\tfetch(ep, {method: 'POST', credentials: 'same-origin'})\n\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\tif (!r.ok) throw new Error('failed');\n\t\t\t\t\t\t\tmarkDirty();\n\t\t\t\t\t\t\tif (card) card.remove();\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function() {\n\t\t\t\t\t\t\tbtn.disabled = false;\n\t\t\t\t\t\t\tbtn.textContent = action === 'approve' ? 'Approve' : 'Reject';\n\t\t\t\t\t\t});\n\t\t\t\t});\n\n\t\t\t\t// ── Entry form save ────────────────────────────────────────────────────\n\t\t\t\tdocument.addEventListener('click', function(e) {\n\t\t\t\t\tvar btn = e.target.closest('.js-entry-save');\n\t\t\t\t\tif (!btn) return;\n\t\t\t\t\tvar det = btn.closest('.js-entry-details');\n\t\t\t\t\tif (!det) return;\n\t\t\t\t\tvar entryId = det.dataset.entryId;\n\t\t\t\t\tvar entry = JSON.parse(det.dataset.entry || '{}');\n\t\t\t\t\tvar hint = det.querySelector('.js-save-hint');\n\n\t\t\t\t\tvar labelInp = det.querySelector('.js-label-input');\n\t\t\t\t\tvar dirSel = det.querySelector('.js-direction-sel');\n\t\t\t\t\tvar typeSel = det.querySelector('.js-type-sel');\n\t\t\t\t\tvar startInp = det.querySelector('.js-start-date');\n\t\t\t\t\tvar periodInp = det.querySelector('.js-period-days');\n\t\t\t\t\tvar priorityInp = det.querySelector('.js-priority');\n\t\t\t\t\tvar ta = document.querySelector('.js-conditions-ta[data-entry-id=\"' + entryId + '\"]');\n\n\t\t\t\t\tvar conds = entry.conditions || {};\n\t\t\t\t\ttry {\n\t\t\t\t\t\tif (ta) {\n\t\t\t\t\t\t\tvar src = (ta._cmView && ta._cmView.state)\n\t\t\t\t\t\t\t\t? ta._cmView.state.doc.toString()\n\t\t\t\t\t\t\t\t: ta.value;\n\t\t\t\t\t\t\tconds = JSON.parse(src);\n\t\t\t\t\t\t}\n\t\t\t\t\t} catch(ex) {}\n\n\t\t\t\t\tfunction doSave(labelId) {\n\t\t\t\t\t\tvar startVal = startInp ? startInp.value : entry.start_date;\n\t\t\t\t\t\t// Flatpickr stores selected date in _flatpickr.selectedDates[0]\n\t\t\t\t\t\tif (startInp && startInp._flatpickr && startInp._flatpickr.selectedDates[0]) {\n\t\t\t\t\t\t\tvar d = startInp._flatpickr.selectedDates[0];\n\t\t\t\t\t\t\tstartVal = d.getFullYear() + '-' +\n\t\t\t\t\t\t\t\tString(d.getMonth() + 1).padStart(2, '0') + '-' +\n\t\t\t\t\t\t\t\tString(d.getDate()).padStart(2, '0');\n\t\t\t\t\t\t}\n\t\t\t\t\t\tvar body = Object.assign({}, entry, {\n\t\t\t\t\t\t\tlabel_id: labelId,\n\t\t\t\t\t\t\tdirection: dirSel ? dirSel.value : entry.direction,\n\t\t\t\t\t\t\tentry_type: typeSel ? typeSel.value : entry.entry_type,\n\t\t\t\t\t\t\tstart_date: startVal || entry.start_date,\n\t\t\t\t\t\t\tperiod_days: periodInp && periodInp.value ? parseInt(periodInp.value, 10) : entry.period_days,\n\t\t\t\t\t\t\tpriority: priorityInp && priorityInp.value !== '' ? parseInt(priorityInp.value, 10) : entry.priority,\n\t\t\t\t\t\t\tconditions: conds,\n\t\t\t\t\t\t});\n\n\t\t\t\t\t\tbtn.disabled = true;\n\t\t\t\t\t\tbtn.textContent = 'Saving…';\n\t\t\t\t\t\tif (hint) { hint.style.color = 'var(--text3)'; hint.textContent = ''; }\n\n\t\t\t\t\t\tfetch('/api/entries/' + entryId, {\n\t\t\t\t\t\t\tmethod: 'PUT',\n\t\t\t\t\t\t\theaders: {'Content-Type': 'application/json'},\n\t\t\t\t\t\t\tcredentials: 'same-origin',\n\t\t\t\t\t\t\tbody: JSON.stringify(body),\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\tif (!r.ok) return r.json().then(function(ev){ throw new Error(ev.detail || 'Save failed'); });\n\t\t\t\t\t\t\treturn r.json();\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.then(function() {\n\t\t\t\t\t\t\tdet.dataset.entry = JSON.stringify(body);\n\t\t\t\t\t\t\tbtn.disabled = false;\n\t\t\t\t\t\t\tbtn.textContent = 'Save';\n\t\t\t\t\t\t\tif (hint) { hint.style.color = 'var(--income)'; hint.textContent = 'Saved'; }\n\t\t\t\t\t\t\tmarkDirty();\n\t\t\t\t\t\t\tsetTimeout(function() { if (hint) hint.textContent = ''; }, 2000);\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function(err) {\n\t\t\t\t\t\t\tbtn.disabled = false;\n\t\t\t\t\t\t\tbtn.textContent = 'Save';\n\t\t\t\t\t\t\tif (hint) { hint.style.color = 'var(--commit)'; hint.textContent = err.message || 'Save failed'; }\n\t\t\t\t\t\t});\n\t\t\t\t\t}\n\n\t\t\t\t\tvar labelName = labelInp ? labelInp.value.trim() : '';\n\t\t\t\t\tvar origLabelName = (entry.label_name || '').toLowerCase();\n\t\t\t\t\tif (!labelName || labelName.toLowerCase() === origLabelName) {\n\t\t\t\t\t\tdoSave(entry.label_id);\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tfetchLabels(function(labels) {\n\t\t\t\t\t\tvar found = labels.find(function(l){ return l.name.toLowerCase() === labelName.toLowerCase(); });\n\t\t\t\t\t\tif (found) { doSave(found.id); return; }\n\t\t\t\t\t\tif (entry.label_id) {\n\t\t\t\t\t\t\tfetch('/api/labels/' + entry.label_id, {\n\t\t\t\t\t\t\t\tmethod: 'PUT',\n\t\t\t\t\t\t\t\theaders: {'Content-Type': 'application/json'},\n\t\t\t\t\t\t\t\tcredentials: 'same-origin',\n\t\t\t\t\t\t\t\tbody: JSON.stringify({name: labelName}),\n\t\t\t\t\t\t\t}).then(function(r) {\n\t\t\t\t\t\t\t\t_labelCache = null;\n\t\t\t\t\t\t\t\tif (r.ok) { doSave(entry.label_id); } else { doSave(entry.label_id); }\n\t\t\t\t\t\t\t}).catch(function() { doSave(entry.label_id); });\n\t\t\t\t\t\t} else {\n\t\t\t\t\t\t\tfetch('/api/labels', {\n\t\t\t\t\t\t\t\tmethod: 'POST',\n\t\t\t\t\t\t\t\theaders: {'Content-Type': 'application/json'},\n\t\t\t\t\t\t\t\tcredentials: 'same-origin',\n\t\t\t\t\t\t\t\tbody: JSON.stringify({name: labelName}),\n\t\t\t\t\t\t\t}).then(function(r){ return r.json(); })\n\t\t\t\t\t\t\t.then(function(env) { _labelCache = null; doSave(env.data ? env.data.id : null); })\n\t\t\t\t\t\t\t.catch(function() { doSave(null); });\n\t\t\t\t\t\t}\n\t\t\t\t\t});\n\t\t\t\t});\n\n\t\t\t\t// ── Confidence panel collapse ──────────────────────────────────────────\n\t\t\t\tdocument.addEventListener('click', function(e) {\n\t\t\t\t\tvar btn = e.target.closest('.js-conf-toggle');\n\t\t\t\t\tif (!btn) return;\n\t\t\t\t\tvar panel = btn.closest('.js-conf-panel');\n\t\t\t\t\tif (!panel) return;\n\t\t\t\t\tvar expanded = panel.dataset.expanded === 'true';\n\t\t\t\t\tpanel.dataset.expanded = expanded ? 'false' : 'true';\n\t\t\t\t\tpanel.style.width = expanded ? '120px' : '230px';\n\t\t\t\t\tpanel.querySelectorAll('.js-conf-bar').forEach(function(b) {\n\t\t\t\t\t\tb.style.display = expanded ? 'none' : '';\n\t\t\t\t\t});\n\t\t\t\t\tbtn.textContent = expanded ? '▶' : '◀';\n\t\t\t\t});\n\n\t\t\t\t// ── Add Entry modal ────────────────────────────────────────────────────\n\t\t\t\tvar addEntryBtn = document.getElementById('add-entry-btn');\n\t\t\t\tvar addEntryDialog = document.getElementById('add-entry-dialog');\n\t\t\t\tvar addEntryClose = document.getElementById('add-entry-close');\n\t\t\t\tvar addEntryCancel = document.getElementById('add-entry-cancel');\n\t\t\t\tvar addEntrySave = document.getElementById('add-entry-save');\n\t\t\t\tvar addEntryError = document.getElementById('add-entry-error');\n\n\t\t\t\tif (addEntryBtn && addEntryDialog) {\n\t\t\t\t\taddEntryBtn.addEventListener('click', function() {\n\t\t\t\t\t\taddEntryDialog.showModal();\n\t\t\t\t\t\tvar startInput = document.getElementById('ae-start-date');\n\t\t\t\t\t\tif (startInput && !startInput.value) {\n\t\t\t\t\t\t\tstartInput.value = new Date().toISOString().slice(0, 10);\n\t\t\t\t\t\t}\n\t\t\t\t\t});\n\t\t\t\t}\n\t\t\t\tif (addEntryClose) addEntryClose.addEventListener('click', function() { addEntryDialog.close(); });\n\t\t\t\tif (addEntryCancel) addEntryCancel.addEventListener('click', function() { addEntryDialog.close(); });\n\t\t\t\tif (addEntryDialog) addEntryDialog.addEventListener('click', function(e) {\n\t\t\t\t\tif (e.target === addEntryDialog) addEntryDialog.close();\n\t\t\t\t});\n\n\t\t\t\tfunction getAeField(id) {\n\t\t\t\t\tvar el = document.getElementById(id);\n\t\t\t\t\treturn el ? el.value.trim() : '';\n\t\t\t\t}\n\n\t\t\t\tfunction resolveAddEntryLabel(name, cb) {\n\t\t\t\t\tif (!name) { cb(null); return; }\n\t\t\t\t\tfetch('/api/labels?limit=500')\n\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t.then(function(env) {\n\t\t\t\t\t\t\tvar found = (env.data||[]).find(function(l){ return l.name.toLowerCase()===name.toLowerCase(); });\n\t\t\t\t\t\t\tif (found) { cb(found.id); return; }\n\t\t\t\t\t\t\tfetch('/api/labels',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})\n\t\t\t\t\t\t\t\t.then(function(r){ return r.json(); })\n\t\t\t\t\t\t\t\t.then(function(c){ cb(c.data ? c.data.id : null); });\n\t\t\t\t\t\t})\n\t\t\t\t\t\t.catch(function(){ cb(null); });\n\t\t\t\t}\n\n\t\t\t\tif (addEntrySave) {\n\t\t\t\t\taddEntrySave.addEventListener('click', function() {\n\t\t\t\t\t\tvar labelName = getAeField('ae-label');\n\t\t\t\t\t\tvar direction = getAeField('ae-direction');\n\t\t\t\t\t\tvar entryType = getAeField('ae-type');\n\t\t\t\t\t\tvar rateStr = getAeField('ae-rate');\n\t\t\t\t\t\tvar startDate = getAeField('ae-start-date');\n\t\t\t\t\t\tvar condsStr = getAeField('ae-conditions');\n\n\t\t\t\t\t\tif (!direction || !entryType || !startDate) {\n\t\t\t\t\t\t\tif (addEntryError) addEntryError.textContent = 'Direction, type, and start date are required.';\n\t\t\t\t\t\t\treturn;\n\t\t\t\t\t\t}\n\n\t\t\t\t\t\tvar conds = {};\n\t\t\t\t\t\tif (condsStr) {\n\t\t\t\t\t\t\ttry { conds = JSON.parse(condsStr); }\n\t\t\t\t\t\t\tcatch(ex) {\n\t\t\t\t\t\t\t\tif (addEntryError) addEntryError.textContent = 'Conditions must be valid JSON.';\n\t\t\t\t\t\t\t\treturn;\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t}\n\n\t\t\t\t\t\t// Rate: user enters $/mo, convert to cents/day (÷ 30.44 × 100).\n\t\t\t\t\t\tvar ratePerDay = null;\n\t\t\t\t\t\tif (rateStr) {\n\t\t\t\t\t\t\tvar rateVal = parseFloat(rateStr);\n\t\t\t\t\t\t\tif (!isNaN(rateVal)) { ratePerDay = (rateVal / 30.44) * 100; }\n\t\t\t\t\t\t}\n\n\t\t\t\t\t\taddEntrySave.disabled = true;\n\t\t\t\t\t\taddEntrySave.textContent = 'Saving…';\n\t\t\t\t\t\tif (addEntryError) addEntryError.textContent = '';\n\n\t\t\t\t\t\tresolveAddEntryLabel(labelName, function(labelId) {\n\t\t\t\t\t\t\tvar body = {\n\t\t\t\t\t\t\t\tlabel_id: labelId,\n\t\t\t\t\t\t\t\tdirection: direction,\n\t\t\t\t\t\t\t\tentry_type: entryType,\n\t\t\t\t\t\t\t\tperiod_days: entryType === 'standing' ? 30 : 1,\n\t\t\t\t\t\t\t\tsource: 'user',\n\t\t\t\t\t\t\t\tstart_date: startDate,\n\t\t\t\t\t\t\t\tconditions: conds,\n\t\t\t\t\t\t\t\tprojected_rate_per_day: ratePerDay,\n\t\t\t\t\t\t\t\tpriority: 0,\n\t\t\t\t\t\t\t};\n\t\t\t\t\t\t\tfetch('/api/entries', {\n\t\t\t\t\t\t\t\tmethod: 'POST',\n\t\t\t\t\t\t\t\theaders: {'Content-Type': 'application/json'},\n\t\t\t\t\t\t\t\tcredentials: 'same-origin',\n\t\t\t\t\t\t\t\tbody: JSON.stringify(body),\n\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\t\t\tif (!r.ok) return r.json().then(function(e){ throw new Error(e.detail||'Save failed'); });\n\t\t\t\t\t\t\t\tmarkDirty();\n\t\t\t\t\t\t\t\taddEntryDialog.close();\n\t\t\t\t\t\t\t\tlocation.reload();\n\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t.catch(function(err) {\n\t\t\t\t\t\t\t\taddEntrySave.disabled = false;\n\t\t\t\t\t\t\t\taddEntrySave.textContent = 'Save';\n\t\t\t\t\t\t\t\tif (addEntryError) addEntryError.textContent = err.message || 'Failed to create entry.';\n\t\t\t\t\t\t\t});\n\t\t\t\t\t\t});\n\t\t\t\t\t});\n\t\t\t\t}\n\t\t\t\t// ── Entry checkbox tracking ───────────────────────────────────────────────\n\t\t\t\t(function() {\n\t\t\t\t\tvar checkedIds = new Set();\n\t\t\t\t\tvar selectAll  = document.querySelector('.js-check-all');\n\n\t\t\t\t\tfunction syncSelectAll() {\n\t\t\t\t\t\tvar cbs     = Array.from(document.querySelectorAll('.js-entry-check'));\n\t\t\t\t\t\tvar checked = cbs.filter(function(c) { return c.checked; });\n\t\t\t\t\t\tif (selectAll) {\n\t\t\t\t\t\t\tselectAll.checked       = checked.length > 0 && checked.length === cbs.length;\n\t\t\t\t\t\t\tselectAll.indeterminate = checked.length > 0 && checked.length < cbs.length;\n\t\t\t\t\t\t}\n\t\t\t\t\t\twindow.__velociCheckedEntries = Array.from(checkedIds);\n\t\t\t\t\t}\n\n\t\t\t\t\tdocument.addEventListener('change', function(e) {\n\t\t\t\t\t\tvar cb = e.target.closest('.js-entry-check');\n\t\t\t\t\t\tif (!cb) return;\n\t\t\t\t\t\tvar id = cb.dataset.entryId;\n\t\t\t\t\t\tif (!id) return;\n\t\t\t\t\t\tif (cb.checked) { checkedIds.add(id); } else { checkedIds.delete(id); }\n\t\t\t\t\t\tsyncSelectAll();\n\t\t\t\t\t});\n\n\t\t\t\t\tif (selectAll) {\n\t\t\t\t\t\tselectAll.addEventListener('change', function() {\n\t\t\t\t\t\t\tdocument.querySelectorAll('.js-entry-check').forEach(function(cb) {\n\t\t\t\t\t\t\t\tcb.checked = selectAll.checked;\n\t\t\t\t\t\t\t\tvar id = cb.dataset.entryId;\n\t\t\t\t\t\t\t\tif (!id) return;\n\t\t\t\t\t\t\t\tif (selectAll.checked) { checkedIds.add(id); } else { checkedIds.delete(id); }\n\t\t\t\t\t\t\t});\n\t\t\t\t\t\t\tsyncSelectAll();\n\t\t\t\t\t\t});\n\t\t\t\t\t}\n\n\t\t\t\t\twindow.__velociCheckedEntries = [];\n\t\t\t\t})();\n\t\t\t})();\n\t\t</script> <script type=\"module\" src=\"/static/js/conditions-editor.js\"></script>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -273,7 +273,7 @@ func ledgerPill(value, label string, data LedgerData, count int) templ.Component
 		var templ_7745c5c3_Var6 templ.SafeURL
 		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(ledgerFilterURL(data, "filter", value)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 837, Col: 62}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 833, Col: 62}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 		if templ_7745c5c3_Err != nil {
@@ -286,7 +286,7 @@ func ledgerPill(value, label string, data LedgerData, count int) templ.Component
 		var templ_7745c5c3_Var7 string
 		templ_7745c5c3_Var7, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(ledgerPillStyle(value, value == data.Filter))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 838, Col: 54}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 834, Col: 54}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 		if templ_7745c5c3_Err != nil {
@@ -299,7 +299,7 @@ func ledgerPill(value, label string, data LedgerData, count int) templ.Component
 		var templ_7745c5c3_Var8 string
 		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 840, Col: 9}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 836, Col: 9}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 		if templ_7745c5c3_Err != nil {
@@ -312,7 +312,7 @@ func ledgerPill(value, label string, data LedgerData, count int) templ.Component
 		var templ_7745c5c3_Var9 string
 		templ_7745c5c3_Var9, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(ledgerPillCountStyle(value == data.Filter))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 841, Col: 58}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 837, Col: 58}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 		if templ_7745c5c3_Err != nil {
@@ -325,7 +325,7 @@ func ledgerPill(value, label string, data LedgerData, count int) templ.Component
 		var templ_7745c5c3_Var10 string
 		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", count))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 841, Col: 87}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 837, Col: 87}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 		if templ_7745c5c3_Err != nil {
@@ -367,7 +367,7 @@ func ledgerSystemPill(data LedgerData) templ.Component {
 		var templ_7745c5c3_Var12 templ.SafeURL
 		templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(ledgerFilterURL(data, "filter", "system")))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 847, Col: 65}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 843, Col: 65}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 		if templ_7745c5c3_Err != nil {
@@ -380,7 +380,7 @@ func ledgerSystemPill(data LedgerData) templ.Component {
 		var templ_7745c5c3_Var13 string
 		templ_7745c5c3_Var13, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(ledgerPillStyle("system", data.Filter == "system"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 848, Col: 60}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 844, Col: 60}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 		if templ_7745c5c3_Err != nil {
@@ -427,7 +427,7 @@ func ledgerDirectionPill(value, label string, data LedgerData) templ.Component {
 			return ledgerFilterURL(data, "direction", value)
 		}()))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 859, Col: 6}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 855, Col: 6}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 		if templ_7745c5c3_Err != nil {
@@ -440,7 +440,7 @@ func ledgerDirectionPill(value, label string, data LedgerData) templ.Component {
 		var templ_7745c5c3_Var16 string
 		templ_7745c5c3_Var16, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(ledgerSmallPillStyle(data.DirectionFilter == value))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 860, Col: 61}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 856, Col: 61}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 		if templ_7745c5c3_Err != nil {
@@ -453,7 +453,7 @@ func ledgerDirectionPill(value, label string, data LedgerData) templ.Component {
 		var templ_7745c5c3_Var17 string
 		templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 861, Col: 9}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 857, Col: 9}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 		if templ_7745c5c3_Err != nil {
@@ -500,7 +500,7 @@ func ledgerTypePill(value, label string, data LedgerData) templ.Component {
 			return ledgerFilterURL(data, "entry_type", value)
 		}()))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 871, Col: 6}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 867, Col: 6}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 		if templ_7745c5c3_Err != nil {
@@ -513,7 +513,7 @@ func ledgerTypePill(value, label string, data LedgerData) templ.Component {
 		var templ_7745c5c3_Var20 string
 		templ_7745c5c3_Var20, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(ledgerSmallPillStyle(data.TypeFilter == value))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 872, Col: 56}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 868, Col: 56}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 		if templ_7745c5c3_Err != nil {
@@ -526,7 +526,7 @@ func ledgerTypePill(value, label string, data LedgerData) templ.Component {
 		var templ_7745c5c3_Var21 string
 		templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 873, Col: 9}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 869, Col: 9}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 		if templ_7745c5c3_Err != nil {
@@ -568,7 +568,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 		var templ_7745c5c3_Var23 string
 		templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.ResolveAttributeValue(e.ID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 879, Col: 22}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 875, Col: 22}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var23)
 		if templ_7745c5c3_Err != nil {
@@ -581,7 +581,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 		var templ_7745c5c3_Var24 string
 		templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.ResolveAttributeValue(entryRowStatus(e))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 880, Col: 39}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 876, Col: 39}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var24)
 		if templ_7745c5c3_Err != nil {
@@ -594,7 +594,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 		var templ_7745c5c3_Var25 string
 		templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.ResolveAttributeValue(entryDataJSON(e))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 881, Col: 31}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 877, Col: 31}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var25)
 		if templ_7745c5c3_Err != nil {
@@ -612,7 +612,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 			var templ_7745c5c3_Var26 string
 			templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.ResolveAttributeValue(e.Source)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 883, Col: 30}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 879, Col: 30}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var26)
 			if templ_7745c5c3_Err != nil {
@@ -630,7 +630,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 		var templ_7745c5c3_Var27 string
 		templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.ResolveAttributeValue(e.ID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 889, Col: 70}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 885, Col: 70}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var27)
 		if templ_7745c5c3_Err != nil {
@@ -644,7 +644,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 			var templ_7745c5c3_Var28 string
 			templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(*e.LabelName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 895, Col: 20}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 891, Col: 20}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
 			if templ_7745c5c3_Err != nil {
@@ -673,7 +673,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 		var templ_7745c5c3_Var29 string
 		templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(entryTypeLabel(e.EntryType))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 904, Col: 80}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 900, Col: 80}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
 		if templ_7745c5c3_Err != nil {
@@ -686,7 +686,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 		var templ_7745c5c3_Var30 string
 		templ_7745c5c3_Var30, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("font-size:11px;font-weight:600;padding:2px 6px;border-radius:4px;display:inline-block;" + ledgerDirectionBadgeStyle(e.Direction))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 905, Col: 146}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 901, Col: 146}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
 		if templ_7745c5c3_Err != nil {
@@ -699,7 +699,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 		var templ_7745c5c3_Var31 string
 		templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(directionLabel(e.Direction))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 905, Col: 178}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 901, Col: 178}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
 		if templ_7745c5c3_Err != nil {
@@ -712,7 +712,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 		var templ_7745c5c3_Var32 string
 		templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateDay(e.ProjectedRatePerDay))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 908, Col: 52}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 904, Col: 52}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var32)
 		if templ_7745c5c3_Err != nil {
@@ -725,7 +725,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 		var templ_7745c5c3_Var33 string
 		templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateMo(e.ProjectedRatePerDay))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 909, Col: 50}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 905, Col: 50}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var33)
 		if templ_7745c5c3_Err != nil {
@@ -738,7 +738,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 		var templ_7745c5c3_Var34 string
 		templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtRateYr(e.ProjectedRatePerDay))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 910, Col: 50}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 906, Col: 50}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var34)
 		if templ_7745c5c3_Err != nil {
@@ -751,7 +751,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 		var templ_7745c5c3_Var35 string
 		templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.JoinStringErrs(fmtRateDay(e.ProjectedRatePerDay))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 912, Col: 39}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 908, Col: 39}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var35))
 		if templ_7745c5c3_Err != nil {
@@ -764,7 +764,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 		var templ_7745c5c3_Var36 string
 		templ_7745c5c3_Var36, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(ledgerStatusBadgeStyle(entryRowStatus(e)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 913, Col: 58}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 909, Col: 58}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var36))
 		if templ_7745c5c3_Err != nil {
@@ -777,7 +777,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 		var templ_7745c5c3_Var37 string
 		templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.JoinStringErrs(ledgerStatusLabel(entryRowStatus(e)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 913, Col: 99}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 909, Col: 99}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var37))
 		if templ_7745c5c3_Err != nil {
@@ -790,7 +790,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 		var templ_7745c5c3_Var38 string
 		templ_7745c5c3_Var38, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("font-size:12px;text-align:right;font-variant-numeric:tabular-nums;color:" + fitColor(e.Fitness))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 914, Col: 138}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 910, Col: 138}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var38))
 		if templ_7745c5c3_Err != nil {
@@ -803,7 +803,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 		var templ_7745c5c3_Var39 string
 		templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinStringErrs(fitPct(e.Fitness))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 914, Col: 160}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 910, Col: 160}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var39))
 		if templ_7745c5c3_Err != nil {
@@ -821,7 +821,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 			return ""
 		}())
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 933, Col: 12}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 929, Col: 12}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var40)
 		if templ_7745c5c3_Err != nil {
@@ -904,7 +904,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 		var templ_7745c5c3_Var41 string
 		templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.ResolveAttributeValue(e.StartDate.Format("2006-01-02"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 967, Col: 48}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 963, Col: 48}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var41)
 		if templ_7745c5c3_Err != nil {
@@ -927,7 +927,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 		var templ_7745c5c3_Var42 string
 		templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtPeriodDays(e.PeriodDays))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 980, Col: 44}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 976, Col: 44}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var42)
 		if templ_7745c5c3_Err != nil {
@@ -950,7 +950,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 		var templ_7745c5c3_Var43 string
 		templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", e.Priority))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 992, Col: 46}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 988, Col: 46}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var43)
 		if templ_7745c5c3_Err != nil {
@@ -983,7 +983,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 				var templ_7745c5c3_Var44 string
 				templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinStringErrs(*e.RecurrenceAnchor)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1012, Col: 157}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1008, Col: 157}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var44))
 				if templ_7745c5c3_Err != nil {
@@ -1002,7 +1002,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 				var templ_7745c5c3_Var45 string
 				templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.JoinStringErrs(e.NextDueDate.Format("2006-01-02"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1015, Col: 135}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1011, Col: 135}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var45))
 				if templ_7745c5c3_Err != nil {
@@ -1025,7 +1025,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 		var templ_7745c5c3_Var46 string
 		templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.ResolveAttributeValue(e.ID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1026, Col: 27}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1022, Col: 27}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var46)
 		if templ_7745c5c3_Err != nil {
@@ -1054,7 +1054,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 			return base
 		}())
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1036, Col: 10}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1032, Col: 10}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var47))
 		if templ_7745c5c3_Err != nil {
@@ -1067,7 +1067,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 		var templ_7745c5c3_Var48 string
 		templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.JoinStringErrs(conditionsFormatted(e.Conditions))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1038, Col: 42}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1034, Col: 42}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var48))
 		if templ_7745c5c3_Err != nil {
@@ -1091,7 +1091,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 			var templ_7745c5c3_Var49 string
 			templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.JoinStringErrs(strings.Join(e.SampleMerchants[:min(3, len(e.SampleMerchants))], " · "))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1044, Col: 82}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1040, Col: 82}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var49))
 			if templ_7745c5c3_Err != nil {
@@ -1139,7 +1139,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 		var templ_7745c5c3_Var50 string
 		templ_7745c5c3_Var50, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(driftRateStyle(e.SnapshotDriftPerDay))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1067, Col: 110}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1063, Col: 110}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var50))
 		if templ_7745c5c3_Err != nil {
@@ -1152,7 +1152,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 		var templ_7745c5c3_Var51 string
 		templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.JoinStringErrs(fmtRateMoSigned(e.SnapshotDriftPerDay))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1067, Col: 153}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1063, Col: 153}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var51))
 		if templ_7745c5c3_Err != nil {
@@ -1165,7 +1165,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 		var templ_7745c5c3_Var52 string
 		templ_7745c5c3_Var52, templ_7745c5c3_Err = templ.JoinStringErrs(fmtRateMo(e.ActualRatePerDay))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1068, Col: 139}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1064, Col: 139}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var52))
 		if templ_7745c5c3_Err != nil {
@@ -1178,7 +1178,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 		var templ_7745c5c3_Var53 string
 		templ_7745c5c3_Var53, templ_7745c5c3_Err = templ.JoinStringErrs(fmtRateMo(e.ProjectedRatePerDay))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1069, Col: 130}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1065, Col: 130}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var53))
 		if templ_7745c5c3_Err != nil {
@@ -1197,7 +1197,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 				return "s"
 			}()))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1076, Col: 10}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1072, Col: 10}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var54))
 			if templ_7745c5c3_Err != nil {
@@ -1216,7 +1216,7 @@ func ledgerEntryRow(e store.EntryRow) templ.Component {
 		var templ_7745c5c3_Var55 string
 		templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.ResolveAttributeValue(e.ID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1084, Col: 49}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1080, Col: 49}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var55)
 		if templ_7745c5c3_Err != nil {
@@ -1259,7 +1259,7 @@ func proposalCard(p store.EntryProposalRow) templ.Component {
 			var templ_7745c5c3_Var57 string
 			templ_7745c5c3_Var57, templ_7745c5c3_Err = templ.JoinStringErrs(*p.EntryLabelName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1098, Col: 25}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1094, Col: 25}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var57))
 			if templ_7745c5c3_Err != nil {
@@ -1278,7 +1278,7 @@ func proposalCard(p store.EntryProposalRow) templ.Component {
 		var templ_7745c5c3_Var58 string
 		templ_7745c5c3_Var58, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("font-size:10px;font-weight:700;padding:1px 5px;border-radius:10px;background:var(--accent);color:#fff")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1103, Col: 121}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1099, Col: 121}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var58))
 		if templ_7745c5c3_Err != nil {
@@ -1306,7 +1306,7 @@ func proposalCard(p store.EntryProposalRow) templ.Component {
 		var templ_7745c5c3_Var59 string
 		templ_7745c5c3_Var59, templ_7745c5c3_Err = templ.JoinStringErrs(p.EntryDirection)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1110, Col: 70}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1106, Col: 70}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var59))
 		if templ_7745c5c3_Err != nil {
@@ -1319,7 +1319,7 @@ func proposalCard(p store.EntryProposalRow) templ.Component {
 		var templ_7745c5c3_Var60 string
 		templ_7745c5c3_Var60, templ_7745c5c3_Err = templ.JoinStringErrs(p.EntryType)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1110, Col: 89}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1106, Col: 89}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var60))
 		if templ_7745c5c3_Err != nil {
@@ -1333,7 +1333,7 @@ func proposalCard(p store.EntryProposalRow) templ.Component {
 			var templ_7745c5c3_Var61 string
 			templ_7745c5c3_Var61, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d transactions matched", *p.EntryMatchedCount))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1114, Col: 67}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1110, Col: 67}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var61))
 			if templ_7745c5c3_Err != nil {
@@ -1352,7 +1352,7 @@ func proposalCard(p store.EntryProposalRow) templ.Component {
 			var templ_7745c5c3_Var62 string
 			templ_7745c5c3_Var62, templ_7745c5c3_Err = templ.JoinStringErrs(strings.Join(p.EntrySampleMerchants[:min(3, len(p.EntrySampleMerchants))], " · "))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1118, Col: 90}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1114, Col: 90}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var62))
 			if templ_7745c5c3_Err != nil {
@@ -1370,7 +1370,7 @@ func proposalCard(p store.EntryProposalRow) templ.Component {
 		var templ_7745c5c3_Var63 string
 		templ_7745c5c3_Var63, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.ID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1126, Col: 27}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1122, Col: 27}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var63)
 		if templ_7745c5c3_Err != nil {
@@ -1383,7 +1383,7 @@ func proposalCard(p store.EntryProposalRow) templ.Component {
 		var templ_7745c5c3_Var64 string
 		templ_7745c5c3_Var64, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.ID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1132, Col: 27}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1128, Col: 27}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var64)
 		if templ_7745c5c3_Err != nil {
@@ -1425,7 +1425,7 @@ func ledgerConfBar(label string, f *float64) templ.Component {
 		var templ_7745c5c3_Var66 string
 		templ_7745c5c3_Var66, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1142, Col: 91}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1138, Col: 91}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var66))
 		if templ_7745c5c3_Err != nil {
@@ -1438,7 +1438,7 @@ func ledgerConfBar(label string, f *float64) templ.Component {
 		var templ_7745c5c3_Var67 string
 		templ_7745c5c3_Var67, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(ledgerConfBarFill(f))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1144, Col: 36}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1140, Col: 36}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var67))
 		if templ_7745c5c3_Err != nil {
@@ -1451,7 +1451,7 @@ func ledgerConfBar(label string, f *float64) templ.Component {
 		var templ_7745c5c3_Var68 string
 		templ_7745c5c3_Var68, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("font-size:11px;min-width:28px;text-align:right;color:" + fitColor(f))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1146, Col: 85}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1142, Col: 85}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var68))
 		if templ_7745c5c3_Err != nil {
@@ -1464,7 +1464,7 @@ func ledgerConfBar(label string, f *float64) templ.Component {
 		var templ_7745c5c3_Var69 string
 		templ_7745c5c3_Var69, templ_7745c5c3_Err = templ.JoinStringErrs(fitPct(f))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1146, Col: 99}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/ledger.templ`, Line: 1142, Col: 99}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var69))
 		if templ_7745c5c3_Err != nil {
@@ -1524,8 +1524,6 @@ func ledgerDirectionBadgeStyle(d string) string {
 func ledgerStatusBadgeStyle(status string) string {
 	base := "font-size:11px;font-weight:600;padding:2px 7px;border-radius:4px;white-space:nowrap;justify-self:center"
 	switch status {
-	case "pending":
-		return base + ";background:var(--accent);color:#fff"
 	case "live":
 		return base + ";background:color-mix(in srgb,var(--surface2) 70%,var(--income) 30%);color:var(--income)"
 	default:
@@ -1535,8 +1533,6 @@ func ledgerStatusBadgeStyle(status string) string {
 
 func ledgerStatusLabel(status string) string {
 	switch status {
-	case "pending":
-		return "Review"
 	case "live":
 		return "Live"
 	default:

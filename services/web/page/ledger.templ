@@ -375,19 +375,15 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 						.then(function(r){ return r.json(); })
 						.then(function(env) {
 							var txns = env.data || [];
-							var verb = entryStatus === 'pending' ? 'will be' : 'are';
 							// Update count in the summary line
 							var det = txPanel.closest('.js-entry-details');
 							var countEl = det && det.querySelector('.js-tx-count');
 							if (countEl) {
 								var n = txns.length;
-								countEl.textContent = n + ' transaction' + (n === 1 ? '' : 's') + ' ' + verb + ' matched';
+								countEl.textContent = n + ' transaction' + (n === 1 ? '' : 's') + ' are matched';
 							}
 							if (!txns.length) {
-								var msg = entryStatus === 'pending'
-									? 'No transactions matched yet. Run Engine to process this entry.'
-									: 'No matched transactions.';
-								txPanel.innerHTML = '<p style="color:var(--text3);font-size:12px">' + msg + '</p>';
+								txPanel.innerHTML = '<p style="color:var(--text3);font-size:12px">No matched transactions.</p>';
 								return;
 							}
 							var rows = txns.map(function(t) {
@@ -548,7 +544,7 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 					fetch(ep, {method: 'POST', credentials: 'same-origin'})
 						.then(function(r) {
 							if (!r.ok) throw new Error('failed');
-							if (action === 'approve') { markDirty(); }
+							markDirty();
 							if (card) card.remove();
 						})
 						.catch(function() {
@@ -1193,8 +1189,6 @@ func ledgerDirectionBadgeStyle(d string) string {
 func ledgerStatusBadgeStyle(status string) string {
 	base := "font-size:11px;font-weight:600;padding:2px 7px;border-radius:4px;white-space:nowrap;justify-self:center"
 	switch status {
-	case "pending":
-		return base + ";background:var(--accent);color:#fff"
 	case "live":
 		return base + ";background:color-mix(in srgb,var(--surface2) 70%,var(--income) 30%);color:var(--income)"
 	default:
@@ -1204,8 +1198,6 @@ func ledgerStatusBadgeStyle(status string) string {
 
 func ledgerStatusLabel(status string) string {
 	switch status {
-	case "pending":
-		return "Review"
 	case "live":
 		return "Live"
 	default:

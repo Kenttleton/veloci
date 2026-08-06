@@ -81,6 +81,16 @@ func (h *ProposalsHandler) RejectProposal(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
+
+	meta, _ := json.Marshal(map[string]string{})
+	if job, jobErr := h.s.CreateJob(ctx, entityID, "account.analyze", userID, meta); jobErr == nil {
+		h.pub.Publish(ctx, queue.Job{ //nolint:errcheck
+			JobID:    job.ID,
+			Type:     "account.analyze",
+			EntityID: entityID,
+			Metadata: meta,
+		})
+	}
 	return c.NoContent(http.StatusNoContent)
 }
 

@@ -783,6 +783,12 @@ async fn persist_cluster(
         .context("failed to update existing pending entry")?;
         id
     } else {
+        // Both INSERTs run inside a single transaction so that a proposal INSERT
+        // failure cannot leave an entry row without a paired pending proposal.
+        // An orphaned entry (no pending proposal) would be invisible to the upsert
+        // lookup and silently duplicated on the next engine run.
+        let mut tx = pool.begin().await.context("failed to begin entry+proposal transaction")?;
+
         let (id,): (Uuid,) = sqlx::query_as(
             "INSERT INTO entries (
                entity_id, label_id, direction, entry_type, period_days, next_due_date,
@@ -815,7 +821,7 @@ async fn persist_cluster(
         .bind(score.amount_fit)
         .bind(&score.sample_merchants)
         .bind(cluster.transactions.len() as i32)
-        .fetch_one(pool)
+        .fetch_one(&mut *tx)
         .await
         .context("failed to insert live entry")?;
 
@@ -825,10 +831,11 @@ async fn persist_cluster(
         )
         .bind(entity_id)
         .bind(id)
-        .execute(pool)
+        .execute(&mut *tx)
         .await
         .context("failed to insert new proposal for entry")?;
 
+        tx.commit().await.context("failed to commit entry+proposal transaction")?;
         id
     };
 
