@@ -22,6 +22,7 @@
 //!   6 — Snapshot UPSERT into `snapshots`
 //!   7 — Cash flow projection into `projections`; raises drift/ended alerts on entries for missed expectations
 
+pub mod drift;
 pub mod stage0;
 pub mod stage1;
 pub mod stage2;
@@ -220,13 +221,19 @@ async fn run_from_stage3(
         WHERE e.id = s.node_id
           AND e.entity_id = $1
           AND e.source = 'system'
-          AND e.status = 'live'
+          AND e.end_date IS NULL
         "#,
     )
     .bind(entity_id)
     .execute(&pools.write)
     .await
     .context("failed to sync projected_rate for system entries")?;
+
+    // Drift proposal detection: compare latest snapshot rates vs stored projected rates.
+    // Runs once at computed_as_of (not per-day) since we need the final crawl output.
+    drift::detect_drift_proposals(entity_id, computed_as_of, &pools.write)
+        .await
+        .context("drift proposal detection failed")?;
 
     // Stage 7: Cash flow projection (write pool for final INSERT)
     run_stage7(entity_id, job_id, computed_as_of, pools).await
