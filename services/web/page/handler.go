@@ -523,6 +523,7 @@ func (s *Server) BudgetStack(c echo.Context) error {
 // LedgerData is passed to the Ledger page template.
 type LedgerData struct {
 	Entries         []store.EntryRow
+	Proposals       []store.EntryProposalRow
 	Counts          store.EntryCounts
 	Filter          string // status filter: all | live | pending | ended
 	LabelFilter     string // ?label=<uuid> — filter by label_id
@@ -578,11 +579,14 @@ func (s *Server) Ledger(c echo.Context) error {
 	counts, _ := s.store.CountEntriesByStatus(ctx, entityID)
 
 	var entries []store.EntryRow
+	var proposals []store.EntryProposalRow
 	switch filter {
 	case "all":
 		entries, _ = s.store.ListAllEntriesSorted(ctx, entityID)
 	case "system":
 		entries, _ = s.store.ListSystemEntries(ctx, entityID)
+	case "pending":
+		proposals, _ = s.store.ListPendingProposals(ctx, entityID)
 	default:
 		entries, _ = s.store.ListEntries(ctx, entityID, store.DateRange{}, "", filter, 500, "")
 	}
@@ -663,6 +667,7 @@ func (s *Server) Ledger(c echo.Context) error {
 	}
 	data := LedgerData{
 		Entries:         entries,
+		Proposals:       proposals,
 		Counts:          counts,
 		Filter:          filter,
 		LabelFilter:     labelFilter,
@@ -818,23 +823,6 @@ func entryTypeLabel(t string) string {
 	}
 }
 
-// alertTypeLabel returns a display label for alert type.
-func alertTypeLabel(t *string) string {
-	if t == nil {
-		return ""
-	}
-	switch *t {
-	case "new":
-		return "New"
-	case "drift":
-		return "Drift"
-	case "anomaly":
-		return "Anomaly"
-	default:
-		return *t
-	}
-}
-
 // fmtRateDay formats a cents/day rate as $/day.
 func fmtRateDay(r *float64) string {
 	if r == nil {
@@ -938,6 +926,15 @@ func fitColor(f *float64) string {
 	return "var(--commit)"
 }
 
+// entryRowStatus derives a display status string from an EntryRow.
+// "live" when end_date is nil, "ended" otherwise.
+func entryRowStatus(e store.EntryRow) string {
+	if e.EndDate == nil {
+		return "live"
+	}
+	return "ended"
+}
+
 // entryStatusColor returns a CSS color for an entry status.
 func entryStatusColor(status string) string {
 	switch status {
@@ -995,7 +992,6 @@ type entryPutBody struct {
 	ProjectedRatePerDay *float64        `json:"projected_rate_per_day"`
 	Conditions          json.RawMessage `json:"conditions"`
 	Priority            int             `json:"priority"`
-	Status              string          `json:"status"`
 	StartDate           string          `json:"start_date"`
 	EndDate             *string         `json:"end_date"`
 	RecurrenceAnchor    *string         `json:"recurrence_anchor"`
@@ -1028,7 +1024,6 @@ func entryDataJSON(e store.EntryRow) string {
 		ProjectedRatePerDay: e.ProjectedRatePerDay,
 		Conditions:          conds,
 		Priority:            e.Priority,
-		Status:              e.Status,
 		StartDate:           e.StartDate.Format("2006-01-02"),
 		EndDate:             endDate,
 		RecurrenceAnchor:    e.RecurrenceAnchor,

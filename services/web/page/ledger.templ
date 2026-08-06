@@ -916,7 +916,7 @@ templ ledgerEntryRow(e store.EntryRow) {
 	<details
 		class="js-entry-details"
 		data-entry-id={ e.ID }
-		data-entry-status={ e.Status }
+		data-entry-status={ entryRowStatus(e) }
 		data-entry={ entryDataJSON(e) }
 		if e.Source != "" {
 			data-entry-scope={ e.Source }
@@ -938,9 +938,6 @@ templ ledgerEntryRow(e store.EntryRow) {
 					if e.Source == "system" {
 						<span style="margin-left:6px;font-size:10px;font-weight:600;padding:1px 5px;border-radius:10px;background:var(--surface2);color:var(--text3)">System</span>
 					}
-					if e.AlertType != nil {
-						<span style="margin-left:6px;font-size:10px;font-weight:700;padding:1px 5px;border-radius:10px;background:var(--accent);color:#fff">{ alertTypeLabel(e.AlertType) }</span>
-					}
 				</span>
 			</span>
 			<span style="font-size:12px;color:var(--text3)">{ entryTypeLabel(e.EntryType) }</span>
@@ -952,12 +949,12 @@ templ ledgerEntryRow(e store.EntryRow) {
 				data-fmt-yr={ fmtRateYr(e.ProjectedRatePerDay) }
 				style="font-size:12px;color:var(--text2);text-align:right;font-variant-numeric:tabular-nums"
 			>{ fmtRateDay(e.ProjectedRatePerDay) }</span>
-			<span style={ ledgerStatusBadgeStyle(e.Status) }>{ ledgerStatusLabel(e.Status) }</span>
+			<span style={ ledgerStatusBadgeStyle(entryRowStatus(e)) }>{ ledgerStatusLabel(entryRowStatus(e)) }</span>
 			<span class="js-entry-fitness" style={ "font-size:12px;text-align:right;font-variant-numeric:tabular-nums;color:" + fitColor(e.Fitness) }>{ fitPct(e.Fitness) }</span>
 		</summary>
 		<div>
 			<!-- Pending banner -->
-			if e.Status == "pending" {
+			if entryRowStatus(e) == "pending" {
 				<div style="display:flex;align-items:center;gap:10px;padding:8px 20px;border-top:1px solid var(--border);background:color-mix(in srgb,var(--surface) 85%,var(--accent) 15%)">
 					<span style="font-size:12px;font-weight:600;color:var(--accent);flex:1">Engine review required</span>
 					<button

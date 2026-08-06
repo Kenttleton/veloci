@@ -48,7 +48,6 @@ type entryView struct {
 	EndDate       *string         `json:"end_date"`
 	CreatedAt     string          `json:"created_at"`
 	// Engine review metadata (null for user-created entries)
-	AlertType               *string  `json:"alert_type"`
 	Fitness                 *float64 `json:"fitness"`
 	MerchantFit             *float64 `json:"merchant_fit"`
 	TimingFit               *float64 `json:"timing_fit"`
@@ -96,6 +95,11 @@ func toEntryView(e store.EntryRow) entryView {
 		sampleMerchants = []string{}
 	}
 
+	status := "live"
+	if e.EndDate != nil {
+		status = "ended"
+	}
+
 	return entryView{
 		ID:                      e.ID,
 		LabelID:                 e.LabelID,
@@ -104,7 +108,7 @@ func toEntryView(e store.EntryRow) entryView {
 		Direction:               e.Direction,
 		EntryType:               e.EntryType,
 		Period:                  period,
-		Status:                  e.Status,
+		Status:                  status,
 		Source:                  e.Source,
 		Priority:                e.Priority,
 		ActualRate:              actualRate,
@@ -115,7 +119,6 @@ func toEntryView(e store.EntryRow) entryView {
 		StartDate:               e.StartDate.Format("2006-01-02"),
 		EndDate:                 endDate,
 		CreatedAt:               e.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		AlertType:               e.AlertType,
 		Fitness:                 e.Fitness,
 		MerchantFit:             e.MerchantFit,
 		TimingFit:               e.TimingFit,
@@ -268,7 +271,6 @@ func (h *EntriesHandler) UpdateEntry(c echo.Context) error {
 		ProjectedRatePerDay *float64        `json:"projected_rate_per_day"`
 		Conditions          json.RawMessage `json:"conditions"`
 		Priority            int             `json:"priority"`
-		Status              string          `json:"status"`
 		StartDate           string          `json:"start_date"`
 		EndDate             *string         `json:"end_date"`
 		RecurrenceAnchor    *string         `json:"recurrence_anchor"`
@@ -326,7 +328,6 @@ func (h *EntriesHandler) UpdateEntry(c echo.Context) error {
 		ProjectedRatePerDay: body.ProjectedRatePerDay,
 		Conditions:          conditions,
 		Priority:            body.Priority,
-		Status:              body.Status,
 		StartDate:           startDate,
 		EndDate:             endDate,
 		RecurrenceAnchor:    body.RecurrenceAnchor,
