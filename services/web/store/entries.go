@@ -26,7 +26,6 @@ type EntryRow struct {
 	ProjectedRatePerDay *float64        `db:"projected_rate_per_day"`
 	Conditions          json.RawMessage `db:"conditions"`
 	Priority            int             `db:"priority"`
-	Status              string          `db:"status"`
 	Source              string          `db:"source"`
 	RecurrenceAnchor    *string         `db:"recurrence_anchor"`
 	NextDueDate         *time.Time      `db:"next_due_date"`
@@ -36,7 +35,6 @@ type EntryRow struct {
 	EndDate             *time.Time      `db:"end_date"`
 	CreatedAt           time.Time       `db:"created_at"`
 	// Engine review metadata (NULL for user-created entries)
-	AlertType                *string    `db:"alert_type"`
 	Fitness                  *float64   `db:"fitness"`
 	MerchantFit              *float64   `db:"merchant_fit"`
 	TimingFit                *float64   `db:"timing_fit"`
@@ -53,11 +51,11 @@ type EntryRow struct {
 const entryCols = `
 	e.id::text, e.entity_id::text, e.label_id::text, l.name AS label_name,
 	e.direction, e.entry_type, e.period_days, e.rate_method,
-	e.projected_rate_per_day, e.conditions, e.priority, e.status, e.source,
+	e.projected_rate_per_day, e.conditions, e.priority, e.source,
 	e.recurrence_anchor, e.next_due_date,
 	e.pending_amount_cents, e.pending_effective_date,
 	e.start_date, e.end_date, e.created_at,
-	e.alert_type, e.fitness, e.merchant_fit, e.timing_fit,
+	e.fitness, e.merchant_fit, e.timing_fit,
 	e.amount_fit, e.sample_merchants, e.matched_transaction_count,
 	e.reviewed_by::text, e.reviewed_at,
 	s.actual_rate_per_day, s.drift_per_day
@@ -68,12 +66,13 @@ const entryCols = `
 // accountID limits to entries with transactions in that account.
 // statusFilter defaults to active-only; pass "all" for every status.
 func (s *Store) ListEntries(ctx context.Context, entityID string, dr DateRange, accountID, statusFilter string, limit int, cursor string) ([]EntryRow, error) {
-	statusCond := `e.status = 'live' AND e.source != 'system'`
+	watermark := `(SELECT COALESCE(MAX(computed_as_of), CURRENT_DATE) FROM snapshots WHERE entity_id = e.entity_id)`
+	statusCond := `(e.end_date IS NULL OR e.end_date >= ` + watermark + `) AND e.source != 'system'`
 	switch statusFilter {
 	case "all":
 		statusCond = `e.source != 'system'`
-	case "pending", "ended":
-		statusCond = `e.status = '` + statusFilter + `' AND e.source != 'system'`
+	case "ended":
+		statusCond = `(e.end_date IS NOT NULL AND e.end_date < ` + watermark + `) AND e.source != 'system'`
 	}
 
 	args := []any{entityID}
@@ -181,7 +180,7 @@ func (s *Store) ListEntriesForPeriod(ctx context.Context, entityID string, perio
 			  AND snapshot_date <= $2::date
 			ORDER BY snapshot_date DESC LIMIT 1
 		) s ON true
-		WHERE e.entity_id = $1 AND e.status = 'live' AND e.direction != 'mixed'
+		WHERE e.entity_id = $1 AND (e.end_date IS NULL OR e.end_date >= $2::date) AND e.direction != 'mixed'
 		ORDER BY e.start_date DESC, e.id DESC
 	`, entryCols), entityID, periodEnd)
 	if err != nil {
@@ -225,20 +224,20 @@ type CreateEntryInput struct {
 	EndDate              *time.Time
 }
 
-// CreateEntry inserts a new entry row with status='pending'.
+// CreateEntry inserts a new entry row.
 func (s *Store) CreateEntry(ctx context.Context, entityID string, in CreateEntryInput) (EntryRow, error) {
 	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
 		INSERT INTO entries (
 			id, entity_id, label_id, direction, entry_type, period_days,
 			rate_method, projected_rate_per_day, conditions, priority,
-			status, source, start_date, end_date, created_at
+			source, start_date, end_date, created_at
 		) VALUES (
 			gen_random_uuid(), $1, $2::uuid, $3, $4, $5,
 			$6, $7, $8, $9,
-			'pending', $10, $11, $12, NOW()
+			$10, $11, $12, NOW()
 		)
 		RETURNING %s,
-		NULL::text AS alert_type, NULL::numeric AS fitness,
+		NULL::numeric AS fitness,
 		NULL::numeric AS merchant_fit, NULL::numeric AS timing_fit,
 		NULL::numeric AS amount_fit, NULL::text[] AS sample_merchants,
 		NULL::int AS matched_transaction_count, NULL::text AS reviewed_by, NULL::timestamptz AS reviewed_at,
@@ -246,7 +245,7 @@ func (s *Store) CreateEntry(ctx context.Context, entityID string, in CreateEntry
 	`, `
 		id::text, entity_id::text, label_id::text,
 		NULL AS label_name, direction, entry_type, period_days,
-		rate_method, projected_rate_per_day, conditions, priority, status, source,
+		rate_method, projected_rate_per_day, conditions, priority, source,
 		recurrence_anchor, next_due_date,
 		pending_amount_cents, pending_effective_date,
 		start_date, end_date, created_at
@@ -271,7 +270,6 @@ type UpdateEntryInput struct {
 	ProjectedRatePerDay *float64
 	Conditions          json.RawMessage
 	Priority            int
-	Status              string
 	StartDate           time.Time
 	EndDate             *time.Time
 	RecurrenceAnchor    *string
@@ -300,14 +298,13 @@ func (s *Store) UpdateEntry(ctx context.Context, entityID, id string, in UpdateE
 			projected_rate_per_day = $8,
 			conditions = $9,
 			priority = $10,
-			status = $11,
-			start_date = $12,
-			end_date = $13,
-			recurrence_anchor = $14,
-			next_due_date = $15
+			start_date = $11,
+			end_date = $12,
+			recurrence_anchor = $13,
+			next_due_date = $14
 		WHERE entity_id = $1 AND id = $2
 		RETURNING %s,
-		NULL::text AS alert_type, NULL::numeric AS fitness,
+		NULL::numeric AS fitness,
 		NULL::numeric AS merchant_fit, NULL::numeric AS timing_fit,
 		NULL::numeric AS amount_fit, NULL::text[] AS sample_merchants,
 		NULL::int AS matched_transaction_count, NULL::text AS reviewed_by, NULL::timestamptz AS reviewed_at,
@@ -315,7 +312,7 @@ func (s *Store) UpdateEntry(ctx context.Context, entityID, id string, in UpdateE
 	`, `
 		id::text, entity_id::text, label_id::text,
 		NULL AS label_name, direction, entry_type, period_days,
-		rate_method, projected_rate_per_day, conditions, priority, status, source,
+		rate_method, projected_rate_per_day, conditions, priority, source,
 		recurrence_anchor, next_due_date,
 		pending_amount_cents, pending_effective_date,
 		start_date, end_date, created_at
@@ -323,7 +320,7 @@ func (s *Store) UpdateEntry(ctx context.Context, entityID, id string, in UpdateE
 		entityID, id,
 		in.LabelID, in.Direction, in.EntryType, in.PeriodDays,
 		in.RateMethod, in.ProjectedRatePerDay, in.Conditions, in.Priority,
-		in.Status, in.StartDate, in.EndDate,
+		in.StartDate, in.EndDate,
 		in.RecurrenceAnchor, in.NextDueDate,
 	)
 	if err != nil {
@@ -419,8 +416,8 @@ func (s *Store) PreviewConditions(ctx context.Context, entityID string, conditio
 }
 
 // UpdateEntryConditions updates the conditions JSON on an entry, releases all
-// transaction_entry_assignments for it, and resets its status to pending.
-// Both writes happen in a single transaction so they are atomic.
+// transaction_entry_assignments for it. Both writes happen in a single
+// transaction so they are atomic.
 func (s *Store) UpdateEntryConditions(ctx context.Context, entityID, id string, conditions json.RawMessage) (EntryRow, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -441,7 +438,7 @@ func (s *Store) UpdateEntryConditions(ctx context.Context, entityID, id string, 
 
 	tag, err := tx.Exec(ctx, `
 		UPDATE entries
-		SET conditions = $3, status = 'pending'
+		SET conditions = $3
 		WHERE entity_id = $1 AND id = $2::uuid
 	`, entityID, id, conditions)
 	if err != nil {
@@ -464,67 +461,11 @@ func (s *Store) UpdateEntryConditions(ctx context.Context, entityID, id string, 
 	return s.GetEntry(ctx, entityID, id)
 }
 
-// ActivateEntry sets an entry's status to active.
-func (s *Store) ActivateEntry(ctx context.Context, entityID, entryID string) error {
-	_, err := s.pool.Exec(ctx, `
-		UPDATE entries SET status = 'live' WHERE entity_id = $1 AND id = $2
-	`, entityID, entryID)
-	return err
-}
-
-// DeactivateEntry sets an entry's status to inactive.
-func (s *Store) DeactivateEntry(ctx context.Context, entityID, entryID string) error {
-	_, err := s.pool.Exec(ctx, `
-		UPDATE entries SET status = 'ended' WHERE entity_id = $1 AND id = $2
-	`, entityID, entryID)
-	return err
-}
-
 // EndEntry sets end_date on an entry.
 func (s *Store) EndEntry(ctx context.Context, entityID, entryID string, endDate time.Time) error {
 	_, err := s.pool.Exec(ctx, `
 		UPDATE entries SET end_date = $3 WHERE entity_id = $1 AND id = $2
 	`, entityID, entryID, endDate)
-	return err
-}
-
-// ApproveEntryReview activates or ends the entry based on its alert_type,
-// records the reviewer, and returns the alert_type for job-trigger decisions.
-func (s *Store) ApproveEntryReview(ctx context.Context, entityID, entryID, userID string) (string, error) {
-	var alertType string
-	err := s.pool.QueryRow(ctx, `
-		SELECT COALESCE(alert_type, '') FROM entries
-		WHERE entity_id = $1 AND id = $2::uuid AND status = 'pending'
-	`, entityID, entryID).Scan(&alertType)
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return "", err
-	}
-
-	switch alertType {
-	case "ended":
-		if _, err := s.pool.Exec(ctx, `
-			UPDATE entries SET end_date = NOW()::date, reviewed_by = $3::uuid, reviewed_at = NOW()
-			WHERE entity_id = $1 AND id = $2::uuid
-		`, entityID, entryID, userID); err != nil {
-			return alertType, err
-		}
-	default: // "new", "" — activate
-		if _, err := s.pool.Exec(ctx, `
-			UPDATE entries SET status = 'live', reviewed_by = $3::uuid, reviewed_at = NOW()
-			WHERE entity_id = $1 AND id = $2::uuid
-		`, entityID, entryID, userID); err != nil {
-			return alertType, err
-		}
-	}
-	return alertType, nil
-}
-
-// RejectEntryReview deactivates the entry and records the reviewer.
-func (s *Store) RejectEntryReview(ctx context.Context, entityID, entryID, userID string) error {
-	_, err := s.pool.Exec(ctx, `
-		UPDATE entries SET status = 'ended', reviewed_by = $3::uuid, reviewed_at = NOW()
-		WHERE entity_id = $1 AND id = $2::uuid AND status = 'pending'
-	`, entityID, entryID, userID)
 	return err
 }
 
@@ -536,39 +477,34 @@ type EntryCounts struct {
 	System  int
 }
 
-// CountEntriesByStatus returns the number of entries per status for a given entity.
-// System entries are counted separately so the All pill can include them while
-// Review/Live/Ended pill counts reflect workflow entries only.
+// CountEntriesByStatus returns pill counts for the Ledger filter bar.
+// Live/Ended are derived from end_date vs the entity's computed_as_of watermark.
+// Pending = pending proposals (the review queue).
 func (s *Store) CountEntriesByStatus(ctx context.Context, entityID string) (EntryCounts, error) {
-	rows, err := s.pool.Query(ctx, `
-		SELECT status, COUNT(*)::int
-		FROM entries
+	var c EntryCounts
+
+	err := s.pool.QueryRow(ctx, `
+		WITH watermark AS (
+			SELECT COALESCE(MAX(computed_as_of), CURRENT_DATE) AS cof
+			FROM snapshots WHERE entity_id = $1
+		)
+		SELECT
+			COUNT(*) FILTER (WHERE end_date IS NULL OR end_date >= w.cof)     AS live,
+			COUNT(*) FILTER (WHERE end_date IS NOT NULL AND end_date < w.cof) AS ended
+		FROM entries, watermark w
 		WHERE entity_id = $1 AND source != 'system'
-		GROUP BY status
-	`, entityID)
+	`, entityID).Scan(&c.Live, &c.Ended)
 	if err != nil {
 		return EntryCounts{}, err
 	}
-	defer rows.Close()
-	var c EntryCounts
-	for rows.Next() {
-		var status string
-		var count int
-		if err := rows.Scan(&status, &count); err != nil {
-			return EntryCounts{}, err
-		}
-		switch status {
-		case "pending":
-			c.Pending = count
-		case "live":
-			c.Live = count
-		case "ended":
-			c.Ended = count
-		}
-	}
-	if err := rows.Err(); err != nil {
+
+	if err := s.pool.QueryRow(ctx, `
+		SELECT COUNT(*)::int FROM entry_proposals
+		WHERE entity_id = $1 AND status = 'pending'
+	`, entityID).Scan(&c.Pending); err != nil {
 		return EntryCounts{}, err
 	}
+
 	if err := s.pool.QueryRow(ctx, `
 		SELECT COUNT(*)::int FROM entries WHERE entity_id = $1 AND source = 'system'
 	`, entityID).Scan(&c.System); err != nil {
@@ -577,9 +513,9 @@ func (s *Store) CountEntriesByStatus(ctx context.Context, entityID string) (Entr
 	return c, nil
 }
 
-// ListAllEntriesSorted returns up to 1000 entries sorted so pending
-// comes first, then live, then ended; within each group ordered by
-// start_date DESC, id DESC. No cursor pagination — used by the Ledger "all" view.
+// ListAllEntriesSorted returns up to 1000 entries sorted so live entries
+// come first, then ended; within each group ordered by start_date DESC, id DESC.
+// No cursor pagination — used by the Ledger "all" view.
 func (s *Store) ListAllEntriesSorted(ctx context.Context, entityID string) ([]EntryRow, error) {
 	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
 		SELECT %s
@@ -593,11 +529,10 @@ func (s *Store) ListAllEntriesSorted(ctx context.Context, entityID string) ([]En
 		) s ON true
 		WHERE e.entity_id = $1
 		ORDER BY
-			CASE e.status
-				WHEN 'pending' THEN 0
-				WHEN 'live'    THEN 1
-				ELSE                2
-			END,
+			CASE WHEN (e.end_date IS NULL OR e.end_date >= (
+				SELECT COALESCE(MAX(computed_as_of), CURRENT_DATE)
+				FROM snapshots WHERE entity_id = e.entity_id
+			)) THEN 0 ELSE 1 END,
 			e.start_date DESC,
 			e.id DESC
 		LIMIT 1000
