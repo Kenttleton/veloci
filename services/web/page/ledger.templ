@@ -76,11 +76,20 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 				<div style="font-size:11px;font-weight:600;color:var(--text3);text-align:right">Fitness</div>
 			</div>
 			<div style="flex:1;overflow:auto">
-				if len(data.Entries) == 0 {
-					<div style="padding:48px 20px;text-align:center;color:var(--text3);font-size:13px">No entries found.</div>
+				if data.Filter == "pending" {
+					if len(data.Proposals) == 0 {
+						<div style="padding:48px 20px;text-align:center;color:var(--text3);font-size:13px">No pending proposals.</div>
+					}
+					for _, p := range data.Proposals {
+						@proposalCard(p)
+					}
 				} else {
-					for _, e := range data.Entries {
-						@ledgerEntryRow(e)
+					if len(data.Entries) == 0 {
+						<div style="padding:48px 20px;text-align:center;color:var(--text3);font-size:13px">No entries found.</div>
+					} else {
+						for _, e := range data.Entries {
+							@ledgerEntryRow(e)
+						}
 					}
 				}
 			</div>
@@ -524,76 +533,28 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 					});
 				}
 
-				// ── Approve / Reject ───────────────────────────────────────────────────
+				// ── Proposal approve / reject ──────────────────────────────────────────
 				document.addEventListener('click', function(e) {
-					var btn = e.target.closest('.js-review-btn');
+					var btn = e.target.closest('.js-proposal-btn');
 					if (!btn) return;
-					var det = btn.closest('.js-entry-details');
-					if (!det) return;
-					var entryId = det.dataset.entryId;
-					var entry = JSON.parse(det.dataset.entry || '{}');
+					var proposalId = btn.dataset.proposalId;
 					var action = btn.dataset.action;
-					var labelInput = det.querySelector('.js-label-input');
-					var dirSel = det.querySelector('.js-direction-sel');
-					var typeSel = det.querySelector('.js-type-sel');
-					var ta = document.querySelector('.js-conditions-ta[data-entry-id="' + entryId + '"]');
-					var conds = entry.conditions || {};
-					try {
-						if (ta) {
-							var src = (ta._cmView && ta._cmView.state)
-								? ta._cmView.state.doc.toString()
-								: ta.value;
-							conds = JSON.parse(src);
-						}
-					} catch(ex) {}
-
-					function resolveLabel(cb) {
-						var name = labelInput ? labelInput.value.trim() : '';
-						if (!name) { cb(entry.label_id); return; }
-						fetch('/api/labels?limit=500')
-							.then(function(r){ return r.json(); })
-							.then(function(env) {
-								var found = (env.data||[]).find(function(l){ return l.name.toLowerCase()===name.toLowerCase(); });
-								if (found) { cb(found.id); return; }
-								fetch('/api/labels',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})
-									.then(function(r){ return r.json(); })
-									.then(function(c){ cb(c.data ? c.data.id : null); });
-							});
-					}
-
+					var card = btn.closest('div[style*="border-bottom"]');
 					btn.disabled = true;
 					btn.textContent = '…';
-
-					resolveLabel(function(labelId) {
-						var body = Object.assign({}, entry, {
-							label_id: labelId,
-							direction: dirSel ? dirSel.value : entry.direction,
-							entry_type: typeSel ? typeSel.value : entry.entry_type,
-							conditions: conds
-						});
-						fetch('/api/entries/' + entryId, {
-							method:'PUT',
-							headers:{'Content-Type':'application/json'},
-							body: JSON.stringify(body)
-						})
+					var ep = action === 'approve'
+						? '/api/proposals/' + proposalId + '/approve'
+						: '/api/proposals/' + proposalId + '/reject';
+					fetch(ep, {method: 'POST', credentials: 'same-origin'})
 						.then(function(r) {
-							if (!r.ok) throw new Error('put-failed');
-							var ep = action==='approve'
-								? '/api/entries/'+entryId+'/approve'
-								: '/api/entries/'+entryId+'/reject';
-							return fetch(ep, {method:'POST'});
-						})
-						.then(function(r) {
-							if (!r || !r.ok) throw new Error('action-failed');
+							if (!r.ok) throw new Error('failed');
 							if (action === 'approve') { markDirty(); }
-							var row = document.querySelector('.js-entry-details[data-entry-id="'+entryId+'"]');
-							if (row) row.remove();
+							if (card) card.remove();
 						})
 						.catch(function() {
 							btn.disabled = false;
-							btn.textContent = action==='approve' ? 'Approve' : 'Reject';
+							btn.textContent = action === 'approve' ? 'Approve' : 'Reject';
 						});
-					});
 				});
 
 				// ── Entry form save ────────────────────────────────────────────────────
@@ -953,22 +914,6 @@ templ ledgerEntryRow(e store.EntryRow) {
 			<span class="js-entry-fitness" style={ "font-size:12px;text-align:right;font-variant-numeric:tabular-nums;color:" + fitColor(e.Fitness) }>{ fitPct(e.Fitness) }</span>
 		</summary>
 		<div>
-			<!-- Pending banner -->
-			if entryRowStatus(e) == "pending" {
-				<div style="display:flex;align-items:center;gap:10px;padding:8px 20px;border-top:1px solid var(--border);background:color-mix(in srgb,var(--surface) 85%,var(--accent) 15%)">
-					<span style="font-size:12px;font-weight:600;color:var(--accent);flex:1">Engine review required</span>
-					<button
-						class="js-review-btn"
-						data-action="reject"
-						style="padding:5px 14px;border-radius:5px;border:1px solid var(--border);cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;background:transparent;color:var(--text2)"
-					>Reject</button>
-					<button
-						class="js-review-btn"
-						data-action="approve"
-						style="padding:5px 14px;border-radius:5px;border:none;cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;background:var(--income);color:#fff"
-					>Approve</button>
-				</div>
-			}
 			<!-- Main 2-column layout: form+conditions left, fitness right -->
 			<div style="display:flex;border-top:1px solid var(--border);background:var(--surface)">
 				<!-- Left: combined form + conditions -->
@@ -1142,6 +1087,54 @@ templ ledgerEntryRow(e store.EntryRow) {
 			</div>
 		</div>
 	</details>
+}
+
+templ proposalCard(p store.EntryProposalRow) {
+	<div style="border-bottom:1px solid var(--border);padding:12px 20px;display:flex;align-items:flex-start;gap:12px">
+		<div style="flex:1;min-width:0">
+			<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+				<span style="font-size:13px;font-weight:600;color:var(--text)">
+					if p.EntryLabelName != nil {
+						{ *p.EntryLabelName }
+					} else {
+						<span style="color:var(--text3);font-style:italic">Unlabeled</span>
+					}
+				</span>
+				<span style={ "font-size:10px;font-weight:700;padding:1px 5px;border-radius:10px;background:var(--accent);color:#fff" }>
+					if p.ProposalType == "new" {
+						New
+					} else {
+						Ended
+					}
+				</span>
+				<span style="font-size:11px;color:var(--text3)">{ p.EntryDirection } · { p.EntryType }</span>
+			</div>
+			<div style="font-size:11px;color:var(--text3)">
+				if p.EntryMatchedCount != nil {
+					{ fmt.Sprintf("%d transactions matched", *p.EntryMatchedCount) }
+				}
+				if len(p.EntrySampleMerchants) > 0 {
+					<span style="margin-left:6px">
+						{ strings.Join(p.EntrySampleMerchants[:min(3, len(p.EntrySampleMerchants))], " · ") }
+					</span>
+				}
+			</div>
+		</div>
+		<div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+			<button
+				class="js-proposal-btn"
+				data-proposal-id={ p.ID }
+				data-action="reject"
+				style="padding:5px 14px;border-radius:5px;border:1px solid var(--border);cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;background:transparent;color:var(--text2)"
+			>Reject</button>
+			<button
+				class="js-proposal-btn"
+				data-proposal-id={ p.ID }
+				data-action="approve"
+				style="padding:5px 14px;border-radius:5px;border:none;cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;background:var(--income);color:#fff"
+			>Approve</button>
+		</div>
+	</div>
 }
 
 templ ledgerConfBar(label string, f *float64) {
