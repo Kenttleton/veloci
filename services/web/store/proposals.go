@@ -71,6 +71,14 @@ func (s *Store) ListPendingProposals(ctx context.Context, entityID string) ([]En
 	return pgx.CollectRows(rows, pgx.RowToStructByName[EntryProposalRow])
 }
 
+// GetProposalType loads only the proposal_type for routing approve/reject dispatch.
+func (s *Store) GetProposalType(ctx context.Context, entityID, proposalID string, out *string) error {
+	return s.pool.QueryRow(ctx, `
+		SELECT proposal_type FROM entry_proposals
+		WHERE entity_id = $1 AND id = $2::uuid AND status = 'pending'
+	`, entityID, proposalID).Scan(out)
+}
+
 // ApproveNewProposal accepts a 'new' proposal: marks it accepted and records the reviewer.
 // The referenced entry is already live — no changes to entries needed.
 func (s *Store) ApproveNewProposal(ctx context.Context, entityID, proposalID, userID string) error {

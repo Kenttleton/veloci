@@ -202,6 +202,7 @@ func runServe(_ *cobra.Command, _ []string) error {
 	handler.RegisterAccountsRoutes(api, s, perms)
 	handler.RegisterLabelsRoutes(api, s, perms)
 	handler.RegisterEntriesRoutes(api, s, pub, perms)
+	handler.RegisterProposalsRoutes(api, s, pub, perms)
 	handler.RegisterTransactionsRoutes(api, s, perms)
 	handler.RegisterSnapshotsRoutes(api, s, perms)
 	handler.RegisterProjectionsRoutes(api, s, perms)

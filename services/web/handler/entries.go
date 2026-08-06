@@ -386,43 +386,6 @@ func (h *EntriesHandler) DeleteEntry(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (h *EntriesHandler) ApproveEntry(c echo.Context) error {
-	ctx := c.Request().Context()
-	entityID := middleware.EntityID(ctx)
-	userID := middleware.UserID(ctx)
-	id := c.Param("id")
-
-	alertType, err := h.s.ApproveEntryReview(ctx, entityID, id, userID)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
-	}
-
-	if alertType != "drift" {
-		meta, _ := json.Marshal(map[string]string{})
-		if job, err := h.s.CreateJob(ctx, entityID, "account.analyze", userID, meta); err == nil {
-			h.pub.Publish(ctx, queue.Job{ //nolint:errcheck
-				JobID:    job.ID,
-				Type:     "account.analyze",
-				EntityID: entityID,
-				Metadata: meta,
-			})
-		}
-	}
-	return c.NoContent(http.StatusNoContent)
-}
-
-func (h *EntriesHandler) RejectEntry(c echo.Context) error {
-	ctx := c.Request().Context()
-	entityID := middleware.EntityID(ctx)
-	userID := middleware.UserID(ctx)
-	id := c.Param("id")
-
-	if err := h.s.RejectEntryReview(ctx, entityID, id, userID); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
-	}
-	return c.NoContent(http.StatusNoContent)
-}
-
 func (h *EntriesHandler) UpdateEntryConditions(c echo.Context) error {
 	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
@@ -500,7 +463,5 @@ func RegisterEntriesRoutes(g *echo.Group, s *store.Store, pub *queue.Publisher, 
 	write.POST("/entries", h.CreateEntry)
 	write.PUT("/entries/:id", h.UpdateEntry)
 	write.DELETE("/entries/:id", h.DeleteEntry)
-	write.POST("/entries/:id/approve", h.ApproveEntry)
-	write.POST("/entries/:id/reject", h.RejectEntry)
 	write.PATCH("/entries/:id/conditions", h.UpdateEntryConditions)
 }
