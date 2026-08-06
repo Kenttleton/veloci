@@ -3,5 +3,9 @@ tmp/*
 
 .env
 
+node_modules/
+
 # JS build sources — output is committed to static/js/
-services/web/js-src/node_modules/.worktrees/
+services/web/js-src/node_modules/
+
+.worktrees/
