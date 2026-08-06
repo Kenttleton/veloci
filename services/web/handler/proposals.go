@@ -39,6 +39,18 @@ func (h *ProposalsHandler) ApproveProposal(c echo.Context) error {
 		err = h.s.ApproveNewProposal(ctx, entityID, id, userID)
 	case "ended":
 		err = h.s.ApproveEndedProposal(ctx, entityID, id, userID)
+	case "drift":
+		var body struct {
+			Path string `json:"path"` // "inplace" or "close_new"
+		}
+		if err := c.Bind(&body); err != nil || (body.Path != "inplace" && body.Path != "close_new") {
+			return echo.NewHTTPError(http.StatusBadRequest, "path must be 'inplace' or 'close_new'")
+		}
+		if body.Path == "close_new" {
+			_, err = h.s.ApproveDriftProposalCloseNew(ctx, entityID, id, userID)
+		} else {
+			err = h.s.ApproveDriftProposalInPlace(ctx, entityID, id, userID)
+		}
 	default:
 		return echo.NewHTTPError(http.StatusBadRequest, "unknown proposal type")
 	}
@@ -75,6 +87,8 @@ func (h *ProposalsHandler) RejectProposal(c echo.Context) error {
 		err = h.s.RejectNewProposal(ctx, entityID, id, userID)
 	case "ended":
 		err = h.s.RejectEndedProposal(ctx, entityID, id, userID, time.Now().UTC())
+	case "drift":
+		err = h.s.RejectDriftProposal(ctx, entityID, id, userID)
 	default:
 		return echo.NewHTTPError(http.StatusBadRequest, "unknown proposal type")
 	}
