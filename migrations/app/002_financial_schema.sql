@@ -242,12 +242,11 @@ CREATE INDEX ON entries (entity_id, label_id);
 --
 -- Re-trigger thresholds:
 --   ended dismissed: re-propose when dismissed_computed_as_of < current computed_as_of.
---   dismissed_transaction_count is reserved for Phase 2 (new proposal re-trigger);
---   in Phase 1, rejecting a 'new' proposal hard-deletes the entry, so this column is unused.
+--   drift dismissed: re-propose when live entry matched_transaction_count > dismissed_transaction_count.
 CREATE TABLE entry_proposals (
   id                          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   entity_id                   UUID        NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-  proposal_type               TEXT        NOT NULL CHECK (proposal_type IN ('new', 'ended')),
+  proposal_type               TEXT        NOT NULL CHECK (proposal_type IN ('new', 'ended', 'drift')),
   status                      TEXT        NOT NULL DEFAULT 'pending'
                               CHECK (status IN ('pending', 'dismissed', 'accepted')),
   reference_entry_id          UUID        NOT NULL REFERENCES entries(id) ON DELETE CASCADE,
@@ -256,8 +255,14 @@ CREATE TABLE entry_proposals (
   proposed_end_date           DATE,
 
   -- re-trigger thresholds (set on dismissal)
-  dismissed_transaction_count INTEGER,    -- new: re-propose when live entry matched_transaction_count > this
+  dismissed_transaction_count INTEGER,    -- drift: re-propose when live entry matched_transaction_count > this
   dismissed_computed_as_of    DATE,       -- ended: re-propose when computed_as_of advances past this
+
+  -- drift proposal only
+  proposed_rate_per_day       NUMERIC,    -- engine-computed new rate at detection time
+  proposed_period_days        INTEGER,    -- future: period drift (not populated in Phase 2)
+  proposed_recurrence_anchor  TEXT,       -- future: anchor drift (not populated in Phase 2)
+  drift_delta_ratio           NUMERIC,    -- |actual - projected| / projected at detection time
 
   -- audit
   reviewed_by                 UUID        REFERENCES users(id),
