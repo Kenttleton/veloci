@@ -82,7 +82,7 @@ func (s *Store) EnsureSystemData(ctx context.Context, entityID string) error {
 			SELECT
 				gen_random_uuid(), $1::uuid,
 				(SELECT id FROM labels WHERE entity_id = $1::uuid AND name = $2 AND source = 'system'),
-				$3, 'irregular',
+				$3, 'variable',
 				'live', 'system', 9999, $4::jsonb, '2000-01-01', NOW()
 			WHERE NOT EXISTS (
 				SELECT 1 FROM entries
