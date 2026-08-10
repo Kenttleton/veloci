@@ -257,6 +257,9 @@ func displayNode(node map[string]any, lu displayLookups) map[string]any {
 
 		case "entry_recurrence_anchor":
 			anchor, _ := node["recurrence_anchor"].(string)
+			if cadence, err := anchorToCadence(anchor); err == nil {
+				return map[string]any{"entry_recurrence_anchor": cadence}
+			}
 			return map[string]any{"entry_recurrence_anchor": anchor}
 
 		case "recurrence_anchor":
@@ -504,7 +507,13 @@ func storageNode(
 
 		// Both canonical and legacy Schema B keys map to entry_recurrence_anchor.
 		case "entry_recurrence_anchor", "recurrence_anchor":
-			return map[string]any{"type": "entry_recurrence_anchor", "recurrence_anchor": val}
+			cadenceStr, _ := val.(string)
+			anchor, err := cadenceToAnchor(cadenceStr)
+			if err != nil {
+				*resolveErr = fmt.Errorf("invalid entry_recurrence_anchor: %w", err)
+				return node
+			}
+			return map[string]any{"type": "entry_recurrence_anchor", "recurrence_anchor": anchor}
 		}
 	}
 

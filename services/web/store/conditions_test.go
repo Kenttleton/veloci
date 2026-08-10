@@ -175,7 +175,8 @@ func TestStorageNode_EntryProjectedRate(t *testing.T) {
 }
 
 func TestStorageNode_EntryRecurrenceAnchor(t *testing.T) {
-	in := mustUnmarshal(t, `{"entry_recurrence_anchor":"dom:-1"}`)
+	// Schema B uses cadence strings; storageNode must convert to Schema A anchor.
+	in := mustUnmarshal(t, `{"entry_recurrence_anchor":"monthly:last"}`)
 	var resolveErr error
 	out := storageNode(in, emptyStoreLU, noCreate, &resolveErr)
 	if out["type"] != "entry_recurrence_anchor" || out["recurrence_anchor"] != "dom:-1" {
@@ -184,12 +185,12 @@ func TestStorageNode_EntryRecurrenceAnchor(t *testing.T) {
 }
 
 func TestStorageNode_LegacyRecurrenceAnchor(t *testing.T) {
-	// Old Schema B key "recurrence_anchor" must produce same Schema A output.
-	in := mustUnmarshal(t, `{"recurrence_anchor":"dom:15"}`)
+	// Old Schema B key "recurrence_anchor" must also convert cadence → Schema A anchor.
+	in := mustUnmarshal(t, `{"recurrence_anchor":"monthly:15"}`)
 	var resolveErr error
 	out := storageNode(in, emptyStoreLU, noCreate, &resolveErr)
-	if out["type"] != "entry_recurrence_anchor" {
-		t.Fatalf("expected entry_recurrence_anchor type, got %v", out["type"])
+	if out["type"] != "entry_recurrence_anchor" || out["recurrence_anchor"] != "dom:15" {
+		t.Fatalf("unexpected: %v", mustMarshal(t, out))
 	}
 }
 
@@ -311,9 +312,10 @@ func TestDisplayNode_DateRange(t *testing.T) {
 }
 
 func TestDisplayNode_EntryRecurrenceAnchor(t *testing.T) {
+	// Schema A anchor must be converted to Schema B cadence string for display.
 	a := mustUnmarshal(t, `{"type":"entry_recurrence_anchor","recurrence_anchor":"dom:-1"}`)
 	b := displayNode(a, emptyLU)
-	if b["entry_recurrence_anchor"] != "dom:-1" {
+	if b["entry_recurrence_anchor"] != "monthly:last" {
 		t.Fatalf("unexpected: %v", mustMarshal(t, b))
 	}
 }
@@ -472,18 +474,20 @@ func TestRoundTrip_EntryProjectedRate(t *testing.T) {
 }
 
 func TestRoundTrip_EntryRecurrenceAnchor(t *testing.T) {
-	in := mustUnmarshal(t, `{"entry_recurrence_anchor":"dom:-1"}`)
+	// Schema B input uses cadence strings; round-trip must preserve the cadence form.
+	in := mustUnmarshal(t, `{"entry_recurrence_anchor":"monthly:last"}`)
 	out := roundTrip(t, in)
-	if out["entry_recurrence_anchor"] != "dom:-1" {
+	if out["entry_recurrence_anchor"] != "monthly:last" {
 		t.Fatalf("round-trip failed: %v", mustMarshal(t, out))
 	}
 }
 
 func TestRoundTrip_LegacyRecurrenceAnchorUpgrade(t *testing.T) {
-	// A Schema B document that uses the old key should round-trip to the new key.
-	in := mustUnmarshal(t, `{"recurrence_anchor":"dom:15"}`)
+	// The old Schema B key "recurrence_anchor" with cadence value must round-trip
+	// to the canonical key and preserve the cadence form.
+	in := mustUnmarshal(t, `{"recurrence_anchor":"monthly:15"}`)
 	out := roundTrip(t, in)
-	if out["entry_recurrence_anchor"] != "dom:15" {
+	if out["entry_recurrence_anchor"] != "monthly:15" {
 		t.Fatalf("expected canonical key in output: %v", mustMarshal(t, out))
 	}
 	if _, old := out["recurrence_anchor"]; old {
@@ -643,10 +647,11 @@ func TestDisplayNodeRecurrenceAnchor(t *testing.T) {
 }
 
 func TestEntryRecurrenceAnchorUnchanged(t *testing.T) {
+	// Schema A anchor must be converted to cadence for display, not passed through raw.
 	lu := displayLookups{labelsByID: map[string]string{}, accountsByID: map[string]string{}, instByID: map[string]string{}}
 	node := map[string]any{"type": "entry_recurrence_anchor", "recurrence_anchor": "dom:15"}
 	got := displayNode(node, lu)
-	if got["entry_recurrence_anchor"] != "dom:15" {
-		t.Errorf("entry_recurrence_anchor should pass through, got %v", got)
+	if got["entry_recurrence_anchor"] != "monthly:15" {
+		t.Errorf("expected cadence monthly:15, got %v", got)
 	}
 }

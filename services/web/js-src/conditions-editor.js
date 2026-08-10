@@ -37,6 +37,7 @@ const KEY_LABELS = {
   entry_projected_rate: "Projected rate is between",
   entry_fitness: "Fitness is",
   entry_recurrence_anchor: "Anchor is",
+  cadence: "Cadence is",
 }
 
 const KNOWN_KEYS = new Set([
@@ -54,6 +55,7 @@ const KNOWN_KEYS = new Set([
   "entry_fitness",
   "entry_projected_rate",
   "entry_recurrence_anchor",
+  "cadence",
   "and", "or", "not",
 ])
 
@@ -247,7 +249,8 @@ function contextKeyCompleter(context) {
     { label: "entry_period", detail: "recurrence period in days", apply: snippet('"entry_period": {"min_days": ${25}, "max_days": ${35}}') },
     { label: "entry_fitness", detail: "fitness score gates", apply: snippet('"entry_fitness": {"overall": {"min": ${0.8}}}') },
     { label: "entry_projected_rate", detail: "projected rate (percent)", apply: snippet('"entry_projected_rate": {"min": ${1.5}}') },
-    { label: "entry_recurrence_anchor", detail: "anchor: dom:N, dow:N, interval:N", apply: snippet('"entry_recurrence_anchor": "${dom:15}"') },
+    { label: "entry_recurrence_anchor", detail: "entry cadence: monthly:15, weekly:monday, every:N", apply: snippet('"entry_recurrence_anchor": "${monthly:15}"') },
+    { label: "cadence", detail: "schedule: monthly:15, weekly:monday, every:N", apply: snippet('"cadence": "${monthly:15}"') },
   ]
 
   const ordered = ctx.depth <= 1
@@ -309,18 +312,36 @@ async function valueCompleter(context) {
     }
   }
 
+  if (key === "cadence") {
+    const cadences = [
+      { label: "monthly:15", detail: "15th of month" },
+      { label: "monthly:1", detail: "1st of month" },
+      { label: "monthly:last", detail: "last day of month" },
+      { label: "semimonthly:1,15", detail: "1st and 15th" },
+      { label: "weekly:monday", detail: "every Monday" },
+      { label: "weekly:friday", detail: "every Friday" },
+      { label: "every:7", detail: "every 7 days" },
+      { label: "every:14", detail: "every 14 days" },
+      { label: "every:30", detail: "every 30 days" },
+      { label: "every:91", detail: "every 91 days (quarterly)" },
+    ]
+    const options = cadences
+      .filter(c => !typed || c.label.includes(typed))
+      .map(c => ({ label: c.label, detail: c.detail, type: "enum", apply: makeApply(c.label) }))
+    return options.length ? { from: valueStart, options } : null
+  }
+
   if (key === "entry_recurrence_anchor") {
     const anchors = [
-      { label: "dom:1", detail: "1st of month" },
-      { label: "dom:15", detail: "15th of month" },
-      { label: "dom:-1", detail: "last day of month" },
-      { label: "dom:-7", detail: "7 days before month end" },
-      { label: "dom:1,15", detail: "1st and 15th (semi-monthly)" },
-      { label: "dow:0", detail: "every Monday" },
-      { label: "dow:4", detail: "every Friday" },
-      { label: "interval:7", detail: "every 7 days" },
-      { label: "interval:14", detail: "every 14 days" },
-      { label: "interval:30", detail: "every 30 days" },
+      { label: "monthly:1", detail: "1st of month" },
+      { label: "monthly:15", detail: "15th of month" },
+      { label: "monthly:last", detail: "last day of month" },
+      { label: "semimonthly:1,15", detail: "1st and 15th" },
+      { label: "weekly:monday", detail: "every Monday" },
+      { label: "weekly:friday", detail: "every Friday" },
+      { label: "every:7", detail: "every 7 days" },
+      { label: "every:14", detail: "every 14 days" },
+      { label: "every:30", detail: "every 30 days" },
     ]
     const options = anchors
       .filter(a => !typed || a.label.includes(typed))
@@ -519,7 +540,16 @@ function conditionsLinter(view) {
         if (pos) diagnostics.push({
           ...pos,
           severity: "error",
-          message: `${label(key)} must be a string (e.g. "dom:15", "dow:0", "interval:14").`,
+          message: `${label(key)} must be a string (e.g. "monthly:15", "weekly:monday", "every:14").`,
+        })
+      }
+
+      if (key === "cadence" && typeof val !== "string") {
+        const pos = findKeyRange(key)
+        if (pos) diagnostics.push({
+          ...pos,
+          severity: "error",
+          message: `${label(key)} must be a string (e.g. "monthly:15", "weekly:monday", "every:30").`,
         })
       }
 
@@ -583,7 +613,7 @@ async function summaryHTML(conditions) {
     if (key === "entry_direction" || key === "entry_type") {
       return `${lbl} ${strong(val)}`
     }
-    if (key === "entry_recurrence_anchor") {
+    if (key === "entry_recurrence_anchor" || key === "cadence") {
       return `${lbl} ${strong(val)}`
     }
     if (key === "amount_range" && val && typeof val === "object") {
