@@ -806,7 +806,7 @@ for _, p := range data.Proposals {
 
 - [ ] **Step 5: Update the JS handler to pass `path` for drift approvals**
 
-Find the JS handler that handles `.js-proposal-btn` clicks (wired in Phase 1). Update it to include the `path` field in the request body when present:
+Find the `.js-proposal-btn` click handler in `ledger.templ` (wired in Phase 1). It currently POSTs to `/api/proposals/:id/approve|reject`, calls `markDirty()`, and removes the card on success. Update it to also read `data-path` from the button and include it in the request body when present:
 
 ```javascript
 document.addEventListener('click', async (e) => {
@@ -817,17 +817,19 @@ document.addEventListener('click', async (e) => {
     const path = btn.dataset.path; // undefined for new/ended, set for drift
     const url = `/api/proposals/${id}/${action}`;
     const body = path ? JSON.stringify({ path }) : '{}';
-    await fetch(url, {
+    const resp = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body,
     });
-    // Reload the review tab to reflect the change.
-    window.location.reload();
+    if (resp.ok) {
+        markDirty();
+        btn.closest('[data-proposal-id]')?.remove();
+    }
 });
 ```
 
-**Note:** Check the existing handler pattern — if Phase 1 used a different event pattern (e.g., Datastar attributes), match it rather than using raw fetch.
+`markDirty()` signals the ledger summary to refresh; card removal keeps the list snappy without a full page reload. This matches the Phase 1 pattern for `new`/`ended` proposals.
 
 - [ ] **Step 6: Regenerate compiled template**
 
