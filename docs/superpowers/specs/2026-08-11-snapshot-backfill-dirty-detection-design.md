@@ -70,7 +70,17 @@ dirty_from = entry.start_date  (always)
 
 A config change to conditions, period_days, start_date, or end_date affects all historical rate computations for that entry — including dates that already have snapshot rows. Recomputing only from the last snapshot would leave earlier snapshots stale. Source C always recomputes the full entry history.
 
+**Dirty range upper bound (`dirty_to`):**
+
+```text
+dirty_to = entry.end_date   if end_date is set AND end_date <= computed_as_of
+dirty_to = computed_as_of   if end_date is null OR end_date > computed_as_of
+```
+
+The full dirty range for a touched entry is `[dirty_from, dirty_to]`. No snapshots are produced outside this range — snapshots after `end_date` are never written, and snapshots before `dirty_from` are left untouched.
+
 When an entry appears in multiple touch sources, the earliest `dirty_from` across all sources wins:
+
 ```rust
 dirty_entry_starts.entry(entry_id)
     .and_modify(|d| *d = (*d).min(dirty_from))
