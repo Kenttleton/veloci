@@ -89,14 +89,25 @@ func (s *Store) DeleteTransactions(ctx context.Context, entityID string, ids []s
 		}
 		placeholders += fmt.Sprintf("$%d::uuid", i+2)
 	}
-	tag, err := s.pool.Exec(ctx, fmt.Sprintf(`
-		DELETE FROM transactions
-		WHERE entity_id = $1 AND id IN (%s)
-	`, placeholders), uuids...)
-	if err != nil {
-		return 0, err
-	}
-	return tag.RowsAffected(), nil
+	// Delta subtraction avoids the CTE snapshot issue (a subquery back into
+	// transactions would still see deleted rows in the same statement snapshot).
+	var n int64
+	err := s.pool.QueryRow(ctx, fmt.Sprintf(`
+		WITH deleted AS (
+			DELETE FROM transactions
+			WHERE entity_id = $1 AND id IN (%s)
+			RETURNING account_id, amount_cents
+		), upd AS (
+			UPDATE accounts
+			SET balance_cents = balance_cents - (
+				SELECT COALESCE(SUM(d.amount_cents), 0) FROM deleted d WHERE d.account_id = accounts.id
+			)
+			WHERE entity_id = $1
+			  AND id IN (SELECT DISTINCT account_id FROM deleted)
+		)
+		SELECT count(*) FROM deleted
+	`, placeholders), uuids...).Scan(&n)
+	return n, err
 }
 
 // ListTransactions returns a paginated list of transactions for an entity ordered by date DESC.

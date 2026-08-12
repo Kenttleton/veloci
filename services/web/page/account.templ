@@ -930,6 +930,7 @@ templ AccountPage(shell ShellData, data AccountData) {
 							deleteSelBtn.style.display = 'none';
 							deleteSelBtn.disabled      = false;
 							deleteSelBtn.textContent   = 'Delete selected';
+							if (window.__velociTxRefresh) window.__velociTxRefresh();
 						})
 						.catch(function(err) {
 							alert(err.message || 'Delete failed. Please try again.');

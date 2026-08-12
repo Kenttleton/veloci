@@ -244,9 +244,10 @@ func (h *JobsHandler) StreamJobs(c echo.Context) error {
 		}
 
 		if event.JobType == "import.process" && event.Status == "complete" {
-			go func(jobID string) { //nolint:errcheck
-				h.s.RecalculateBalanceForJob(context.Background(), entityID, jobID)
-			}(event.JobID)
+			// Recalculate synchronously before flushing the SSE event: the client
+			// calls __velociTxRefresh immediately on receipt, so the balance must
+			// be up to date in the DB before that GET lands.
+			h.s.RecalculateBalanceForJob(context.Background(), entityID, event.JobID) //nolint:errcheck
 		}
 
 		b, _ := json.Marshal(event)
