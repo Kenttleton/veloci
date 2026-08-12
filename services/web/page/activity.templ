@@ -44,6 +44,25 @@ templ ActivityPage(shell ShellData, data ActivityData) {
 				}
 			</div>
 		</div>
+		<script>
+			(function () {
+				var now = new Date();
+				var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+				var yesterdayStart = new Date(+todayStart - 86400000);
+				document.querySelectorAll('time[data-fmt="activity"]').forEach(function (el) {
+					var d = new Date(el.getAttribute('datetime'));
+					var dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+					var timeStr = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+					if (+dayStart >= +todayStart) {
+						el.textContent = timeStr;
+					} else if (+dayStart >= +yesterdayStart) {
+						el.textContent = 'Yesterday · ' + timeStr;
+					} else {
+						el.textContent = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' · ' + timeStr;
+					}
+				});
+			})();
+		</script>
 	}
 }
 
@@ -62,9 +81,13 @@ templ jobCard(job store.ProcessingJob, isTarget bool) {
 						<span style="font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
 							{ jobTypeLabel(job.JobType) }
 						</span>
-						<span style="font-size:11px;color:var(--text3);flex-shrink:0">
-							{ formatJobTimestamp(job.QueuedAt) }
-						</span>
+						<time
+							datetime={ job.QueuedAt.UTC().Format(time.RFC3339) }
+							data-fmt="activity"
+							style="font-size:11px;color:var(--text3);flex-shrink:0"
+						>
+							{ job.QueuedAt.UTC().Format("Jan 2 · 3:04 PM") } UTC
+						</time>
 					</div>
 					<div style="font-size:12px;color:var(--text3);margin-top:1px">
 						Triggered by { job.TriggeredBy }
@@ -140,22 +163,6 @@ func jobTypeLabel(jobType string) string {
 	}
 }
 
-func formatJobTimestamp(t time.Time) string {
-	now := time.Now()
-	today := now.Truncate(24 * time.Hour)
-	yesterday := today.Add(-24 * time.Hour)
-	ts := t.Local()
-	timeStr := ts.Format("3:04 PM")
-	day := ts.Truncate(24 * time.Hour)
-	switch {
-	case day.Equal(today):
-		return timeStr
-	case day.Equal(yesterday):
-		return "Yesterday · " + timeStr
-	default:
-		return ts.Format("Jan 2") + " · " + timeStr
-	}
-}
 
 type jobMeta struct {
 	TransactionsImported   *int `json:"transactions_imported"`
