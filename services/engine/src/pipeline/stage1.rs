@@ -638,10 +638,26 @@ pub async fn run(entity_id: Uuid, pool: &PgPool) -> Result<Stage1Output> {
     // user-created and system entries reflect current assignment state.
     update_live_entry_stats(entity_id, pool).await?;
 
+    let txn_dates: std::collections::HashMap<Uuid, NaiveDate> =
+        txns.iter().map(|t| (t.id, t.date)).collect();
+
+    let new_entry_assignments: Vec<(Uuid, NaiveDate)> = {
+        let mut seen = std::collections::HashSet::new();
+        results
+            .iter()
+            .flat_map(|(txn_id, matched_entries, _)| {
+                let date = *txn_dates.get(txn_id)
+                    .unwrap_or(&NaiveDate::from_ymd_opt(1970, 1, 1).unwrap());
+                matched_entries.iter().map(move |(entry_id, _)| (*entry_id, date))
+            })
+            .filter(|pair| seen.insert(*pair))
+            .collect()
+    };
+
     Ok(Stage1Output {
         total_assignments,
         unmatched_tx_ids,
-        new_entry_assignments: Vec::new(),
+        new_entry_assignments,
     })
 }
 
@@ -2519,6 +2535,44 @@ mod tests {
             CompiledConditionTree::EntryDirection(Direction::Income),
         ]);
         assert!(tree_has_entry_targets(&nested));
+    }
+
+    #[test]
+    fn new_entry_assignments_collected_from_results() {
+        use chrono::NaiveDate;
+        use std::collections::HashMap;
+
+        let txn_a = Uuid::parse_str("aaaaaaaa-0000-0000-0000-000000000000").unwrap();
+        let txn_b = Uuid::parse_str("bbbbbbbb-0000-0000-0000-000000000000").unwrap();
+        let entry_1 = Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
+        let entry_2 = Uuid::parse_str("00000000-0000-0000-0000-000000000002").unwrap();
+
+        let date_a = NaiveDate::from_ymd_opt(2025, 3, 15).unwrap();
+        let date_b = NaiveDate::from_ymd_opt(2025, 6, 1).unwrap();
+
+        let results: Vec<(Uuid, Vec<(Uuid, f64)>, bool)> = vec![
+            (txn_a, vec![(entry_1, 1.0)], false),
+            (txn_b, vec![(entry_1, 0.9), (entry_2, 1.0)], false),
+        ];
+
+        let txn_dates: HashMap<Uuid, NaiveDate> = [
+            (txn_a, date_a),
+            (txn_b, date_b),
+        ].into_iter().collect();
+
+        let mut seen = std::collections::HashSet::new();
+        let assignments: Vec<(Uuid, NaiveDate)> = results.iter()
+            .flat_map(|(txn_id, matched, _)| {
+                let date = *txn_dates.get(txn_id).unwrap();
+                matched.iter().map(move |(entry_id, _)| (*entry_id, date))
+            })
+            .filter(|pair| seen.insert(*pair))
+            .collect();
+
+        assert_eq!(assignments.len(), 3);
+        assert!(assignments.contains(&(entry_1, date_a)));
+        assert!(assignments.contains(&(entry_1, date_b)));
+        assert!(assignments.contains(&(entry_2, date_b)));
     }
 }
 
