@@ -313,7 +313,7 @@ templ budgetStackBody(data BudgetData) {
 		<div style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;width:148px">Entry / type</div>
 		<div style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;flex:1">Track</div>
 		<div style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;width:80px;text-align:right">Actual</div>
-		<div style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;width:72px;text-align:right">Drift</div>
+		<div style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;width:100px;text-align:right">Drift</div>
 	</div>
 	<!-- Income anchor -->
 	if len(data.Income) > 0 {
@@ -332,7 +332,7 @@ templ budgetStackBody(data BudgetData) {
 					data-fmt-yr={ fmtRateYr(&data.TotalIncomeRate) }
 				>{ fmtRateDay(&data.TotalIncomeRate) }</span>
 			</div>
-			<div style="width:72px;text-align:right;color:var(--text3);font-size:12px">—</div>
+			<div style="width:100px;text-align:right;color:var(--text3);font-size:12px">—</div>
 		</div>
 	}
 	<!-- Spend label groups -->
@@ -357,7 +357,7 @@ templ budgetStackBody(data BudgetData) {
 				data-fmt-yr={ fmtRateYrSigned(&data.MarginRate) }
 			>{ fmtRateDaySigned(&data.MarginRate) }</span>
 		</div>
-		<div style="width:72px;text-align:right;font-size:12px">
+		<div style="width:100px;text-align:right;font-size:12px;white-space:nowrap">
 			<span
 				data-fmt-day={ fmtRateDaySigned(&data.Summary.DriftRate) }
 				data-fmt-mo={ fmtRateMoSigned(&data.Summary.DriftRate) }
@@ -394,7 +394,7 @@ templ budgetLabelGroupRow(group BudgetGroup, totalIncomePerDay float64) {
 				data-fmt-yr={ fmtRateYr(&group.ActualRatePerDay) }
 			>{ fmtRateDay(&group.ActualRatePerDay) }</span>
 		</div>
-		<div style="width:72px;text-align:right;font-size:12px">
+		<div style="width:100px;text-align:right;font-size:12px;white-space:nowrap">
 			<span
 				data-fmt-day={ fmtRateDaySigned(&group.DriftPerDay) }
 				data-fmt-mo={ fmtRateMoSigned(&group.DriftPerDay) }
@@ -433,7 +433,7 @@ templ budgetEntryDetailRow(e store.EntryRow, labelKey string, totalIncomePerDay 
 				<span style="color:var(--text3)">—</span>
 			}
 		</div>
-		<div style="width:72px;text-align:right;font-size:12px">
+		<div style="width:100px;text-align:right;font-size:12px;white-space:nowrap">
 			if e.SnapshotDriftPerDay != nil {
 				<span
 					data-fmt-day={ fmtRateDaySigned(e.SnapshotDriftPerDay) }
