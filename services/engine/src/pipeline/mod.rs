@@ -268,6 +268,12 @@ async fn run_stage7(
 #[cfg(test)]
 mod tests {
     use super::*;
-    // Verify DirtyDetectionInput is accessible from this module.
-    fn _check_dirty_input_type(_: dirty::DirtyDetectionInput) {}
+
+    #[test]
+    fn dirty_detection_input_constructible() {
+        let _ = dirty::DirtyDetectionInput {
+            superseded_entry_ids:  vec![],
+            new_entry_assignments: vec![],
+        };
+    }
 }
