@@ -140,12 +140,24 @@ templ jobStream() {
 			var running = {};
 			var backoff = 1000;
 
+			// ── Label cache ───────────────────────────────────────────────────────
+			var _labelCache = {};
+			function resolveLabel(id, cb) {
+				if (_labelCache[id]) { cb(_labelCache[id]); return; }
+				fetch('/api/labels/' + id, { credentials: 'same-origin' })
+					.then(function(r) { return r.ok ? r.json() : null; })
+					.then(function(body) {
+						var name = body && body.data && body.data.name;
+						if (name) { _labelCache[id] = name; cb(name); }
+					})
+					.catch(function() {});
+			}
+
 			function syncDot() {
 				var el = document.getElementById('activity-dot');
 				if (!el) return;
 				var jobs = Object.values(running);
 				el.style.display = jobs.length > 0 ? '' : 'none';
-				// Show the most recent stage label as a tooltip on the activity dot.
 				var label = '';
 				for (var i = 0; i < jobs.length; i++) {
 					if (jobs[i].stage_label) { label = jobs[i].stage_label; break; }
@@ -186,8 +198,19 @@ templ jobStream() {
 				if (evt.status === 'complete' && TX_JOBS[evt.job_type]) {
 					refreshTransactions();
 				}
-				// Broadcast to any page that wants to react to job events.
-				document.dispatchEvent(new CustomEvent('veloci:job', { detail: evt }));
+
+				// Resolve label_id → name, then broadcast so page consumers get
+				// stage_label populated (activity page, etc.).
+				if (evt.label_id) {
+					resolveLabel(evt.label_id, function(name) {
+						evt.stage_label = name;
+						if (running[evt.job_id]) { running[evt.job_id].stage_label = name; }
+						syncDot();
+						document.dispatchEvent(new CustomEvent('veloci:job', { detail: evt }));
+					});
+				} else {
+					document.dispatchEvent(new CustomEvent('veloci:job', { detail: evt }));
+				}
 			}
 
 			function connect() {

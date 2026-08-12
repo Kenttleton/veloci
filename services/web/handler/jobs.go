@@ -170,16 +170,15 @@ func (h *JobsHandler) TriggerProject(c echo.Context) error {
 }
 
 // sseJobEvent is the payload sent over the SSE channel.
-// Stage-progress events (emitted mid-pipeline by the engine) carry Stage and
-// LabelID. Status-change events (from the Postgres trigger) carry Error.
+// Stage-progress events carry Stage and LabelID (UUID); the UI resolves the
+// display name via GET /api/labels/:id. Status-change events carry Error.
 type sseJobEvent struct {
-	JobID      string  `json:"job_id"`
-	JobType    string  `json:"job_type"`
-	Status     string  `json:"status"`
-	Error      *string `json:"error,omitempty"`
-	Stage      *int    `json:"stage,omitempty"`
-	StageLabel *string `json:"stage_label,omitempty"`
-	LabelID    *string `json:"label_id,omitempty"`
+	JobID   string  `json:"job_id"`
+	JobType string  `json:"job_type"`
+	Status  string  `json:"status"`
+	Error   *string `json:"error,omitempty"`
+	Stage   *int    `json:"stage,omitempty"`
+	LabelID *string `json:"label_id,omitempty"`
 }
 
 // StreamJobs streams job state changes as Server-Sent Events.
@@ -248,16 +247,10 @@ func (h *JobsHandler) StreamJobs(c echo.Context) error {
 			continue
 		}
 
-		// Stage-progress notification: resolve the label UUID → display name.
-		if event.Stage != nil && event.LabelID != nil {
-			if label, err := h.s.GetLabel(ctx, entityID, *event.LabelID); err == nil {
-				event.StageLabel = &label.Name
-			}
-			// Stage 0 means transactions are written — recalculate balance now so
-			// the account page sees a fresh total when it refreshes.
-			if *event.Stage == 0 && event.JobType == "import.process" {
-				h.s.RecalculateBalanceForJob(context.Background(), entityID, event.JobID) //nolint:errcheck
-			}
+		// Stage-progress notification: trigger early balance recalc on stage 0
+		// so the account page sees a fresh total when it refreshes.
+		if event.Stage != nil && *event.Stage == 0 && event.JobType == "import.process" {
+			h.s.RecalculateBalanceForJob(context.Background(), entityID, event.JobID) //nolint:errcheck
 		}
 
 		// On final completion keep the recalc as a safety net (handles jobs that
