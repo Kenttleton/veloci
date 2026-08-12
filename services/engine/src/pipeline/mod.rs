@@ -22,6 +22,7 @@
 //!   6 — Snapshot UPSERT into `snapshots`
 //!   7 — Cash flow projection into `projections`; raises drift/ended alerts on entries for missed expectations
 
+pub mod dirty;
 pub mod stage0;
 pub mod stage1;
 pub mod stage2;
