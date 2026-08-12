@@ -109,6 +109,24 @@ pub async fn run(
     .await
     .context("failed to record import batch")?;
 
+    let supersede_tx_ids: Vec<Uuid> = classified
+        .iter()
+        .filter_map(|c| if let DedupAction::Supersede(id) = c.action { Some(id) } else { None })
+        .collect();
+
+    let superseded_entry_ids: Vec<Uuid> = if !supersede_tx_ids.is_empty() {
+        let rows: Vec<(Uuid,)> = sqlx::query_as(
+            "SELECT DISTINCT entry_id FROM transaction_entry_assignments WHERE transaction_id = ANY($1)",
+        )
+        .bind(&supersede_tx_ids)
+        .fetch_all(&pools.read)
+        .await
+        .context("failed to query entry assignments for superseded transactions")?;
+        rows.into_iter().map(|(id,)| id).collect()
+    } else {
+        Vec::new()
+    };
+
     // Batch INSERT accepted candidates (sequential — no partial writes).
     batch_insert(
         entity_id,
@@ -128,7 +146,7 @@ pub async fn run(
         computed_as_of,
         imported_count,
         skipped_count,
-        superseded_entry_ids: Vec::new(),
+        superseded_entry_ids,
     })
 }
 
@@ -1113,6 +1131,57 @@ mod tests {
     fn parse_date_invalid_errors() {
         assert!(parse_date("not-a-date").is_err());
         assert!(parse_date("").is_err());
+    }
+
+    #[test]
+    fn supersede_ids_extracted_from_classified() {
+        let id1 = Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
+        let id2 = Uuid::parse_str("00000000-0000-0000-0000-000000000002").unwrap();
+
+        let classified = vec![
+            ClassifiedCandidate {
+                candidate: Candidate {
+                    date:                NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+                    amount_cents:        -1000,
+                    imported_payee:      "Netflix".into(),
+                    merchant_normalized: "Netflix".into(),
+                    imported_id:         None,
+                },
+                action:            DedupAction::Supersede(id1),
+                settlement_status: "flux",
+            },
+            ClassifiedCandidate {
+                candidate: Candidate {
+                    date:                NaiveDate::from_ymd_opt(2025, 1, 2).unwrap(),
+                    amount_cents:        -500,
+                    imported_payee:      "Spotify".into(),
+                    merchant_normalized: "Spotify".into(),
+                    imported_id:         None,
+                },
+                action:            DedupAction::Insert,
+                settlement_status: "settled",
+            },
+            ClassifiedCandidate {
+                candidate: Candidate {
+                    date:                NaiveDate::from_ymd_opt(2025, 1, 3).unwrap(),
+                    amount_cents:        -200,
+                    imported_payee:      "Hulu".into(),
+                    merchant_normalized: "Hulu".into(),
+                    imported_id:         None,
+                },
+                action:            DedupAction::Supersede(id2),
+                settlement_status: "flux",
+            },
+        ];
+
+        let supersede_ids: Vec<Uuid> = classified
+            .iter()
+            .filter_map(|c| if let DedupAction::Supersede(id) = c.action { Some(id) } else { None })
+            .collect();
+
+        assert_eq!(supersede_ids.len(), 2);
+        assert!(supersede_ids.contains(&id1));
+        assert!(supersede_ids.contains(&id2));
     }
 
     // Spec §13 point 8: amount_cents sign convention
