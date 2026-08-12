@@ -128,6 +128,7 @@ pub async fn run(
         computed_as_of,
         imported_count,
         skipped_count,
+        superseded_entry_ids: Vec::new(),
     })
 }
 

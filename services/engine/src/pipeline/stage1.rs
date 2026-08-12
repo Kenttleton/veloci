@@ -641,6 +641,7 @@ pub async fn run(entity_id: Uuid, pool: &PgPool) -> Result<Stage1Output> {
     Ok(Stage1Output {
         total_assignments,
         unmatched_tx_ids,
+        new_entry_assignments: Vec::new(),
     })
 }
 

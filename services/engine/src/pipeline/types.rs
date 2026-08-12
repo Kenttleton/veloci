@@ -160,9 +160,12 @@ pub struct SnapshotRow {
 #[derive(Debug, Clone)]
 pub struct Stage0Output {
     /// The `MAX(date)` from transactions — used as the flux window anchor.
-    pub computed_as_of: NaiveDate,
-    pub imported_count: u32,
-    pub skipped_count:  u32,
+    pub computed_as_of:       NaiveDate,
+    pub imported_count:       u32,
+    pub skipped_count:        u32,
+    /// Entry IDs whose assignments were about to be removed by a supersede DELETE.
+    /// Captured by Stage 0 before the DELETE executes.
+    pub superseded_entry_ids: Vec<Uuid>,
 }
 
 /// Output from Stage 1.
@@ -171,6 +174,9 @@ pub struct Stage1Output {
     pub total_assignments: u64,
     /// UUIDs of transactions that matched no entry — passed to Stage 2.
     pub unmatched_tx_ids:  Vec<Uuid>,
+    /// (entry_id, txn_date) for every entry that received at least one assignment.
+    /// Dates are for diagnostics only — dirty_from is computed from last snapshot, not tx date.
+    pub new_entry_assignments: Vec<(Uuid, NaiveDate)>,
 }
 
 /// Output from Stage 2.
@@ -279,5 +285,27 @@ mod tests {
         assert_eq!(NodeType::from_str("label"), Some(NodeType::Label));
         assert_eq!(NodeType::from_str("rule"),           None);
         assert_eq!(NodeType::from_str("classification"), None);
+    }
+
+    #[test]
+    fn stage0_output_has_superseded_entry_ids() {
+        use chrono::NaiveDate;
+        let out = Stage0Output {
+            computed_as_of:       NaiveDate::from_ymd_opt(2025, 12, 31).unwrap(),
+            imported_count:       1,
+            skipped_count:        0,
+            superseded_entry_ids: vec![Uuid::nil()],
+        };
+        assert_eq!(out.superseded_entry_ids.len(), 1);
+    }
+
+    #[test]
+    fn stage1_output_has_new_entry_assignments() {
+        let out = Stage1Output {
+            total_assignments:     1,
+            unmatched_tx_ids:      vec![],
+            new_entry_assignments: vec![(Uuid::nil(), chrono::NaiveDate::from_ymd_opt(2025, 6, 1).unwrap())],
+        };
+        assert_eq!(out.new_entry_assignments.len(), 1);
     }
 }
