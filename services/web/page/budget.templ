@@ -176,8 +176,9 @@ templ BudgetPage(shell ShellData, data BudgetData) {
 					loadHistory(allEntryId, null);
 				}
 
-				// Sync button state and display to persisted gran on load
-				applyGran(activeGran);
+				// Sync chart gran and rate display to persisted gran on load
+				if (chart) chart.setGranularity(activeGran);
+				updateRateDisplays();
 			})();
 		</script>
 	}

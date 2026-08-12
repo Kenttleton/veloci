@@ -270,7 +270,7 @@
     function onDown(cx) { self._drag = { sx: cx, sp: self._panOffset }; self._dragDist = 0; }
     function onMove(cx) {
       if (!self._drag) return;
-      var dx = self._drag.sx - cx;  // positive = drag left = older data
+      var dx = cx - self._drag.sx;  // positive = drag right = older data (natural pan)
       self._dragDist = Math.abs(dx);
       var cW = self.w - self.o.padLeft - self.o.padRight;
       var activeCellW = Math.max(4, Math.floor(cW / self._windowSize()));
