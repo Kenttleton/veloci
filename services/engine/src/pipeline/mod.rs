@@ -68,9 +68,7 @@ pub async fn run_import(
 ) -> Result<()> {
     tracing::info!(%entity_id, %job_id, %pending_import_id, "import.process starting");
 
-    // Stage 0: CSV normalization + dedup → transactions
     let stage0_out = stage0::run(entity_id, job_id, pending_import_id, pools).await?;
-
     tracing::info!(%entity_id, imported = stage0_out.imported_count, skipped = stage0_out.skipped_count, computed_as_of = %stage0_out.computed_as_of, "stage 0 complete");
 
     if stage0_out.imported_count == 0 {
@@ -78,8 +76,18 @@ pub async fn run_import(
         return Ok(());
     }
 
-    // Stages 1–7 share the same computed_as_of horizon from Stage 0.
-    run_from_stage1(entity_id, job_id, stage0_out.computed_as_of, pools).await
+    let stage1_out = stage1::run(entity_id, &pools.read).await?;
+    tracing::info!(%entity_id, assignments = stage1_out.total_assignments, unmatched = stage1_out.unmatched_tx_ids.len(), "stage 1 complete");
+
+    let stage2_out = stage2::run(entity_id, &stage1_out.unmatched_tx_ids, &pools.read).await?;
+    tracing::info!(%entity_id, clusters = stage2_out.clusters_created, "stage 2 complete");
+
+    let dirty_input = dirty::DirtyDetectionInput {
+        superseded_entry_ids:  stage0_out.superseded_entry_ids,
+        new_entry_assignments: stage1_out.new_entry_assignments,
+    };
+
+    run_from_stage3(entity_id, job_id, stage0_out.computed_as_of, Some(dirty_input), pools).await
 }
 
 /// Run stages 1 → 7 for an `entries.reprocess` job.
@@ -94,7 +102,15 @@ pub async fn run_entries_reprocess(
     tracing::info!(%entity_id, %job_id, "entries.reprocess starting");
 
     let computed_as_of = stage0::query_computed_as_of(entity_id, &pools.read).await?;
-    run_from_stage1(entity_id, job_id, computed_as_of, pools).await
+
+    let stage1_out = stage1::run(entity_id, &pools.read).await?;
+    tracing::info!(%entity_id, assignments = stage1_out.total_assignments, "stage 1 complete");
+
+    let stage2_out = stage2::run(entity_id, &stage1_out.unmatched_tx_ids, &pools.read).await?;
+    tracing::info!(%entity_id, clusters = stage2_out.clusters_created, "stage 2 complete");
+
+    // Bypass dirty detection — full re-run from history_start.
+    run_from_stage3(entity_id, job_id, computed_as_of, None, pools).await
 }
 
 /// Run stages 3 → 7 for an `account.analyze` job.
@@ -108,9 +124,8 @@ pub async fn run_account_analyze(
     pools: &Pools,
 ) -> Result<()> {
     tracing::info!(%entity_id, %job_id, "account.analyze starting");
-
     let computed_as_of = stage0::query_computed_as_of(entity_id, &pools.read).await?;
-    run_from_stage3(entity_id, job_id, computed_as_of, pools).await
+    run_from_stage3(entity_id, job_id, computed_as_of, None, pools).await
 }
 
 /// Run stage 7 only for a `balance.project` job.
@@ -132,51 +147,62 @@ pub async fn run_balance_project(
 // Internal stage chains
 // ---------------------------------------------------------------------------
 
-/// Run stages 1 → 7.
-async fn run_from_stage1(
-    entity_id: Uuid,
-    job_id: Uuid,
-    computed_as_of: chrono::NaiveDate,
-    pools: &Pools,
-) -> Result<()> {
-    // Stage 1: Entry matching → transaction_entry_assignments
-    let stage1_out = stage1::run(entity_id, &pools.read).await?;
-    tracing::info!(%entity_id, assignments = stage1_out.total_assignments, unmatched = stage1_out.unmatched_tx_ids.len(), "stage 1 complete");
-
-    // Stage 2: Pattern detection on unmatched transactions → pending_review entries
-    let stage2_out = stage2::run(entity_id, &stage1_out.unmatched_tx_ids, &pools.read).await?;
-    tracing::info!(%entity_id, clusters = stage2_out.clusters_created, "stage 2 complete");
-
-    run_from_stage3(entity_id, job_id, computed_as_of, pools).await
-}
-
 /// Run stages 3 → 7.
 async fn run_from_stage3(
-    entity_id: Uuid,
-    job_id: Uuid,
+    entity_id:      Uuid,
+    job_id:         Uuid,
     computed_as_of: chrono::NaiveDate,
-    pools: &Pools,
+    dirty_input:    Option<dirty::DirtyDetectionInput>,
+    pools:          &Pools,
 ) -> Result<()> {
     use crate::pipeline::types::SettlementConfig;
 
-    // Fetch settlement window for the flux day-crawl.
     let settlement_cfg = SettlementConfig::query(entity_id, &pools.read).await?;
+    let flux_start = computed_as_of
+        - chrono::Duration::days(i64::from(settlement_cfg.settlement_window_days));
 
-    let flux_start = computed_as_of - chrono::Duration::days(i64::from(settlement_cfg.settlement_window_days));
+    // Build dirty context — either from import touch sources or full bypass.
+    let dirty_ctx = match dirty_input {
+        Some(ref input) => {
+            dirty::DirtyContext::from_import(
+                entity_id,
+                computed_as_of,
+                flux_start,
+                input,
+                &pools.read,
+            )
+            .await?
+        }
+        None => {
+            let entries       = dirty::query_entries(entity_id, &pools.read).await?;
+            let history_start = dirty::query_history_start(entity_id, &pools.read).await?;
+            dirty::DirtyContext::full_rerun(entries, history_start, computed_as_of)
+        }
+    };
 
-    tracing::info!(%entity_id, %flux_start, %computed_as_of, window_days = settlement_cfg.settlement_window_days, "beginning flux window day-crawl");
+    tracing::info!(
+        %entity_id,
+        crawl_start    = %dirty_ctx.crawl_start,
+        %computed_as_of,
+        bypass         = dirty_ctx.bypass_mode,
+        "beginning day-crawl"
+    );
 
-    // Day-crawl: Stages 3–6 run once per calendar day in the flux window.
-    // Stage 7 runs once at the end with the final computed_as_of.
-    let mut snapshot_date = flux_start;
+    let mut snapshot_date = dirty_ctx.crawl_start;
     while snapshot_date <= computed_as_of {
-        // Stage 3: Rate computation per active entry
-        let stage3_out = stage3::run(entity_id, snapshot_date, &pools.read).await?;
+        let dirty_entry_ids = dirty_ctx.dirty_entry_ids_for_date(snapshot_date, flux_start);
 
-        // Stage 4: Label rate aggregation from entry rates
-        let stage4_out = stage4::run(entity_id, &stage3_out.entry_rates, &pools.read).await?;
+        if dirty_entry_ids.is_empty() {
+            snapshot_date += chrono::Duration::days(1);
+            continue;
+        }
 
-        // Stage 5: Slope + drift
+        let stage3_out =
+            stage3::run(entity_id, snapshot_date, &dirty_entry_ids, &pools.read).await?;
+
+        let stage4_out =
+            stage4::run(entity_id, &stage3_out.entry_rates, &pools.read).await?;
+
         let stage5_out = stage5::run(
             entity_id,
             snapshot_date,
@@ -187,7 +213,6 @@ async fn run_from_stage3(
         )
         .await?;
 
-        // Stage 6: Atomic snapshot UPSERT (write pool)
         stage6::run(
             entity_id,
             job_id,
@@ -203,11 +228,8 @@ async fn run_from_stage3(
         snapshot_date += chrono::Duration::days(1);
     }
 
-    tracing::info!(%entity_id, "flux window day-crawl complete");
+    tracing::info!(%entity_id, "day-crawl complete");
 
-    // Sync projected_rate_per_day back to system entries from their latest snapshot.
-    // User-created entries keep their manually set projection; system entries
-    // (Income, Spend) derive their rate from actual matched transactions.
     sqlx::query(
         r#"
         UPDATE entries e
@@ -229,7 +251,6 @@ async fn run_from_stage3(
     .await
     .context("failed to sync projected_rate for system entries")?;
 
-    // Stage 7: Cash flow projection (write pool for final INSERT)
     run_stage7(entity_id, job_id, computed_as_of, pools).await
 }
 
@@ -242,4 +263,11 @@ async fn run_stage7(
     stage7::run(entity_id, job_id, computed_as_of, pools).await?;
     tracing::info!(%entity_id, %job_id, "pipeline complete");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    // Verify DirtyDetectionInput is accessible from this module.
+    fn _check_dirty_input_type(_: dirty::DirtyDetectionInput) {}
 }
