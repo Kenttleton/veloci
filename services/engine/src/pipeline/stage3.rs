@@ -1,18 +1,16 @@
-//! Stage 3: Rate computation per active entry (day-crawl).
+//! Stage 3: Rate computation per dirty entry (day-crawl).
 //!
-//! **Input:** `transaction_entry_assignments` joined to `entries WHERE status = 'live'`
-//! and `end_date IS NULL`.
+//! **Input:** `dirty_entry_ids` from the dirty-detection pass; queries
+//! `transaction_entry_assignments` joined to those specific entries only.
 //!
 //! **Output:** Per-entry `EntryRate` structs containing actual_rate, projected_rate,
 //! window_days_used, and rolling_window_total_cents.
 //!
 //! ## Algorithm
 //!
-//! 1. Load all live entries (status='active', end_date IS NULL, no epoch join).
-//! 2. Load all relevant transaction assignments scoped by `entries.start_date`
-//!    and `snapshot_date` for the flux window day-crawl.
-//! 3. `rayon::par_iter` over live entries — each entry's rate is computed
-//!    independently from its own transaction data.
+//! 1. Load dirty entries by ID (no status/end_date filter — supports ended entries).
+//! 2. Load transaction assignments scoped to dirty entry IDs and `snapshot_date`.
+//! 3. `rayon::par_iter` over entries — each rate is computed independently.
 //!
 //! This stage is read-only with respect to entry metadata. `next_due_date` is
 //! maintained by Stage 1 (live entries) and Stage 2 (new detections).
@@ -60,14 +58,15 @@ pub(crate) struct AssignedTxn {
 /// Only transactions where `date <= snapshot_date` and `date >= entry.start_date`
 /// are included — this is the flux window day-crawl anchor.
 pub async fn run(
-    entity_id: Uuid,
-    snapshot_date: NaiveDate,
-    pool: &PgPool,
+    entity_id:       Uuid,
+    snapshot_date:   NaiveDate,
+    dirty_entry_ids: &[Uuid],
+    pool:            &PgPool,
 ) -> Result<Stage3Output> {
     let system_window_days = load_system_window_days(entity_id, pool).await?;
-    let entries = load_active_entries(entity_id, pool).await?;
-    let txns = load_assigned_txns(entity_id, snapshot_date, pool).await?;
-    let prior_rates = load_prior_snapshot_rates(entity_id, snapshot_date, pool).await?;
+    let entries     = load_entries_by_ids(entity_id, dirty_entry_ids, pool).await?;
+    let txns        = load_assigned_txns(entity_id, snapshot_date, dirty_entry_ids, pool).await?;
+    let prior_rates = load_prior_snapshot_rates(entity_id, snapshot_date, dirty_entry_ids, pool).await?;
 
     // Index transactions by entry_id for O(1) lookup during par_iter.
     let txns_by_entry: std::collections::HashMap<Uuid, Vec<&AssignedTxn>> = {
@@ -225,7 +224,15 @@ fn max_rate(txns: &[&AssignedTxn], period_days: i32) -> f64 {
 // DB loaders
 // ---------------------------------------------------------------------------
 
-async fn load_active_entries(entity_id: Uuid, pool: &PgPool) -> Result<Vec<ActiveEntry>> {
+async fn load_entries_by_ids(
+    entity_id:       Uuid,
+    dirty_entry_ids: &[Uuid],
+    pool:            &PgPool,
+) -> Result<Vec<ActiveEntry>> {
+    if dirty_entry_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
     #[derive(sqlx::FromRow)]
     struct Row {
         id:                     Uuid,
@@ -245,30 +252,27 @@ async fn load_active_entries(entity_id: Uuid, pool: &PgPool) -> Result<Vec<Activ
                rate_method, projected_rate_per_day, start_date
         FROM entries
         WHERE entity_id = $1
-          AND status = 'live'
-          AND end_date IS NULL
+          AND id = ANY($2)
         "#,
     )
     .bind(entity_id)
+    .bind(dirty_entry_ids)
     .fetch_all(pool)
     .await
-    .context("failed to load live entries for stage 3")?;
+    .context("failed to load dirty entries for stage 3")?;
 
-    Ok(rows
-        .into_iter()
-        .map(|r| ActiveEntry {
-            id:                     r.id,
-            label_id:               r.label_id,
-            direction:              r.direction,
-            entry_type:             r.entry_type,
-            source:                 r.source,
-            period_days:            r.period_days,
-            rate_method:            r.rate_method,
-            projected_rate_per_day: r.projected_rate_per_day
-                .and_then(|v| v.to_string().parse::<f64>().ok()),
-            start_date:             r.start_date,
-        })
-        .collect())
+    Ok(rows.into_iter().map(|r| ActiveEntry {
+        id:                     r.id,
+        label_id:               r.label_id,
+        direction:              r.direction,
+        entry_type:             r.entry_type,
+        source:                 r.source,
+        period_days:            r.period_days,
+        rate_method:            r.rate_method,
+        projected_rate_per_day: r.projected_rate_per_day
+            .and_then(|v| v.to_string().parse::<f64>().ok()),
+        start_date:             r.start_date,
+    }).collect())
 }
 
 async fn load_system_window_days(entity_id: Uuid, pool: &PgPool) -> Result<i32> {
@@ -284,10 +288,15 @@ async fn load_system_window_days(entity_id: Uuid, pool: &PgPool) -> Result<i32> 
 }
 
 async fn load_assigned_txns(
-    entity_id: Uuid,
-    snapshot_date: NaiveDate,
-    pool: &PgPool,
+    entity_id:       Uuid,
+    snapshot_date:   NaiveDate,
+    dirty_entry_ids: &[Uuid],
+    pool:            &PgPool,
 ) -> Result<Vec<AssignedTxn>> {
+    if dirty_entry_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
     #[derive(sqlx::FromRow)]
     struct Row {
         entry_id:     Uuid,
@@ -302,33 +311,35 @@ async fn load_assigned_txns(
         JOIN transactions t ON t.id = tea.transaction_id
         JOIN entries e ON e.id = tea.entry_id
         WHERE t.entity_id = $1
-          AND e.status = 'live'
+          AND tea.entry_id = ANY($3)
           AND t.date <= $2
           AND t.date >= e.start_date
         "#,
     )
     .bind(entity_id)
     .bind(snapshot_date)
+    .bind(dirty_entry_ids)
     .fetch_all(pool)
     .await
     .context("failed to load assigned transactions for stage 3")?;
 
-    Ok(rows
-        .into_iter()
-        .map(|r| AssignedTxn {
-            entry_id:     r.entry_id,
-            txn_date:     r.txn_date,
-            amount_cents: r.amount_cents,
-        })
-        .collect())
+    Ok(rows.into_iter().map(|r| AssignedTxn {
+        entry_id:     r.entry_id,
+        txn_date:     r.txn_date,
+        amount_cents: r.amount_cents,
+    }).collect())
 }
 
-/// Load the most recent prior snapshot rate for each entry — used as projection baseline.
 async fn load_prior_snapshot_rates(
-    entity_id: Uuid,
-    snapshot_date: NaiveDate,
-    pool: &PgPool,
+    entity_id:       Uuid,
+    snapshot_date:   NaiveDate,
+    dirty_entry_ids: &[Uuid],
+    pool:            &PgPool,
 ) -> Result<Vec<(Uuid, f64)>> {
+    if dirty_entry_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
     #[derive(sqlx::FromRow)]
     struct Row {
         node_id:             Uuid,
@@ -343,23 +354,22 @@ async fn load_prior_snapshot_rates(
         FROM snapshots
         WHERE entity_id = $1
           AND node_type = 'entry'
+          AND node_id = ANY($3)
           AND snapshot_date < $2
         ORDER BY node_id, snapshot_date DESC
         "#,
     )
     .bind(entity_id)
     .bind(snapshot_date)
+    .bind(dirty_entry_ids)
     .fetch_all(pool)
     .await
     .context("failed to load prior snapshot rates for stage 3")?;
 
-    Ok(rows
-        .into_iter()
-        .map(|r| {
-            let rate = r.actual_rate_per_day.to_string().parse::<f64>().unwrap_or(0.0);
-            (r.node_id, rate)
-        })
-        .collect())
+    Ok(rows.into_iter().map(|r| {
+        let rate = r.actual_rate_per_day.to_string().parse::<f64>().unwrap_or(0.0);
+        (r.node_id, rate)
+    }).collect())
 }
 
 // ---------------------------------------------------------------------------
@@ -431,5 +441,23 @@ mod tests {
     #[test]
     fn median_rate_empty_returns_zero() {
         assert_eq!(median_rate(&[], 30), 0.0);
+    }
+
+    #[test]
+    fn empty_dirty_entry_ids_produces_empty_rates() {
+        let entry = ActiveEntry {
+            id:                     Uuid::nil(),
+            label_id:               None,
+            direction:              "spend".into(),
+            entry_type:             "standing".into(),
+            source:                 "user".into(),
+            period_days:            Some(30),
+            rate_method:            "median".into(),
+            projected_rate_per_day: None,
+            start_date:             NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+        };
+        let rate = compute_entry_rate(&entry, &[], NaiveDate::from_ymd_opt(2025, 6, 1).unwrap(), None, 90);
+        assert_eq!(rate.transaction_count, 0);
+        assert_eq!(rate.actual_rate_per_day, 0.0);
     }
 }
