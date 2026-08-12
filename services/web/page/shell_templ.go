@@ -190,7 +190,7 @@ func jobStream() templ.Component {
 			templ_7745c5c3_Var6 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<script>\n\t\t// ── Session management ────────────────────────────────────────────────────────\n\t\t(function() {\n\t\t\tvar lastActivity = Date.now();\n\t\t\tvar lastRefreshTime = Date.now();\n\t\t\tvar idleRefreshCount = 0;\n\n\t\t\t// Track user activity\n\t\t\t['click', 'keydown', 'scroll', 'touchstart'].forEach(function(evt) {\n\t\t\t\tdocument.addEventListener(evt, function() { lastActivity = Date.now(); }, {passive: true, capture: true});\n\t\t\t});\n\t\t\t// Throttled mousemove (avoid per-pixel updates)\n\t\t\tvar lastMouseUpdate = 0;\n\t\t\tdocument.addEventListener('mousemove', function() {\n\t\t\t\tvar now = Date.now();\n\t\t\t\tif (now - lastMouseUpdate > 10000) { lastActivity = now; lastMouseUpdate = now; }\n\t\t\t}, {passive: true});\n\n\t\t\tfunction doLogout() {\n\t\t\t\tfetch('/logout', {method: 'POST', credentials: 'same-origin'}).finally(function() {\n\t\t\t\t\twindow.location.href = '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search);\n\t\t\t\t});\n\t\t\t}\n\n\t\t\tfunction scheduleRefresh() {\n\t\t\t\tsetTimeout(performRefresh, 13 * 60 * 1000);\n\t\t\t}\n\n\t\t\tfunction performRefresh() {\n\t\t\t\tvar wasActive = lastActivity > lastRefreshTime;\n\t\t\t\tif (wasActive) {\n\t\t\t\t\tidleRefreshCount = 0;\n\t\t\t\t} else {\n\t\t\t\t\tidleRefreshCount++;\n\t\t\t\t}\n\t\t\t\t// After 1 consecutive idle refresh, skip the next and logout\n\t\t\t\tif (idleRefreshCount > 1) {\n\t\t\t\t\tdoLogout();\n\t\t\t\t\treturn;\n\t\t\t\t}\n\t\t\t\tfetch('/api/session/refresh', {method: 'POST', credentials: 'same-origin'})\n\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\tlastRefreshTime = Date.now();\n\t\t\t\t\t\tif (!r.ok) { doLogout(); return; }\n\t\t\t\t\t\tscheduleRefresh();\n\t\t\t\t\t})\n\t\t\t\t\t.catch(function() {\n\t\t\t\t\t\t// Network error — retry in 60s without resetting idle counter\n\t\t\t\t\t\tsetTimeout(performRefresh, 60 * 1000);\n\t\t\t\t\t});\n\t\t\t}\n\n\t\t\tscheduleRefresh();\n\n\t\t\t// Global 401 intercept — redirect to login preserving current URL\n\t\t\tvar _fetch = window.fetch;\n\t\t\twindow.fetch = function(url, opts) {\n\t\t\t\treturn _fetch(url, opts).then(function(r) {\n\t\t\t\t\tif (r.status === 401 || r.status === 403) {\n\t\t\t\t\t\twindow.location.href = '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search);\n\t\t\t\t\t}\n\t\t\t\t\treturn r;\n\t\t\t\t});\n\t\t\t};\n\t\t})();\n\n\t\t(function() {\n\t\t\tvar TX_JOBS = { 'import.process': true, 'account.analyze': true, 'entries.reprocess': true };\n\t\t\tvar running = {};\n\t\t\tvar backoff = 1000;\n\n\t\t\tfunction syncDot() {\n\t\t\t\tvar el = document.getElementById('activity-dot');\n\t\t\t\tif (!el) return;\n\t\t\t\tvar jobs = Object.values(running);\n\t\t\t\tel.style.display = jobs.length > 0 ? '' : 'none';\n\t\t\t\t// Show the most recent stage label as a tooltip on the activity dot.\n\t\t\t\tvar label = '';\n\t\t\t\tfor (var i = 0; i < jobs.length; i++) {\n\t\t\t\t\tif (jobs[i].stage_label) { label = jobs[i].stage_label; break; }\n\t\t\t\t}\n\t\t\t\tel.title = label;\n\t\t\t}\n\n\t\t\tfunction refreshTransactions() {\n\t\t\t\tif (window.__velociTxRefresh) {\n\t\t\t\t\twindow.__velociTxRefresh();\n\t\t\t\t}\n\t\t\t}\n\n\t\t\t// ─── SSE ─────────────────────────────────────────────────────────────\n\t\t\tfunction onEvent(evt) {\n\t\t\t\tif (evt.status === 'queued' || evt.status === 'processing') {\n\t\t\t\t\trunning[evt.job_id] = evt;\n\t\t\t\t} else {\n\t\t\t\t\tdelete running[evt.job_id];\n\t\t\t\t}\n\t\t\t\tsyncDot();\n\n\t\t\t\t// Stage 0: transactions are in the DB — refresh account page immediately.\n\t\t\t\tif (evt.stage === 0 && TX_JOBS[evt.job_type]) {\n\t\t\t\t\trefreshTransactions();\n\t\t\t\t}\n\t\t\t\t// Stage 6: snapshots are written — reports/budget can refresh.\n\t\t\t\tif (evt.stage === 6) {\n\t\t\t\t\tdocument.dispatchEvent(new CustomEvent('veloci:snapshots-ready', { detail: evt }));\n\t\t\t\t}\n\t\t\t\t// Stage 7: projections are written — budget page can refresh.\n\t\t\t\tif (evt.stage === 7) {\n\t\t\t\t\tdocument.dispatchEvent(new CustomEvent('veloci:projections-ready', { detail: evt }));\n\t\t\t\t}\n\n\t\t\t\t// Safety net: on completion, refresh transactions for jobs that\n\t\t\t\t// either skipped stage 0 or whose stage 0 signal may have been missed.\n\t\t\t\tif (evt.status === 'complete' && TX_JOBS[evt.job_type]) {\n\t\t\t\t\trefreshTransactions();\n\t\t\t\t}\n\t\t\t\t// Broadcast to any page that wants to react to job events.\n\t\t\t\tdocument.dispatchEvent(new CustomEvent('veloci:job', { detail: evt }));\n\t\t\t}\n\n\t\t\tfunction connect() {\n\t\t\t\tvar es = new EventSource('/api/jobs/stream');\n\t\t\t\tes.onmessage = function(e) {\n\t\t\t\t\ttry { onEvent(JSON.parse(e.data)); backoff = 1000; } catch(_) {}\n\t\t\t\t};\n\t\t\t\tes.onerror = function() {\n\t\t\t\t\tes.close();\n\t\t\t\t\tsetTimeout(connect, backoff);\n\t\t\t\t\tbackoff = Math.min(backoff * 2, 30000);\n\t\t\t\t};\n\t\t\t}\n\n\t\t\tconnect();\n\t\t})();\n\t</script>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<script>\n\t\t// ── Session management ────────────────────────────────────────────────────────\n\t\t(function() {\n\t\t\tvar lastActivity = Date.now();\n\t\t\tvar lastRefreshTime = Date.now();\n\t\t\tvar idleRefreshCount = 0;\n\n\t\t\t// Track user activity\n\t\t\t['click', 'keydown', 'scroll', 'touchstart'].forEach(function(evt) {\n\t\t\t\tdocument.addEventListener(evt, function() { lastActivity = Date.now(); }, {passive: true, capture: true});\n\t\t\t});\n\t\t\t// Throttled mousemove (avoid per-pixel updates)\n\t\t\tvar lastMouseUpdate = 0;\n\t\t\tdocument.addEventListener('mousemove', function() {\n\t\t\t\tvar now = Date.now();\n\t\t\t\tif (now - lastMouseUpdate > 10000) { lastActivity = now; lastMouseUpdate = now; }\n\t\t\t}, {passive: true});\n\n\t\t\tfunction doLogout() {\n\t\t\t\tfetch('/logout', {method: 'POST', credentials: 'same-origin'}).finally(function() {\n\t\t\t\t\twindow.location.href = '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search);\n\t\t\t\t});\n\t\t\t}\n\n\t\t\tfunction scheduleRefresh() {\n\t\t\t\tsetTimeout(performRefresh, 13 * 60 * 1000);\n\t\t\t}\n\n\t\t\tfunction performRefresh() {\n\t\t\t\tvar wasActive = lastActivity > lastRefreshTime;\n\t\t\t\tif (wasActive) {\n\t\t\t\t\tidleRefreshCount = 0;\n\t\t\t\t} else {\n\t\t\t\t\tidleRefreshCount++;\n\t\t\t\t}\n\t\t\t\t// After 1 consecutive idle refresh, skip the next and logout\n\t\t\t\tif (idleRefreshCount > 1) {\n\t\t\t\t\tdoLogout();\n\t\t\t\t\treturn;\n\t\t\t\t}\n\t\t\t\tfetch('/api/session/refresh', {method: 'POST', credentials: 'same-origin'})\n\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\tlastRefreshTime = Date.now();\n\t\t\t\t\t\tif (!r.ok) { doLogout(); return; }\n\t\t\t\t\t\tscheduleRefresh();\n\t\t\t\t\t})\n\t\t\t\t\t.catch(function() {\n\t\t\t\t\t\t// Network error — retry in 60s without resetting idle counter\n\t\t\t\t\t\tsetTimeout(performRefresh, 60 * 1000);\n\t\t\t\t\t});\n\t\t\t}\n\n\t\t\tscheduleRefresh();\n\n\t\t\t// Global 401 intercept — redirect to login preserving current URL\n\t\t\tvar _fetch = window.fetch;\n\t\t\twindow.fetch = function(url, opts) {\n\t\t\t\treturn _fetch(url, opts).then(function(r) {\n\t\t\t\t\tif (r.status === 401 || r.status === 403) {\n\t\t\t\t\t\twindow.location.href = '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search);\n\t\t\t\t\t}\n\t\t\t\t\treturn r;\n\t\t\t\t});\n\t\t\t};\n\t\t})();\n\n\t\t(function() {\n\t\t\tvar TX_JOBS = { 'import.process': true, 'account.analyze': true, 'entries.reprocess': true };\n\t\t\tvar running = {};\n\t\t\tvar backoff = 1000;\n\n\t\t\t// ── Label cache ───────────────────────────────────────────────────────\n\t\t\tvar _labelCache = {};\n\t\t\tfunction resolveLabel(id, cb) {\n\t\t\t\tif (_labelCache[id]) { cb(_labelCache[id]); return; }\n\t\t\t\tfetch('/api/labels/' + id, { credentials: 'same-origin' })\n\t\t\t\t\t.then(function(r) { return r.ok ? r.json() : null; })\n\t\t\t\t\t.then(function(body) {\n\t\t\t\t\t\tvar name = body && body.data && body.data.name;\n\t\t\t\t\t\tif (name) { _labelCache[id] = name; cb(name); }\n\t\t\t\t\t})\n\t\t\t\t\t.catch(function() {});\n\t\t\t}\n\n\t\t\tfunction syncDot() {\n\t\t\t\tvar el = document.getElementById('activity-dot');\n\t\t\t\tif (!el) return;\n\t\t\t\tvar jobs = Object.values(running);\n\t\t\t\tel.style.display = jobs.length > 0 ? '' : 'none';\n\t\t\t\tvar label = '';\n\t\t\t\tfor (var i = 0; i < jobs.length; i++) {\n\t\t\t\t\tif (jobs[i].stage_label) { label = jobs[i].stage_label; break; }\n\t\t\t\t}\n\t\t\t\tel.title = label;\n\t\t\t}\n\n\t\t\tfunction refreshTransactions() {\n\t\t\t\tif (window.__velociTxRefresh) {\n\t\t\t\t\twindow.__velociTxRefresh();\n\t\t\t\t}\n\t\t\t}\n\n\t\t\t// ─── SSE ─────────────────────────────────────────────────────────────\n\t\t\tfunction onEvent(evt) {\n\t\t\t\tif (evt.status === 'queued' || evt.status === 'processing') {\n\t\t\t\t\trunning[evt.job_id] = evt;\n\t\t\t\t} else {\n\t\t\t\t\tdelete running[evt.job_id];\n\t\t\t\t}\n\t\t\t\tsyncDot();\n\n\t\t\t\t// Stage 0: transactions are in the DB — refresh account page immediately.\n\t\t\t\tif (evt.stage === 0 && TX_JOBS[evt.job_type]) {\n\t\t\t\t\trefreshTransactions();\n\t\t\t\t}\n\t\t\t\t// Stage 6: snapshots are written — reports/budget can refresh.\n\t\t\t\tif (evt.stage === 6) {\n\t\t\t\t\tdocument.dispatchEvent(new CustomEvent('veloci:snapshots-ready', { detail: evt }));\n\t\t\t\t}\n\t\t\t\t// Stage 7: projections are written — budget page can refresh.\n\t\t\t\tif (evt.stage === 7) {\n\t\t\t\t\tdocument.dispatchEvent(new CustomEvent('veloci:projections-ready', { detail: evt }));\n\t\t\t\t}\n\n\t\t\t\t// Safety net: on completion, refresh transactions for jobs that\n\t\t\t\t// either skipped stage 0 or whose stage 0 signal may have been missed.\n\t\t\t\tif (evt.status === 'complete' && TX_JOBS[evt.job_type]) {\n\t\t\t\t\trefreshTransactions();\n\t\t\t\t}\n\n\t\t\t\t// Resolve label_id → name, then broadcast so page consumers get\n\t\t\t\t// stage_label populated (activity page, etc.).\n\t\t\t\tif (evt.label_id) {\n\t\t\t\t\tresolveLabel(evt.label_id, function(name) {\n\t\t\t\t\t\tevt.stage_label = name;\n\t\t\t\t\t\tif (running[evt.job_id]) { running[evt.job_id].stage_label = name; }\n\t\t\t\t\t\tsyncDot();\n\t\t\t\t\t\tdocument.dispatchEvent(new CustomEvent('veloci:job', { detail: evt }));\n\t\t\t\t\t});\n\t\t\t\t} else {\n\t\t\t\t\tdocument.dispatchEvent(new CustomEvent('veloci:job', { detail: evt }));\n\t\t\t\t}\n\t\t\t}\n\n\t\t\tfunction connect() {\n\t\t\t\tvar es = new EventSource('/api/jobs/stream');\n\t\t\t\tes.onmessage = function(e) {\n\t\t\t\t\ttry { onEvent(JSON.parse(e.data)); backoff = 1000; } catch(_) {}\n\t\t\t\t};\n\t\t\t\tes.onerror = function() {\n\t\t\t\t\tes.close();\n\t\t\t\t\tsetTimeout(connect, backoff);\n\t\t\t\t\tbackoff = Math.min(backoff * 2, 30000);\n\t\t\t\t};\n\t\t\t}\n\n\t\t\tconnect();\n\t\t})();\n\t</script>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -400,7 +400,7 @@ func navLink(href, label, currentPath string) templ.Component {
 		var templ_7745c5c3_Var15 templ.SafeURL
 		templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(href))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 245, Col: 28}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 268, Col: 28}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 		if templ_7745c5c3_Err != nil {
@@ -430,7 +430,7 @@ func navLink(href, label, currentPath string) templ.Component {
 		var templ_7745c5c3_Var17 string
 		templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 249, Col: 9}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 272, Col: 9}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 		if templ_7745c5c3_Err != nil {
@@ -477,7 +477,7 @@ func navLinkLedger(href string, data ShellData) templ.Component {
 		var templ_7745c5c3_Var20 templ.SafeURL
 		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(href))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 255, Col: 28}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 278, Col: 28}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 		if templ_7745c5c3_Err != nil {
@@ -503,7 +503,7 @@ func navLinkLedger(href string, data ShellData) templ.Component {
 		var templ_7745c5c3_Var22 string
 		templ_7745c5c3_Var22, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(ledgerIconStyle(data.HasRunningJobs))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 258, Col: 52}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 281, Col: 52}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
 		if templ_7745c5c3_Err != nil {
@@ -558,7 +558,7 @@ func navLinkActivity(href string, hasRunning bool, currentPath string) templ.Com
 		var templ_7745c5c3_Var25 templ.SafeURL
 		templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(href))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 267, Col: 28}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 290, Col: 28}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 		if templ_7745c5c3_Err != nil {
@@ -592,7 +592,7 @@ func navLinkActivity(href string, hasRunning bool, currentPath string) templ.Com
 		var templ_7745c5c3_Var27 string
 		templ_7745c5c3_Var27, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(activityDotStyle(hasRunning))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 272, Col: 83}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 295, Col: 83}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 		if templ_7745c5c3_Err != nil {
@@ -641,7 +641,7 @@ func accountSection(title string, accounts []ShellAccount, status, currentPath s
 		var templ_7745c5c3_Var29 string
 		templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 286, Col: 46}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 309, Col: 46}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
 		if templ_7745c5c3_Err != nil {
@@ -654,7 +654,7 @@ func accountSection(title string, accounts []ShellAccount, status, currentPath s
 		var templ_7745c5c3_Var30 string
 		templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.ResolveAttributeValue("Add " + strings.ToLower(title) + " account")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 289, Col: 56}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 312, Col: 56}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var30)
 		if templ_7745c5c3_Err != nil {
@@ -667,7 +667,7 @@ func accountSection(title string, accounts []ShellAccount, status, currentPath s
 		var templ_7745c5c3_Var31 string
 		templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.ResolveAttributeValue(status)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 290, Col: 29}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 313, Col: 29}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var31)
 		if templ_7745c5c3_Err != nil {
@@ -693,7 +693,7 @@ func accountSection(title string, accounts []ShellAccount, status, currentPath s
 			var templ_7745c5c3_Var32 string
 			templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(strings.ToLower(title))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 296, Col: 100}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 319, Col: 100}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
 			if templ_7745c5c3_Err != nil {
@@ -717,7 +717,7 @@ func accountSection(title string, accounts []ShellAccount, status, currentPath s
 			var templ_7745c5c3_Var34 templ.SafeURL
 			templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/accounts/" + a.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 300, Col: 45}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 323, Col: 45}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
 			if templ_7745c5c3_Err != nil {
@@ -743,7 +743,7 @@ func accountSection(title string, accounts []ShellAccount, status, currentPath s
 			var templ_7745c5c3_Var36 string
 			templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.JoinStringErrs(a.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 303, Col: 44}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 326, Col: 44}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var36))
 			if templ_7745c5c3_Err != nil {
@@ -778,7 +778,7 @@ func accountSection(title string, accounts []ShellAccount, status, currentPath s
 			var templ_7745c5c3_Var39 string
 			templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinStringErrs(FormatBalance(a.BalanceCents))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 305, Col: 36}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 328, Col: 36}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var39))
 			if templ_7745c5c3_Err != nil {
@@ -854,7 +854,7 @@ func userMenu(user ShellUser, currentPath string) templ.Component {
 		var templ_7745c5c3_Var42 string
 		templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinStringErrs(Initials(user.Name, user.Email))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 699, Col: 70}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 722, Col: 70}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
 		if templ_7745c5c3_Err != nil {
@@ -872,7 +872,7 @@ func userMenu(user ShellUser, currentPath string) templ.Component {
 			var templ_7745c5c3_Var43 string
 			templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(user.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 703, Col: 44}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 726, Col: 44}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
 			if templ_7745c5c3_Err != nil {
@@ -890,7 +890,7 @@ func userMenu(user ShellUser, currentPath string) templ.Component {
 		var templ_7745c5c3_Var44 string
 		templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinStringErrs(user.Email)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 705, Col: 45}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 728, Col: 45}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var44))
 		if templ_7745c5c3_Err != nil {

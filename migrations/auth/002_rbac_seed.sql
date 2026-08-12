@@ -1,4 +1,4 @@
--- migrations/app/002_rbac_seed.sql
+-- migrations/auth/002_rbac_seed.sql
 INSERT INTO roles (name) VALUES ('entity_admin'), ('entity_user');
 
 INSERT INTO permissions (name) VALUES

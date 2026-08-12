@@ -183,6 +183,18 @@ CREATE TABLE labels (
 
 CREATE INDEX ON labels (entity_id);
 
+-- Maps pipeline stage numbers to a label UUID so the engine can emit label_id
+-- in pg_notify payloads without ever referencing label names.
+-- Seeded per entity by EnsureSystemLabels alongside the system labels.
+CREATE TABLE pipeline_stage_labels (
+  stage_num  INTEGER NOT NULL,
+  entity_id  UUID    NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+  label_id   UUID    NOT NULL REFERENCES labels(id)   ON DELETE CASCADE,
+  PRIMARY KEY (stage_num, entity_id)
+);
+
+CREATE INDEX ON pipeline_stage_labels (entity_id);
+
 -- ── ENTRIES ──────────────────────────────────────────────────────────────────
 -- One row per continuous rate signal instance (absorbs rules + rule_epochs).
 -- start_date = when this signal instance began (first matching transaction date).
