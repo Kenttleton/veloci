@@ -43,7 +43,6 @@ impl DirtyContext {
         let history_start      = query_history_start(entity_id, pool).await?;
         let last_snapshots     = query_last_snapshot_per_entry(entity_id, pool).await?;
         let existing_snapshots = query_existing_snapshots(entity_id, pool).await?;
-        let source_c_ids       = query_source_c_entry_ids(entity_id, pool).await?;
 
         let entry_start: HashMap<Uuid, NaiveDate> =
             entries.iter().map(|e| (e.id, e.start_date)).collect();
@@ -62,11 +61,6 @@ impl DirtyContext {
                 .get(entry_id)
                 .copied()
                 .unwrap_or_else(|| entry_start.get(entry_id).copied().unwrap_or(history_start));
-            merge_dirty_from(&mut dirty_from, *entry_id, df);
-        }
-
-        for entry_id in &source_c_ids {
-            let df = entry_start.get(entry_id).copied().unwrap_or(history_start);
             merge_dirty_from(&mut dirty_from, *entry_id, df);
         }
 
@@ -265,29 +259,6 @@ async fn query_existing_snapshots(
     .context("failed to load existing snapshots for gap-fill detection")?;
 
     Ok(rows.into_iter().map(|r| (r.node_id, r.snapshot_date)).collect())
-}
-
-async fn query_source_c_entry_ids(entity_id: Uuid, pool: &PgPool) -> Result<Vec<Uuid>> {
-    let rows: Vec<(Uuid,)> = sqlx::query_as(
-        r#"
-        SELECT e.id
-        FROM entries e
-        LEFT JOIN (
-            SELECT node_id, MAX(computed_as_of) AS max_coa
-            FROM snapshots
-            WHERE entity_id = $1 AND node_type = 'entry'
-            GROUP BY node_id
-        ) s ON s.node_id = e.id
-        WHERE e.entity_id = $1
-          AND (s.max_coa IS NULL OR e.updated_at > s.max_coa)
-        "#,
-    )
-    .bind(entity_id)
-    .fetch_all(pool)
-    .await
-    .context("failed to query Source C (entry metadata changes)")?;
-
-    Ok(rows.into_iter().map(|(id,)| id).collect())
 }
 
 // ---------------------------------------------------------------------------
