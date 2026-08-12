@@ -147,16 +147,37 @@ func (s *Store) DeleteLabelIfOrphaned(ctx context.Context, entityID, labelID str
 	return err
 }
 
-// EnsureSystemLabels creates the Income and Spend system labels for the entity
-// if they do not already exist. Safe to call on every startup.
+// EnsureSystemLabels creates the built-in system labels for the entity if they
+// do not already exist, and links pipeline stage numbers to their label UUIDs.
+// Safe to call on every entity creation and on startup.
 func (s *Store) EnsureSystemLabels(ctx context.Context, entityID string) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO labels (id, entity_id, name, source, created_at)
-		VALUES
-			(gen_random_uuid(), $1::uuid, 'Income', 'system', NOW()),
-			(gen_random_uuid(), $1::uuid, 'Spend',  'system', NOW()),
-			(gen_random_uuid(), $1::uuid, 'All',    'system', NOW())
-		ON CONFLICT (entity_id, name) DO UPDATE SET source = 'system'
+		WITH seeded AS (
+			INSERT INTO labels (id, entity_id, name, source, created_at)
+			VALUES
+				(gen_random_uuid(), $1::uuid, 'Income',       'system', NOW()),
+				(gen_random_uuid(), $1::uuid, 'Spend',        'system', NOW()),
+				(gen_random_uuid(), $1::uuid, 'All',          'system', NOW()),
+				(gen_random_uuid(), $1::uuid, 'Importing',    'system', NOW()),
+				(gen_random_uuid(), $1::uuid, 'Categorizing', 'system', NOW()),
+				(gen_random_uuid(), $1::uuid, 'Analyzing',    'system', NOW()),
+				(gen_random_uuid(), $1::uuid, 'Forecasting',  'system', NOW())
+			ON CONFLICT (entity_id, name) DO UPDATE SET source = 'system'
+			RETURNING id, name
+		)
+		INSERT INTO pipeline_stage_labels (stage_num, entity_id, label_id)
+		SELECT
+			CASE s.name
+				WHEN 'Importing'    THEN 0
+				WHEN 'Categorizing' THEN 2
+				WHEN 'Analyzing'    THEN 6
+				WHEN 'Forecasting'  THEN 7
+			END,
+			$1::uuid,
+			s.id
+		FROM seeded s
+		WHERE s.name IN ('Importing', 'Categorizing', 'Analyzing', 'Forecasting')
+		ON CONFLICT (stage_num, entity_id) DO UPDATE SET label_id = EXCLUDED.label_id
 	`, entityID)
 	return err
 }

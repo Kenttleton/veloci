@@ -33,10 +33,81 @@ pub mod stage6;
 pub mod stage7;
 pub mod types;
 
+use std::collections::HashMap;
+
 use anyhow::{Context, Result};
 use uuid::Uuid;
 
 use crate::db::Pools;
+
+// ---------------------------------------------------------------------------
+// Stage-label helpers
+// ---------------------------------------------------------------------------
+
+/// Label UUIDs keyed by stage number, loaded once per job from
+/// `pipeline_stage_labels`. The engine never touches label names.
+type StageLabelMap = HashMap<i32, Uuid>;
+
+/// Load the entity's pipeline stage → label UUID mapping.
+/// Returns an empty map (with a warning) if the table is unpopulated —
+/// the pipeline continues; only stage notifications are silently skipped.
+async fn query_stage_labels(entity_id: Uuid, pool: &sqlx::PgPool) -> StageLabelMap {
+    let result = sqlx::query(
+        "SELECT stage_num, label_id FROM pipeline_stage_labels WHERE entity_id = $1",
+    )
+    .bind(entity_id)
+    .fetch_all(pool)
+    .await;
+
+    match result {
+        Ok(rows) => {
+            use sqlx::Row as _;
+            rows.into_iter()
+                .filter_map(|r| {
+                    let stage_num: i32 = r.try_get("stage_num").ok()?;
+                    let label_id: Uuid = r.try_get("label_id").ok()?;
+                    Some((stage_num, label_id))
+                })
+                .collect()
+        }
+        Err(e) => {
+            tracing::warn!(%entity_id, err = %e, "failed to load stage labels — stage notifications disabled");
+            HashMap::new()
+        }
+    }
+}
+
+/// Fire a pg_notify on `job:{entity_id}` carrying the label UUID for `stage_num`.
+/// Errors are logged but never propagate — stage signals are best-effort.
+async fn notify_stage(
+    pool:         &sqlx::PgPool,
+    entity_id:    Uuid,
+    job_id:       Uuid,
+    job_type:     &str,
+    stage_num:    i32,
+    stage_labels: &StageLabelMap,
+) {
+    let Some(label_id) = stage_labels.get(&stage_num) else {
+        tracing::warn!(%entity_id, stage_num, "no stage label mapped — skipping notify");
+        return;
+    };
+    let payload = serde_json::json!({
+        "job_id":   job_id,
+        "job_type": job_type,
+        "status":   "processing",
+        "stage":    stage_num,
+        "label_id": label_id,
+    })
+    .to_string();
+    if let Err(e) = sqlx::query("SELECT pg_notify($1, $2)")
+        .bind(format!("job:{entity_id}"))
+        .bind(&payload)
+        .execute(pool)
+        .await
+    {
+        tracing::warn!(%entity_id, stage_num, err = %e, "notify_stage pg_notify failed");
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Pipeline-wide constants
@@ -68,8 +139,11 @@ pub async fn run_import(
 ) -> Result<()> {
     tracing::info!(%entity_id, %job_id, %pending_import_id, "import.process starting");
 
+    let stage_labels = query_stage_labels(entity_id, &pools.read).await;
+
     let stage0_out = stage0::run(entity_id, job_id, pending_import_id, pools).await?;
     tracing::info!(%entity_id, imported = stage0_out.imported_count, skipped = stage0_out.skipped_count, computed_as_of = %stage0_out.computed_as_of, "stage 0 complete");
+    notify_stage(&pools.write, entity_id, job_id, "import.process", 0, &stage_labels).await;
 
     if stage0_out.imported_count == 0 {
         tracing::info!(%entity_id, "stage 0 imported nothing new — skipping stages 1–7");
@@ -81,13 +155,14 @@ pub async fn run_import(
 
     let stage2_out = stage2::run(entity_id, &stage1_out.unmatched_tx_ids, &pools.read).await?;
     tracing::info!(%entity_id, clusters = stage2_out.clusters_created, "stage 2 complete");
+    notify_stage(&pools.write, entity_id, job_id, "import.process", 2, &stage_labels).await;
 
     let dirty_input = dirty::DirtyDetectionInput {
         superseded_entry_ids:  stage0_out.superseded_entry_ids,
         new_entry_assignments: stage1_out.new_entry_assignments,
     };
 
-    run_from_stage3(entity_id, job_id, stage0_out.computed_as_of, Some(dirty_input), pools).await
+    run_from_stage3(entity_id, job_id, "import.process", stage0_out.computed_as_of, Some(dirty_input), &stage_labels, pools).await
 }
 
 /// Run stages 1 → 7 for an `entries.reprocess` job.
@@ -101,6 +176,7 @@ pub async fn run_entries_reprocess(
 ) -> Result<()> {
     tracing::info!(%entity_id, %job_id, "entries.reprocess starting");
 
+    let stage_labels = query_stage_labels(entity_id, &pools.read).await;
     let computed_as_of = stage0::query_computed_as_of(entity_id, &pools.read).await?;
 
     let stage1_out = stage1::run(entity_id, &pools.read).await?;
@@ -108,9 +184,10 @@ pub async fn run_entries_reprocess(
 
     let stage2_out = stage2::run(entity_id, &stage1_out.unmatched_tx_ids, &pools.read).await?;
     tracing::info!(%entity_id, clusters = stage2_out.clusters_created, "stage 2 complete");
+    notify_stage(&pools.write, entity_id, job_id, "entries.reprocess", 2, &stage_labels).await;
 
     // Bypass dirty detection — full re-run from history_start.
-    run_from_stage3(entity_id, job_id, computed_as_of, None, pools).await
+    run_from_stage3(entity_id, job_id, "entries.reprocess", computed_as_of, None, &stage_labels, pools).await
 }
 
 /// Run stages 3 → 7 for an `account.analyze` job.
@@ -124,8 +201,9 @@ pub async fn run_account_analyze(
     pools: &Pools,
 ) -> Result<()> {
     tracing::info!(%entity_id, %job_id, "account.analyze starting");
+    let stage_labels = query_stage_labels(entity_id, &pools.read).await;
     let computed_as_of = stage0::query_computed_as_of(entity_id, &pools.read).await?;
-    run_from_stage3(entity_id, job_id, computed_as_of, None, pools).await
+    run_from_stage3(entity_id, job_id, "account.analyze", computed_as_of, None, &stage_labels, pools).await
 }
 
 /// Run stage 7 only for a `balance.project` job.
@@ -138,9 +216,9 @@ pub async fn run_balance_project(
     pools: &Pools,
 ) -> Result<()> {
     tracing::info!(%entity_id, %job_id, "balance.project starting");
-
+    let stage_labels = query_stage_labels(entity_id, &pools.read).await;
     let computed_as_of = stage0::query_computed_as_of(entity_id, &pools.read).await?;
-    run_stage7(entity_id, job_id, computed_as_of, pools).await
+    run_stage7(entity_id, job_id, "balance.project", computed_as_of, &stage_labels, pools).await
 }
 
 // ---------------------------------------------------------------------------
@@ -151,8 +229,10 @@ pub async fn run_balance_project(
 async fn run_from_stage3(
     entity_id:      Uuid,
     job_id:         Uuid,
+    job_type:       &str,
     computed_as_of: chrono::NaiveDate,
     dirty_input:    Option<dirty::DirtyDetectionInput>,
+    stage_labels:   &StageLabelMap,
     pools:          &Pools,
 ) -> Result<()> {
     use crate::pipeline::types::SettlementConfig;
@@ -229,6 +309,7 @@ async fn run_from_stage3(
     }
 
     tracing::info!(%entity_id, "day-crawl complete");
+    notify_stage(&pools.write, entity_id, job_id, job_type, 6, stage_labels).await;
 
     sqlx::query(
         r#"
@@ -251,17 +332,20 @@ async fn run_from_stage3(
     .await
     .context("failed to sync projected_rate for system entries")?;
 
-    run_stage7(entity_id, job_id, computed_as_of, pools).await
+    run_stage7(entity_id, job_id, job_type, computed_as_of, stage_labels, pools).await
 }
 
 async fn run_stage7(
-    entity_id: Uuid,
-    job_id: Uuid,
+    entity_id:    Uuid,
+    job_id:       Uuid,
+    job_type:     &str,
     computed_as_of: chrono::NaiveDate,
-    pools: &Pools,
+    stage_labels: &StageLabelMap,
+    pools:        &Pools,
 ) -> Result<()> {
     stage7::run(entity_id, job_id, computed_as_of, pools).await?;
     tracing::info!(%entity_id, %job_id, "pipeline complete");
+    notify_stage(&pools.write, entity_id, job_id, job_type, 7, stage_labels).await;
     Ok(())
 }
 

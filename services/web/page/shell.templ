@@ -142,7 +142,15 @@ templ jobStream() {
 
 			function syncDot() {
 				var el = document.getElementById('activity-dot');
-				if (el) el.style.display = Object.keys(running).length > 0 ? '' : 'none';
+				if (!el) return;
+				var jobs = Object.values(running);
+				el.style.display = jobs.length > 0 ? '' : 'none';
+				// Show the most recent stage label as a tooltip on the activity dot.
+				var label = '';
+				for (var i = 0; i < jobs.length; i++) {
+					if (jobs[i].stage_label) { label = jobs[i].stage_label; break; }
+				}
+				el.title = label;
 			}
 
 			function refreshTransactions() {
@@ -154,11 +162,27 @@ templ jobStream() {
 			// ─── SSE ─────────────────────────────────────────────────────────────
 			function onEvent(evt) {
 				if (evt.status === 'queued' || evt.status === 'processing') {
-					running[evt.job_id] = true;
+					running[evt.job_id] = evt;
 				} else {
 					delete running[evt.job_id];
 				}
 				syncDot();
+
+				// Stage 0: transactions are in the DB — refresh account page immediately.
+				if (evt.stage === 0 && TX_JOBS[evt.job_type]) {
+					refreshTransactions();
+				}
+				// Stage 6: snapshots are written — reports/budget can refresh.
+				if (evt.stage === 6) {
+					document.dispatchEvent(new CustomEvent('veloci:snapshots-ready', { detail: evt }));
+				}
+				// Stage 7: projections are written — budget page can refresh.
+				if (evt.stage === 7) {
+					document.dispatchEvent(new CustomEvent('veloci:projections-ready', { detail: evt }));
+				}
+
+				// Safety net: on completion, refresh transactions for jobs that
+				// either skipped stage 0 or whose stage 0 signal may have been missed.
 				if (evt.status === 'complete' && TX_JOBS[evt.job_type]) {
 					refreshTransactions();
 				}

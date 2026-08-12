@@ -61,6 +61,14 @@ templ ActivityPage(shell ShellData, data ActivityData) {
 						el.textContent = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' · ' + timeStr;
 					}
 				});
+
+				// Live stage label updates for in-progress job cards.
+				document.addEventListener('veloci:job', function (e) {
+					var evt = e.detail;
+					if (!evt.stage_label) return;
+					var el = document.getElementById('stage-' + evt.job_id);
+					if (el) el.textContent = evt.stage_label;
+				});
 			})();
 		</script>
 	}
@@ -93,7 +101,11 @@ templ jobCard(job store.ProcessingJob, isTarget bool) {
 						Triggered by { job.TriggeredBy }
 					</div>
 					<div style="font-size:12px;color:var(--text2);margin-top:2px">
-						{ jobSummaryLine(job) }
+						if job.Status == "processing" || job.Status == "queued" {
+							<span id={ "stage-" + job.ID }>{ jobSummaryLine(job) }</span>
+						} else {
+							{ jobSummaryLine(job) }
+						}
 					</div>
 				</div>
 			</summary>
