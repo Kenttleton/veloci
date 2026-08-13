@@ -343,14 +343,18 @@ type BudgetData struct {
 	AllEntryID      string
 	IncomeEntryID   string
 	SpendEntryID    string
+	HasEngineJob    bool
 }
 
 func (s *Server) Budget(c echo.Context) error {
 	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
 
-	summary, _ := s.store.GetSnapshotSummary(ctx, entityID)
-	entries, _ := s.store.ListEntries(ctx, entityID, store.DateRange{}, "", "live", 500, "")
+	excludeJobIDs, _ := s.store.ActiveEngineJobIDs(ctx, entityID)
+	hasEngineJob := len(excludeJobIDs) > 0
+
+	summary, _ := s.store.GetSnapshotSummary(ctx, entityID, excludeJobIDs)
+	entries, _ := s.store.ListEntries(ctx, entityID, store.DateRange{}, "", "live", 500, "", excludeJobIDs)
 
 	var income []store.EntryRow
 	groupIdx := make(map[string]int)
@@ -417,6 +421,7 @@ func (s *Server) Budget(c echo.Context) error {
 		AllEntryID:      allEntryID,
 		IncomeEntryID:   incomeEntryID,
 		SpendEntryID:    spendEntryID,
+		HasEngineJob:    hasEngineJob,
 	}))
 }
 
@@ -448,7 +453,7 @@ func (s *Server) BudgetStack(c echo.Context) error {
 		}
 	}
 
-	entries, _ := s.store.ListEntriesForPeriod(ctx, entityID, periodEnd)
+	entries, _ := s.store.ListEntriesForPeriod(ctx, entityID, periodEnd, nil)
 
 	var income []store.EntryRow
 	groupIdx := make(map[string]int)
@@ -584,7 +589,7 @@ func (s *Server) Ledger(c echo.Context) error {
 	case "system":
 		entries, _ = s.store.ListSystemEntries(ctx, entityID)
 	default:
-		entries, _ = s.store.ListEntries(ctx, entityID, store.DateRange{}, "", filter, 500, "")
+		entries, _ = s.store.ListEntries(ctx, entityID, store.DateRange{}, "", filter, 500, "", nil)
 	}
 
 	// Apply additional filters (label, direction, type) in Go after fetch.
@@ -1181,6 +1186,7 @@ type ReportsData struct {
 	NextCursor   string // date string "YYYY-MM-DD", empty when no further pages
 	Exports      []store.Export
 	CanExport    bool // reports:write permission
+	HasEngineJob bool // an engine job is currently running
 }
 
 func (s *Server) Reports(c echo.Context) error {
@@ -1188,8 +1194,15 @@ func (s *Server) Reports(c echo.Context) error {
 	entityID := middleware.EntityID(ctx)
 	role := middleware.EntityRole(ctx)
 
-	summary, _ := s.store.GetSnapshotSummary(ctx, entityID)
-	history, _ := s.store.ListSnapshotDaySummaries(ctx, entityID, reportsPageSize+1, nil, nil, nil)
+	// Exclude in-progress engine job rows so the page shows stable data from
+	// the previous completed run while the engine is mid-crawl. Each day's
+	// stage-6 UPSERT stamps the new job_id on processed rows; excluding that
+	// ID gives a consistent read regardless of how far the crawl has progressed.
+	excludeJobIDs, _ := s.store.ActiveEngineJobIDs(ctx, entityID)
+	hasEngineJob := len(excludeJobIDs) > 0
+
+	summary, _ := s.store.GetSnapshotSummary(ctx, entityID, excludeJobIDs)
+	history, _ := s.store.ListSnapshotDaySummaries(ctx, entityID, reportsPageSize+1, nil, nil, nil, excludeJobIDs)
 	exports, _ := s.store.ListExports(ctx, entityID, 10, "")
 
 	var nextCursor string
@@ -1199,12 +1212,13 @@ func (s *Server) Reports(c echo.Context) error {
 	}
 
 	return s.render(c, ReportsPage(titled(s.buildShellData(c.Request()), "Reports"), ReportsData{
-		Summary:    summary,
-		MarginRate: summary.IncomeRate - summary.SpendRate,
-		History:    history,
-		NextCursor: nextCursor,
-		Exports:    exports,
-		CanExport:  s.perms.Has(role, "reports:write"),
+		Summary:      summary,
+		MarginRate:   summary.IncomeRate - summary.SpendRate,
+		History:      history,
+		NextCursor:   nextCursor,
+		Exports:      exports,
+		CanExport:    s.perms.Has(role, "reports:write"),
+		HasEngineJob: hasEngineJob,
 	}))
 }
 

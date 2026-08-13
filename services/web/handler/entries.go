@@ -156,7 +156,7 @@ func (h *EntriesHandler) ListEntries(c echo.Context) error {
 	}
 
 	dr := store.ResolveRange(dateFrom, dateTo, spanDays, spanMonths, spanYears)
-	items, err := h.s.ListEntries(ctx, entityID, dr, accountID, status, limit+1, cursor)
+	items, err := h.s.ListEntries(ctx, entityID, dr, accountID, status, limit+1, cursor, nil)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}

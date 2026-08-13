@@ -117,7 +117,7 @@ func (h *SnapshotsHandler) GetSnapshotSummary(c echo.Context) error {
 	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
 
-	summary, err := h.s.GetSnapshotSummary(ctx, entityID)
+	summary, err := h.s.GetSnapshotSummary(ctx, entityID, nil)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
@@ -191,9 +191,13 @@ type snapshotReportRow struct {
 // GetSnapshotReport returns per-day aggregate rates for the entity.
 // Supports keyset pagination via ?cursor=YYYY-MM-DD and optional date range
 // via ?date_from=YYYY-MM-DD&date_to=YYYY-MM-DD. Pass ?format=csv to download.
+// Active engine job rows are excluded so infinite-scroll pages stay consistent
+// with the server-rendered initial view during a crawl.
 func (h *SnapshotsHandler) GetSnapshotReport(c echo.Context) error {
 	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
+
+	excludeJobIDs, _ := h.s.ActiveEngineJobIDs(ctx, entityID)
 
 	limit, err := strconv.Atoi(c.QueryParam("limit"))
 	if err != nil || limit <= 0 || limit > 500 {
@@ -225,7 +229,7 @@ func (h *SnapshotsHandler) GetSnapshotReport(c echo.Context) error {
 
 	if c.QueryParam("format") == "csv" {
 		// limit=0 → no LIMIT clause; streams all matching rows.
-		rows, err := h.s.ListSnapshotDaySummaries(ctx, entityID, 0, nil, dateFrom, dateTo)
+		rows, err := h.s.ListSnapshotDaySummaries(ctx, entityID, 0, nil, dateFrom, dateTo, excludeJobIDs)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 		}
@@ -246,7 +250,7 @@ func (h *SnapshotsHandler) GetSnapshotReport(c echo.Context) error {
 		return nil
 	}
 
-	items, err := h.s.ListSnapshotDaySummaries(ctx, entityID, limit+1, before, dateFrom, dateTo)
+	items, err := h.s.ListSnapshotDaySummaries(ctx, entityID, limit+1, before, dateFrom, dateTo, excludeJobIDs)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}

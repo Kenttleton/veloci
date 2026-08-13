@@ -67,7 +67,9 @@ const entryCols = `
 // dr filters on start_date; see DateRange / ResolveRange for resolution rules.
 // accountID limits to entries with transactions in that account.
 // statusFilter defaults to active-only; pass "all" for every status.
-func (s *Store) ListEntries(ctx context.Context, entityID string, dr DateRange, accountID, statusFilter string, limit int, cursor string) ([]EntryRow, error) {
+// excludeJobIDs skips snapshot rows written by in-progress engine jobs so the
+// returned rates stay consistent with the previous completed run during a crawl.
+func (s *Store) ListEntries(ctx context.Context, entityID string, dr DateRange, accountID, statusFilter string, limit int, cursor string, excludeJobIDs []string) ([]EntryRow, error) {
 	statusCond := `e.status = 'live' AND e.source != 'system'`
 	switch statusFilter {
 	case "all":
@@ -105,16 +107,22 @@ func (s *Store) ListEntries(ctx context.Context, entityID string, dr DateRange, 
 			)`, len(args))
 	}
 
-	const entryFrom = `
+	snapshotExclude := ""
+	if len(excludeJobIDs) > 0 {
+		args = append(args, excludeJobIDs)
+		snapshotExclude = fmt.Sprintf("\n\t\t\tAND NOT (job_id::text = ANY($%d))", len(args))
+	}
+
+	entryFrom := fmt.Sprintf(`
 		FROM entries e
 		LEFT JOIN labels l ON l.id = e.label_id
 		LEFT JOIN LATERAL (
 			SELECT actual_rate_per_day, drift_per_day
 			FROM snapshots
-			WHERE entity_id = e.entity_id AND node_id = e.id AND node_type = 'entry'
+			WHERE entity_id = e.entity_id AND node_id = e.id AND node_type = 'entry'%s
 			ORDER BY snapshot_date DESC LIMIT 1
 		) s ON true
-	`
+	`, snapshotExclude)
 
 	if cursor == "" {
 		args = append(args, limit)
@@ -169,7 +177,15 @@ func (s *Store) GetSystemEntryID(ctx context.Context, entityID, direction string
 
 // ListEntriesForPeriod returns live non-mixed entries with their most-recent snapshot
 // on or before periodEnd. Used by the BudgetStack fragment to show historical data.
-func (s *Store) ListEntriesForPeriod(ctx context.Context, entityID string, periodEnd time.Time) ([]EntryRow, error) {
+// excludeJobIDs skips in-progress engine job rows; pass nil for historical dates
+// where the running job's rows are irrelevant.
+func (s *Store) ListEntriesForPeriod(ctx context.Context, entityID string, periodEnd time.Time, excludeJobIDs []string) ([]EntryRow, error) {
+	snapshotExclude := ""
+	extraArgs := []any{entityID, periodEnd}
+	if len(excludeJobIDs) > 0 {
+		extraArgs = append(extraArgs, excludeJobIDs)
+		snapshotExclude = fmt.Sprintf("\n\t\t\t  AND NOT (job_id::text = ANY($%d))", len(extraArgs))
+	}
 	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
 		SELECT %s
 		FROM entries e
@@ -178,12 +194,12 @@ func (s *Store) ListEntriesForPeriod(ctx context.Context, entityID string, perio
 			SELECT actual_rate_per_day, drift_per_day
 			FROM snapshots
 			WHERE entity_id = e.entity_id AND node_id = e.id AND node_type = 'entry'
-			  AND snapshot_date <= $2::date
+			  AND snapshot_date <= $2::date%s
 			ORDER BY snapshot_date DESC LIMIT 1
 		) s ON true
 		WHERE e.entity_id = $1 AND e.status = 'live' AND e.direction != 'mixed'
 		ORDER BY e.start_date DESC, e.id DESC
-	`, entryCols), entityID, periodEnd)
+	`, entryCols, snapshotExclude), extraArgs...)
 	if err != nil {
 		return nil, err
 	}

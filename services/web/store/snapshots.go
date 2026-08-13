@@ -77,8 +77,21 @@ type SnapshotSummary struct {
 }
 
 // GetSnapshotSummary returns aggregated rates for the latest snapshot date.
-func (s *Store) GetSnapshotSummary(ctx context.Context, entityID string) (SnapshotSummary, error) {
-	rows, err := s.pool.Query(ctx, `
+// excludeJobIDs skips rows written by in-progress engine jobs, giving a stable
+// view of the previous completed run during a crawl.
+func (s *Store) GetSnapshotSummary(ctx context.Context, entityID string, excludeJobIDs []string) (SnapshotSummary, error) {
+	args := []any{entityID}
+	jobExclude := ""
+	if len(excludeJobIDs) > 0 {
+		args = append(args, excludeJobIDs)
+		jobExclude = fmt.Sprintf(" AND NOT (s.job_id::text = ANY($%d))", len(args))
+		// subquery also needs the same exclusion so MAX(snapshot_date) is stable
+	}
+	var subExclude string
+	if len(excludeJobIDs) > 0 {
+		subExclude = fmt.Sprintf(" AND NOT (s2.job_id::text = ANY($%d))", len(args))
+	}
+	q := fmt.Sprintf(`
 		SELECT
 			COALESCE(SUM(CASE WHEN e.direction = 'income' THEN s.actual_rate_per_day ELSE 0 END), 0) AS income_rate,
 			COALESCE(SUM(CASE WHEN e.direction = 'spend' THEN s.actual_rate_per_day ELSE 0 END), 0) AS spend_rate,
@@ -87,10 +100,12 @@ func (s *Store) GetSnapshotSummary(ctx context.Context, entityID string) (Snapsh
 		FROM snapshots s
 		JOIN entries e ON e.id = s.node_id AND s.node_type = 'entry'
 		WHERE s.entity_id = $1
+		  %s
 		  AND s.snapshot_date = (
-			SELECT MAX(s2.snapshot_date) FROM snapshots s2 WHERE s2.entity_id = $1
+			SELECT MAX(s2.snapshot_date) FROM snapshots s2 WHERE s2.entity_id = $1%s
 		  )
-	`, entityID)
+	`, jobExclude, subExclude)
+	rows, err := s.pool.Query(ctx, q, args...)
 	if err != nil {
 		return SnapshotSummary{}, err
 	}
@@ -108,8 +123,10 @@ type SnapshotDaySummary struct {
 
 // ListSnapshotDaySummaries returns per-day aggregate rates for an entity,
 // ordered newest-first. before, dateFrom, and dateTo are optional filters.
+// excludeJobIDs skips rows written by in-progress engine jobs so the caller
+// sees a stable view of the previous completed run during a crawl.
 // Pass limit+1 to detect whether more pages exist.
-func (s *Store) ListSnapshotDaySummaries(ctx context.Context, entityID string, limit int, before, dateFrom, dateTo *time.Time) ([]SnapshotDaySummary, error) {
+func (s *Store) ListSnapshotDaySummaries(ctx context.Context, entityID string, limit int, before, dateFrom, dateTo *time.Time, excludeJobIDs []string) ([]SnapshotDaySummary, error) {
 	const base = `
 		SELECT
 			s.snapshot_date,
@@ -135,6 +152,10 @@ func (s *Store) ListSnapshotDaySummaries(ctx context.Context, entityID string, l
 	}
 	if dateTo != nil {
 		add("s.snapshot_date <=", *dateTo)
+	}
+	if len(excludeJobIDs) > 0 {
+		args = append(args, excludeJobIDs)
+		extra += fmt.Sprintf(" AND NOT (s.job_id::text = ANY($%d))", len(args))
 	}
 	var q string
 	if limit > 0 {

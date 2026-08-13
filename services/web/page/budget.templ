@@ -179,6 +179,24 @@ templ BudgetPage(shell ShellData, data BudgetData) {
 				// Sync chart gran and rate display to persisted gran on load
 				if (chart) chart.setGranularity(activeGran);
 				updateRateDisplays();
+
+				// ── Engine job listener: reload page when snapshots complete ─────
+				var TX_JOBS = { 'import.process': true, 'account.analyze': true, 'entries.reprocess': true };
+				var bgtBadge = document.getElementById('bgt-computing-badge');
+				function setBgtComputing(on) {
+					if (bgtBadge) bgtBadge.style.display = on ? 'flex' : 'none';
+				}
+				document.addEventListener('veloci:job', function (e) {
+					var evt = e.detail;
+					if (!TX_JOBS[evt.job_type]) return;
+					if (evt.status === 'queued' || evt.status === 'processing') {
+						setBgtComputing(true);
+						return;
+					}
+					if (evt.status === 'complete') {
+						window.location.reload();
+					}
+				});
 			})();
 		</script>
 	}
@@ -252,8 +270,15 @@ templ budgetSummaryStrip(data BudgetData) {
 			}
 		</div>
 		<!-- Proportion labels -->
-		<div style="display:flex;justify-content:space-between;margin-top:3px">
+		<div style="display:flex;justify-content:space-between;align-items:center;margin-top:3px">
 			<span style="font-size:11px;color:var(--text3)">{ strconv.Itoa(budgetCommitPct(data.Summary)) }% spend</span>
+			<div
+				id="bgt-computing-badge"
+				style={ "display:" + budgetComputingDisplay(data.HasEngineJob) + ";align-items:center;gap:5px;font-size:11px;color:var(--accent)" }
+			>
+				<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent)"></span>
+				Computing…
+			</div>
 			<span style="font-size:11px;color:var(--text3)">{ strconv.Itoa(budgetMarginPct(data.Summary)) }% margin</span>
 		</div>
 	</div>
@@ -367,7 +392,11 @@ templ budgetStackBody(data BudgetData) {
 	</div>
 	if len(data.Income) == 0 && len(data.CommitGroups) == 0 {
 		<div style="padding:32px 20px;color:var(--text3);font-size:13px;text-align:center">
-			No active entries. Run the engine on the Ledger page to generate budget data.
+			if data.HasEngineJob {
+				Computing your first snapshots…
+			} else {
+				No active entries. Run the engine on the Ledger page to generate budget data.
+			}
 		</div>
 	}
 }
@@ -448,6 +477,13 @@ templ budgetEntryDetailRow(e store.EntryRow, labelKey string, totalIncomePerDay 
 }
 
 // ── Go helpers ────────────────────────────────────────────────────────────────
+
+func budgetComputingDisplay(computing bool) string {
+	if computing {
+		return "flex"
+	}
+	return "none"
+}
 
 func budgetCommitPct(s store.SnapshotSummary) int {
 	if s.IncomeRate <= 0 {

@@ -75,16 +75,23 @@ templ ReportsPage(shell ShellData, data ReportsData) {
 				@rptSummaryChipSigned("Margin", &data.MarginRate)
 				@rptSummaryChipDrift(&data.Summary.DriftRate)
 				if !data.Summary.ComputedAsOf.IsZero() {
-					<div style="margin-left:auto;font-size:11px;color:var(--text3);flex-shrink:0">
+					<div id="rpt-as-of" style={ "margin-left:auto;font-size:11px;color:var(--text3);flex-shrink:0;" + ifStr(data.HasEngineJob, "display:none", "") }>
 						as of { data.Summary.ComputedAsOf.Format("Jan 2, 2006") }
 					</div>
 				}
+				<div id="rpt-computing-badge" style={ "font-size:11px;color:var(--accent);flex-shrink:0;" + ifStr(data.HasEngineJob, "margin-left:auto", "display:none;margin-left:auto") }>
+					Computing…
+				</div>
 			</div>
 			<!-- History table -->
 			<div id="rpt-section" style="flex:1;overflow:auto" data-next-cursor={ data.NextCursor }>
 				if len(data.History) == 0 {
 					<div id="rpt-empty" style="padding:48px 20px;text-align:center;color:var(--text3);font-size:13px">
-						No snapshot data yet. Upload transactions and run the engine to generate a report.
+						if data.HasEngineJob {
+							Computing your first snapshots…
+						} else {
+							No snapshot data yet. Upload transactions and run the engine to generate a report.
+						}
 					</div>
 				} else {
 					<table style="width:100%;border-collapse:collapse">
@@ -372,6 +379,60 @@ templ ReportsPage(shell ShellData, data ReportsData) {
 						});
 					});
 				}
+
+				// ─── Engine job state → computing badge + table refresh ──────────
+				// The shell broadcasts all SSE job events — including active jobs
+				// replayed on first SSE connect — as 'veloci:job' CustomEvents.
+				// We listen for TX job state transitions here:
+				//   queued/processing → show computing badge
+				//   complete          → re-fetch table (job is no longer active so
+				//                       the API no longer excludes its rows)
+				var TX_JOBS = { 'import.process': true, 'account.analyze': true, 'entries.reprocess': true };
+				var computingBadge = document.getElementById('rpt-computing-badge');
+				var asOfEl         = document.getElementById('rpt-as-of');
+
+				function setComputing(on) {
+					if (computingBadge) computingBadge.style.display = on ? '' : 'none';
+					if (asOfEl) asOfEl.style.display = on ? 'none' : '';
+				}
+
+				document.addEventListener('veloci:job', function (e) {
+					var evt = e.detail;
+					if (!TX_JOBS[evt.job_type]) return; // handled below for exports
+
+					if (evt.status === 'queued' || evt.status === 'processing') {
+						setComputing(true);
+						return;
+					}
+
+					if (evt.status === 'complete') {
+						// Job is no longer in ListActiveJobs — API now returns full data.
+						var tbody = document.getElementById('rpt-tbody');
+						if (!tbody) {
+							// Page was in empty/computing state — reload to get the
+							// server-rendered table scaffold with fresh data.
+							window.location.reload();
+							return;
+						}
+						// In-place refresh: replace the visible rows with fresh data.
+						var section  = document.getElementById('rpt-section');
+						var from = document.getElementById('rpt-date-from');
+						var to   = document.getElementById('rpt-date-to');
+						var url  = '/api/snapshots/report?limit=60';
+						if (from && from.value) url += '&date_from=' + encodeURIComponent(from.value);
+						if (to && to.value)     url += '&date_to='   + encodeURIComponent(to.value);
+						fetch(url)
+							.then(function (r) { return r.json(); })
+							.then(function (body) {
+								tbody.innerHTML = '';
+								(body.data || []).forEach(function (r) { tbody.appendChild(makeRow(r)); });
+								var cursor = (body.meta && body.meta.next_cursor) || null;
+								if (section) section.dataset.nextCursor = cursor || '';
+								setComputing(false);
+							})
+							.catch(function () { setComputing(false); });
+					}
+				});
 
 				// ─── SSE job completion → refresh export row ─────────────────────
 				// The shell broadcasts all SSE job events as 'veloci:job' CustomEvents.

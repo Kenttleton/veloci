@@ -112,3 +112,27 @@ func (s *Store) ListActiveJobs(ctx context.Context, entityID string) ([]Processi
 	}
 	return pgx.CollectRows(rows, pgx.RowToStructByName[ProcessingJob])
 }
+
+// engineJobTypes are the job types that write snapshot rows via stage 6.
+var engineJobTypes = map[string]bool{
+	"import.process":    true,
+	"account.analyze":   true,
+	"entries.reprocess": true,
+}
+
+// ActiveEngineJobIDs returns the IDs of currently running snapshot-writing jobs.
+// Used to filter out in-progress UPSERT rows from report queries, giving callers
+// a stable view of the previous completed run while the engine is mid-crawl.
+func (s *Store) ActiveEngineJobIDs(ctx context.Context, entityID string) ([]string, error) {
+	jobs, err := s.ListActiveJobs(ctx, entityID)
+	if err != nil {
+		return nil, err
+	}
+	var ids []string
+	for _, j := range jobs {
+		if engineJobTypes[j.JobType] {
+			ids = append(ids, j.ID)
+		}
+	}
+	return ids, nil
+}
