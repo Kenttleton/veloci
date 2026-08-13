@@ -73,7 +73,7 @@ templ ReportsPage(shell ShellData, data ReportsData) {
 				@rptSummaryChip("Income", &data.Summary.IncomeRate, "var(--income)")
 				@rptSummaryChip("Spend", &data.Summary.SpendRate, "var(--commit)")
 				@rptSummaryChipSigned("Margin", &data.MarginRate)
-				@rptSummaryChipSigned("Drift", &data.Summary.DriftRate)
+				@rptSummaryChipDrift(&data.Summary.DriftRate)
 				if !data.Summary.ComputedAsOf.IsZero() {
 					<div style="margin-left:auto;font-size:11px;color:var(--text3);flex-shrink:0">
 						as of { data.Summary.ComputedAsOf.Format("Jan 2, 2006") }
@@ -137,6 +137,10 @@ templ ReportsPage(shell ShellData, data ReportsData) {
 					if (btn) applyGran(btn.dataset.gran);
 				});
 
+				document.addEventListener('veloci:granchange', function (e) {
+					applyGran(e.detail.gran);
+				});
+
 				applyGran(activeGran);
 
 				// ─── Rate formatters ─────────────────────────────────────────────
@@ -156,6 +160,15 @@ templ ReportsPage(shell ShellData, data ReportsData) {
 					var yr = (signed ? fmtSgn : fmtAbs)(cpd * 365, '/yr');
 					return { mo: mo, day: day, yr: yr };
 				}
+				function fmtDriftRow(cpd) {
+					var v = cpd / 100;
+					var day = v > 0 ? '+$' + v.toFixed(4) + '/day' : v < 0 ? '−$' + Math.abs(v).toFixed(4) + '/day' : '$0.0000/day';
+					var vm = v * 30.44;
+					var mo = vm > 0 ? '+$' + vm.toFixed(2) + '/mo' : vm < 0 ? '−$' + Math.abs(vm).toFixed(2) + '/mo' : '$0.00/mo';
+					var vy = v * 365;
+					var yr = vy > 0 ? '+$' + Math.round(vy) + '/yr' : vy < 0 ? '−$' + Math.round(Math.abs(vy)) + '/yr' : '$0/yr';
+					return { day: day, mo: mo, yr: yr };
+				}
 				function signColor(cpd) {
 					if (cpd > 0) return 'var(--income)';
 					if (cpd < 0) return 'var(--commit)';
@@ -173,7 +186,7 @@ templ ReportsPage(shell ShellData, data ReportsData) {
 					var inc = fmtRow(r.income_rate, false);
 					var spd = fmtRow(r.spend_rate, false);
 					var mgn = fmtRow(r.margin_rate, true);
-					var dft = fmtRow(r.drift_rate, true);
+					var dft = fmtDriftRow(r.drift_rate);
 					var attr = activeGran === 'day' ? 'day' : activeGran === 'year' ? 'yr' : 'mo';
 					tr.innerHTML =
 						'<td style="padding:8px 20px;font-size:13px;color:var(--text2);white-space:nowrap;font-variant-numeric:tabular-nums">'+fmtDate(r.date)+'</td>'
@@ -442,10 +455,10 @@ templ rptHistoryRow(row store.SnapshotDaySummary) {
 		</td>
 		<td style={ "padding:8px 12px;text-align:right;font-size:13px;font-variant-numeric:tabular-nums;" + rptSignColor(&row.DriftRate) }>
 			<span
-				data-fmt-day={ fmtRateDaySigned(&row.DriftRate) }
-				data-fmt-mo={ fmtRateMoSigned(&row.DriftRate) }
-				data-fmt-yr={ fmtRateYrSigned(&row.DriftRate) }
-			>{ fmtRateMoSigned(&row.DriftRate) }</span>
+				data-fmt-day={ fmtDriftDaySigned(&row.DriftRate) }
+				data-fmt-mo={ fmtDriftMoSigned(&row.DriftRate) }
+				data-fmt-yr={ fmtDriftYrSigned(&row.DriftRate) }
+			>{ fmtDriftMoSigned(&row.DriftRate) }</span>
 		</td>
 	</tr>
 }
@@ -472,6 +485,19 @@ templ rptSummaryChipSigned(label string, r *float64) {
 				data-fmt-mo={ fmtRateMoSigned(r) }
 				data-fmt-yr={ fmtRateYrSigned(r) }
 			>{ fmtRateMoSigned(r) }</span>
+		</div>
+	</div>
+}
+
+templ rptSummaryChipDrift(r *float64) {
+	<div style="flex-shrink:0">
+		<div style="font-size:10px;font-weight:600;color:var(--text3);letter-spacing:0.04em;text-transform:uppercase;margin-bottom:2px">Drift</div>
+		<div style={ "font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;" + rptSignColor(r) }>
+			<span
+				data-fmt-day={ fmtDriftDaySigned(r) }
+				data-fmt-mo={ fmtDriftMoSigned(r) }
+				data-fmt-yr={ fmtDriftYrSigned(r) }
+			>{ fmtDriftMoSigned(r) }</span>
 		</div>
 	</div>
 }

@@ -359,10 +359,10 @@ templ budgetStackBody(data BudgetData) {
 		</div>
 		<div style="width:100px;text-align:right;font-size:12px;white-space:nowrap">
 			<span
-				data-fmt-day={ fmtRateDaySigned(&data.Summary.DriftRate) }
-				data-fmt-mo={ fmtRateMoSigned(&data.Summary.DriftRate) }
-				data-fmt-yr={ fmtRateYrSigned(&data.Summary.DriftRate) }
-			>{ fmtRateDaySigned(&data.Summary.DriftRate) }</span>
+				data-fmt-day={ fmtDriftDaySigned(&data.Summary.DriftRate) }
+				data-fmt-mo={ fmtDriftMoSigned(&data.Summary.DriftRate) }
+				data-fmt-yr={ fmtDriftYrSigned(&data.Summary.DriftRate) }
+			>{ fmtDriftDaySigned(&data.Summary.DriftRate) }</span>
 		</div>
 	</div>
 	if len(data.Income) == 0 && len(data.CommitGroups) == 0 {
@@ -396,10 +396,10 @@ templ budgetLabelGroupRow(group BudgetGroup, totalIncomePerDay float64) {
 		</div>
 		<div style="width:100px;text-align:right;font-size:12px;white-space:nowrap">
 			<span
-				data-fmt-day={ fmtRateDaySigned(&group.DriftPerDay) }
-				data-fmt-mo={ fmtRateMoSigned(&group.DriftPerDay) }
-				data-fmt-yr={ fmtRateYrSigned(&group.DriftPerDay) }
-			>{ fmtRateDaySigned(&group.DriftPerDay) }</span>
+				data-fmt-day={ fmtDriftDaySigned(&group.DriftPerDay) }
+				data-fmt-mo={ fmtDriftMoSigned(&group.DriftPerDay) }
+				data-fmt-yr={ fmtDriftYrSigned(&group.DriftPerDay) }
+			>{ fmtDriftDaySigned(&group.DriftPerDay) }</span>
 		</div>
 	</div>
 	<!-- Entry detail rows (hidden by default) -->
@@ -436,10 +436,10 @@ templ budgetEntryDetailRow(e store.EntryRow, labelKey string, totalIncomePerDay 
 		<div style="width:100px;text-align:right;font-size:12px;white-space:nowrap">
 			if e.SnapshotDriftPerDay != nil {
 				<span
-					data-fmt-day={ fmtRateDaySigned(e.SnapshotDriftPerDay) }
-					data-fmt-mo={ fmtRateMoSigned(e.SnapshotDriftPerDay) }
-					data-fmt-yr={ fmtRateYrSigned(e.SnapshotDriftPerDay) }
-				>{ fmtRateDaySigned(e.SnapshotDriftPerDay) }</span>
+					data-fmt-day={ fmtDriftDaySigned(e.SnapshotDriftPerDay) }
+					data-fmt-mo={ fmtDriftMoSigned(e.SnapshotDriftPerDay) }
+					data-fmt-yr={ fmtDriftYrSigned(e.SnapshotDriftPerDay) }
+				>{ fmtDriftDaySigned(e.SnapshotDriftPerDay) }</span>
 			} else {
 				<span style="color:var(--text3)">—</span>
 			}

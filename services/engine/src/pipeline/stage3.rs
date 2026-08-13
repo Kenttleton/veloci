@@ -160,8 +160,8 @@ pub(crate) fn compute_entry_rate(
         prior_projected_rate.unwrap_or(actual_rate_per_day)
     } else {
         match entry.rate_method.as_str() {
-            "max" => max_rate(&active_txns, period_days),
-            _     => median_rate(&active_txns, period_days), // "median" is the default
+            "max" => max_rate(&active_txns, period_days) * direction.sign(),
+            _     => median_rate(&active_txns, period_days) * direction.sign(), // "median" is the default
         }
     };
 

@@ -69,6 +69,15 @@ impl Direction {
             _         => None,
         }
     }
+
+    /// Sign multiplier for rate values: spend rates are negative, income positive.
+    pub fn sign(&self) -> f64 {
+        match self {
+            Self::Income => 1.0,
+            Self::Spend  => -1.0,
+            Self::Mixed  => 1.0,
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

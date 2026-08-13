@@ -871,6 +871,22 @@ func fmtRateYr(r *float64) string {
 	return fmt.Sprintf("$%.2f/yr", v)
 }
 
+// fmtDriftDaySigned formats a cents/day drift rate as signed $/day with 4 decimal places.
+// Drift per day is typically a very small number after the engine correction; 2 decimals rounds to zero.
+func fmtDriftDaySigned(r *float64) string {
+	if r == nil {
+		return "—"
+	}
+	v := *r / 100.0
+	if v > 0 {
+		return fmt.Sprintf("+$%.4f/day", v)
+	}
+	if v < 0 {
+		return fmt.Sprintf("−$%.4f/day", -v)
+	}
+	return "$0.0000/day"
+}
+
 // fmtRateDaySigned formats a cents/day rate as signed $/day. Nil means no data (—), zero means $0.00.
 func fmtRateDaySigned(r *float64) string {
 	if r == nil {
@@ -884,6 +900,36 @@ func fmtRateDaySigned(r *float64) string {
 		return fmt.Sprintf("−$%.2f/day", -v)
 	}
 	return "$0.00/day"
+}
+
+// fmtDriftMoSigned formats a cents/day drift rate as signed $/mo with 2 decimal places.
+func fmtDriftMoSigned(r *float64) string {
+	if r == nil {
+		return "—"
+	}
+	v := *r / 100.0 * 30.44
+	if v > 0 {
+		return fmt.Sprintf("+$%.2f/mo", v)
+	}
+	if v < 0 {
+		return fmt.Sprintf("−$%.2f/mo", -v)
+	}
+	return "$0.00/mo"
+}
+
+// fmtDriftYrSigned formats a cents/day drift rate as signed $/yr with 0 decimal places.
+func fmtDriftYrSigned(r *float64) string {
+	if r == nil {
+		return "—"
+	}
+	v := *r / 100.0 * 365
+	if v > 0 {
+		return fmt.Sprintf("+$%.0f/yr", v)
+	}
+	if v < 0 {
+		return fmt.Sprintf("−$%.0f/yr", -v)
+	}
+	return "$0/yr"
 }
 
 // fmtRateMoSigned formats a cents/day rate as signed $/mo (× 30.44). Nil means no data (—), zero means $0.
