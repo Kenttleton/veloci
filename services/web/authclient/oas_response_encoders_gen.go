@@ -88,6 +88,12 @@ func encodeRevokeUserTokensResponse(response *RevokeUserTokensNoContent, w http.
 	return nil
 }
 
+func encodeUpdateCredentialEmailResponse(response *UpdateCredentialEmailNoContent, w http.ResponseWriter, span trace.Span) error {
+	w.WriteHeader(204)
+
+	return nil
+}
+
 func encodeUpdateCredentialPasswordResponse(response *UpdateCredentialPasswordNoContent, w http.ResponseWriter, span trace.Span) error {
 	w.WriteHeader(204)
 

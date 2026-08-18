@@ -105,6 +105,20 @@ func (d *DB) UpdateCredentialPassword(ctx context.Context, id, hash string) (fou
 	return tag.RowsAffected() > 0, nil
 }
 
+// UpdateCredentialEmail updates the email for an existing credential by ID.
+// Returns found=false (and no error) when the row does not exist.
+// Returns a pgconn.PgError with code "23505" when the email is already taken.
+func (d *DB) UpdateCredentialEmail(ctx context.Context, id, email string) (found bool, err error) {
+	tag, err := d.pool.Exec(ctx,
+		`UPDATE auth_credentials SET email = $2 WHERE id = $1`,
+		id, email,
+	)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() > 0, nil
+}
+
 // DeleteCredential removes a credential by ID. It returns:
 //   - found=false when the row does not exist
 //   - systemRoleBlocked=true when the row is a server_admin (operation not permitted)

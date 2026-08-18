@@ -23,6 +23,7 @@ type credentialStore interface {
 	FindCredentialByEmail(ctx context.Context, email string) (*store.Credential, error)
 	CreateCredential(ctx context.Context, id, email, hash, role string) error
 	UpdateCredentialPassword(ctx context.Context, id, hash string) (found bool, err error)
+	UpdateCredentialEmail(ctx context.Context, id, email string) (found bool, err error)
 	DeleteCredential(ctx context.Context, id string) (found bool, systemRoleBlocked bool, err error)
 }
 
@@ -63,6 +64,13 @@ type UpdateCredentialPasswordInput struct {
 	ID   string `path:"id" doc:"Credential UUID"`
 	Body struct {
 		Password string `json:"password" required:"true" doc:"New plaintext password"`
+	}
+}
+
+type UpdateCredentialEmailInput struct {
+	ID   string `path:"id" doc:"Credential UUID"`
+	Body struct {
+		Email string `json:"email" required:"true" format:"email" doc:"New email address"`
 	}
 }
 
@@ -125,6 +133,22 @@ func (h *Handler) UpdatePassword(ctx context.Context, input *UpdateCredentialPas
 	return nil, nil
 }
 
+// UpdateEmail replaces the email for an existing credential.
+func (h *Handler) UpdateEmail(ctx context.Context, input *UpdateCredentialEmailInput) (*struct{}, error) {
+	found, err := h.db.UpdateCredentialEmail(ctx, input.ID, input.Body.Email)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return nil, huma.Error409Conflict("email already registered")
+		}
+		return nil, huma.Error500InternalServerError("internal error")
+	}
+	if !found {
+		return nil, huma.Error404NotFound("credential not found")
+	}
+	return nil, nil
+}
+
 // Delete permanently removes a credential and all its tokens via FK cascade.
 func (h *Handler) Delete(ctx context.Context, input *DeleteCredentialInput) (*struct{}, error) {
 	found, systemRoleBlocked, err := h.db.DeleteCredential(ctx, input.ID)
@@ -168,6 +192,15 @@ func RegisterRoutes(api huma.API, h *Handler) {
 		Tags:          []string{"credentials"},
 		DefaultStatus: http.StatusNoContent,
 	}, h.UpdatePassword)
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "update-credential-email",
+		Method:        http.MethodPut,
+		Path:          "/credentials/{id}/email",
+		Summary:       "Update email for a credential",
+		Tags:          []string{"credentials"},
+		DefaultStatus: http.StatusNoContent,
+	}, h.UpdateEmail)
 
 	huma.Register(api, huma.Operation{
 		OperationID:   "delete-credential",

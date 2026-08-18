@@ -8,6 +8,8 @@ package page
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
+import "github.com/veloci/veloci/store"
+
 // PlaceholderPage renders the shell with a "coming soon" message.
 func PlaceholderPage(data ShellData, name string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
@@ -49,7 +51,7 @@ func PlaceholderPage(data ShellData, name string) templ.Component {
 			var templ_7745c5c3_Var3 string
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/pages.templ`, Line: 6, Col: 38}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/pages.templ`, Line: 8, Col: 38}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
@@ -69,8 +71,8 @@ func PlaceholderPage(data ShellData, name string) templ.Component {
 	})
 }
 
-// SettingsPage — profile settings (placeholder, matches React).
-func SettingsPage(data ShellData) templ.Component {
+// SettingsPage — user profile and security settings.
+func SettingsPage(shell ShellData, u store.User) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -103,13 +105,80 @@ func SettingsPage(data ShellData) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<div style=\"display:flex;flex-direction:column;height:100%;overflow:hidden\"><div style=\"flex:1;overflow:auto;padding:24px 20px\"><section style=\"max-width:480px\"><h2 style=\"margin:0 0 4px;font-size:15px;font-weight:700;color:var(--text)\">Profile</h2><p style=\"margin:0 0 20px;font-size:12px;color:var(--text3)\">Manage your display name, email, and password.</p><div style=\"padding:32px 0;color:var(--text3);font-size:13px\">Profile settings coming soon.</div></section></div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<div style=\"display:flex;flex-direction:column;height:100%;overflow:hidden\"><div style=\"flex:1;overflow:auto;padding:24px 20px\"><div style=\"max-width:560px;display:flex;flex-direction:column;gap:32px\"><!-- Profile --><section><h2 style=\"margin:0 0 4px;font-size:15px;font-weight:700;color:var(--text)\">Profile</h2><p style=\"margin:0 0 16px;font-size:12px;color:var(--text3)\">Your name and how you appear in the app.</p><form id=\"profile-form\" style=\"display:flex;flex-direction:column;gap:12px\"><div style=\"display:flex;gap:12px\"><div style=\"flex:1\"><label class=\"field-label\">First Name</label> <input id=\"field-first-name\" type=\"text\" class=\"field-input\" value=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var6 string
+			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(u.FirstName)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/pages.templ`, Line: 30, Col: 29}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "\" placeholder=\"First\"></div><div style=\"flex:1\"><label class=\"field-label\">Last Name</label> <input id=\"field-last-name\" type=\"text\" class=\"field-input\" value=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var7 string
+			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.ResolveAttributeValue(u.LastName)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/pages.templ`, Line: 40, Col: 28}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\" placeholder=\"Last\"></div></div><div><label class=\"field-label\">Preferred Name</label> <input id=\"field-preferred-name\" type=\"text\" class=\"field-input\" value=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var8 string
+			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(u.PreferredName)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/pages.templ`, Line: 51, Col: 32}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "\" placeholder=\"How you'd like to be addressed\"><p style=\"margin:4px 0 0;font-size:11px;color:var(--text3)\">First name, full name, or nickname — this is what appears in the app.</p></div><div><label class=\"field-label\">Email</label> <input type=\"text\" class=\"field-input\" value=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var9 string
+			templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.ResolveAttributeValue(u.Email)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/pages.templ`, Line: 58, Col: 62}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var9)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" disabled style=\"opacity:0.6;cursor:default\"></div><div><label class=\"field-label\">Role</label><div style=\"margin-top:4px\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if u.EntityRole == "entity_admin" {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<span class=\"badge badge-admin\">Admin</span>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			} else {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<span class=\"badge badge-member\">Member</span>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</div></div><div style=\"display:flex;align-items:center;gap:12px\"><button type=\"button\" class=\"btn btn-primary\" onclick=\"saveProfile()\">Save</button> <span id=\"profile-status\" style=\"font-size:12px;color:var(--text3)\"></span></div></form></section><!-- Security --><section><h2 style=\"margin:0 0 4px;font-size:15px;font-weight:700;color:var(--text)\">Security</h2><p style=\"margin:0 0 16px;font-size:12px;color:var(--text3)\">Update your email address or password. Both require your current password.</p><!-- Change Email --><div style=\"border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px\"><h3 style=\"margin:0 0 12px;font-size:13px;font-weight:600;color:var(--text)\">Change Email</h3><div style=\"display:flex;flex-direction:column;gap:10px\"><div><label class=\"field-label\">New Email</label> <input id=\"field-new-email\" type=\"email\" class=\"field-input\" placeholder=\"new@example.com\"></div><div><label class=\"field-label\">Current Password</label> <input id=\"field-email-password\" type=\"password\" class=\"field-input\" placeholder=\"Your current password\"></div><div style=\"display:flex;align-items:center;gap:12px\"><button type=\"button\" class=\"btn btn-secondary\" onclick=\"changeEmail()\">Update Email</button> <span id=\"email-status\" style=\"font-size:12px;color:var(--text3)\"></span></div></div></div><!-- Change Password --><div style=\"border:1px solid var(--border);border-radius:8px;padding:16px\"><h3 style=\"margin:0 0 12px;font-size:13px;font-weight:600;color:var(--text)\">Change Password</h3><div style=\"display:flex;flex-direction:column;gap:10px\"><div><label class=\"field-label\">Current Password</label> <input id=\"field-current-password\" type=\"password\" class=\"field-input\"></div><div><label class=\"field-label\">New Password</label> <input id=\"field-new-password\" type=\"password\" class=\"field-input\"></div><div><label class=\"field-label\">Confirm New Password</label> <input id=\"field-confirm-password\" type=\"password\" class=\"field-input\"></div><div style=\"display:flex;align-items:center;gap:12px\"><button type=\"button\" class=\"btn btn-secondary\" onclick=\"changePassword()\">Change Password</button> <span id=\"password-status\" style=\"font-size:12px;color:var(--text3)\"></span></div></div></div></section></div></div></div><script>\n\t\tfunction saveProfile() {\n\t\t\tconst status = document.getElementById('profile-status');\n\t\t\tfetch('/api/users/me', {\n\t\t\t\tmethod: 'PUT',\n\t\t\t\theaders: {'Content-Type': 'application/json'},\n\t\t\t\tbody: JSON.stringify({\n\t\t\t\t\tfirst_name:     document.getElementById('field-first-name').value,\n\t\t\t\t\tlast_name:      document.getElementById('field-last-name').value,\n\t\t\t\t\tpreferred_name: document.getElementById('field-preferred-name').value,\n\t\t\t\t}),\n\t\t\t}).then(r => {\n\t\t\t\tif (r.ok) {\n\t\t\t\t\tstatus.style.color = 'var(--green, #22c55e)';\n\t\t\t\t\tstatus.textContent = 'Saved.';\n\t\t\t\t} else {\n\t\t\t\t\tstatus.style.color = 'var(--red, #ef4444)';\n\t\t\t\t\tstatus.textContent = 'Save failed.';\n\t\t\t\t}\n\t\t\t\tsetTimeout(() => { status.textContent = ''; }, 3000);\n\t\t\t});\n\t\t}\n\n\t\tfunction changeEmail() {\n\t\t\tconst status = document.getElementById('email-status');\n\t\t\tconst newEmail = document.getElementById('field-new-email').value.trim();\n\t\t\tconst password = document.getElementById('field-email-password').value;\n\t\t\tif (!newEmail || !password) {\n\t\t\t\tstatus.style.color = 'var(--red, #ef4444)';\n\t\t\t\tstatus.textContent = 'All fields required.';\n\t\t\t\treturn;\n\t\t\t}\n\t\t\tfetch('/api/users/me/email', {\n\t\t\t\tmethod: 'PUT',\n\t\t\t\theaders: {'Content-Type': 'application/json'},\n\t\t\t\tbody: JSON.stringify({email: newEmail, current_password: password}),\n\t\t\t}).then(r => {\n\t\t\t\tif (r.ok) {\n\t\t\t\t\tstatus.style.color = 'var(--green, #22c55e)';\n\t\t\t\t\tstatus.textContent = 'Email updated. You may need to log in again.';\n\t\t\t\t\tdocument.getElementById('field-new-email').value = '';\n\t\t\t\t\tdocument.getElementById('field-email-password').value = '';\n\t\t\t\t} else if (r.status === 401) {\n\t\t\t\t\tstatus.style.color = 'var(--red, #ef4444)';\n\t\t\t\t\tstatus.textContent = 'Current password is incorrect.';\n\t\t\t\t} else if (r.status === 409) {\n\t\t\t\t\tstatus.style.color = 'var(--red, #ef4444)';\n\t\t\t\t\tstatus.textContent = 'That email is already in use.';\n\t\t\t\t} else {\n\t\t\t\t\tstatus.style.color = 'var(--red, #ef4444)';\n\t\t\t\t\tstatus.textContent = 'Update failed.';\n\t\t\t\t}\n\t\t\t});\n\t\t}\n\n\t\tfunction changePassword() {\n\t\t\tconst status = document.getElementById('password-status');\n\t\t\tconst current = document.getElementById('field-current-password').value;\n\t\t\tconst next    = document.getElementById('field-new-password').value;\n\t\t\tconst confirm = document.getElementById('field-confirm-password').value;\n\t\t\tif (!current || !next || !confirm) {\n\t\t\t\tstatus.style.color = 'var(--red, #ef4444)';\n\t\t\t\tstatus.textContent = 'All fields required.';\n\t\t\t\treturn;\n\t\t\t}\n\t\t\tif (next !== confirm) {\n\t\t\t\tstatus.style.color = 'var(--red, #ef4444)';\n\t\t\t\tstatus.textContent = 'New passwords do not match.';\n\t\t\t\treturn;\n\t\t\t}\n\t\t\tfetch('/api/users/me/password', {\n\t\t\t\tmethod: 'PUT',\n\t\t\t\theaders: {'Content-Type': 'application/json'},\n\t\t\t\tbody: JSON.stringify({current_password: current, new_password: next}),\n\t\t\t}).then(r => {\n\t\t\t\tif (r.ok) {\n\t\t\t\t\tstatus.style.color = 'var(--green, #22c55e)';\n\t\t\t\t\tstatus.textContent = 'Password changed.';\n\t\t\t\t\tdocument.getElementById('field-current-password').value = '';\n\t\t\t\t\tdocument.getElementById('field-new-password').value = '';\n\t\t\t\t\tdocument.getElementById('field-confirm-password').value = '';\n\t\t\t\t} else if (r.status === 401) {\n\t\t\t\t\tstatus.style.color = 'var(--red, #ef4444)';\n\t\t\t\t\tstatus.textContent = 'Current password is incorrect.';\n\t\t\t\t} else {\n\t\t\t\t\tstatus.style.color = 'var(--red, #ef4444)';\n\t\t\t\t\tstatus.textContent = 'Change failed.';\n\t\t\t\t}\n\t\t\t});\n\t\t}\n\t\t</script>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = Shell(data).Render(templ.WithChildren(ctx, templ_7745c5c3_Var5), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = Shell(shell).Render(templ.WithChildren(ctx, templ_7745c5c3_Var5), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

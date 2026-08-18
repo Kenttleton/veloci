@@ -14,6 +14,7 @@ const (
 	RefreshTokenOperation             OperationName = "RefreshToken"
 	RevokeTokenOperation              OperationName = "RevokeToken"
 	RevokeUserTokensOperation         OperationName = "RevokeUserTokens"
+	UpdateCredentialEmailOperation    OperationName = "UpdateCredentialEmail"
 	UpdateCredentialPasswordOperation OperationName = "UpdateCredentialPassword"
 	ValidateCredentialOperation       OperationName = "ValidateCredential"
 	ValidateTokenOperation            OperationName = "ValidateToken"

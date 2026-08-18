@@ -331,7 +331,7 @@ func syncAdminUser(ctx context.Context, authClient *authclient.Client, s *store.
 		return fmt.Errorf("could not validate admin credential after 60s: %w", err)
 	}
 
-	userID, err := s.EnsureUser(ctx, email, "Server Admin", credentialID)
+	userID, err := s.EnsureUser(ctx, email, credentialID)
 	if err != nil {
 		return fmt.Errorf("ensure user: %w", err)
 	}

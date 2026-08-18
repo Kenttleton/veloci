@@ -623,6 +623,25 @@ func (s *TokenPairOutputBody) SetRefreshToken(val string) {
 	s.RefreshToken = val
 }
 
+// Ref: #/components/schemas/UpdateCredentialEmailInputBody
+type UpdateCredentialEmailInputBody struct {
+	// New email address.
+	Email string `json:"email"`
+}
+
+// GetEmail returns the value of Email.
+func (s *UpdateCredentialEmailInputBody) GetEmail() string {
+	return s.Email
+}
+
+// SetEmail sets the value of Email.
+func (s *UpdateCredentialEmailInputBody) SetEmail(val string) {
+	s.Email = val
+}
+
+// UpdateCredentialEmailNoContent is response for UpdateCredentialEmail operation.
+type UpdateCredentialEmailNoContent struct{}
+
 // Ref: #/components/schemas/UpdateCredentialPasswordInputBody
 type UpdateCredentialPasswordInputBody struct {
 	// New plaintext password.

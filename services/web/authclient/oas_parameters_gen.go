@@ -212,6 +212,72 @@ func decodeRevokeUserTokensParams(args [1]string, argsEscaped bool, r *http.Requ
 	return params, nil
 }
 
+// UpdateCredentialEmailParams is parameters of update-credential-email operation.
+type UpdateCredentialEmailParams struct {
+	// Credential UUID.
+	ID string
+}
+
+func unpackUpdateCredentialEmailParams(packed middleware.Parameters) (params UpdateCredentialEmailParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "id",
+			In:   "path",
+		}
+		params.ID = packed[key].(string)
+	}
+	return params
+}
+
+func decodeUpdateCredentialEmailParams(args [1]string, argsEscaped bool, r *http.Request) (params UpdateCredentialEmailParams, _ error) {
+	// Decode path: id.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "id",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.ID = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "id",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
 // UpdateCredentialPasswordParams is parameters of update-credential-password operation.
 type UpdateCredentialPasswordParams struct {
 	// Credential UUID.

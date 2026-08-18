@@ -719,11 +719,11 @@ templ addAccountDialog() {
 
 templ userMenu(user ShellUser, currentPath string) {
 	<details class="user-menu" style="position:relative">
-		<summary class="user-menu-summary">{ Initials(user.Name, user.Email) }</summary>
+		<summary class="user-menu-summary">{ Initials(user.DisplayName, user.Email) }</summary>
 		<div class="user-menu-dropdown">
 			<div class="user-menu-info">
-				if user.Name != "" {
-					<div class="user-menu-name">{ user.Name }</div>
+				if user.DisplayName != "" {
+					<div class="user-menu-name">{ user.DisplayName }</div>
 				}
 				<div class="user-menu-email">{ user.Email }</div>
 			</div>

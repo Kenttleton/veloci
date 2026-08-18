@@ -85,6 +85,15 @@ func (UnimplementedHandler) RevokeUserTokens(ctx context.Context, params RevokeU
 	return ht.ErrNotImplemented
 }
 
+// UpdateCredentialEmail implements update-credential-email operation.
+//
+// Update email for a credential.
+//
+// PUT /credentials/{id}/email
+func (UnimplementedHandler) UpdateCredentialEmail(ctx context.Context, req *UpdateCredentialEmailInputBody, params UpdateCredentialEmailParams) error {
+	return ht.ErrNotImplemented
+}
+
 // UpdateCredentialPassword implements update-credential-password operation.
 //
 // Update password hash for a credential.

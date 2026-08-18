@@ -1,5 +1,7 @@
 package page
 
+import "github.com/veloci/veloci/store"
+
 // PlaceholderPage renders the shell with a "coming soon" message.
 templ PlaceholderPage(data ShellData, name string) {
 	@Shell(data) {
@@ -7,22 +9,208 @@ templ PlaceholderPage(data ShellData, name string) {
 	}
 }
 
-
-// SettingsPage — profile settings (placeholder, matches React).
-templ SettingsPage(data ShellData) {
-	@Shell(data) {
+// SettingsPage — user profile and security settings.
+templ SettingsPage(shell ShellData, u store.User) {
+	@Shell(shell) {
 		<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
 			<div style="flex:1;overflow:auto;padding:24px 20px">
-				<section style="max-width:480px">
-					<h2 style="margin:0 0 4px;font-size:15px;font-weight:700;color:var(--text)">Profile</h2>
-					<p style="margin:0 0 20px;font-size:12px;color:var(--text3)">
-						Manage your display name, email, and password.
-					</p>
-					<div style="padding:32px 0;color:var(--text3);font-size:13px">
-						Profile settings coming soon.
-					</div>
-				</section>
+				<div style="max-width:560px;display:flex;flex-direction:column;gap:32px">
+					<!-- Profile -->
+					<section>
+						<h2 style="margin:0 0 4px;font-size:15px;font-weight:700;color:var(--text)">Profile</h2>
+						<p style="margin:0 0 16px;font-size:12px;color:var(--text3)">Your name and how you appear in the app.</p>
+						<form id="profile-form" style="display:flex;flex-direction:column;gap:12px">
+							<div style="display:flex;gap:12px">
+								<div style="flex:1">
+									<label class="field-label">First Name</label>
+									<input
+										id="field-first-name"
+										type="text"
+										class="field-input"
+										value={ u.FirstName }
+										placeholder="First"
+									/>
+								</div>
+								<div style="flex:1">
+									<label class="field-label">Last Name</label>
+									<input
+										id="field-last-name"
+										type="text"
+										class="field-input"
+										value={ u.LastName }
+										placeholder="Last"
+									/>
+								</div>
+							</div>
+							<div>
+								<label class="field-label">Preferred Name</label>
+								<input
+									id="field-preferred-name"
+									type="text"
+									class="field-input"
+									value={ u.PreferredName }
+									placeholder="How you'd like to be addressed"
+								/>
+								<p style="margin:4px 0 0;font-size:11px;color:var(--text3)">First name, full name, or nickname — this is what appears in the app.</p>
+							</div>
+							<div>
+								<label class="field-label">Email</label>
+								<input type="text" class="field-input" value={ u.Email } disabled style="opacity:0.6;cursor:default"/>
+							</div>
+							<div>
+								<label class="field-label">Role</label>
+								<div style="margin-top:4px">
+									if u.EntityRole == "entity_admin" {
+										<span class="badge badge-admin">Admin</span>
+									} else {
+										<span class="badge badge-member">Member</span>
+									}
+								</div>
+							</div>
+							<div style="display:flex;align-items:center;gap:12px">
+								<button type="button" class="btn btn-primary" onclick="saveProfile()">Save</button>
+								<span id="profile-status" style="font-size:12px;color:var(--text3)"></span>
+							</div>
+						</form>
+					</section>
+					<!-- Security -->
+					<section>
+						<h2 style="margin:0 0 4px;font-size:15px;font-weight:700;color:var(--text)">Security</h2>
+						<p style="margin:0 0 16px;font-size:12px;color:var(--text3)">Update your email address or password. Both require your current password.</p>
+						<!-- Change Email -->
+						<div style="border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px">
+							<h3 style="margin:0 0 12px;font-size:13px;font-weight:600;color:var(--text)">Change Email</h3>
+							<div style="display:flex;flex-direction:column;gap:10px">
+								<div>
+									<label class="field-label">New Email</label>
+									<input id="field-new-email" type="email" class="field-input" placeholder="new@example.com"/>
+								</div>
+								<div>
+									<label class="field-label">Current Password</label>
+									<input id="field-email-password" type="password" class="field-input" placeholder="Your current password"/>
+								</div>
+								<div style="display:flex;align-items:center;gap:12px">
+									<button type="button" class="btn btn-secondary" onclick="changeEmail()">Update Email</button>
+									<span id="email-status" style="font-size:12px;color:var(--text3)"></span>
+								</div>
+							</div>
+						</div>
+						<!-- Change Password -->
+						<div style="border:1px solid var(--border);border-radius:8px;padding:16px">
+							<h3 style="margin:0 0 12px;font-size:13px;font-weight:600;color:var(--text)">Change Password</h3>
+							<div style="display:flex;flex-direction:column;gap:10px">
+								<div>
+									<label class="field-label">Current Password</label>
+									<input id="field-current-password" type="password" class="field-input"/>
+								</div>
+								<div>
+									<label class="field-label">New Password</label>
+									<input id="field-new-password" type="password" class="field-input"/>
+								</div>
+								<div>
+									<label class="field-label">Confirm New Password</label>
+									<input id="field-confirm-password" type="password" class="field-input"/>
+								</div>
+								<div style="display:flex;align-items:center;gap:12px">
+									<button type="button" class="btn btn-secondary" onclick="changePassword()">Change Password</button>
+									<span id="password-status" style="font-size:12px;color:var(--text3)"></span>
+								</div>
+							</div>
+						</div>
+					</section>
+				</div>
 			</div>
 		</div>
+		<script>
+		function saveProfile() {
+			const status = document.getElementById('profile-status');
+			fetch('/api/users/me', {
+				method: 'PUT',
+				headers: {'Content-Type': 'application/json'},
+				body: JSON.stringify({
+					first_name:     document.getElementById('field-first-name').value,
+					last_name:      document.getElementById('field-last-name').value,
+					preferred_name: document.getElementById('field-preferred-name').value,
+				}),
+			}).then(r => {
+				if (r.ok) {
+					status.style.color = 'var(--green, #22c55e)';
+					status.textContent = 'Saved.';
+				} else {
+					status.style.color = 'var(--red, #ef4444)';
+					status.textContent = 'Save failed.';
+				}
+				setTimeout(() => { status.textContent = ''; }, 3000);
+			});
+		}
+
+		function changeEmail() {
+			const status = document.getElementById('email-status');
+			const newEmail = document.getElementById('field-new-email').value.trim();
+			const password = document.getElementById('field-email-password').value;
+			if (!newEmail || !password) {
+				status.style.color = 'var(--red, #ef4444)';
+				status.textContent = 'All fields required.';
+				return;
+			}
+			fetch('/api/users/me/email', {
+				method: 'PUT',
+				headers: {'Content-Type': 'application/json'},
+				body: JSON.stringify({email: newEmail, current_password: password}),
+			}).then(r => {
+				if (r.ok) {
+					status.style.color = 'var(--green, #22c55e)';
+					status.textContent = 'Email updated. You may need to log in again.';
+					document.getElementById('field-new-email').value = '';
+					document.getElementById('field-email-password').value = '';
+				} else if (r.status === 401) {
+					status.style.color = 'var(--red, #ef4444)';
+					status.textContent = 'Current password is incorrect.';
+				} else if (r.status === 409) {
+					status.style.color = 'var(--red, #ef4444)';
+					status.textContent = 'That email is already in use.';
+				} else {
+					status.style.color = 'var(--red, #ef4444)';
+					status.textContent = 'Update failed.';
+				}
+			});
+		}
+
+		function changePassword() {
+			const status = document.getElementById('password-status');
+			const current = document.getElementById('field-current-password').value;
+			const next    = document.getElementById('field-new-password').value;
+			const confirm = document.getElementById('field-confirm-password').value;
+			if (!current || !next || !confirm) {
+				status.style.color = 'var(--red, #ef4444)';
+				status.textContent = 'All fields required.';
+				return;
+			}
+			if (next !== confirm) {
+				status.style.color = 'var(--red, #ef4444)';
+				status.textContent = 'New passwords do not match.';
+				return;
+			}
+			fetch('/api/users/me/password', {
+				method: 'PUT',
+				headers: {'Content-Type': 'application/json'},
+				body: JSON.stringify({current_password: current, new_password: next}),
+			}).then(r => {
+				if (r.ok) {
+					status.style.color = 'var(--green, #22c55e)';
+					status.textContent = 'Password changed.';
+					document.getElementById('field-current-password').value = '';
+					document.getElementById('field-new-password').value = '';
+					document.getElementById('field-confirm-password').value = '';
+				} else if (r.status === 401) {
+					status.style.color = 'var(--red, #ef4444)';
+					status.textContent = 'Current password is incorrect.';
+				} else {
+					status.style.color = 'var(--red, #ef4444)';
+					status.textContent = 'Change failed.';
+				}
+			});
+		}
+		</script>
 	}
 }

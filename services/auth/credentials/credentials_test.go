@@ -40,6 +40,10 @@ func (s *stubCredDB) UpdateCredentialPassword(_ context.Context, id, hash string
 	return s.updateFound, nil
 }
 
+func (s *stubCredDB) UpdateCredentialEmail(_ context.Context, id, email string) (bool, error) {
+	return s.updateFound, nil
+}
+
 func (s *stubCredDB) DeleteCredential(_ context.Context, id string) (bool, bool, error) {
 	return s.deleteFound, s.deleteRoleBlocked, nil
 }

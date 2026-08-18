@@ -27,20 +27,24 @@ func NewUsersHandler(s *store.Store, auth *authclient.Client) *UsersHandler {
 
 // userView is the API representation of a user.
 type userView struct {
-	ID         string `json:"id"`
-	Email      string `json:"email"`
-	Name       string `json:"name"`
-	EntityRole string `json:"entity_role"`
-	CreatedAt  string `json:"created_at"`
+	ID            string `json:"id"`
+	Email         string `json:"email"`
+	FirstName     string `json:"first_name"`
+	LastName      string `json:"last_name"`
+	PreferredName string `json:"preferred_name"`
+	EntityRole    string `json:"entity_role"`
+	CreatedAt     string `json:"created_at"`
 }
 
 func toUserView(u store.User) userView {
 	return userView{
-		ID:         u.ID,
-		Email:      u.Email,
-		Name:       u.Name,
-		EntityRole: u.EntityRole,
-		CreatedAt:  u.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		ID:            u.ID,
+		Email:         u.Email,
+		FirstName:     u.FirstName,
+		LastName:      u.LastName,
+		PreferredName: u.PreferredName,
+		EntityRole:    u.EntityRole,
+		CreatedAt:     u.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
 }
 
@@ -65,13 +69,15 @@ func (h *UsersHandler) UpdateMe(c echo.Context) error {
 	userID := middleware.UserID(ctx)
 
 	var body struct {
-		Name string `json:"name"`
+		FirstName     string `json:"first_name"`
+		LastName      string `json:"last_name"`
+		PreferredName string `json:"preferred_name"`
 	}
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid body")
 	}
 
-	if err := h.s.UpdateUserProfile(ctx, userID, body.Name); err != nil {
+	if err := h.s.UpdateUserProfile(ctx, userID, body.FirstName, body.LastName, body.PreferredName); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 	u, err := h.s.GetUserByID(ctx, entityID, userID)
@@ -82,6 +88,96 @@ func (h *UsersHandler) UpdateMe(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 	return c.JSON(http.StatusOK, response.Single(toUserView(u)))
+}
+
+func (h *UsersHandler) ChangeOwnPassword(c echo.Context) error {
+	ctx := c.Request().Context()
+	email := middleware.Email(ctx)
+	userID := middleware.UserID(ctx)
+
+	var body struct {
+		CurrentPassword string `json:"current_password"`
+		NewPassword     string `json:"new_password"`
+	}
+	if err := c.Bind(&body); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid body")
+	}
+	if body.CurrentPassword == "" || body.NewPassword == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "current_password and new_password are required")
+	}
+
+	// Verify current password.
+	if _, err := h.auth.ValidateCredential(ctx, &authclient.ValidateCredentialInputBody{
+		Email:    email,
+		Password: body.CurrentPassword,
+	}); err != nil {
+		return echo.NewHTTPError(http.StatusUnauthorized, "current password is incorrect")
+	}
+
+	credID, err := h.s.GetUserCredentialID(ctx, userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return echo.NewHTTPError(http.StatusNotFound, "not found")
+	}
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
+	}
+
+	if err := h.auth.UpdateCredentialPassword(ctx, &authclient.UpdateCredentialPasswordInputBody{
+		Password: body.NewPassword,
+	}, authclient.UpdateCredentialPasswordParams{ID: credID}); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+func (h *UsersHandler) ChangeOwnEmail(c echo.Context) error {
+	ctx := c.Request().Context()
+	email := middleware.Email(ctx)
+	userID := middleware.UserID(ctx)
+
+	var body struct {
+		Email           string `json:"email"`
+		CurrentPassword string `json:"current_password"`
+	}
+	if err := c.Bind(&body); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid body")
+	}
+	if body.Email == "" || body.CurrentPassword == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "email and current_password are required")
+	}
+
+	// Verify current password before changing the email.
+	if _, err := h.auth.ValidateCredential(ctx, &authclient.ValidateCredentialInputBody{
+		Email:    email,
+		Password: body.CurrentPassword,
+	}); err != nil {
+		return echo.NewHTTPError(http.StatusUnauthorized, "current password is incorrect")
+	}
+
+	credID, err := h.s.GetUserCredentialID(ctx, userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return echo.NewHTTPError(http.StatusNotFound, "not found")
+	}
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
+	}
+
+	// Update auth service first.
+	if err := h.auth.UpdateCredentialEmail(ctx, &authclient.UpdateCredentialEmailInputBody{
+		Email: body.Email,
+	}, authclient.UpdateCredentialEmailParams{ID: credID}); err != nil {
+		return echo.NewHTTPError(http.StatusConflict, "email already registered")
+	}
+
+	// Update app DB; roll back auth service on failure.
+	if err := h.s.UpdateUserEmail(ctx, userID, body.Email); err != nil {
+		// Best-effort rollback to keep auth and app in sync.
+		_ = h.auth.UpdateCredentialEmail(ctx, &authclient.UpdateCredentialEmailInputBody{
+			Email: email,
+		}, authclient.UpdateCredentialEmailParams{ID: credID})
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
+	}
+	return c.NoContent(http.StatusNoContent)
 }
 
 func (h *UsersHandler) ListUsers(c echo.Context) error {
@@ -211,6 +307,8 @@ func RegisterUsersRoutes(g *echo.Group, s *store.Store, auth *authclient.Client,
 
 	read.GET("/users/me", h.GetMe)
 	read.PUT("/users/me", h.UpdateMe)
+	g.PUT("/users/me/password", h.ChangeOwnPassword)
+	g.PUT("/users/me/email", h.ChangeOwnEmail)
 	manage.GET("/users", h.ListUsers)
 	manage.PUT("/users/:id/password", h.ChangePassword)
 	manage.DELETE("/users/:id", h.DeleteUser)

@@ -35,8 +35,8 @@ type ShellData struct {
 
 // ShellUser holds the current user's display info.
 type ShellUser struct {
-	Name  string
-	Email string
+	DisplayName string
+	Email       string
 }
 
 // ShellAccount is a simplified account for the sidebar.
@@ -170,8 +170,15 @@ func (s *Server) buildShellData(r *http.Request) ShellData {
 		}
 	}
 
+	shellUser := ShellUser{Email: email}
+	if userID := middleware.UserID(ctx); userID != "" {
+		if u, err := s.store.GetUserByID(ctx, entityID, userID); err == nil {
+			shellUser.DisplayName = u.DisplayName()
+		}
+	}
+
 	return ShellData{
-		User:            ShellUser{Email: email},
+		User:            shellUser,
 		ActiveAccounts:  active,
 		PassiveAccounts: passive,
 		CurrentPath:     r.URL.Path,
@@ -685,7 +692,15 @@ func (s *Server) Activity(c echo.Context) error {
 	targetJobID := c.QueryParam("job")
 	entityID := middleware.EntityID(c.Request().Context())
 
-	jobs, _ := s.store.ListJobs(c.Request().Context(), entityID, pageSize, cursor)
+	ctx := c.Request().Context()
+	jobs, _ := s.store.ListJobs(ctx, entityID, pageSize, cursor)
+
+	userNames := map[string]string{}
+	if users, err := s.store.ListUsers(ctx, entityID); err == nil {
+		for _, u := range users {
+			userNames[u.ID] = u.DisplayName()
+		}
+	}
 
 	var nextCursor string
 	if len(jobs) == pageSize {
@@ -697,6 +712,7 @@ func (s *Server) Activity(c echo.Context) error {
 		Jobs:        jobs,
 		NextCursor:  nextCursor,
 		TargetJobID: targetJobID,
+		UserNames:   userNames,
 	}
 	return s.render(c, ActivityPage(titled(s.buildShellData(c.Request()), "Activity"), data))
 }
@@ -1169,7 +1185,15 @@ func (s *Server) Configuration(c echo.Context) error {
 }
 
 func (s *Server) Settings(c echo.Context) error {
-	return s.render(c, SettingsPage(titled(s.buildShellData(c.Request()), "Settings")))
+	ctx := c.Request().Context()
+	entityID := middleware.EntityID(ctx)
+	userID := middleware.UserID(ctx)
+
+	u, err := s.store.GetUserByID(ctx, entityID, userID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
+	}
+	return s.render(c, SettingsPage(titled(s.buildShellData(c.Request()), "Settings"), u))
 }
 
 func (s *Server) Glossary(c echo.Context) error {

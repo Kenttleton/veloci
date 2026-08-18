@@ -11,7 +11,9 @@ CREATE TABLE users (
   id                 UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   auth_credential_id UUID        NOT NULL UNIQUE,
   email              TEXT        NOT NULL UNIQUE,
-  name               TEXT        NOT NULL,
+  first_name         TEXT        NOT NULL DEFAULT '',
+  last_name          TEXT        NOT NULL DEFAULT '',
+  preferred_name     TEXT        NOT NULL DEFAULT '',
   created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

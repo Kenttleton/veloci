@@ -56,6 +56,12 @@ type Handler interface {
 	//
 	// DELETE /tokens/user/{credential_id}
 	RevokeUserTokens(ctx context.Context, params RevokeUserTokensParams) error
+	// UpdateCredentialEmail implements update-credential-email operation.
+	//
+	// Update email for a credential.
+	//
+	// PUT /credentials/{id}/email
+	UpdateCredentialEmail(ctx context.Context, req *UpdateCredentialEmailInputBody, params UpdateCredentialEmailParams) error
 	// UpdateCredentialPassword implements update-credential-password operation.
 	//
 	// Update password hash for a credential.

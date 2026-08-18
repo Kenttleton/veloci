@@ -852,9 +852,9 @@ func userMenu(user ShellUser, currentPath string) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var42 string
-		templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinStringErrs(Initials(user.Name, user.Email))
+		templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinStringErrs(Initials(user.DisplayName, user.Email))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 722, Col: 70}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 722, Col: 77}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
 		if templ_7745c5c3_Err != nil {
@@ -864,15 +864,15 @@ func userMenu(user ShellUser, currentPath string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		if user.Name != "" {
+		if user.DisplayName != "" {
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "<div class=\"user-menu-name\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var43 string
-			templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(user.Name)
+			templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(user.DisplayName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 726, Col: 44}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/shell.templ`, Line: 726, Col: 51}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
 			if templ_7745c5c3_Err != nil {

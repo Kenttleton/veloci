@@ -221,6 +221,20 @@
         ],
         "type": "object"
       },
+      "UpdateCredentialEmailInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "description": "New email address",
+            "format": "email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "type": "object"
+      },
       "UpdateCredentialPasswordInputBody": {
         "additionalProperties": false,
         "properties": {
@@ -438,6 +452,52 @@
           }
         },
         "summary": "Permanently remove a credential and cascade tokens",
+        "tags": [
+          "credentials"
+        ]
+      }
+    },
+    "/credentials/{id}/email": {
+      "put": {
+        "operationId": "update-credential-email",
+        "parameters": [
+          {
+            "description": "Credential UUID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Credential UUID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCredentialEmailInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Update email for a credential",
         "tags": [
           "credentials"
         ]
