@@ -10,18 +10,16 @@ type EntitySummary struct {
 	UserCount int    `db:"user_count"`
 }
 
-// EnsureAdminEntity returns the ID of the first entity, creating one with the given
-// name if none exists. Used during first-instance bootstrap.
-func (s *Store) EnsureAdminEntity(ctx context.Context, name string) (string, error) {
+// EnsureAdminEntity returns the ID of the first entity, creating one if none
+// exists. The entity label (display name) is seeded separately by EnsureSystemData.
+func (s *Store) EnsureAdminEntity(ctx context.Context) (string, error) {
 	var id string
 	// Return the first existing entity to avoid creating duplicates on restart.
 	err := s.pool.QueryRow(ctx, `SELECT id::text FROM entities ORDER BY created_at LIMIT 1`).Scan(&id)
 	if err == nil {
 		return id, nil
 	}
-	err = s.pool.QueryRow(ctx, `
-		INSERT INTO entities (name) VALUES ($1) RETURNING id::text
-	`, name).Scan(&id)
+	err = s.pool.QueryRow(ctx, `INSERT INTO entities DEFAULT VALUES RETURNING id::text`).Scan(&id)
 	return id, err
 }
 

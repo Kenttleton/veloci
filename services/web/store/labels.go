@@ -147,10 +147,38 @@ func (s *Store) DeleteLabelIfOrphaned(ctx context.Context, entityID, labelID str
 	return err
 }
 
+// GetEntityLabel returns the system label that is the identity of the entity
+// (the one entities.label_id points to).
+func (s *Store) GetEntityLabel(ctx context.Context, entityID string) (Label, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT l.id::text, l.entity_id::text, l.name, l.source, l.created_at
+		FROM labels l
+		JOIN entities e ON l.id = e.label_id
+		WHERE e.id = $1::uuid
+	`, entityID)
+	if err != nil {
+		return Label{}, err
+	}
+	return pgx.CollectOneRow(rows, pgx.RowToStructByName[Label])
+}
+
+// UpdateEntityLabel renames the entity identity label. Unlike UpdateLabel, this
+// is permitted for system-source labels because the entity name is user-settable.
+func (s *Store) UpdateEntityLabel(ctx context.Context, entityID, name string) error {
+	_, err := s.pool.Exec(ctx, `
+		UPDATE labels SET name = $2
+		FROM entities
+		WHERE entities.id = $1::uuid
+		  AND labels.id = entities.label_id
+	`, entityID, name)
+	return err
+}
+
 // EnsureSystemLabels creates the built-in system labels for the entity if they
-// do not already exist, and links pipeline stage numbers to their label UUIDs.
-// Safe to call on every entity creation and on startup.
-func (s *Store) EnsureSystemLabels(ctx context.Context, entityID string) error {
+// do not already exist, seeds the entity identity label, and links pipeline stage
+// numbers to their label UUIDs. Safe to call on every startup.
+func (s *Store) EnsureSystemLabels(ctx context.Context, entityID, entityName string) error {
+	// Seed fixed system labels and pipeline stage mappings.
 	_, err := s.pool.Exec(ctx, `
 		WITH seeded AS (
 			INSERT INTO labels (id, entity_id, name, source, created_at)
@@ -179,6 +207,29 @@ func (s *Store) EnsureSystemLabels(ctx context.Context, entityID string) error {
 		WHERE s.name IN ('Importing', 'Categorizing', 'Analyzing', 'Forecasting')
 		ON CONFLICT (stage_num, entity_id) DO UPDATE SET label_id = EXCLUDED.label_id
 	`, entityID)
+	if err != nil {
+		return err
+	}
+
+	// Seed the entity identity label only on first run (when entities.label_id is NULL).
+	// ON CONFLICT DO NOTHING: if the entity name collides with an existing label, skip —
+	// the link step below won't fire and label_id stays NULL until resolved manually.
+	var labelID string
+	err = s.pool.QueryRow(ctx, `
+		INSERT INTO labels (id, entity_id, name, source, created_at)
+		SELECT gen_random_uuid(), $1::uuid, $2, 'system', NOW()
+		WHERE NOT EXISTS (SELECT 1 FROM entities WHERE id = $1::uuid AND label_id IS NOT NULL)
+		ON CONFLICT (entity_id, name) DO NOTHING
+		RETURNING id::text
+	`, entityID, entityName).Scan(&labelID)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	if labelID != "" {
+		_, err = s.pool.Exec(ctx, `
+			UPDATE entities SET label_id = $2::uuid WHERE id = $1::uuid AND label_id IS NULL
+		`, entityID, labelID)
+	}
 	return err
 }
 
@@ -190,22 +241,30 @@ func (s *Store) labelExists(ctx context.Context, entityID, id string) (bool, err
 	return exists, err
 }
 
-// LabelWithCount extends Label with the entry count for the entity.
+// LabelWithCount extends Label with usage counts for the entity.
 type LabelWithCount struct {
 	Label
-	EntryCount int `db:"entry_count"`
+	EntryCount      int  `db:"entry_count"`
+	IsPipelineLabel bool `db:"is_pipeline_label"`
+	ActivityCount   int  `db:"activity_count"`
 }
 
 // ListLabelsWithEntryCount returns all entity labels ordered by creation date,
-// with the count of entries that reference each label.
+// with entry counts for regular labels and activity counts for pipeline stage labels.
 func (s *Store) ListLabelsWithEntryCount(ctx context.Context, entityID string) ([]LabelWithCount, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT l.id::text, l.entity_id::text, l.name, l.source, l.created_at,
-		       COUNT(e.id)::int AS entry_count
+		       COUNT(DISTINCT e.id)::int AS entry_count,
+		       (psl.label_id IS NOT NULL) AS is_pipeline_label,
+		       CASE WHEN psl.label_id IS NOT NULL
+		            THEN (SELECT COUNT(*)::int FROM processing_jobs WHERE entity_id = $1)
+		            ELSE 0
+		       END AS activity_count
 		FROM labels l
 		LEFT JOIN entries e ON e.label_id = l.id AND e.entity_id = l.entity_id
+		LEFT JOIN pipeline_stage_labels psl ON psl.label_id = l.id AND psl.entity_id = l.entity_id
 		WHERE l.entity_id = $1
-		GROUP BY l.id, l.entity_id, l.name, l.source, l.created_at
+		GROUP BY l.id, l.entity_id, l.name, l.source, l.created_at, psl.label_id
 		ORDER BY (l.source = 'system') DESC, l.created_at DESC, l.id DESC
 	`, entityID)
 	if err != nil {

@@ -59,11 +59,12 @@ func (s *Store) EnsureEntityConfig(ctx context.Context, entityID string) error {
 }
 
 // EnsureSystemData idempotently initialises all system-managed data for an entity:
-//   - system labels (Income, Spend)
+//   - entity identity label (seeded with entityName on first run)
+//   - system labels (Income, Spend, All, pipeline stages)
 //   - entity_config row
-//   - Income and Spend system entries (source='system', priority=9999, status='live')
-func (s *Store) EnsureSystemData(ctx context.Context, entityID string) error {
-	if err := s.EnsureSystemLabels(ctx, entityID); err != nil {
+//   - Income, Spend, and All system entries (source='system', priority=9999, status='live')
+func (s *Store) EnsureSystemData(ctx context.Context, entityID, entityName string) error {
+	if err := s.EnsureSystemLabels(ctx, entityID, entityName); err != nil {
 		return err
 	}
 	if err := s.EnsureEntityConfig(ctx, entityID); err != nil {

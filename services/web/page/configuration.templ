@@ -23,7 +23,7 @@ templ ConfigurationPage(shell ShellData, data ConfigurationData) {
 					<a
 						href="?tab=system"
 						style={ cfgTabStyle(data.Tab == "system") }
-					>System</a>
+					>Entity</a>
 					if shell.EntityRole == "entity_admin" {
 						<a
 							href="?tab=users"
@@ -36,7 +36,7 @@ templ ConfigurationPage(shell ShellData, data ConfigurationData) {
 				if data.Tab == "institutions" {
 					@cfgInstitutionsSection(data.Institutions)
 				} else if data.Tab == "system" {
-					@cfgSystemSection(data.EntityConfig.SystemWindowDays)
+					@cfgSystemSection(data.EntityName, data.EntityConfig.SystemWindowDays)
 				} else if data.Tab == "users" {
 					@cfgUsersSection(data.Users, data.ServerAdminEmail)
 				} else {
@@ -122,13 +122,13 @@ templ ConfigurationPage(shell ShellData, data ConfigurationData) {
 				}
 
 				function labelRowHTML(id, name, entryCount, editing, isSystem) {
-					var countStr = entryCount > 0 ? entryCount + ' entr' + (entryCount === 1 ? 'y' : 'ies') : '—';
+					var countStr = entryCount > 0 ? entryCount + (entryCount === 1 ? ' Entry' : ' Entries') : '—';
 					if (isSystem) {
 						return '<td style="padding:8px 12px;font-size:13px;color:var(--text2)">' + escHtml(name) +
 							'<span style="margin-left:6px;font-size:10px;font-weight:600;padding:1px 5px;border-radius:10px;background:var(--surface2);color:var(--text3)">System</span></td>' +
 							'<td style="padding:8px 12px;font-size:12px;color:var(--text2)">' + countStr + '</td>' +
 							'<td style="padding:8px 12px">' +
-							  '<button class="js-label-where-used" data-label-id="' + id + '" data-label-name="' + escHtml(name) + '" style="background:none;border:none;cursor:pointer;color:var(--accent);font-size:12px;font-family:inherit;padding:0">Where used</button>' +
+							  '<button class="js-label-where-used" data-label-id="' + id + '" data-label-name="' + escHtml(name) + '" style="background:none;border:none;cursor:pointer;color:var(--accent);font-size:12px;font-family:inherit;padding:0">Where Used</button>' +
 							'</td>';
 					}
 					if (editing) {
@@ -142,9 +142,11 @@ templ ConfigurationPage(shell ShellData, data ConfigurationData) {
 					return '<td style="padding:8px 12px;font-size:13px;color:var(--text);cursor:pointer" class="js-label-name-cell" data-label-id="' + id + '" data-label-name="' + escHtml(name) + '" data-entry-count="' + entryCount + '">' + escHtml(name) + '</td>' +
 						'<td style="padding:8px 12px;font-size:12px;color:var(--text2)">' + countStr + '</td>' +
 						'<td style="padding:8px 12px">' +
-						  '<div class="js-label-actions-normal" style="display:flex;gap:6px">' +
-						    '<button class="js-label-where-used" data-label-id="' + id + '" data-label-name="' + escHtml(name) + '" style="background:none;border:none;cursor:pointer;color:var(--accent);font-size:12px;font-family:inherit;padding:0">Where used</button>' +
+						  '<div class="js-label-actions-normal" style="display:flex;align-items:center;gap:6px;white-space:nowrap">' +
+						    '<button class="js-label-where-used" data-label-id="' + id + '" data-label-name="' + escHtml(name) + '" style="background:none;border:none;cursor:pointer;color:var(--accent);font-size:12px;font-family:inherit;padding:0">Where Used</button>' +
+						    '<span style="color:var(--border);user-select:none">|</span>' +
 						    '<button class="js-label-rename" data-label-id="' + id + '" data-label-name="' + escHtml(name) + '" data-entry-count="' + entryCount + '" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:0">Rename</button>' +
+						    '<span style="color:var(--border);user-select:none">|</span>' +
 						    '<button class="js-label-delete" data-label-id="' + id + '" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit;padding:0">Delete</button>' +
 						  '</div>' +
 						  '<div class="js-label-delete-confirm" style="display:none;align-items:center;gap:4px">' +
@@ -303,11 +305,32 @@ templ ConfigurationPage(shell ShellData, data ConfigurationData) {
 					if (existing) { existing.remove(); return; }
 					var labelTr = labelsBody ? labelsBody.querySelector('tr[data-label-id="' + id + '"]') : null;
 					if (!labelTr) return;
+					var isPipeline = labelTr.dataset.isPipeline === '1';
 					var expTr = document.createElement('tr');
 					expTr.dataset.labelExpansion = id;
-					expTr.innerHTML = '<td colspan="3" style="padding:12px 16px;background:var(--bg);border-bottom:1px solid var(--border)">' + buildLabelExpansionHTML(id, name) + '</td>';
+					var inner = isPipeline
+						? buildPipelineExpansionHTML(id, parseInt(labelTr.dataset.activityCount || '0', 10))
+						: buildLabelExpansionHTML(id, name);
+					expTr.innerHTML = '<td colspan="3" style="padding:12px 16px;background:var(--bg);border-bottom:1px solid var(--border)">' + inner + '</td>';
 					labelTr.parentNode.insertBefore(expTr, labelTr.nextSibling);
-					loadLabelEntries(id);
+					if (!isPipeline) loadLabelEntries(id);
+				}
+
+				function buildPipelineExpansionHTML(id, activityCount) {
+					var countStr = activityCount === 1 ? '1 activity' : activityCount + ' activities';
+					return '<div style="display:grid;gap:10px">' +
+						'<div>' +
+							'<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Pipeline stage label</div>' +
+							'<div style="font-size:12px;color:var(--text2)">' +
+								'Used by the SSE processing pipeline to broadcast the current stage. ' +
+								'Not attached to entries.' +
+							'</div>' +
+						'</div>' +
+						'<div style="font-size:11px;color:var(--text3);border-top:1px solid var(--border);padding-top:8px">' +
+							(activityCount > 0 ? countStr + ' in the activity log — ' : 'No activities yet — ') +
+							'<a href="/activity" style="color:var(--accent)">view in Activity</a>.' +
+						'</div>' +
+					'</div>';
 				}
 
 				function buildLabelExpansionHTML(id, name) {
@@ -368,9 +391,100 @@ templ ConfigurationPage(shell ShellData, data ConfigurationData) {
 					var whereUsed = e.target.closest('.js-label-where-used');
 					if (whereUsed) {
 						toggleLabelExpansion(whereUsed.dataset.labelId, whereUsed.dataset.labelName);
+						return;
 					}
+					var sortBtn = e.target.closest('[data-label-sort]');
+					if (sortBtn) { sortLabelRows(sortBtn.dataset.labelSort); return; }
 				});
 
+				// ── Labels filter & sort ──────────────────────────────────────────────────
+
+				var labelFilterInput = document.getElementById('label-filter-input');
+				var labelSortState = { col: null, dir: 0 }; // 0=default,1=asc,-1=desc
+
+				function getLabelDataRows() {
+					if (!labelsBody) return [];
+					return Array.from(labelsBody.querySelectorAll('tr[data-label-id]'));
+				}
+
+				// Capture server-rendered order so the third click can reset to it.
+				var labelOriginalOrder = getLabelDataRows().map(function(r) { return r.dataset.labelId; });
+
+				function applyLabelFilter() {
+					var q = labelFilterInput ? labelFilterInput.value.toLowerCase().trim() : '';
+					var rows = getLabelDataRows();
+					var visible = 0;
+					rows.forEach(function(row) {
+						var name = (row.dataset.rowLabelName || '').toLowerCase();
+						var show = !q || name.includes(q);
+						row.style.display = show ? '' : 'none';
+						if (!show) {
+							var exp = labelsBody ? labelsBody.querySelector('tr[data-label-expansion="' + row.dataset.labelId + '"]') : null;
+							if (exp) exp.remove();
+						}
+						if (show) visible++;
+					});
+					var filterEmpty = document.getElementById('labels-filter-empty');
+					if (filterEmpty) filterEmpty.style.display = (q && visible === 0) ? '' : 'none';
+				}
+
+				function sortLabelRows(col) {
+					if (!labelsBody) return;
+					labelsBody.querySelectorAll('tr[data-label-expansion]').forEach(function(r) { r.remove(); });
+					if (labelSortState.col === col) {
+						// Cycle: asc → desc → default (reset)
+						if (labelSortState.dir === 1) {
+							labelSortState.dir = -1;
+						} else if (labelSortState.dir === -1) {
+							labelSortState.col = null;
+							labelSortState.dir = 0;
+						}
+					} else {
+						labelSortState.col = col;
+						labelSortState.dir = 1;
+					}
+					var rows = getLabelDataRows();
+					if (!labelSortState.col) {
+						// Restore server-rendered order
+						rows.sort(function(a, b) {
+							return labelOriginalOrder.indexOf(a.dataset.labelId) - labelOriginalOrder.indexOf(b.dataset.labelId);
+						});
+					} else {
+						rows.sort(function(a, b) {
+							if (labelSortState.col === 'name') {
+								var av = (a.dataset.rowLabelName || '').toLowerCase();
+								var bv = (b.dataset.rowLabelName || '').toLowerCase();
+								return labelSortState.dir * av.localeCompare(bv);
+							}
+							var av = parseInt(a.dataset.rowCount || '0', 10);
+							var bv = parseInt(b.dataset.rowCount || '0', 10);
+							return labelSortState.dir * (av - bv);
+						});
+					}
+					rows.forEach(function(r) { labelsBody.appendChild(r); });
+					var filterEmpty = document.getElementById('labels-filter-empty');
+					if (filterEmpty) labelsBody.appendChild(filterEmpty);
+					applyLabelFilter();
+					updateSortIndicators();
+				}
+
+				function updateSortIndicators() {
+					['name', 'count'].forEach(function(col) {
+						var el = document.getElementById('sort-indicator-' + col);
+						if (!el) return;
+						if (!labelSortState.col || labelSortState.col !== col) {
+							el.textContent = ' ⇅';
+							el.style.opacity = '0.4';
+						} else {
+							el.textContent = labelSortState.dir === 1 ? ' ▲' : ' ▼';
+							el.style.opacity = '1';
+						}
+					});
+				}
+
+				if (labelFilterInput) {
+					labelFilterInput.addEventListener('input', applyLabelFilter);
+				}
 
 				// ── Merchants (removed) ───────────────────────────────────────────────────
 				// Canonical merchants tab was removed in the 2026-07-21 conditions refactor.
@@ -570,24 +684,36 @@ templ ConfigurationPage(shell ShellData, data ConfigurationData) {
 }
 
 templ cfgLabelsSection(labels []store.LabelWithCount) {
-	<section style="max-width:560px">
+	<section>
 		<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
 			<div>
 				<h2 style="margin:0;font-size:15px;font-weight:700;color:var(--text)">Labels</h2>
-				<p style="margin:4px 0 0;font-size:12px;color:var(--text3)">Used to tag and group budget entries</p>
+				<p style="margin:4px 0 0;font-size:12px;color:var(--text3)">Categorize entries and label processing pipeline stages</p>
 			</div>
-			<button
-				id="add-label-btn"
-				style="background:none;border:none;cursor:pointer;color:var(--accent);font-size:13px;font-family:inherit;padding:4px 0;display:flex;align-items:center;gap:4px"
-			>+ New label</button>
+			<div style="display:flex;align-items:center;gap:8px">
+				<input
+					id="label-filter-input"
+					type="text"
+					placeholder="Filter labels…"
+					style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:13px;color:var(--text);outline:none;width:180px"
+				/>
+				<button
+					id="add-label-btn"
+					style="background:none;border:none;cursor:pointer;color:var(--accent);font-size:13px;font-family:inherit;padding:4px 0;white-space:nowrap"
+				>+ New label</button>
+			</div>
 		</div>
 		<div style="border:1px solid var(--border);border-radius:4px;overflow:hidden">
 			<table style="width:100%;border-collapse:collapse">
 				<thead>
 					<tr style="background:var(--surface);border-bottom:1px solid var(--border)">
-						<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em">Name</th>
-						<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;width:110px">Used by</th>
-						<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;width:80px">Actions</th>
+						<th style="padding:8px 12px;text-align:left">
+							<button data-label-sort="name" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:11px;font-weight:600;font-family:inherit;text-transform:uppercase;letter-spacing:0.05em;padding:0">Name<span id="sort-indicator-name" style="opacity:0.4"> ⇅</span></button>
+						</th>
+						<th style="padding:8px 12px;text-align:left;width:160px">
+							<button data-label-sort="count" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:11px;font-weight:600;font-family:inherit;text-transform:uppercase;letter-spacing:0.05em;padding:0">Used by<span id="sort-indicator-count" style="opacity:0.4"> ⇅</span></button>
+						</th>
+						<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;width:200px">Actions</th>
 					</tr>
 				</thead>
 				<tbody id="labels-body">
@@ -609,25 +735,52 @@ templ cfgLabelsSection(labels []store.LabelWithCount) {
 							</div>
 						</td>
 					</tr>
+					<tr id="labels-filter-empty" style="display:none">
+						<td colspan="3" style="padding:16px 12px;color:var(--text3);font-size:13px">No labels match the filter.</td>
+					</tr>
 					if len(labels) == 0 {
 						<tr id="labels-empty">
 							<td colspan="3" style="padding:16px 12px;color:var(--text3);font-size:13px">No labels yet. Create one above.</td>
 						</tr>
 					} else {
-						for i, l := range labels {
+						for _, l := range labels {
 							<tr
 								data-label-id={ l.ID }
+								data-row-label-name={ l.Name }
+								data-row-count={ func() string {
+									if l.IsPipelineLabel { return fmt.Sprintf("%d", l.ActivityCount) }
+									return fmt.Sprintf("%d", l.EntryCount)
+								}() }
 								if l.Source == "system" {
 									data-is-system="1"
 								}
-								style={ func() string {
-									if i < len(labels)-1 {
-										return "border-bottom:1px solid var(--border)"
-									}
-									return ""
-								}() }
+								if l.IsPipelineLabel {
+									data-is-pipeline="1"
+									data-activity-count={ fmt.Sprintf("%d", l.ActivityCount) }
+								}
+								style="border-bottom:1px solid var(--border)"
 							>
-								if l.Source == "system" {
+								if l.IsPipelineLabel {
+									<td style="padding:8px 12px;font-size:13px;color:var(--text2)">
+										{ l.Name }
+										<span style="margin-left:6px;font-size:10px;font-weight:600;padding:1px 5px;border-radius:10px;background:var(--surface2);color:var(--text3)">Pipeline</span>
+									</td>
+									<td style="padding:8px 12px;font-size:12px;color:var(--text2)">
+										if l.ActivityCount > 0 {
+											{ fmt.Sprintf("%d", l.ActivityCount) }
+											if l.ActivityCount == 1 {
+												{ " Activity" }
+											} else {
+												{ " Activities" }
+											}
+										} else {
+											<span style="color:var(--text3)">—</span>
+										}
+									</td>
+									<td style="padding:8px 12px">
+										<button class="js-label-where-used" data-label-id={ l.ID } data-label-name={ l.Name } style="background:none;border:none;cursor:pointer;color:var(--accent);font-size:12px;font-family:inherit;padding:0">Where Used</button>
+									</td>
+								} else if l.Source == "system" {
 									<td style="padding:8px 12px;font-size:13px;color:var(--text2)">
 										{ l.Name }
 										<span style="margin-left:6px;font-size:10px;font-weight:600;padding:1px 5px;border-radius:10px;background:var(--surface2);color:var(--text3)">System</span>
@@ -636,16 +789,16 @@ templ cfgLabelsSection(labels []store.LabelWithCount) {
 										if l.EntryCount > 0 {
 											{ fmt.Sprintf("%d", l.EntryCount) }
 											if l.EntryCount == 1 {
-												{ " entry" }
+												{ " Entry" }
 											} else {
-												{ " entries" }
+												{ " Entries" }
 											}
 										} else {
 											<span style="color:var(--text3)">—</span>
 										}
 									</td>
 									<td style="padding:8px 12px">
-										<button class="js-label-where-used" data-label-id={ l.ID } data-label-name={ l.Name } style="background:none;border:none;cursor:pointer;color:var(--accent);font-size:12px;font-family:inherit;padding:0">Where used</button>
+										<button class="js-label-where-used" data-label-id={ l.ID } data-label-name={ l.Name } style="background:none;border:none;cursor:pointer;color:var(--accent);font-size:12px;font-family:inherit;padding:0">Where Used</button>
 									</td>
 								} else {
 									<td
@@ -659,18 +812,20 @@ templ cfgLabelsSection(labels []store.LabelWithCount) {
 										if l.EntryCount > 0 {
 											{ fmt.Sprintf("%d", l.EntryCount) }
 											if l.EntryCount == 1 {
-												{ " entry" }
+												{ " Entry" }
 											} else {
-												{ " entries" }
+												{ " Entries" }
 											}
 										} else {
 											<span style="color:var(--text3)">—</span>
 										}
 									</td>
 									<td style="padding:8px 12px">
-										<div class="js-label-actions-normal" style="display:flex;gap:6px">
-											<button class="js-label-where-used" data-label-id={ l.ID } data-label-name={ l.Name } style="background:none;border:none;cursor:pointer;color:var(--accent);font-size:12px;font-family:inherit;padding:0">Where used</button>
+										<div class="js-label-actions-normal" style="display:flex;align-items:center;gap:6px;white-space:nowrap">
+											<button class="js-label-where-used" data-label-id={ l.ID } data-label-name={ l.Name } style="background:none;border:none;cursor:pointer;color:var(--accent);font-size:12px;font-family:inherit;padding:0">Where Used</button>
+											<span style="color:var(--border);user-select:none">|</span>
 											<button class="js-label-rename" data-label-id={ l.ID } data-label-name={ l.Name } data-entry-count={ fmt.Sprintf("%d", l.EntryCount) } style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:0">Rename</button>
+											<span style="color:var(--border);user-select:none">|</span>
 											<button class="js-label-delete" data-label-id={ l.ID } style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit;padding:0">Delete</button>
 										</div>
 										<div class="js-label-delete-confirm" style="display:none;align-items:center;gap:4px">

@@ -165,36 +165,6 @@ CREATE INDEX ON transactions (entity_id, account_id, date);
 CREATE INDEX ON transactions (entity_id, date);
 CREATE INDEX ON transactions (entity_id, account_id, settlement_status, imported_at);
 
--- ── LABELS ──────────────────────────────────────────────────────────────────
--- Global name registry. Used by entries (display name tag) and as the
--- composability key for label_matched conditions. Entity-scoping is on
--- operational tables; labels are pure display names referenced by ID throughout
--- the engine. Renaming a label requires no recalculation — only a UI refresh.
-
-CREATE TABLE labels (
-  id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  entity_id  UUID        NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-  name       TEXT        NOT NULL,
-  source     TEXT        NOT NULL DEFAULT 'engine'
-             CHECK (source IN ('user', 'engine', 'system')),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (entity_id, name)
-);
-
-CREATE INDEX ON labels (entity_id);
-
--- Maps pipeline stage numbers to a label UUID so the engine can emit label_id
--- in pg_notify payloads without ever referencing label names.
--- Seeded per entity by EnsureSystemLabels alongside the system labels.
-CREATE TABLE pipeline_stage_labels (
-  stage_num  INTEGER NOT NULL,
-  entity_id  UUID    NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-  label_id   UUID    NOT NULL REFERENCES labels(id)   ON DELETE CASCADE,
-  PRIMARY KEY (stage_num, entity_id)
-);
-
-CREATE INDEX ON pipeline_stage_labels (entity_id);
-
 -- ── ENTRIES ──────────────────────────────────────────────────────────────────
 -- One row per continuous rate signal instance (absorbs rules + rule_epochs).
 -- start_date = when this signal instance began (first matching transaction date).

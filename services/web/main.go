@@ -336,7 +336,7 @@ func syncAdminUser(ctx context.Context, authClient *authclient.Client, s *store.
 		return fmt.Errorf("ensure user: %w", err)
 	}
 
-	entityID, err := s.EnsureAdminEntity(ctx, "Home")
+	entityID, err := s.EnsureAdminEntity(ctx)
 	if err != nil {
 		return fmt.Errorf("ensure entity: %w", err)
 	}
@@ -345,7 +345,7 @@ func syncAdminUser(ctx context.Context, authClient *authclient.Client, s *store.
 		return fmt.Errorf("ensure entity membership: %w", err)
 	}
 
-	if err := s.EnsureSystemData(ctx, entityID); err != nil {
+	if err := s.EnsureSystemData(ctx, entityID, "Home"); err != nil {
 		return fmt.Errorf("ensure system data: %w", err)
 	}
 

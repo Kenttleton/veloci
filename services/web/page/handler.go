@@ -1157,6 +1157,7 @@ type ConfigurationData struct {
 	Labels           []store.LabelWithCount
 	Institutions     []InstitutionWithAccounts
 	EntityConfig     store.EntityConfig
+	EntityName       string
 	Users            []store.User
 	ServerAdminEmail string
 }
@@ -1188,6 +1189,9 @@ func (s *Server) Configuration(c echo.Context) error {
 		}
 	case "system":
 		data.EntityConfig, _ = s.store.GetEntityConfig(ctx, entityID)
+		if lbl, err := s.store.GetEntityLabel(ctx, entityID); err == nil {
+			data.EntityName = lbl.Name
+		}
 	case "users":
 		data.Users, _ = s.store.ListUsers(ctx, entityID)
 		data.ServerAdminEmail = viper.GetString("auth.admin.email")

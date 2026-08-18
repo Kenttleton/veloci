@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 	"github.com/veloci/veloci/middleware"
@@ -61,6 +62,28 @@ func (h *EntityConfigHandler) UpdateEntityConfig(c echo.Context) error {
 	return c.JSON(http.StatusOK, response.Single(toEntityConfigView(cfg)))
 }
 
+type updateEntityNameBody struct {
+	Name string `json:"name"`
+}
+
+func (h *EntityConfigHandler) UpdateEntityName(c echo.Context) error {
+	ctx := c.Request().Context()
+	entityID := middleware.EntityID(ctx)
+
+	var body updateEntityNameBody
+	if err := c.Bind(&body); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+	name := strings.TrimSpace(body.Name)
+	if name == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "name is required")
+	}
+	if err := h.s.UpdateEntityLabel(ctx, entityID, name); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
 func RegisterEntityConfigRoutes(g *echo.Group, s *store.Store, perms middleware.PermissionCache) {
 	h := NewEntityConfigHandler(s)
 	read := g.Group("", middleware.RequirePermission(perms, "accounts:read"))
@@ -68,4 +91,5 @@ func RegisterEntityConfigRoutes(g *echo.Group, s *store.Store, perms middleware.
 
 	read.GET("/entity/config", h.GetEntityConfig)
 	write.PUT("/entity/config", h.UpdateEntityConfig)
+	write.PUT("/entity/name", h.UpdateEntityName)
 }
