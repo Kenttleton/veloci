@@ -24,6 +24,12 @@ templ ConfigurationPage(shell ShellData, data ConfigurationData) {
 						href="?tab=system"
 						style={ cfgTabStyle(data.Tab == "system") }
 					>System</a>
+					if shell.EntityRole == "entity_admin" {
+						<a
+							href="?tab=users"
+							style={ cfgTabStyle(data.Tab == "users") }
+						>Users</a>
+					}
 				</div>
 			</div>
 			<div style="flex:1;overflow:auto;padding:24px 20px">
@@ -31,6 +37,8 @@ templ ConfigurationPage(shell ShellData, data ConfigurationData) {
 					@cfgInstitutionsSection(data.Institutions)
 				} else if data.Tab == "system" {
 					@cfgSystemSection(data.EntityConfig.SystemWindowDays)
+				} else if data.Tab == "users" {
+					@cfgUsersSection(data.Users)
 				} else {
 					@cfgLabelsSection(data.Labels)
 				}
@@ -840,6 +848,240 @@ templ cfgFormField(label, id, inputType, placeholder string, required bool) {
 			style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;color:var(--text);outline:none;width:100%"
 		/>
 	</div>
+}
+
+templ cfgUsersSection(users []store.User) {
+	<section style="max-width:640px">
+		<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+			<div>
+				<h2 style="margin:0;font-size:15px;font-weight:700;color:var(--text)">Users</h2>
+				<p style="margin:4px 0 0;font-size:12px;color:var(--text3)">Manage team members and access</p>
+			</div>
+			<button
+				id="invite-user-btn"
+				style="background:none;border:none;cursor:pointer;color:var(--accent);font-size:13px;font-family:inherit;padding:4px 0;display:flex;align-items:center;gap:4px"
+			>+ Invite user</button>
+		</div>
+		<div id="invite-result" style="display:none;margin-bottom:16px;padding:12px 14px;border:1px solid var(--border);border-radius:6px;background:var(--surface)">
+			<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px">Invitation link (share once — expires in 24h)</div>
+			<div style="display:flex;gap:8px;align-items:center">
+				<input id="invite-token-display" type="text" readonly style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:5px 8px;font-size:12px;font-family:monospace;color:var(--text)"/>
+				<button id="invite-copy-btn" style="background:var(--accent);border:none;border-radius:4px;padding:5px 12px;cursor:pointer;font-size:12px;color:#fff;font-family:inherit;flex-shrink:0">Copy</button>
+			</div>
+		</div>
+		<div id="invite-form" style="display:none;margin-bottom:16px;padding:16px;border:1px solid var(--border);border-radius:6px;background:var(--surface)">
+			<div style="display:flex;flex-direction:column;gap:12px">
+				<div>
+					<label style="display:block;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:5px">Email</label>
+					<input id="invite-email" type="email" placeholder="user@example.com" style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;color:var(--text);outline:none;width:100%;box-sizing:border-box"/>
+				</div>
+				<div>
+					<label style="display:block;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:5px">Role</label>
+					<select id="invite-role" style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;color:var(--text);outline:none;width:100%;box-sizing:border-box;cursor:pointer;font-family:inherit">
+						<option value="entity_member">Member</option>
+						<option value="entity_admin">Admin</option>
+					</select>
+				</div>
+				<div id="invite-error" style="display:none;font-size:12px;color:var(--commit)"></div>
+				<div style="display:flex;gap:8px">
+					<button id="invite-submit" style="background:var(--accent);border:none;border-radius:6px;padding:6px 16px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit">Send invite</button>
+					<button id="invite-cancel" style="background:transparent;border:1px solid var(--border);border-radius:6px;padding:6px 16px;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit">Cancel</button>
+				</div>
+			</div>
+		</div>
+		<div style="border:1px solid var(--border);border-radius:4px;overflow:hidden">
+			<table style="width:100%;border-collapse:collapse">
+				<thead>
+					<tr style="background:var(--surface);border-bottom:1px solid var(--border)">
+						<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em">Name</th>
+						<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em">Email</th>
+						<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;width:80px">Role</th>
+						<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;width:120px">Actions</th>
+					</tr>
+				</thead>
+				<tbody id="users-body">
+					if len(users) == 0 {
+						<tr>
+							<td colspan="4" style="padding:16px 12px;color:var(--text3);font-size:13px">No users found.</td>
+						</tr>
+					} else {
+						for i, u := range users {
+							<tr
+								data-user-id={ u.ID }
+								style={ func() string {
+									if i < len(users)-1 { return "border-bottom:1px solid var(--border)" }
+									return ""
+								}() }
+							>
+								<td style="padding:8px 12px;font-size:13px;color:var(--text)">{ u.DisplayName() }</td>
+								<td style="padding:8px 12px;font-size:13px;color:var(--text2)">{ u.Email }</td>
+								<td style="padding:8px 12px">
+									if u.EntityRole == "entity_admin" {
+										<span style="display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;background:var(--accent);color:#fff">Admin</span>
+									} else {
+										<span style="display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;background:var(--surface2);color:var(--text2);border:1px solid var(--border)">Member</span>
+									}
+								</td>
+								<td style="padding:8px 12px">
+									<div class="js-user-actions-normal" style="display:flex;gap:8px">
+										<button class="js-user-reset-pw" data-user-id={ u.ID } style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:0">Reset pw</button>
+										<button class="js-user-delete" data-user-id={ u.ID } style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit;padding:0">Delete</button>
+									</div>
+									<div class="js-user-delete-confirm" style="display:none;align-items:center;gap:4px">
+										<span style="font-size:11px;color:var(--commit)">Delete?</span>
+										<button class="js-user-delete-yes" data-user-id={ u.ID } style="background:none;border:none;cursor:pointer;color:var(--commit);font-size:11px;font-family:inherit;padding:2px 4px">Yes</button>
+										<button class="js-user-delete-no" data-user-id={ u.ID } style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:11px;font-family:inherit;padding:2px 4px">No</button>
+									</div>
+									<div class="js-user-reset-pw-form" style="display:none;align-items:center;gap:4px">
+										<input class="js-user-new-pw-input" type="password" placeholder="New password" style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:12px;color:var(--text);outline:none;width:120px"/>
+										<button class="js-user-reset-pw-save" data-user-id={ u.ID } style="background:none;border:none;cursor:pointer;color:var(--income);font-size:12px;font-family:inherit;padding:2px 4px">Save</button>
+										<button class="js-user-reset-pw-cancel" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit;padding:2px 4px">Cancel</button>
+									</div>
+								</td>
+							</tr>
+						}
+					}
+				</tbody>
+			</table>
+		</div>
+	</section>
+	<script>
+	(function() {
+		var inviteBtn    = document.getElementById('invite-user-btn');
+		var inviteForm   = document.getElementById('invite-form');
+		var inviteResult = document.getElementById('invite-result');
+		var inviteSubmit = document.getElementById('invite-submit');
+		var inviteCancel = document.getElementById('invite-cancel');
+		var inviteError  = document.getElementById('invite-error');
+		var inviteTokenDisplay = document.getElementById('invite-token-display');
+		var inviteCopyBtn = document.getElementById('invite-copy-btn');
+
+		if (inviteBtn) inviteBtn.addEventListener('click', function() {
+			if (inviteResult) inviteResult.style.display = 'none';
+			if (inviteForm) inviteForm.style.display = '';
+			var emailInput = document.getElementById('invite-email');
+			if (emailInput) emailInput.focus();
+		});
+		if (inviteCancel) inviteCancel.addEventListener('click', function() {
+			if (inviteForm) inviteForm.style.display = 'none';
+		});
+		if (inviteCopyBtn) inviteCopyBtn.addEventListener('click', function() {
+			if (inviteTokenDisplay) {
+				inviteTokenDisplay.select();
+				document.execCommand('copy');
+				inviteCopyBtn.textContent = 'Copied!';
+				setTimeout(function() { inviteCopyBtn.textContent = 'Copy'; }, 2000);
+			}
+		});
+		if (inviteSubmit) inviteSubmit.addEventListener('click', function() {
+			var email = (document.getElementById('invite-email') || {}).value.trim();
+			var role  = (document.getElementById('invite-role') || {}).value;
+			if (!email) {
+				if (inviteError) { inviteError.textContent = 'Email is required.'; inviteError.style.display = ''; }
+				return;
+			}
+			if (inviteError) inviteError.style.display = 'none';
+			inviteSubmit.disabled = true;
+			inviteSubmit.textContent = 'Sending…';
+			fetch('/api/users/invite', {
+				method: 'POST',
+				headers: {'Content-Type': 'application/json'},
+				body: JSON.stringify({email: email, entity_role: role}),
+			}).then(function(r) { return r.json().then(function(d) { return {ok: r.ok, d: d}; }); })
+			.then(function(res) {
+				inviteSubmit.disabled = false;
+				inviteSubmit.textContent = 'Send invite';
+				if (!res.ok) {
+					if (inviteError) { inviteError.textContent = res.d.detail || 'Invite failed.'; inviteError.style.display = ''; }
+					return;
+				}
+				var origin = window.location.origin;
+				var link = origin + '/accept-invite?token=' + encodeURIComponent(res.d.token);
+				if (inviteTokenDisplay) inviteTokenDisplay.value = link;
+				if (inviteForm) inviteForm.style.display = 'none';
+				if (inviteResult) inviteResult.style.display = '';
+				document.getElementById('invite-email').value = '';
+			}).catch(function() {
+				inviteSubmit.disabled = false;
+				inviteSubmit.textContent = 'Send invite';
+				if (inviteError) { inviteError.textContent = 'Invite failed.'; inviteError.style.display = ''; }
+			});
+		});
+
+		document.addEventListener('click', function(e) {
+			var resetBtn = e.target.closest('.js-user-reset-pw');
+			if (resetBtn) {
+				var row = resetBtn.closest('tr[data-user-id]');
+				if (!row) return;
+				row.querySelector('.js-user-actions-normal').style.display = 'none';
+				var form = row.querySelector('.js-user-reset-pw-form');
+				form.style.display = 'flex';
+				var input = form.querySelector('.js-user-new-pw-input');
+				if (input) { input.value = ''; input.focus(); }
+				return;
+			}
+			var resetCancel = e.target.closest('.js-user-reset-pw-cancel');
+			if (resetCancel) {
+				var row = resetCancel.closest('tr[data-user-id]');
+				if (!row) return;
+				row.querySelector('.js-user-actions-normal').style.display = 'flex';
+				row.querySelector('.js-user-reset-pw-form').style.display = 'none';
+				return;
+			}
+			var resetSave = e.target.closest('.js-user-reset-pw-save');
+			if (resetSave) {
+				var row = resetSave.closest('tr[data-user-id]');
+				if (!row) return;
+				var input = row.querySelector('.js-user-new-pw-input');
+				var pw = input ? input.value : '';
+				if (!pw) return;
+				resetSave.disabled = true;
+				fetch('/api/users/' + resetSave.dataset.userId + '/password', {
+					method: 'PUT',
+					headers: {'Content-Type': 'application/json'},
+					body: JSON.stringify({password: pw}),
+				}).then(function(r) {
+					resetSave.disabled = false;
+					if (r.ok) {
+						row.querySelector('.js-user-actions-normal').style.display = 'flex';
+						row.querySelector('.js-user-reset-pw-form').style.display = 'none';
+					}
+				}).catch(function() { resetSave.disabled = false; });
+				return;
+			}
+			var delBtn = e.target.closest('.js-user-delete');
+			if (delBtn) {
+				var row = delBtn.closest('tr[data-user-id]');
+				if (!row) return;
+				row.querySelector('.js-user-actions-normal').style.display = 'none';
+				row.querySelector('.js-user-delete-confirm').style.display = 'flex';
+				return;
+			}
+			var delNo = e.target.closest('.js-user-delete-no');
+			if (delNo) {
+				var row = delNo.closest('tr[data-user-id]');
+				if (!row) return;
+				row.querySelector('.js-user-actions-normal').style.display = 'flex';
+				row.querySelector('.js-user-delete-confirm').style.display = 'none';
+				return;
+			}
+			var delYes = e.target.closest('.js-user-delete-yes');
+			if (delYes) {
+				var uid = delYes.dataset.userId;
+				delYes.disabled = true;
+				fetch('/api/users/' + uid, {method: 'DELETE'})
+					.then(function(r) {
+						if (r.ok || r.status === 404) {
+							var row = document.querySelector('tr[data-user-id="' + uid + '"]');
+							if (row) row.remove();
+						} else { delYes.disabled = false; }
+					})
+					.catch(function() { delYes.disabled = false; });
+				return;
+			}
+		});
+	})();
+	</script>
 }
 
 func cfgTabStyle(active bool) string {

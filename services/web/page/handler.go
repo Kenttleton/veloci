@@ -27,6 +27,7 @@ type ShellData struct {
 	PageTitle       string
 	PageBadge       string // optional pill shown next to the title in the shell header
 	User            ShellUser
+	EntityRole      string
 	ActiveAccounts  []ShellAccount
 	PassiveAccounts []ShellAccount
 	CurrentPath     string
@@ -179,6 +180,7 @@ func (s *Server) buildShellData(r *http.Request) ShellData {
 
 	return ShellData{
 		User:            shellUser,
+		EntityRole:      middleware.EntityRole(ctx),
 		ActiveAccounts:  active,
 		PassiveAccounts: passive,
 		CurrentPath:     r.URL.Path,
@@ -1154,6 +1156,7 @@ type ConfigurationData struct {
 	Labels       []store.LabelWithCount
 	Institutions []InstitutionWithAccounts
 	EntityConfig store.EntityConfig
+	Users        []store.User
 }
 
 func (s *Server) Configuration(c echo.Context) error {
@@ -1162,6 +1165,11 @@ func (s *Server) Configuration(c echo.Context) error {
 
 	tab := c.QueryParam("tab")
 	if tab == "" || tab == "merchants" {
+		tab = "labels"
+	}
+
+	// Users tab is admin-only; redirect non-admins away.
+	if tab == "users" && middleware.EntityRole(ctx) != "entity_admin" {
 		tab = "labels"
 	}
 
@@ -1178,6 +1186,8 @@ func (s *Server) Configuration(c echo.Context) error {
 		}
 	case "system":
 		data.EntityConfig, _ = s.store.GetEntityConfig(ctx, entityID)
+	case "users":
+		data.Users, _ = s.store.ListUsers(ctx, entityID)
 	default:
 		data.Labels, _ = s.store.ListLabelsWithEntryCount(ctx, entityID)
 	}

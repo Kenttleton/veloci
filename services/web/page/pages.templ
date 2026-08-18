@@ -19,56 +19,40 @@ templ SettingsPage(shell ShellData, u store.User) {
 					<section>
 						<h2 style="margin:0 0 4px;font-size:15px;font-weight:700;color:var(--text)">Profile</h2>
 						<p style="margin:0 0 16px;font-size:12px;color:var(--text3)">Your name and how you appear in the app.</p>
-						<form id="profile-form" style="display:flex;flex-direction:column;gap:12px">
+						<form id="profile-form" style="display:flex;flex-direction:column;gap:14px">
 							<div style="display:flex;gap:12px">
 								<div style="flex:1">
-									<label class="field-label">First Name</label>
-									<input
-										id="field-first-name"
-										type="text"
-										class="field-input"
-										value={ u.FirstName }
-										placeholder="First"
-									/>
+									<label style="display:block;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:5px">First Name</label>
+									<input id="field-first-name" type="text" value={ u.FirstName } placeholder="First"/>
 								</div>
 								<div style="flex:1">
-									<label class="field-label">Last Name</label>
-									<input
-										id="field-last-name"
-										type="text"
-										class="field-input"
-										value={ u.LastName }
-										placeholder="Last"
-									/>
+									<label style="display:block;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:5px">Last Name</label>
+									<input id="field-last-name" type="text" value={ u.LastName } placeholder="Last"/>
 								</div>
 							</div>
 							<div>
-								<label class="field-label">Preferred Name</label>
-								<input
-									id="field-preferred-name"
-									type="text"
-									class="field-input"
-									value={ u.PreferredName }
-									placeholder="How you'd like to be addressed"
-								/>
-								<p style="margin:4px 0 0;font-size:11px;color:var(--text3)">First name, full name, or nickname — this is what appears in the app.</p>
+								<label style="display:block;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:5px">Preferred Name</label>
+								<input id="field-preferred-name" type="text" value={ u.PreferredName } placeholder="How you'd like to be addressed"/>
+								<p style="margin:5px 0 0;font-size:11px;color:var(--text3)">First name, full name, or nickname — shown throughout the app.</p>
 							</div>
 							<div>
-								<label class="field-label">Email</label>
-								<input type="text" class="field-input" value={ u.Email } disabled style="opacity:0.6;cursor:default"/>
+								<label style="display:block;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:5px">Email</label>
+								<input type="text" value={ u.Email } disabled style="opacity:0.55;cursor:default"/>
 							</div>
 							<div>
-								<label class="field-label">Role</label>
-								<div style="margin-top:4px">
-									if u.EntityRole == "entity_admin" {
-										<span class="badge badge-admin">Admin</span>
-									} else {
-										<span class="badge badge-member">Member</span>
-									}
-								</div>
+								<label style="display:block;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:5px">Role</label>
+								if u.EntityRole == "entity_admin" {
+									<span style="display:inline-block;padding:3px 10px;border-radius:16px;font-size:12px;font-weight:600;background:var(--accent);color:#fff">Admin</span>
+								} else {
+									<span style="display:inline-block;padding:3px 10px;border-radius:16px;font-size:12px;font-weight:600;background:var(--surface2);color:var(--text2);border:1px solid var(--border)">Member</span>
+								}
 							</div>
-							<div style="display:flex;align-items:center;gap:12px">
-								<button type="button" class="btn btn-primary" onclick="saveProfile()">Save</button>
+							<div style="display:flex;align-items:center;gap:12px;padding-top:2px">
+								<button
+									type="button"
+									onclick="saveProfile()"
+									style="background:var(--accent);border:none;border-radius:6px;padding:7px 18px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit"
+								>Save</button>
 								<span id="profile-status" style="font-size:12px;color:var(--text3)"></span>
 							</div>
 						</form>
@@ -76,43 +60,51 @@ templ SettingsPage(shell ShellData, u store.User) {
 					<!-- Security -->
 					<section>
 						<h2 style="margin:0 0 4px;font-size:15px;font-weight:700;color:var(--text)">Security</h2>
-						<p style="margin:0 0 16px;font-size:12px;color:var(--text3)">Update your email address or password. Both require your current password.</p>
+						<p style="margin:0 0 16px;font-size:12px;color:var(--text3)">Update your email or password. Both require your current password to confirm.</p>
 						<!-- Change Email -->
 						<div style="border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px">
-							<h3 style="margin:0 0 12px;font-size:13px;font-weight:600;color:var(--text)">Change Email</h3>
-							<div style="display:flex;flex-direction:column;gap:10px">
+							<h3 style="margin:0 0 14px;font-size:13px;font-weight:600;color:var(--text)">Change Email</h3>
+							<div style="display:flex;flex-direction:column;gap:12px">
 								<div>
-									<label class="field-label">New Email</label>
-									<input id="field-new-email" type="email" class="field-input" placeholder="new@example.com"/>
+									<label style="display:block;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:5px">New Email</label>
+									<input id="field-new-email" type="email" placeholder="new@example.com"/>
 								</div>
 								<div>
-									<label class="field-label">Current Password</label>
-									<input id="field-email-password" type="password" class="field-input" placeholder="Your current password"/>
+									<label style="display:block;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:5px">Current Password</label>
+									<input id="field-email-password" type="password" placeholder="Your current password"/>
 								</div>
-								<div style="display:flex;align-items:center;gap:12px">
-									<button type="button" class="btn btn-secondary" onclick="changeEmail()">Update Email</button>
+								<div style="display:flex;align-items:center;gap:12px;padding-top:2px">
+									<button
+										type="button"
+										onclick="changeEmail()"
+										style="background:var(--accent);border:none;border-radius:6px;padding:7px 18px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit"
+									>Update Email</button>
 									<span id="email-status" style="font-size:12px;color:var(--text3)"></span>
 								</div>
 							</div>
 						</div>
 						<!-- Change Password -->
 						<div style="border:1px solid var(--border);border-radius:8px;padding:16px">
-							<h3 style="margin:0 0 12px;font-size:13px;font-weight:600;color:var(--text)">Change Password</h3>
-							<div style="display:flex;flex-direction:column;gap:10px">
+							<h3 style="margin:0 0 14px;font-size:13px;font-weight:600;color:var(--text)">Change Password</h3>
+							<div style="display:flex;flex-direction:column;gap:12px">
 								<div>
-									<label class="field-label">Current Password</label>
-									<input id="field-current-password" type="password" class="field-input"/>
+									<label style="display:block;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:5px">Current Password</label>
+									<input id="field-current-password" type="password"/>
 								</div>
 								<div>
-									<label class="field-label">New Password</label>
-									<input id="field-new-password" type="password" class="field-input"/>
+									<label style="display:block;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:5px">New Password</label>
+									<input id="field-new-password" type="password"/>
 								</div>
 								<div>
-									<label class="field-label">Confirm New Password</label>
-									<input id="field-confirm-password" type="password" class="field-input"/>
+									<label style="display:block;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:5px">Confirm New Password</label>
+									<input id="field-confirm-password" type="password"/>
 								</div>
-								<div style="display:flex;align-items:center;gap:12px">
-									<button type="button" class="btn btn-secondary" onclick="changePassword()">Change Password</button>
+								<div style="display:flex;align-items:center;gap:12px;padding-top:2px">
+									<button
+										type="button"
+										onclick="changePassword()"
+										style="background:var(--accent);border:none;border-radius:6px;padding:7px 18px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit"
+									>Change Password</button>
 									<span id="password-status" style="font-size:12px;color:var(--text3)"></span>
 								</div>
 							</div>
