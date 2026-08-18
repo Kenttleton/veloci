@@ -14,6 +14,7 @@ import (
 	"github.com/a-h/templ"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
+	"github.com/spf13/viper"
 	"github.com/veloci/veloci/authclient"
 	"github.com/veloci/veloci/fieldregistry"
 	"github.com/veloci/veloci/middleware"
@@ -1152,11 +1153,12 @@ type InstitutionWithAccounts struct {
 
 // ConfigurationData is passed to the Configuration page template.
 type ConfigurationData struct {
-	Tab          string
-	Labels       []store.LabelWithCount
-	Institutions []InstitutionWithAccounts
-	EntityConfig store.EntityConfig
-	Users        []store.User
+	Tab              string
+	Labels           []store.LabelWithCount
+	Institutions     []InstitutionWithAccounts
+	EntityConfig     store.EntityConfig
+	Users            []store.User
+	ServerAdminEmail string
 }
 
 func (s *Server) Configuration(c echo.Context) error {
@@ -1188,6 +1190,7 @@ func (s *Server) Configuration(c echo.Context) error {
 		data.EntityConfig, _ = s.store.GetEntityConfig(ctx, entityID)
 	case "users":
 		data.Users, _ = s.store.ListUsers(ctx, entityID)
+		data.ServerAdminEmail = viper.GetString("auth.admin.email")
 	default:
 		data.Labels, _ = s.store.ListLabelsWithEntryCount(ctx, entityID)
 	}

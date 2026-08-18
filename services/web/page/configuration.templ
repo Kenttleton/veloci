@@ -38,7 +38,7 @@ templ ConfigurationPage(shell ShellData, data ConfigurationData) {
 				} else if data.Tab == "system" {
 					@cfgSystemSection(data.EntityConfig.SystemWindowDays)
 				} else if data.Tab == "users" {
-					@cfgUsersSection(data.Users)
+					@cfgUsersSection(data.Users, data.ServerAdminEmail)
 				} else {
 					@cfgLabelsSection(data.Labels)
 				}
@@ -850,8 +850,8 @@ templ cfgFormField(label, id, inputType, placeholder string, required bool) {
 	</div>
 }
 
-templ cfgUsersSection(users []store.User) {
-	<section style="max-width:640px">
+templ cfgUsersSection(users []store.User, serverAdminEmail string) {
+	<section>
 		<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
 			<div>
 				<h2 style="margin:0;font-size:15px;font-weight:700;color:var(--text)">Users</h2>
@@ -859,8 +859,8 @@ templ cfgUsersSection(users []store.User) {
 			</div>
 			<button
 				id="invite-user-btn"
-				style="background:none;border:none;cursor:pointer;color:var(--accent);font-size:13px;font-family:inherit;padding:4px 0;display:flex;align-items:center;gap:4px"
-			>+ Invite user</button>
+				style="background:var(--accent);border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit"
+			>+ Invite User</button>
 		</div>
 		<div id="invite-result" style="display:none;margin-bottom:16px;padding:12px 14px;border:1px solid var(--border);border-radius:6px;background:var(--surface)">
 			<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px">Invitation link (share once — expires in 24h)</div>
@@ -884,7 +884,7 @@ templ cfgUsersSection(users []store.User) {
 				</div>
 				<div id="invite-error" style="display:none;font-size:12px;color:var(--commit)"></div>
 				<div style="display:flex;gap:8px">
-					<button id="invite-submit" style="background:var(--accent);border:none;border-radius:6px;padding:6px 16px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit">Send invite</button>
+					<button id="invite-submit" style="background:var(--accent);border:none;border-radius:6px;padding:6px 16px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit">Send Invite</button>
 					<button id="invite-cancel" style="background:transparent;border:1px solid var(--border);border-radius:6px;padding:6px 16px;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit">Cancel</button>
 				</div>
 			</div>
@@ -893,16 +893,18 @@ templ cfgUsersSection(users []store.User) {
 			<table style="width:100%;border-collapse:collapse">
 				<thead>
 					<tr style="background:var(--surface);border-bottom:1px solid var(--border)">
-						<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em">Name</th>
-						<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em">Email</th>
-						<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;width:80px">Role</th>
-						<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;width:120px">Actions</th>
+						<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em">First Name</th>
+						<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em">Last Name</th>
+						<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em">Preferred Name</th>
+						<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em">Email</th>
+						<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;width:90px">Role</th>
+						<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;width:220px">Actions</th>
 					</tr>
 				</thead>
 				<tbody id="users-body">
 					if len(users) == 0 {
 						<tr>
-							<td colspan="4" style="padding:16px 12px;color:var(--text3);font-size:13px">No users found.</td>
+							<td colspan="6" style="padding:20px 14px;color:var(--text3);font-size:13px">No users found.</td>
 						</tr>
 					} else {
 						for i, u := range users {
@@ -913,30 +915,54 @@ templ cfgUsersSection(users []store.User) {
 									return ""
 								}() }
 							>
-								<td style="padding:8px 12px;font-size:13px;color:var(--text)">{ u.DisplayName() }</td>
-								<td style="padding:8px 12px;font-size:13px;color:var(--text2)">{ u.Email }</td>
-								<td style="padding:8px 12px">
+								<td style="padding:10px 14px;font-size:13px;color:var(--text)">
+									if u.FirstName != "" {
+										{ u.FirstName }
+									} else {
+										<span style="color:var(--text3)">—</span>
+									}
+								</td>
+								<td style="padding:10px 14px;font-size:13px;color:var(--text)">
+									if u.LastName != "" {
+										{ u.LastName }
+									} else {
+										<span style="color:var(--text3)">—</span>
+									}
+								</td>
+								<td style="padding:10px 14px;font-size:13px;color:var(--text2)">
+									if u.PreferredName != "" {
+										{ u.PreferredName }
+									} else {
+										<span style="color:var(--text3)">—</span>
+									}
+								</td>
+								<td style="padding:10px 14px;font-size:13px;color:var(--text2)">{ u.Email }</td>
+								<td style="padding:10px 14px">
 									if u.EntityRole == "entity_admin" {
 										<span style="display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;background:var(--accent);color:#fff">Admin</span>
 									} else {
 										<span style="display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;background:var(--surface2);color:var(--text2);border:1px solid var(--border)">Member</span>
 									}
 								</td>
-								<td style="padding:8px 12px">
-									<div class="js-user-actions-normal" style="display:flex;gap:8px">
-										<button class="js-user-reset-pw" data-user-id={ u.ID } style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:0">Reset pw</button>
-										<button class="js-user-delete" data-user-id={ u.ID } style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit;padding:0">Delete</button>
-									</div>
-									<div class="js-user-delete-confirm" style="display:none;align-items:center;gap:4px">
-										<span style="font-size:11px;color:var(--commit)">Delete?</span>
-										<button class="js-user-delete-yes" data-user-id={ u.ID } style="background:none;border:none;cursor:pointer;color:var(--commit);font-size:11px;font-family:inherit;padding:2px 4px">Yes</button>
-										<button class="js-user-delete-no" data-user-id={ u.ID } style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:11px;font-family:inherit;padding:2px 4px">No</button>
-									</div>
-									<div class="js-user-reset-pw-form" style="display:none;align-items:center;gap:4px">
-										<input class="js-user-new-pw-input" type="password" placeholder="New password" style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:12px;color:var(--text);outline:none;width:120px"/>
-										<button class="js-user-reset-pw-save" data-user-id={ u.ID } style="background:none;border:none;cursor:pointer;color:var(--income);font-size:12px;font-family:inherit;padding:2px 4px">Save</button>
-										<button class="js-user-reset-pw-cancel" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit;padding:2px 4px">Cancel</button>
-									</div>
+								<td style="padding:8px 14px">
+									if u.Email == serverAdminEmail {
+										<span style="display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;background:var(--surface2);color:var(--text3);border:1px solid var(--border)">Server Admin</span>
+									} else {
+										<div class="js-user-actions-normal" style="display:flex;gap:6px">
+											<button class="js-user-reset-pw" data-user-id={ u.ID } style="background:transparent;border:1px solid var(--border);border-radius:5px;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:4px 10px">Reset Password</button>
+											<button class="js-user-delete" data-user-id={ u.ID } style="background:transparent;border:1px solid var(--border);border-radius:5px;cursor:pointer;color:var(--commit);font-size:12px;font-family:inherit;padding:4px 10px">Delete</button>
+										</div>
+										<div class="js-user-delete-confirm" style="display:none;align-items:center;gap:6px">
+											<span style="font-size:12px;color:var(--commit)">Delete this user?</span>
+											<button class="js-user-delete-yes" data-user-id={ u.ID } style="background:var(--commit);border:none;border-radius:5px;cursor:pointer;color:#fff;font-size:12px;font-family:inherit;padding:4px 10px">Delete</button>
+											<button class="js-user-delete-no" data-user-id={ u.ID } style="background:transparent;border:1px solid var(--border);border-radius:5px;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:4px 10px">Cancel</button>
+										</div>
+										<div class="js-user-reset-pw-form" style="display:none;align-items:center;gap:6px">
+											<input class="js-user-new-pw-input" type="password" placeholder="New password" style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:12px;color:var(--text);outline:none;width:140px"/>
+											<button class="js-user-reset-pw-save" data-user-id={ u.ID } style="background:var(--accent);border:none;border-radius:5px;cursor:pointer;color:#fff;font-size:12px;font-family:inherit;padding:4px 10px">Save</button>
+											<button class="js-user-reset-pw-cancel" style="background:transparent;border:1px solid var(--border);border-radius:5px;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:4px 10px">Cancel</button>
+										</div>
+									}
 								</td>
 							</tr>
 						}

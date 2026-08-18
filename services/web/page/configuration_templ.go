@@ -125,7 +125,7 @@ func ConfigurationPage(shell ShellData, data ConfigurationData) templ.Component 
 					return templ_7745c5c3_Err
 				}
 			} else if data.Tab == "users" {
-				templ_7745c5c3_Err = cfgUsersSection(data.Users).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = cfgUsersSection(data.Users, data.ServerAdminEmail).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -1010,7 +1010,7 @@ func cfgFormField(label, id, inputType, placeholder string, required bool) templ
 	})
 }
 
-func cfgUsersSection(users []store.User) templ.Component {
+func cfgUsersSection(users []store.User, serverAdminEmail string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -1031,12 +1031,12 @@ func cfgUsersSection(users []store.User) templ.Component {
 			templ_7745c5c3_Var52 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 72, "<section style=\"max-width:640px\"><div style=\"display:flex;align-items:center;justify-content:space-between;margin-bottom:16px\"><div><h2 style=\"margin:0;font-size:15px;font-weight:700;color:var(--text)\">Users</h2><p style=\"margin:4px 0 0;font-size:12px;color:var(--text3)\">Manage team members and access</p></div><button id=\"invite-user-btn\" style=\"background:none;border:none;cursor:pointer;color:var(--accent);font-size:13px;font-family:inherit;padding:4px 0;display:flex;align-items:center;gap:4px\">+ Invite user</button></div><div id=\"invite-result\" style=\"display:none;margin-bottom:16px;padding:12px 14px;border:1px solid var(--border);border-radius:6px;background:var(--surface)\"><div style=\"font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px\">Invitation link (share once — expires in 24h)</div><div style=\"display:flex;gap:8px;align-items:center\"><input id=\"invite-token-display\" type=\"text\" readonly style=\"flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:5px 8px;font-size:12px;font-family:monospace;color:var(--text)\"> <button id=\"invite-copy-btn\" style=\"background:var(--accent);border:none;border-radius:4px;padding:5px 12px;cursor:pointer;font-size:12px;color:#fff;font-family:inherit;flex-shrink:0\">Copy</button></div></div><div id=\"invite-form\" style=\"display:none;margin-bottom:16px;padding:16px;border:1px solid var(--border);border-radius:6px;background:var(--surface)\"><div style=\"display:flex;flex-direction:column;gap:12px\"><div><label style=\"display:block;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:5px\">Email</label> <input id=\"invite-email\" type=\"email\" placeholder=\"user@example.com\" style=\"background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;color:var(--text);outline:none;width:100%;box-sizing:border-box\"></div><div><label style=\"display:block;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:5px\">Role</label> <select id=\"invite-role\" style=\"background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;color:var(--text);outline:none;width:100%;box-sizing:border-box;cursor:pointer;font-family:inherit\"><option value=\"entity_member\">Member</option> <option value=\"entity_admin\">Admin</option></select></div><div id=\"invite-error\" style=\"display:none;font-size:12px;color:var(--commit)\"></div><div style=\"display:flex;gap:8px\"><button id=\"invite-submit\" style=\"background:var(--accent);border:none;border-radius:6px;padding:6px 16px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit\">Send invite</button> <button id=\"invite-cancel\" style=\"background:transparent;border:1px solid var(--border);border-radius:6px;padding:6px 16px;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit\">Cancel</button></div></div></div><div style=\"border:1px solid var(--border);border-radius:4px;overflow:hidden\"><table style=\"width:100%;border-collapse:collapse\"><thead><tr style=\"background:var(--surface);border-bottom:1px solid var(--border)\"><th style=\"padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em\">Name</th><th style=\"padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em\">Email</th><th style=\"padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;width:80px\">Role</th><th style=\"padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;width:120px\">Actions</th></tr></thead> <tbody id=\"users-body\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 72, "<section><div style=\"display:flex;align-items:center;justify-content:space-between;margin-bottom:16px\"><div><h2 style=\"margin:0;font-size:15px;font-weight:700;color:var(--text)\">Users</h2><p style=\"margin:4px 0 0;font-size:12px;color:var(--text3)\">Manage team members and access</p></div><button id=\"invite-user-btn\" style=\"background:var(--accent);border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit\">+ Invite User</button></div><div id=\"invite-result\" style=\"display:none;margin-bottom:16px;padding:12px 14px;border:1px solid var(--border);border-radius:6px;background:var(--surface)\"><div style=\"font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px\">Invitation link (share once — expires in 24h)</div><div style=\"display:flex;gap:8px;align-items:center\"><input id=\"invite-token-display\" type=\"text\" readonly style=\"flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:5px 8px;font-size:12px;font-family:monospace;color:var(--text)\"> <button id=\"invite-copy-btn\" style=\"background:var(--accent);border:none;border-radius:4px;padding:5px 12px;cursor:pointer;font-size:12px;color:#fff;font-family:inherit;flex-shrink:0\">Copy</button></div></div><div id=\"invite-form\" style=\"display:none;margin-bottom:16px;padding:16px;border:1px solid var(--border);border-radius:6px;background:var(--surface)\"><div style=\"display:flex;flex-direction:column;gap:12px\"><div><label style=\"display:block;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:5px\">Email</label> <input id=\"invite-email\" type=\"email\" placeholder=\"user@example.com\" style=\"background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;color:var(--text);outline:none;width:100%;box-sizing:border-box\"></div><div><label style=\"display:block;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:5px\">Role</label> <select id=\"invite-role\" style=\"background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;color:var(--text);outline:none;width:100%;box-sizing:border-box;cursor:pointer;font-family:inherit\"><option value=\"entity_member\">Member</option> <option value=\"entity_admin\">Admin</option></select></div><div id=\"invite-error\" style=\"display:none;font-size:12px;color:var(--commit)\"></div><div style=\"display:flex;gap:8px\"><button id=\"invite-submit\" style=\"background:var(--accent);border:none;border-radius:6px;padding:6px 16px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit\">Send Invite</button> <button id=\"invite-cancel\" style=\"background:transparent;border:1px solid var(--border);border-radius:6px;padding:6px 16px;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit\">Cancel</button></div></div></div><div style=\"border:1px solid var(--border);border-radius:4px;overflow:hidden\"><table style=\"width:100%;border-collapse:collapse\"><thead><tr style=\"background:var(--surface);border-bottom:1px solid var(--border)\"><th style=\"padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em\">First Name</th><th style=\"padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em\">Last Name</th><th style=\"padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em\">Preferred Name</th><th style=\"padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em\">Email</th><th style=\"padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;width:90px\">Role</th><th style=\"padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;width:220px\">Actions</th></tr></thead> <tbody id=\"users-body\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if len(users) == 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 73, "<tr><td colspan=\"4\" style=\"padding:16px 12px;color:var(--text3);font-size:13px\">No users found.</td></tr>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 73, "<tr><td colspan=\"6\" style=\"padding:20px 14px;color:var(--text3);font-size:13px\">No users found.</td></tr>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1049,7 +1049,7 @@ func cfgUsersSection(users []store.User) templ.Component {
 				var templ_7745c5c3_Var53 string
 				templ_7745c5c3_Var53, templ_7745c5c3_Err = templ.ResolveAttributeValue(u.ID)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 910, Col: 27}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 912, Col: 27}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var53)
 				if templ_7745c5c3_Err != nil {
@@ -1067,125 +1067,187 @@ func cfgUsersSection(users []store.User) templ.Component {
 					return ""
 				}())
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 914, Col: 11}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 916, Col: 11}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var54))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 76, "\"><td style=\"padding:8px 12px;font-size:13px;color:var(--text)\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 76, "\"><td style=\"padding:10px 14px;font-size:13px;color:var(--text)\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var55 string
-				templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.JoinStringErrs(u.DisplayName())
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 916, Col: 87}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var55))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 77, "</td><td style=\"padding:8px 12px;font-size:13px;color:var(--text2)\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var56 string
-				templ_7745c5c3_Var56, templ_7745c5c3_Err = templ.JoinStringErrs(u.Email)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 917, Col: 80}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var56))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 78, "</td><td style=\"padding:8px 12px\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				if u.EntityRole == "entity_admin" {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 79, "<span style=\"display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;background:var(--accent);color:#fff\">Admin</span>")
+				if u.FirstName != "" {
+					var templ_7745c5c3_Var55 string
+					templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.JoinStringErrs(u.FirstName)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 920, Col: 23}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var55))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				} else {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 80, "<span style=\"display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;background:var(--surface2);color:var(--text2);border:1px solid var(--border)\">Member</span>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 77, "<span style=\"color:var(--text3)\">—</span>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 81, "</td><td style=\"padding:8px 12px\"><div class=\"js-user-actions-normal\" style=\"display:flex;gap:8px\"><button class=\"js-user-reset-pw\" data-user-id=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 78, "</td><td style=\"padding:10px 14px;font-size:13px;color:var(--text)\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var57 string
-				templ_7745c5c3_Var57, templ_7745c5c3_Err = templ.ResolveAttributeValue(u.ID)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 927, Col: 62}
+				if u.LastName != "" {
+					var templ_7745c5c3_Var56 string
+					templ_7745c5c3_Var56, templ_7745c5c3_Err = templ.JoinStringErrs(u.LastName)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 927, Col: 22}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var56))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				} else {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 79, "<span style=\"color:var(--text3)\">—</span>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var57)
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 80, "</td><td style=\"padding:10px 14px;font-size:13px;color:var(--text2)\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 82, "\" style=\"background:none;border:none;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:0\">Reset pw</button> <button class=\"js-user-delete\" data-user-id=\"")
+				if u.PreferredName != "" {
+					var templ_7745c5c3_Var57 string
+					templ_7745c5c3_Var57, templ_7745c5c3_Err = templ.JoinStringErrs(u.PreferredName)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 934, Col: 27}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var57))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				} else {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 81, "<span style=\"color:var(--text3)\">—</span>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 82, "</td><td style=\"padding:10px 14px;font-size:13px;color:var(--text2)\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var58 string
-				templ_7745c5c3_Var58, templ_7745c5c3_Err = templ.ResolveAttributeValue(u.ID)
+				templ_7745c5c3_Var58, templ_7745c5c3_Err = templ.JoinStringErrs(u.Email)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 928, Col: 60}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 939, Col: 81}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var58)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 83, "\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit;padding:0\">Delete</button></div><div class=\"js-user-delete-confirm\" style=\"display:none;align-items:center;gap:4px\"><span style=\"font-size:11px;color:var(--commit)\">Delete?</span> <button class=\"js-user-delete-yes\" data-user-id=\"")
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var58))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var59 string
-				templ_7745c5c3_Var59, templ_7745c5c3_Err = templ.ResolveAttributeValue(u.ID)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 932, Col: 64}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var59)
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 83, "</td><td style=\"padding:10px 14px\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 84, "\" style=\"background:none;border:none;cursor:pointer;color:var(--commit);font-size:11px;font-family:inherit;padding:2px 4px\">Yes</button> <button class=\"js-user-delete-no\" data-user-id=\"")
+				if u.EntityRole == "entity_admin" {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 84, "<span style=\"display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;background:var(--accent);color:#fff\">Admin</span>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				} else {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 85, "<span style=\"display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;background:var(--surface2);color:var(--text2);border:1px solid var(--border)\">Member</span>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 86, "</td><td style=\"padding:8px 14px\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var60 string
-				templ_7745c5c3_Var60, templ_7745c5c3_Err = templ.ResolveAttributeValue(u.ID)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 933, Col: 63}
+				if u.Email == serverAdminEmail {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 87, "<span style=\"display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;background:var(--surface2);color:var(--text3);border:1px solid var(--border)\">Server Admin</span>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				} else {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 88, "<div class=\"js-user-actions-normal\" style=\"display:flex;gap:6px\"><button class=\"js-user-reset-pw\" data-user-id=\"")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var59 string
+					templ_7745c5c3_Var59, templ_7745c5c3_Err = templ.ResolveAttributeValue(u.ID)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 952, Col: 63}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var59)
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 89, "\" style=\"background:transparent;border:1px solid var(--border);border-radius:5px;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:4px 10px\">Reset Password</button> <button class=\"js-user-delete\" data-user-id=\"")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var60 string
+					templ_7745c5c3_Var60, templ_7745c5c3_Err = templ.ResolveAttributeValue(u.ID)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 953, Col: 61}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var60)
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 90, "\" style=\"background:transparent;border:1px solid var(--border);border-radius:5px;cursor:pointer;color:var(--commit);font-size:12px;font-family:inherit;padding:4px 10px\">Delete</button></div><div class=\"js-user-delete-confirm\" style=\"display:none;align-items:center;gap:6px\"><span style=\"font-size:12px;color:var(--commit)\">Delete this user?</span> <button class=\"js-user-delete-yes\" data-user-id=\"")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var61 string
+					templ_7745c5c3_Var61, templ_7745c5c3_Err = templ.ResolveAttributeValue(u.ID)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 957, Col: 65}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var61)
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 91, "\" style=\"background:var(--commit);border:none;border-radius:5px;cursor:pointer;color:#fff;font-size:12px;font-family:inherit;padding:4px 10px\">Delete</button> <button class=\"js-user-delete-no\" data-user-id=\"")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var62 string
+					templ_7745c5c3_Var62, templ_7745c5c3_Err = templ.ResolveAttributeValue(u.ID)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 958, Col: 64}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var62)
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 92, "\" style=\"background:transparent;border:1px solid var(--border);border-radius:5px;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:4px 10px\">Cancel</button></div><div class=\"js-user-reset-pw-form\" style=\"display:none;align-items:center;gap:6px\"><input class=\"js-user-new-pw-input\" type=\"password\" placeholder=\"New password\" style=\"background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:12px;color:var(--text);outline:none;width:140px\"> <button class=\"js-user-reset-pw-save\" data-user-id=\"")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var63 string
+					templ_7745c5c3_Var63, templ_7745c5c3_Err = templ.ResolveAttributeValue(u.ID)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 962, Col: 68}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var63)
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 93, "\" style=\"background:var(--accent);border:none;border-radius:5px;cursor:pointer;color:#fff;font-size:12px;font-family:inherit;padding:4px 10px\">Save</button> <button class=\"js-user-reset-pw-cancel\" style=\"background:transparent;border:1px solid var(--border);border-radius:5px;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:4px 10px\">Cancel</button></div>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var60)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 85, "\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:11px;font-family:inherit;padding:2px 4px\">No</button></div><div class=\"js-user-reset-pw-form\" style=\"display:none;align-items:center;gap:4px\"><input class=\"js-user-new-pw-input\" type=\"password\" placeholder=\"New password\" style=\"background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:12px;color:var(--text);outline:none;width:120px\"> <button class=\"js-user-reset-pw-save\" data-user-id=\"")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var61 string
-				templ_7745c5c3_Var61, templ_7745c5c3_Err = templ.ResolveAttributeValue(u.ID)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 937, Col: 67}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var61)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 86, "\" style=\"background:none;border:none;cursor:pointer;color:var(--income);font-size:12px;font-family:inherit;padding:2px 4px\">Save</button> <button class=\"js-user-reset-pw-cancel\" style=\"background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit;padding:2px 4px\">Cancel</button></div></td></tr>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 94, "</td></tr>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 87, "</tbody></table></div></section><script>\n\t(function() {\n\t\tvar inviteBtn    = document.getElementById('invite-user-btn');\n\t\tvar inviteForm   = document.getElementById('invite-form');\n\t\tvar inviteResult = document.getElementById('invite-result');\n\t\tvar inviteSubmit = document.getElementById('invite-submit');\n\t\tvar inviteCancel = document.getElementById('invite-cancel');\n\t\tvar inviteError  = document.getElementById('invite-error');\n\t\tvar inviteTokenDisplay = document.getElementById('invite-token-display');\n\t\tvar inviteCopyBtn = document.getElementById('invite-copy-btn');\n\n\t\tif (inviteBtn) inviteBtn.addEventListener('click', function() {\n\t\t\tif (inviteResult) inviteResult.style.display = 'none';\n\t\t\tif (inviteForm) inviteForm.style.display = '';\n\t\t\tvar emailInput = document.getElementById('invite-email');\n\t\t\tif (emailInput) emailInput.focus();\n\t\t});\n\t\tif (inviteCancel) inviteCancel.addEventListener('click', function() {\n\t\t\tif (inviteForm) inviteForm.style.display = 'none';\n\t\t});\n\t\tif (inviteCopyBtn) inviteCopyBtn.addEventListener('click', function() {\n\t\t\tif (inviteTokenDisplay) {\n\t\t\t\tinviteTokenDisplay.select();\n\t\t\t\tdocument.execCommand('copy');\n\t\t\t\tinviteCopyBtn.textContent = 'Copied!';\n\t\t\t\tsetTimeout(function() { inviteCopyBtn.textContent = 'Copy'; }, 2000);\n\t\t\t}\n\t\t});\n\t\tif (inviteSubmit) inviteSubmit.addEventListener('click', function() {\n\t\t\tvar email = (document.getElementById('invite-email') || {}).value.trim();\n\t\t\tvar role  = (document.getElementById('invite-role') || {}).value;\n\t\t\tif (!email) {\n\t\t\t\tif (inviteError) { inviteError.textContent = 'Email is required.'; inviteError.style.display = ''; }\n\t\t\t\treturn;\n\t\t\t}\n\t\t\tif (inviteError) inviteError.style.display = 'none';\n\t\t\tinviteSubmit.disabled = true;\n\t\t\tinviteSubmit.textContent = 'Sending…';\n\t\t\tfetch('/api/users/invite', {\n\t\t\t\tmethod: 'POST',\n\t\t\t\theaders: {'Content-Type': 'application/json'},\n\t\t\t\tbody: JSON.stringify({email: email, entity_role: role}),\n\t\t\t}).then(function(r) { return r.json().then(function(d) { return {ok: r.ok, d: d}; }); })\n\t\t\t.then(function(res) {\n\t\t\t\tinviteSubmit.disabled = false;\n\t\t\t\tinviteSubmit.textContent = 'Send invite';\n\t\t\t\tif (!res.ok) {\n\t\t\t\t\tif (inviteError) { inviteError.textContent = res.d.detail || 'Invite failed.'; inviteError.style.display = ''; }\n\t\t\t\t\treturn;\n\t\t\t\t}\n\t\t\t\tvar origin = window.location.origin;\n\t\t\t\tvar link = origin + '/accept-invite?token=' + encodeURIComponent(res.d.token);\n\t\t\t\tif (inviteTokenDisplay) inviteTokenDisplay.value = link;\n\t\t\t\tif (inviteForm) inviteForm.style.display = 'none';\n\t\t\t\tif (inviteResult) inviteResult.style.display = '';\n\t\t\t\tdocument.getElementById('invite-email').value = '';\n\t\t\t}).catch(function() {\n\t\t\t\tinviteSubmit.disabled = false;\n\t\t\t\tinviteSubmit.textContent = 'Send invite';\n\t\t\t\tif (inviteError) { inviteError.textContent = 'Invite failed.'; inviteError.style.display = ''; }\n\t\t\t});\n\t\t});\n\n\t\tdocument.addEventListener('click', function(e) {\n\t\t\tvar resetBtn = e.target.closest('.js-user-reset-pw');\n\t\t\tif (resetBtn) {\n\t\t\t\tvar row = resetBtn.closest('tr[data-user-id]');\n\t\t\t\tif (!row) return;\n\t\t\t\trow.querySelector('.js-user-actions-normal').style.display = 'none';\n\t\t\t\tvar form = row.querySelector('.js-user-reset-pw-form');\n\t\t\t\tform.style.display = 'flex';\n\t\t\t\tvar input = form.querySelector('.js-user-new-pw-input');\n\t\t\t\tif (input) { input.value = ''; input.focus(); }\n\t\t\t\treturn;\n\t\t\t}\n\t\t\tvar resetCancel = e.target.closest('.js-user-reset-pw-cancel');\n\t\t\tif (resetCancel) {\n\t\t\t\tvar row = resetCancel.closest('tr[data-user-id]');\n\t\t\t\tif (!row) return;\n\t\t\t\trow.querySelector('.js-user-actions-normal').style.display = 'flex';\n\t\t\t\trow.querySelector('.js-user-reset-pw-form').style.display = 'none';\n\t\t\t\treturn;\n\t\t\t}\n\t\t\tvar resetSave = e.target.closest('.js-user-reset-pw-save');\n\t\t\tif (resetSave) {\n\t\t\t\tvar row = resetSave.closest('tr[data-user-id]');\n\t\t\t\tif (!row) return;\n\t\t\t\tvar input = row.querySelector('.js-user-new-pw-input');\n\t\t\t\tvar pw = input ? input.value : '';\n\t\t\t\tif (!pw) return;\n\t\t\t\tresetSave.disabled = true;\n\t\t\t\tfetch('/api/users/' + resetSave.dataset.userId + '/password', {\n\t\t\t\t\tmethod: 'PUT',\n\t\t\t\t\theaders: {'Content-Type': 'application/json'},\n\t\t\t\t\tbody: JSON.stringify({password: pw}),\n\t\t\t\t}).then(function(r) {\n\t\t\t\t\tresetSave.disabled = false;\n\t\t\t\t\tif (r.ok) {\n\t\t\t\t\t\trow.querySelector('.js-user-actions-normal').style.display = 'flex';\n\t\t\t\t\t\trow.querySelector('.js-user-reset-pw-form').style.display = 'none';\n\t\t\t\t\t}\n\t\t\t\t}).catch(function() { resetSave.disabled = false; });\n\t\t\t\treturn;\n\t\t\t}\n\t\t\tvar delBtn = e.target.closest('.js-user-delete');\n\t\t\tif (delBtn) {\n\t\t\t\tvar row = delBtn.closest('tr[data-user-id]');\n\t\t\t\tif (!row) return;\n\t\t\t\trow.querySelector('.js-user-actions-normal').style.display = 'none';\n\t\t\t\trow.querySelector('.js-user-delete-confirm').style.display = 'flex';\n\t\t\t\treturn;\n\t\t\t}\n\t\t\tvar delNo = e.target.closest('.js-user-delete-no');\n\t\t\tif (delNo) {\n\t\t\t\tvar row = delNo.closest('tr[data-user-id]');\n\t\t\t\tif (!row) return;\n\t\t\t\trow.querySelector('.js-user-actions-normal').style.display = 'flex';\n\t\t\t\trow.querySelector('.js-user-delete-confirm').style.display = 'none';\n\t\t\t\treturn;\n\t\t\t}\n\t\t\tvar delYes = e.target.closest('.js-user-delete-yes');\n\t\t\tif (delYes) {\n\t\t\t\tvar uid = delYes.dataset.userId;\n\t\t\t\tdelYes.disabled = true;\n\t\t\t\tfetch('/api/users/' + uid, {method: 'DELETE'})\n\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\tif (r.ok || r.status === 404) {\n\t\t\t\t\t\t\tvar row = document.querySelector('tr[data-user-id=\"' + uid + '\"]');\n\t\t\t\t\t\t\tif (row) row.remove();\n\t\t\t\t\t\t} else { delYes.disabled = false; }\n\t\t\t\t\t})\n\t\t\t\t\t.catch(function() { delYes.disabled = false; });\n\t\t\t\treturn;\n\t\t\t}\n\t\t});\n\t})();\n\t</script>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 95, "</tbody></table></div></section><script>\n\t(function() {\n\t\tvar inviteBtn    = document.getElementById('invite-user-btn');\n\t\tvar inviteForm   = document.getElementById('invite-form');\n\t\tvar inviteResult = document.getElementById('invite-result');\n\t\tvar inviteSubmit = document.getElementById('invite-submit');\n\t\tvar inviteCancel = document.getElementById('invite-cancel');\n\t\tvar inviteError  = document.getElementById('invite-error');\n\t\tvar inviteTokenDisplay = document.getElementById('invite-token-display');\n\t\tvar inviteCopyBtn = document.getElementById('invite-copy-btn');\n\n\t\tif (inviteBtn) inviteBtn.addEventListener('click', function() {\n\t\t\tif (inviteResult) inviteResult.style.display = 'none';\n\t\t\tif (inviteForm) inviteForm.style.display = '';\n\t\t\tvar emailInput = document.getElementById('invite-email');\n\t\t\tif (emailInput) emailInput.focus();\n\t\t});\n\t\tif (inviteCancel) inviteCancel.addEventListener('click', function() {\n\t\t\tif (inviteForm) inviteForm.style.display = 'none';\n\t\t});\n\t\tif (inviteCopyBtn) inviteCopyBtn.addEventListener('click', function() {\n\t\t\tif (inviteTokenDisplay) {\n\t\t\t\tinviteTokenDisplay.select();\n\t\t\t\tdocument.execCommand('copy');\n\t\t\t\tinviteCopyBtn.textContent = 'Copied!';\n\t\t\t\tsetTimeout(function() { inviteCopyBtn.textContent = 'Copy'; }, 2000);\n\t\t\t}\n\t\t});\n\t\tif (inviteSubmit) inviteSubmit.addEventListener('click', function() {\n\t\t\tvar email = (document.getElementById('invite-email') || {}).value.trim();\n\t\t\tvar role  = (document.getElementById('invite-role') || {}).value;\n\t\t\tif (!email) {\n\t\t\t\tif (inviteError) { inviteError.textContent = 'Email is required.'; inviteError.style.display = ''; }\n\t\t\t\treturn;\n\t\t\t}\n\t\t\tif (inviteError) inviteError.style.display = 'none';\n\t\t\tinviteSubmit.disabled = true;\n\t\t\tinviteSubmit.textContent = 'Sending…';\n\t\t\tfetch('/api/users/invite', {\n\t\t\t\tmethod: 'POST',\n\t\t\t\theaders: {'Content-Type': 'application/json'},\n\t\t\t\tbody: JSON.stringify({email: email, entity_role: role}),\n\t\t\t}).then(function(r) { return r.json().then(function(d) { return {ok: r.ok, d: d}; }); })\n\t\t\t.then(function(res) {\n\t\t\t\tinviteSubmit.disabled = false;\n\t\t\t\tinviteSubmit.textContent = 'Send invite';\n\t\t\t\tif (!res.ok) {\n\t\t\t\t\tif (inviteError) { inviteError.textContent = res.d.detail || 'Invite failed.'; inviteError.style.display = ''; }\n\t\t\t\t\treturn;\n\t\t\t\t}\n\t\t\t\tvar origin = window.location.origin;\n\t\t\t\tvar link = origin + '/accept-invite?token=' + encodeURIComponent(res.d.token);\n\t\t\t\tif (inviteTokenDisplay) inviteTokenDisplay.value = link;\n\t\t\t\tif (inviteForm) inviteForm.style.display = 'none';\n\t\t\t\tif (inviteResult) inviteResult.style.display = '';\n\t\t\t\tdocument.getElementById('invite-email').value = '';\n\t\t\t}).catch(function() {\n\t\t\t\tinviteSubmit.disabled = false;\n\t\t\t\tinviteSubmit.textContent = 'Send invite';\n\t\t\t\tif (inviteError) { inviteError.textContent = 'Invite failed.'; inviteError.style.display = ''; }\n\t\t\t});\n\t\t});\n\n\t\tdocument.addEventListener('click', function(e) {\n\t\t\tvar resetBtn = e.target.closest('.js-user-reset-pw');\n\t\t\tif (resetBtn) {\n\t\t\t\tvar row = resetBtn.closest('tr[data-user-id]');\n\t\t\t\tif (!row) return;\n\t\t\t\trow.querySelector('.js-user-actions-normal').style.display = 'none';\n\t\t\t\tvar form = row.querySelector('.js-user-reset-pw-form');\n\t\t\t\tform.style.display = 'flex';\n\t\t\t\tvar input = form.querySelector('.js-user-new-pw-input');\n\t\t\t\tif (input) { input.value = ''; input.focus(); }\n\t\t\t\treturn;\n\t\t\t}\n\t\t\tvar resetCancel = e.target.closest('.js-user-reset-pw-cancel');\n\t\t\tif (resetCancel) {\n\t\t\t\tvar row = resetCancel.closest('tr[data-user-id]');\n\t\t\t\tif (!row) return;\n\t\t\t\trow.querySelector('.js-user-actions-normal').style.display = 'flex';\n\t\t\t\trow.querySelector('.js-user-reset-pw-form').style.display = 'none';\n\t\t\t\treturn;\n\t\t\t}\n\t\t\tvar resetSave = e.target.closest('.js-user-reset-pw-save');\n\t\t\tif (resetSave) {\n\t\t\t\tvar row = resetSave.closest('tr[data-user-id]');\n\t\t\t\tif (!row) return;\n\t\t\t\tvar input = row.querySelector('.js-user-new-pw-input');\n\t\t\t\tvar pw = input ? input.value : '';\n\t\t\t\tif (!pw) return;\n\t\t\t\tresetSave.disabled = true;\n\t\t\t\tfetch('/api/users/' + resetSave.dataset.userId + '/password', {\n\t\t\t\t\tmethod: 'PUT',\n\t\t\t\t\theaders: {'Content-Type': 'application/json'},\n\t\t\t\t\tbody: JSON.stringify({password: pw}),\n\t\t\t\t}).then(function(r) {\n\t\t\t\t\tresetSave.disabled = false;\n\t\t\t\t\tif (r.ok) {\n\t\t\t\t\t\trow.querySelector('.js-user-actions-normal').style.display = 'flex';\n\t\t\t\t\t\trow.querySelector('.js-user-reset-pw-form').style.display = 'none';\n\t\t\t\t\t}\n\t\t\t\t}).catch(function() { resetSave.disabled = false; });\n\t\t\t\treturn;\n\t\t\t}\n\t\t\tvar delBtn = e.target.closest('.js-user-delete');\n\t\t\tif (delBtn) {\n\t\t\t\tvar row = delBtn.closest('tr[data-user-id]');\n\t\t\t\tif (!row) return;\n\t\t\t\trow.querySelector('.js-user-actions-normal').style.display = 'none';\n\t\t\t\trow.querySelector('.js-user-delete-confirm').style.display = 'flex';\n\t\t\t\treturn;\n\t\t\t}\n\t\t\tvar delNo = e.target.closest('.js-user-delete-no');\n\t\t\tif (delNo) {\n\t\t\t\tvar row = delNo.closest('tr[data-user-id]');\n\t\t\t\tif (!row) return;\n\t\t\t\trow.querySelector('.js-user-actions-normal').style.display = 'flex';\n\t\t\t\trow.querySelector('.js-user-delete-confirm').style.display = 'none';\n\t\t\t\treturn;\n\t\t\t}\n\t\t\tvar delYes = e.target.closest('.js-user-delete-yes');\n\t\t\tif (delYes) {\n\t\t\t\tvar uid = delYes.dataset.userId;\n\t\t\t\tdelYes.disabled = true;\n\t\t\t\tfetch('/api/users/' + uid, {method: 'DELETE'})\n\t\t\t\t\t.then(function(r) {\n\t\t\t\t\t\tif (r.ok || r.status === 404) {\n\t\t\t\t\t\t\tvar row = document.querySelector('tr[data-user-id=\"' + uid + '\"]');\n\t\t\t\t\t\t\tif (row) row.remove();\n\t\t\t\t\t\t} else { delYes.disabled = false; }\n\t\t\t\t\t})\n\t\t\t\t\t.catch(function() { delYes.disabled = false; });\n\t\t\t\treturn;\n\t\t\t}\n\t\t});\n\t})();\n\t</script>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
