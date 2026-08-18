@@ -686,7 +686,7 @@ func cfgInstitutionsSection(institutions []InstitutionWithAccounts) templ.Compon
 			templ_7745c5c3_Var39 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "<section style=\"max-width:640px\"><div style=\"display:flex;align-items:center;justify-content:space-between;margin-bottom:16px\"><div><h2 style=\"margin:0;font-size:15px;font-weight:700;color:var(--text)\">Institution Mappings</h2><p style=\"margin:4px 0 0;font-size:12px;color:var(--text3)\">CSV column mappings for each financial institution</p></div><button id=\"new-inst-btn\" style=\"background:none;border:none;cursor:pointer;color:var(--accent);font-size:13px;font-family:inherit;padding:4px 0;display:flex;align-items:center;gap:4px\">+ New mapping</button></div><div id=\"inst-list\" style=\"border:1px solid var(--border);border-radius:4px;overflow:hidden\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "<section><div style=\"display:flex;align-items:center;justify-content:space-between;margin-bottom:16px\"><div><h2 style=\"margin:0;font-size:15px;font-weight:700;color:var(--text)\">Institution Mappings</h2><p style=\"margin:4px 0 0;font-size:12px;color:var(--text3)\">CSV column mappings for each financial institution</p></div><button id=\"new-inst-btn\" style=\"background:none;border:none;cursor:pointer;color:var(--accent);font-size:13px;font-family:inherit;padding:4px 0;display:flex;align-items:center;gap:4px\">+ New mapping</button></div><div id=\"inst-list\" style=\"border:1px solid var(--border);border-radius:4px;overflow:hidden\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
