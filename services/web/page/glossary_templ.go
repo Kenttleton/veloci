@@ -42,7 +42,7 @@ func GlossaryPage(data ShellData) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div style=\"display:flex;flex-direction:column;height:100%;overflow:hidden\"><div style=\"padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0\"><p style=\"margin:0;font-size:13px;color:var(--text3)\">Domain vocabulary for Veloci. Hover any dashed-underline term in the app for a short definition.</p></div><div style=\"flex:1;overflow:auto;padding:20px\"><div style=\"max-width:720px\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"page-layout\"><div style=\"padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0\"><p style=\"margin:0;font-size:13px;color:var(--text3)\">Domain vocabulary for Veloci. Hover any dashed-underline term in the app for a short definition.</p></div><div style=\"flex:1;overflow:auto;padding:20px\"><div style=\"max-width:720px\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

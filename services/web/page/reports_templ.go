@@ -46,7 +46,7 @@ func ReportsPage(shell ShellData, data ReportsData) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div style=\"display:flex;flex-direction:column;height:100%;overflow:hidden\"><!-- Exports panel --><div style=\"padding:10px 20px;border-bottom:1px solid var(--border);flex-shrink:0\"><div style=\"display:flex;align-items:center;gap:12px;margin-bottom:8px\"><span style=\"font-size:11px;font-weight:600;color:var(--text3);letter-spacing:0.04em;text-transform:uppercase\">Exports</span> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"page-layout\"><!-- Exports panel --><div style=\"padding:10px 20px;border-bottom:1px solid var(--border);flex-shrink:0\"><div style=\"display:flex;align-items:center;gap:12px;margin-bottom:8px\"><span style=\"font-size:11px;font-weight:600;color:var(--text3);letter-spacing:0.04em;text-transform:uppercase\">Exports</span> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

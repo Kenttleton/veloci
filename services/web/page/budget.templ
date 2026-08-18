@@ -10,7 +10,7 @@ import (
 
 templ BudgetPage(shell ShellData, data BudgetData) {
 	@Shell(shell) {
-		<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
+		<div class="page-layout">
 			<!-- Summary strip -->
 			@budgetSummaryStrip(data)
 			<!-- Scrollable body: horizon chart + stack panel -->

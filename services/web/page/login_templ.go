@@ -96,7 +96,7 @@ func Login(errMsg, email, next string) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" placeholder=\"Email\" required autofocus> <input type=\"password\" name=\"password\" placeholder=\"Password\" required> <button type=\"submit\" class=\"btn-primary\">Sign in</button></form></main>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" placeholder=\"Email\" required autofocus> <input type=\"password\" name=\"password\" placeholder=\"Password\" required> <button type=\"submit\" class=\"btn btn--primary\" style=\"width:100%\">Sign in</button></form></main>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

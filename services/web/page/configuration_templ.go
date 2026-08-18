@@ -48,7 +48,7 @@ func ConfigurationPage(shell ShellData, data ConfigurationData) templ.Component 
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div style=\"display:flex;flex-direction:column;height:100%;overflow:hidden\"><div style=\"padding:14px 20px 0;border-bottom:1px solid var(--border);flex-shrink:0\"><div style=\"display:flex;gap:2px\"><a href=\"?tab=labels\" style=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"page-layout\"><div style=\"padding:14px 20px 0;border-bottom:1px solid var(--border);flex-shrink:0\"><div style=\"display:flex;gap:2px\"><a href=\"?tab=labels\" style=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -110,7 +110,7 @@ func ConfigurationPage(shell ShellData, data ConfigurationData) templ.Component 
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "</div></div><div style=\"flex:1;overflow:auto;padding:24px 20px\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "</div></div><div class=\"page-body\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -837,7 +837,7 @@ func cfgInstRow(inst InstitutionWithAccounts, isLast bool) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 62, "</div><div style=\"border-top:1px solid var(--border);background:var(--bg);padding:10px 16px\"><div style=\"font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px\">Accounts using this institution</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 62, "</div><div style=\"border-top:1px solid var(--border);background:var(--bg);padding:10px 16px\"><div class=\"field-label\" style=\"margin-bottom:6px\">Accounts using this institution</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1032,7 +1032,7 @@ func cfgInstDialog() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 74, "</div><div id=\"inst-dialog-error\" style=\"color:var(--commit);font-size:12px;display:none\"></div></div><div style=\"padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0\"><button id=\"inst-dialog-cancel\" style=\"background:transparent;border:1px solid var(--border);border-radius:6px;padding:6px 16px;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit\">Cancel</button> <button id=\"inst-dialog-save\" style=\"background:var(--accent);border:none;border-radius:6px;padding:6px 16px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit\">Save mapping</button></div></div></dialog>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 74, "</div><div id=\"inst-dialog-error\" style=\"color:var(--commit);font-size:12px;display:none\"></div></div><div style=\"padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0\"><button id=\"inst-dialog-cancel\" class=\"btn btn--ghost\">Cancel</button> <button id=\"inst-dialog-save\" class=\"btn btn--primary\">Save mapping</button></div></div></dialog>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1152,7 +1152,7 @@ func cfgUsersSection(users []store.User, serverAdminEmail string) templ.Componen
 			templ_7745c5c3_Var60 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 82, "<section><div style=\"display:flex;align-items:center;justify-content:space-between;margin-bottom:16px\"><div><h2 style=\"margin:0;font-size:15px;font-weight:700;color:var(--text)\">Users</h2><p style=\"margin:4px 0 0;font-size:12px;color:var(--text3)\">Manage team members and access</p></div><button id=\"invite-user-btn\" style=\"background:var(--accent);border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit\">+ Invite User</button></div><div id=\"invite-result\" style=\"display:none;margin-bottom:16px;padding:12px 14px;border:1px solid var(--border);border-radius:6px;background:var(--surface)\"><div style=\"font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px\">Invitation link (share once — expires in 24h)</div><div style=\"display:flex;gap:8px;align-items:center\"><input id=\"invite-token-display\" type=\"text\" readonly style=\"flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:5px 8px;font-size:12px;font-family:monospace;color:var(--text)\"> <button id=\"invite-copy-btn\" style=\"background:var(--accent);border:none;border-radius:4px;padding:5px 12px;cursor:pointer;font-size:12px;color:#fff;font-family:inherit;flex-shrink:0\">Copy</button></div></div><div id=\"invite-form\" style=\"display:none;margin-bottom:16px;padding:16px;border:1px solid var(--border);border-radius:6px;background:var(--surface)\"><div style=\"display:flex;flex-direction:column;gap:12px\"><div><label style=\"display:block;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:5px\">Email</label> <input id=\"invite-email\" type=\"email\" placeholder=\"user@example.com\" style=\"background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;color:var(--text);outline:none;width:100%;box-sizing:border-box\"></div><div><label style=\"display:block;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:5px\">Role</label> <select id=\"invite-role\" style=\"background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;color:var(--text);outline:none;width:100%;box-sizing:border-box;cursor:pointer;font-family:inherit\"><option value=\"entity_member\">Member</option> <option value=\"entity_admin\">Admin</option></select></div><div id=\"invite-error\" style=\"display:none;font-size:12px;color:var(--commit)\"></div><div style=\"display:flex;gap:8px\"><button id=\"invite-submit\" style=\"background:var(--accent);border:none;border-radius:6px;padding:6px 16px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit\">Send Invite</button> <button id=\"invite-cancel\" style=\"background:transparent;border:1px solid var(--border);border-radius:6px;padding:6px 16px;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit\">Cancel</button></div></div></div><div style=\"border:1px solid var(--border);border-radius:4px;overflow:hidden\"><table style=\"width:100%;border-collapse:collapse\"><thead><tr style=\"background:var(--surface);border-bottom:1px solid var(--border)\"><th style=\"padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em\">First Name</th><th style=\"padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em\">Last Name</th><th style=\"padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em\">Preferred Name</th><th style=\"padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em\">Email</th><th style=\"padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;width:90px\">Role</th><th style=\"padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;width:220px\">Actions</th></tr></thead> <tbody id=\"users-body\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 82, "<section><div style=\"display:flex;align-items:center;justify-content:space-between;margin-bottom:16px\"><div><h2 style=\"margin:0;font-size:15px;font-weight:700;color:var(--text)\">Users</h2><p style=\"margin:4px 0 0;font-size:12px;color:var(--text3)\">Manage team members and access</p></div><button id=\"invite-user-btn\" class=\"btn btn--primary\">+ Invite User</button></div><div id=\"invite-result\" style=\"display:none;margin-bottom:16px;padding:12px 14px;border:1px solid var(--border);border-radius:6px;background:var(--surface)\"><div style=\"font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px\">Invitation link (share once — expires in 24h)</div><div style=\"display:flex;gap:8px;align-items:center\"><input id=\"invite-token-display\" type=\"text\" readonly style=\"flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:5px 8px;font-size:12px;font-family:monospace;color:var(--text)\"> <button id=\"invite-copy-btn\" style=\"background:var(--accent);border:none;border-radius:4px;padding:5px 12px;cursor:pointer;font-size:12px;color:#fff;font-family:inherit;flex-shrink:0\">Copy</button></div></div><div id=\"invite-form\" style=\"display:none;margin-bottom:16px;padding:16px;border:1px solid var(--border);border-radius:6px;background:var(--surface)\"><div style=\"display:flex;flex-direction:column;gap:12px\"><div><label class=\"field-label\">Email</label> <input id=\"invite-email\" type=\"email\" placeholder=\"user@example.com\" style=\"background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;color:var(--text);outline:none;width:100%;box-sizing:border-box\"></div><div><label class=\"field-label\">Role</label> <select id=\"invite-role\" style=\"background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;color:var(--text);outline:none;width:100%;box-sizing:border-box;cursor:pointer;font-family:inherit\"><option value=\"entity_member\">Member</option> <option value=\"entity_admin\">Admin</option></select></div><div id=\"invite-error\" style=\"display:none;font-size:12px;color:var(--commit)\"></div><div style=\"display:flex;gap:8px\"><button id=\"invite-submit\" class=\"btn btn--primary\">Send Invite</button> <button id=\"invite-cancel\" class=\"btn btn--ghost\">Cancel</button></div></div></div><div style=\"border:1px solid var(--border);border-radius:4px;overflow:hidden\"><table style=\"width:100%;border-collapse:collapse\"><thead><tr style=\"background:var(--surface);border-bottom:1px solid var(--border)\"><th style=\"padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em\">First Name</th><th style=\"padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em\">Last Name</th><th style=\"padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em\">Preferred Name</th><th style=\"padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em\">Email</th><th style=\"padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;width:90px\">Role</th><th style=\"padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;width:220px\">Actions</th></tr></thead> <tbody id=\"users-body\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1272,12 +1272,12 @@ func cfgUsersSection(users []store.User, serverAdminEmail string) templ.Componen
 					return templ_7745c5c3_Err
 				}
 				if u.EntityRole == "entity_admin" {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 94, "<span style=\"display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;background:var(--accent);color:#fff\">Admin</span>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 94, "<span class=\"pill pill--accent pill--sm\">Admin</span>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				} else {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 95, "<span style=\"display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;background:var(--surface2);color:var(--text2);border:1px solid var(--border)\">Member</span>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 95, "<span class=\"pill pill--muted pill--sm\">Member</span>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -1287,77 +1287,77 @@ func cfgUsersSection(users []store.User, serverAdminEmail string) templ.Componen
 					return templ_7745c5c3_Err
 				}
 				if u.Email == serverAdminEmail {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 97, "<span style=\"display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;background:var(--surface2);color:var(--text3);border:1px solid var(--border)\">Server Admin</span>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 97, "<span class=\"pill pill--muted pill--sm\">Server Admin</span>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				} else {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 98, "<div class=\"js-user-actions-normal\" style=\"display:flex;gap:6px\"><button class=\"js-user-reset-pw\" data-user-id=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 98, "<div class=\"js-user-actions-normal\" style=\"display:flex;gap:6px\"><button class=\"js-user-reset-pw btn btn--ghost btn--sm\" data-user-id=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var67 string
 					templ_7745c5c3_Var67, templ_7745c5c3_Err = templ.ResolveAttributeValue(u.ID)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 1107, Col: 63}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 1107, Col: 86}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var67)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 99, "\" style=\"background:transparent;border:1px solid var(--border);border-radius:5px;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:4px 10px\">Reset Password</button> <button class=\"js-user-delete\" data-user-id=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 99, "\">Reset Password</button> <button class=\"js-user-delete btn btn--ghost btn--sm\" data-user-id=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var68 string
 					templ_7745c5c3_Var68, templ_7745c5c3_Err = templ.ResolveAttributeValue(u.ID)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 1108, Col: 61}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 1108, Col: 84}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var68)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 100, "\" style=\"background:transparent;border:1px solid var(--border);border-radius:5px;cursor:pointer;color:var(--commit);font-size:12px;font-family:inherit;padding:4px 10px\">Delete</button></div><div class=\"js-user-delete-confirm\" style=\"display:none;align-items:center;gap:6px\"><span style=\"font-size:12px;color:var(--commit)\">Delete this user?</span> <button class=\"js-user-delete-yes\" data-user-id=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 100, "\" style=\"color:var(--commit)\">Delete</button></div><div class=\"js-user-delete-confirm\" style=\"display:none;align-items:center;gap:6px\"><span style=\"font-size:12px;color:var(--commit)\">Delete this user?</span> <button class=\"js-user-delete-yes btn btn--sm\" data-user-id=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var69 string
 					templ_7745c5c3_Var69, templ_7745c5c3_Err = templ.ResolveAttributeValue(u.ID)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 1112, Col: 65}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 1112, Col: 77}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var69)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 101, "\" style=\"background:var(--commit);border:none;border-radius:5px;cursor:pointer;color:#fff;font-size:12px;font-family:inherit;padding:4px 10px\">Delete</button> <button class=\"js-user-delete-no\" data-user-id=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 101, "\" style=\"background:var(--commit);border:none;color:#fff\">Delete</button> <button class=\"js-user-delete-no btn btn--ghost btn--sm\" data-user-id=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var70 string
 					templ_7745c5c3_Var70, templ_7745c5c3_Err = templ.ResolveAttributeValue(u.ID)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 1113, Col: 64}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 1113, Col: 87}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var70)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 102, "\" style=\"background:transparent;border:1px solid var(--border);border-radius:5px;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:4px 10px\">Cancel</button></div><div class=\"js-user-reset-pw-form\" style=\"display:none;align-items:center;gap:6px\"><input class=\"js-user-new-pw-input\" type=\"password\" placeholder=\"New password\" style=\"background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:12px;color:var(--text);outline:none;width:140px\"> <button class=\"js-user-reset-pw-save\" data-user-id=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 102, "\">Cancel</button></div><div class=\"js-user-reset-pw-form\" style=\"display:none;align-items:center;gap:6px\"><input class=\"js-user-new-pw-input\" type=\"password\" placeholder=\"New password\" style=\"background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:12px;color:var(--text);outline:none;width:140px\"> <button class=\"js-user-reset-pw-save btn btn--primary btn--sm\" data-user-id=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var71 string
 					templ_7745c5c3_Var71, templ_7745c5c3_Err = templ.ResolveAttributeValue(u.ID)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 1117, Col: 68}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `page/configuration.templ`, Line: 1117, Col: 93}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var71)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 103, "\" style=\"background:var(--accent);border:none;border-radius:5px;cursor:pointer;color:#fff;font-size:12px;font-family:inherit;padding:4px 10px\">Save</button> <button class=\"js-user-reset-pw-cancel\" style=\"background:transparent;border:1px solid var(--border);border-radius:5px;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:4px 10px\">Cancel</button></div>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 103, "\">Save</button> <button class=\"js-user-reset-pw-cancel btn btn--ghost btn--sm\">Cancel</button></div>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}

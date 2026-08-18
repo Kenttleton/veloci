@@ -9,7 +9,7 @@ import (
 
 templ ConfigurationPage(shell ShellData, data ConfigurationData) {
 	@Shell(shell) {
-		<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
+		<div class="page-layout">
 			<div style="padding:14px 20px 0;border-bottom:1px solid var(--border);flex-shrink:0">
 				<div style="display:flex;gap:2px">
 					<a
@@ -32,7 +32,7 @@ templ ConfigurationPage(shell ShellData, data ConfigurationData) {
 					}
 				</div>
 			</div>
-			<div style="flex:1;overflow:auto;padding:24px 20px">
+			<div class="page-body">
 				if data.Tab == "institutions" {
 					@cfgInstitutionsSection(data.Institutions)
 				} else if data.Tab == "system" {
@@ -917,7 +917,7 @@ templ cfgInstRow(inst InstitutionWithAccounts, isLast bool) {
 			@cfgInstField("Amount tolerance", fmt.Sprintf("%.3g%%", inst.AmountTolerancePct*100))
 		</div>
 		<div style="border-top:1px solid var(--border);background:var(--bg);padding:10px 16px">
-			<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Accounts using this institution</div>
+			<div class="field-label" style="margin-bottom:6px">Accounts using this institution</div>
 			if len(inst.Accounts) == 0 {
 				<span style="color:var(--text3);font-size:12px">No accounts linked to this institution.</span>
 			} else {
@@ -977,11 +977,11 @@ templ cfgInstDialog() {
 		<div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0">
 			<button
 				id="inst-dialog-cancel"
-				style="background:transparent;border:1px solid var(--border);border-radius:6px;padding:6px 16px;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit"
+				class="btn btn--ghost"
 			>Cancel</button>
 			<button
 				id="inst-dialog-save"
-				style="background:var(--accent);border:none;border-radius:6px;padding:6px 16px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit"
+				class="btn btn--primary"
 			>Save mapping</button>
 		</div>
 		</div>
@@ -1014,7 +1014,7 @@ templ cfgUsersSection(users []store.User, serverAdminEmail string) {
 			</div>
 			<button
 				id="invite-user-btn"
-				style="background:var(--accent);border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit"
+				class="btn btn--primary"
 			>+ Invite User</button>
 		</div>
 		<div id="invite-result" style="display:none;margin-bottom:16px;padding:12px 14px;border:1px solid var(--border);border-radius:6px;background:var(--surface)">
@@ -1027,11 +1027,11 @@ templ cfgUsersSection(users []store.User, serverAdminEmail string) {
 		<div id="invite-form" style="display:none;margin-bottom:16px;padding:16px;border:1px solid var(--border);border-radius:6px;background:var(--surface)">
 			<div style="display:flex;flex-direction:column;gap:12px">
 				<div>
-					<label style="display:block;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:5px">Email</label>
+					<label class="field-label">Email</label>
 					<input id="invite-email" type="email" placeholder="user@example.com" style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;color:var(--text);outline:none;width:100%;box-sizing:border-box"/>
 				</div>
 				<div>
-					<label style="display:block;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:5px">Role</label>
+					<label class="field-label">Role</label>
 					<select id="invite-role" style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;color:var(--text);outline:none;width:100%;box-sizing:border-box;cursor:pointer;font-family:inherit">
 						<option value="entity_member">Member</option>
 						<option value="entity_admin">Admin</option>
@@ -1039,8 +1039,8 @@ templ cfgUsersSection(users []store.User, serverAdminEmail string) {
 				</div>
 				<div id="invite-error" style="display:none;font-size:12px;color:var(--commit)"></div>
 				<div style="display:flex;gap:8px">
-					<button id="invite-submit" style="background:var(--accent);border:none;border-radius:6px;padding:6px 16px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit">Send Invite</button>
-					<button id="invite-cancel" style="background:transparent;border:1px solid var(--border);border-radius:6px;padding:6px 16px;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit">Cancel</button>
+					<button id="invite-submit" class="btn btn--primary">Send Invite</button>
+					<button id="invite-cancel" class="btn btn--ghost">Cancel</button>
 				</div>
 			</div>
 		</div>
@@ -1094,28 +1094,28 @@ templ cfgUsersSection(users []store.User, serverAdminEmail string) {
 								<td style="padding:10px 14px;font-size:13px;color:var(--text2)">{ u.Email }</td>
 								<td style="padding:10px 14px">
 									if u.EntityRole == "entity_admin" {
-										<span style="display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;background:var(--accent);color:#fff">Admin</span>
+										<span class="pill pill--accent pill--sm">Admin</span>
 									} else {
-										<span style="display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;background:var(--surface2);color:var(--text2);border:1px solid var(--border)">Member</span>
+										<span class="pill pill--muted pill--sm">Member</span>
 									}
 								</td>
 								<td style="padding:8px 14px">
 									if u.Email == serverAdminEmail {
-										<span style="display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;background:var(--surface2);color:var(--text3);border:1px solid var(--border)">Server Admin</span>
+										<span class="pill pill--muted pill--sm">Server Admin</span>
 									} else {
 										<div class="js-user-actions-normal" style="display:flex;gap:6px">
-											<button class="js-user-reset-pw" data-user-id={ u.ID } style="background:transparent;border:1px solid var(--border);border-radius:5px;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:4px 10px">Reset Password</button>
-											<button class="js-user-delete" data-user-id={ u.ID } style="background:transparent;border:1px solid var(--border);border-radius:5px;cursor:pointer;color:var(--commit);font-size:12px;font-family:inherit;padding:4px 10px">Delete</button>
+											<button class="js-user-reset-pw btn btn--ghost btn--sm" data-user-id={ u.ID }>Reset Password</button>
+											<button class="js-user-delete btn btn--ghost btn--sm" data-user-id={ u.ID } style="color:var(--commit)">Delete</button>
 										</div>
 										<div class="js-user-delete-confirm" style="display:none;align-items:center;gap:6px">
 											<span style="font-size:12px;color:var(--commit)">Delete this user?</span>
-											<button class="js-user-delete-yes" data-user-id={ u.ID } style="background:var(--commit);border:none;border-radius:5px;cursor:pointer;color:#fff;font-size:12px;font-family:inherit;padding:4px 10px">Delete</button>
-											<button class="js-user-delete-no" data-user-id={ u.ID } style="background:transparent;border:1px solid var(--border);border-radius:5px;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:4px 10px">Cancel</button>
+											<button class="js-user-delete-yes btn btn--sm" data-user-id={ u.ID } style="background:var(--commit);border:none;color:#fff">Delete</button>
+											<button class="js-user-delete-no btn btn--ghost btn--sm" data-user-id={ u.ID }>Cancel</button>
 										</div>
 										<div class="js-user-reset-pw-form" style="display:none;align-items:center;gap:6px">
 											<input class="js-user-new-pw-input" type="password" placeholder="New password" style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:12px;color:var(--text);outline:none;width:140px"/>
-											<button class="js-user-reset-pw-save" data-user-id={ u.ID } style="background:var(--accent);border:none;border-radius:5px;cursor:pointer;color:#fff;font-size:12px;font-family:inherit;padding:4px 10px">Save</button>
-											<button class="js-user-reset-pw-cancel" style="background:transparent;border:1px solid var(--border);border-radius:5px;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit;padding:4px 10px">Cancel</button>
+											<button class="js-user-reset-pw-save btn btn--primary btn--sm" data-user-id={ u.ID }>Save</button>
+											<button class="js-user-reset-pw-cancel btn btn--ghost btn--sm">Cancel</button>
 										</div>
 									}
 								</td>

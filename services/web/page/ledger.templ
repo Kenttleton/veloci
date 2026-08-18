@@ -9,7 +9,7 @@ import (
 
 templ LedgerPage(shell ShellData, data LedgerData) {
 	@Shell(shell) {
-		<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
+		<div class="page-layout">
 			<div style="display:flex;gap:6px;padding:8px 20px;border-bottom:1px solid var(--border);flex-shrink:0;align-items:center;flex-wrap:wrap">
 				@ledgerPill("all", "All", data, data.Counts.Pending+data.Counts.Live+data.Counts.Ended+data.Counts.System)
 				@ledgerPill("pending", "Review", data, data.Counts.Pending)
@@ -56,11 +56,11 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 					}
 					<button
 						id="add-entry-btn"
-						style="background:var(--accent);border:none;border-radius:5px;padding:4px 12px;cursor:pointer;font-size:12px;font-weight:500;color:#fff;font-family:inherit"
+						class="btn btn--primary btn--sm"
 					>+ Add Entry</button>
 					<button
 						id="run-engine-btn"
-						style="background:none;border:1px solid var(--border);border-radius:5px;padding:4px 10px;cursor:pointer;font-size:12px;color:var(--text2);font-family:inherit"
+						class="btn btn--ghost btn--sm"
 					>Run Engine</button>
 				</div>
 			</div>
@@ -96,7 +96,7 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 			</div>
 			<div style="padding:16px 18px;display:grid;gap:12px">
 				<div>
-					<label style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">Label</label>
+					<label class="field-label">Label</label>
 					<input
 						id="ae-label"
 						type="text"
@@ -106,7 +106,7 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 				</div>
 				<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
 					<div>
-						<label style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">Direction</label>
+						<label class="field-label">Direction</label>
 						<select
 							id="ae-direction"
 							style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit"
@@ -117,7 +117,7 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 						</select>
 					</div>
 					<div>
-						<label style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">Type</label>
+						<label class="field-label">Type</label>
 						<select
 							id="ae-type"
 							style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit"
@@ -130,7 +130,7 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 				</div>
 				<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
 					<div>
-						<label style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">Projected $/mo <span style="font-weight:400;color:var(--text3)">(optional)</span></label>
+						<label class="field-label">Projected $/mo <span style="font-weight:400;color:var(--text3)">(optional)</span></label>
 						<input
 							id="ae-rate"
 							type="number"
@@ -141,7 +141,7 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 						/>
 					</div>
 					<div>
-						<label style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">Start date</label>
+						<label class="field-label">Start date</label>
 						<input
 							id="ae-start-date"
 							type="date"
@@ -150,7 +150,7 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 					</div>
 				</div>
 				<div>
-					<label style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">
+					<label class="field-label">
 						Conditions JSON <span style="font-weight:400;color:var(--text3)">(optional — you can add via the editor after saving)</span>
 					</label>
 					<textarea
@@ -165,11 +165,11 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 			<div style="display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--border)">
 				<button
 					id="add-entry-cancel"
-					style="background:none;border:1px solid var(--border);border-radius:5px;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit"
+					class="btn btn--ghost"
 				>Cancel</button>
 				<button
 					id="add-entry-save"
-					style="background:var(--accent);border:none;border-radius:5px;padding:6px 16px;cursor:pointer;font-size:13px;font-weight:500;color:#fff;font-family:inherit"
+					class="btn btn--primary"
 				>Save</button>
 			</div>
 		</dialog>
@@ -1061,8 +1061,7 @@ templ ledgerEntryRow(e store.EntryRow) {
 								<div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;padding-bottom:5px">
 									<span class="js-save-hint" style="font-size:11px"></span>
 									<button
-										class="js-entry-save"
-										style="background:var(--accent);border:none;border-radius:4px;padding:4px 12px;cursor:pointer;font-size:12px;font-weight:500;color:#fff;font-family:inherit"
+										class="js-entry-save btn btn--primary btn--sm"
 									>Save</button>
 								</div>
 								<div style="display:flex;justify-content:flex-start;gap:16px;line-height:1;padding-top:1px">
@@ -1078,7 +1077,7 @@ templ ledgerEntryRow(e store.EntryRow) {
 					</div>
 					<!-- Conditions editor -->
 					<div style="flex:1;padding:12px 20px;display:flex;flex-direction:column;gap:6px;min-width:0">
-						<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em">Matching Rule</div>
+						<div class="field-label">Matching Rule</div>
 						<textarea
 							class="js-conditions-ta"
 							data-entry-id={ e.ID }
@@ -1109,7 +1108,7 @@ templ ledgerEntryRow(e store.EntryRow) {
 				if e.Fitness != nil {
 					<div class="js-conf-panel" data-expanded="true" style="width:230px;transition:width 0.2s;border-left:1px solid var(--border);padding:12px 16px;display:flex;flex-direction:column;gap:8px;overflow:hidden;flex-shrink:0">
 						<div style="display:flex;align-items:center;justify-content:space-between">
-							<span style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em">Fitness</span>
+							<span class="field-label" style="margin-bottom:0">Fitness</span>
 							<button class="js-conf-toggle" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:11px;padding:0">◀</button>
 						</div>
 						@ledgerConfBar("Overall", e.Fitness)

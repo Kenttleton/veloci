@@ -164,9 +164,10 @@ html, body {
   width: 100%;
   text-align: left;
   font-family: inherit;
+
+  &:hover { background: var(--surface2); color: var(--text); }
+  &.nav-item--active { color: var(--text); background: var(--surface2); font-weight: 500; }
 }
-.nav-item:hover { background: var(--surface2); color: var(--text); }
-.nav-item--active { color: var(--text); background: var(--surface2); font-weight: 500; }
 
 /* ─── Account list items ────────────────────────────────────────────────── */
 
@@ -192,8 +193,9 @@ html, body {
   padding: 0;
   display: flex;
   align-items: center;
+
+  &:hover { color: var(--text2); }
 }
-.account-section-add:hover { color: var(--text2); }
 
 .account-item {
   display: flex;
@@ -204,8 +206,9 @@ html, body {
   cursor: pointer;
   text-decoration: none;
   background: transparent;
+
+  &:hover, &.account-item--active { background: var(--surface2); }
 }
-.account-item:hover, .account-item--active { background: var(--surface2); }
 .account-item-name {
   font-size: 13px;
   color: var(--text);
@@ -296,8 +299,9 @@ html, body {
   font-size: 13px;
   color: var(--text2);
   font-family: inherit;
+
+  &:hover { color: var(--text); }
 }
-.user-menu-btn:hover { color: var(--text); }
 
 /* ─── Scrollbars ────────────────────────────────────────────────────────── */
 
@@ -323,19 +327,6 @@ input[type="text"] {
 }
 input:focus { border-color: var(--accent); }
 input::placeholder { color: var(--text3); }
-
-.btn-primary {
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  padding: 8px 16px;
-  cursor: pointer;
-  font-weight: 500;
-  width: 100%;
-}
-.btn-primary:hover { filter: brightness(1.1); }
-.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 
 /* ─── Login page ────────────────────────────────────────────────────────── */
 

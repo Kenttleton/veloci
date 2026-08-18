@@ -19,8 +19,8 @@ type ActivityData struct {
 
 templ ActivityPage(shell ShellData, data ActivityData) {
 	@Shell(shell) {
-		<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
-			<div style="flex:1;overflow:auto;padding:16px 20px">
+		<div class="page-layout">
+			<div class="page-body page-body--tight">
 				if len(data.Jobs) == 0 {
 					<div style="text-align:center;padding-top:48px">
 						<p style="color:var(--text2);margin-bottom:8px;font-size:15px">No activity yet.</p>
