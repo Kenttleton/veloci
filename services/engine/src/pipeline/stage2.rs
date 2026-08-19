@@ -691,7 +691,7 @@ async fn persist_cluster(
     // Use the detected interval as period_days; fall back to 30 for single-
     // transaction clusters where no interval can be measured.
     let period_days = score.mean_interval_days.unwrap_or(30.0).round().max(1.0) as i32;
-    let rate_per_day = score.median_amount_cents.abs() as f64 / period_days as f64;
+    let rate_per_day = score.median_amount_cents as f64 / period_days as f64;
     let direction = if score.median_amount_cents > 0 { "income" } else { "spend" };
 
     // start_date = earliest transaction in the cluster.
