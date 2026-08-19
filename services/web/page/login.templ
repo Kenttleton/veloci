@@ -1,10 +1,20 @@
 package page
 
-templ Login(errMsg, email, next string) {
+templ Login(errMsg, email, next, entityLabel string) {
 	@base("Sign in") {
 		<main class="login-page">
 			<form method="POST" action="/login" class="login-form">
-				<h1 class="login-title">Veloci</h1>
+				<div class="login-brand">
+					<div class="login-brand-mark">
+						@iconLogoPlaceholder()
+					</div>
+					<div class="login-brand-text">
+						<span class="login-brand-product">Veloci</span>
+						if entityLabel != "" {
+							<span class="login-brand-entity">{ entityLabel }</span>
+						}
+					</div>
+				</div>
 				if errMsg != "" {
 					<p class="login-error">{ errMsg }</p>
 				}

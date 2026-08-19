@@ -207,13 +207,16 @@ func titled(sd ShellData, title string, badge ...string) ShellData {
 
 // GetLogin renders the login form.
 func (s *Server) GetLogin(c echo.Context) error {
-	return s.render(c, Login("", "", c.QueryParam("next")))
+	entityLabel := s.store.GetInstanceEntityLabel(c.Request().Context())
+	return s.render(c, Login("", "", c.QueryParam("next"), entityLabel))
 }
 
 // PostLogin handles login form submission.
 func (s *Server) PostLogin(c echo.Context) error {
+	ctx := c.Request().Context()
+	entityLabel := s.store.GetInstanceEntityLabel(ctx)
 	if err := c.Request().ParseForm(); err != nil {
-		return s.render(c, Login("Invalid request", "", ""))
+		return s.render(c, Login("Invalid request", "", "", entityLabel))
 	}
 	email := c.FormValue("email")
 	password := c.FormValue("password")
@@ -222,14 +225,13 @@ func (s *Server) PostLogin(c echo.Context) error {
 	if next == "" || !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") {
 		next = "/"
 	}
-	ctx := c.Request().Context()
 
 	cred, err := s.auth.ValidateCredential(ctx, &authclient.ValidateCredentialInputBody{
 		Email:    email,
 		Password: password,
 	})
 	if err != nil {
-		return s.render(c, Login("Invalid email or password", email, next))
+		return s.render(c, Login("Invalid email or password", email, next, entityLabel))
 	}
 
 	var userID, entityID, entityRole string
@@ -241,7 +243,7 @@ func (s *Server) PostLogin(c echo.Context) error {
 		LIMIT 1
 	`, email).Scan(&userID, &entityID, &entityRole)
 	if err != nil {
-		return s.render(c, Login("Invalid email or password", email, next))
+		return s.render(c, Login("Invalid email or password", email, next, entityLabel))
 	}
 
 	claims := make(authclient.MintTokenInputBodyClaims)
@@ -261,7 +263,7 @@ func (s *Server) PostLogin(c echo.Context) error {
 		Claims:       claims,
 	})
 	if err != nil {
-		return s.render(c, Login("Login failed, please try again", email, next))
+		return s.render(c, Login("Login failed, please try again", email, next, entityLabel))
 	}
 
 	expiry, _ := time.Parse(time.RFC3339, minted.ExpiresAt)

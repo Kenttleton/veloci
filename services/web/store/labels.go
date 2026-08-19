@@ -162,6 +162,20 @@ func (s *Store) GetEntityLabel(ctx context.Context, entityID string) (Label, err
 	return pgx.CollectOneRow(rows, pgx.RowToStructByName[Label])
 }
 
+// GetInstanceEntityLabel returns the entity label for the primary entity without
+// requiring an authenticated entity ID. Safe to call on the pre-login page.
+func (s *Store) GetInstanceEntityLabel(ctx context.Context) string {
+	var name string
+	_ = s.pool.QueryRow(ctx, `
+		SELECT l.name
+		FROM labels l
+		JOIN entities e ON l.id = e.label_id
+		ORDER BY e.created_at
+		LIMIT 1
+	`).Scan(&name)
+	return name
+}
+
 // UpdateEntityLabel renames the entity identity label. Unlike UpdateLabel, this
 // is permitted for system-source labels because the entity name is user-settable.
 func (s *Store) UpdateEntityLabel(ctx context.Context, entityID, name string) error {
