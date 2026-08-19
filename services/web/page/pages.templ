@@ -114,20 +114,53 @@ templ SettingsPage(shell ShellData, u store.User) {
 			</div>
 		</div>
 		<script>
+		function _displayName(first, last, preferred, email) {
+			if (preferred) return preferred;
+			const full = (first + ' ' + last).trim();
+			if (full) return full;
+			return email;
+		}
+		function _initials(name, email) {
+			if (name) {
+				const parts = name.trim().split(/\s+/);
+				if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+				return name.length >= 2 ? name.slice(0, 2).toUpperCase() : name[0].toUpperCase();
+			}
+			return email.length >= 2 ? email.slice(0, 2).toUpperCase() : '?';
+		}
 		function saveProfile() {
 			const status = document.getElementById('profile-status');
+			const first  = document.getElementById('field-first-name').value;
+			const last   = document.getElementById('field-last-name').value;
+			const pref   = document.getElementById('field-preferred-name').value;
 			fetch('/api/users/me', {
 				method: 'PUT',
 				headers: {'Content-Type': 'application/json'},
-				body: JSON.stringify({
-					first_name:     document.getElementById('field-first-name').value,
-					last_name:      document.getElementById('field-last-name').value,
-					preferred_name: document.getElementById('field-preferred-name').value,
-				}),
+				body: JSON.stringify({first_name: first, last_name: last, preferred_name: pref}),
 			}).then(r => {
 				if (r.ok) {
 					status.style.color = 'var(--green, #22c55e)';
 					status.textContent = 'Saved.';
+					const email   = document.querySelector('.user-menu-email')?.textContent ?? '';
+					const display = _displayName(first, last, pref, email);
+					const summary = document.querySelector('.user-menu-summary');
+					if (summary) summary.textContent = _initials(display, email);
+					const nameEl = document.querySelector('.user-menu-name');
+					if (display && display !== email) {
+						if (nameEl) {
+							nameEl.textContent = display;
+						} else {
+							const info = document.querySelector('.user-menu-info');
+							if (info) {
+								const div = document.createElement('div');
+								div.className = 'user-menu-name';
+								div.textContent = display;
+								info.insertBefore(div, info.firstChild);
+							}
+						}
+					} else if (nameEl) {
+						nameEl.remove();
+					}
 				} else {
 					status.style.color = 'var(--red, #ef4444)';
 					status.textContent = 'Save failed.';

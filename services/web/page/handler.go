@@ -37,8 +37,8 @@ type ShellData struct {
 
 // ShellUser holds the current user's display info.
 type ShellUser struct {
-	DisplayName string
-	Email       string
+	PreferredName string
+	Email         string
 }
 
 // ShellAccount is a simplified account for the sidebar.
@@ -175,7 +175,7 @@ func (s *Server) buildShellData(r *http.Request) ShellData {
 	shellUser := ShellUser{Email: email}
 	if userID := middleware.UserID(ctx); userID != "" {
 		if u, err := s.store.GetUserByID(ctx, entityID, userID); err == nil {
-			shellUser.DisplayName = u.DisplayName()
+			shellUser.PreferredName = u.DisplayName()
 		}
 	}
 
@@ -1210,7 +1210,7 @@ func (s *Server) Settings(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
-	return s.render(c, SettingsPage(titled(s.buildShellData(c.Request()), "Settings"), u))
+	return s.render(c, SettingsPage(titled(s.buildShellData(c.Request()), "User Settings"), u))
 }
 
 func (s *Server) Glossary(c echo.Context) error {

@@ -299,6 +299,7 @@ html, body {
   font-size: 13px;
   color: var(--text2);
   font-family: inherit;
+  text-decoration: none;
 
   &:hover { color: var(--text); }
 }

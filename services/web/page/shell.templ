@@ -250,9 +250,6 @@ templ sidebar(data ShellData) {
 		</div>
 		<div class="sidebar-footer">
 			@navLinkActivity("/activity", data.HasRunningJobs, data.CurrentPath)
-			@navLink("/settings", "Settings", data.CurrentPath) {
-				@iconSettings()
-			}
 			@navLink("/glossary", "Glossary", data.CurrentPath) {
 				@iconBookOpen()
 			}
@@ -719,14 +716,15 @@ templ addAccountDialog() {
 
 templ userMenu(user ShellUser, currentPath string) {
 	<details class="user-menu" style="position:relative">
-		<summary class="user-menu-summary">{ Initials(user.DisplayName, user.Email) }</summary>
+		<summary class="user-menu-summary">{ Initials(user.PreferredName, user.Email) }</summary>
 		<div class="user-menu-dropdown">
 			<div class="user-menu-info">
-				if user.DisplayName != "" {
-					<div class="user-menu-name">{ user.DisplayName }</div>
+				if user.PreferredName != "" {
+					<div class="user-menu-name">{ user.PreferredName }</div>
 				}
 				<div class="user-menu-email">{ user.Email }</div>
 			</div>
+			<a href="/settings" class="user-menu-btn">Settings</a>
 			<form method="POST" action="/logout">
 				<button type="submit" class="user-menu-btn">Sign out</button>
 			</form>
