@@ -20,6 +20,7 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 					<div style="width:1px;height:16px;background:var(--border);margin:0 4px"></div>
 					@ledgerDirectionPill("income", "Income", data)
 					@ledgerDirectionPill("spend", "Spend", data)
+					@ledgerDirectionPill("mixed", "Mixed", data)
 					<div style="width:1px;height:16px;background:var(--border);margin:0 4px"></div>
 					@ledgerTypePill("standing", "Standing", data)
 					@ledgerTypePill("variable", "Variable", data)
@@ -114,6 +115,7 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 							<option value="">— select —</option>
 							<option value="spend">Spend</option>
 							<option value="income">Income</option>
+							<option value="mixed">Mixed</option>
 						</select>
 					</div>
 					<div>
@@ -1005,6 +1007,7 @@ templ ledgerEntryRow(e store.EntryRow) {
 							>
 								<option value="income" selected?={ e.Direction == "income" }>Income</option>
 								<option value="spend" selected?={ e.Direction == "spend" }>Spend</option>
+								<option value="mixed" selected?={ e.Direction == "mixed" }>Mixed</option>
 							</select>
 							<select
 								class="js-type-sel"
@@ -1193,10 +1196,14 @@ func ledgerSmallPillStyle(active bool) string {
 }
 
 func ledgerDirectionBadgeStyle(d string) string {
-	if d == "income" {
+	switch d {
+	case "income":
 		return "background:color-mix(in srgb,var(--surface2) 80%,var(--income) 20%);color:var(--income)"
+	case "spend":
+		return "background:color-mix(in srgb,var(--surface2) 80%,var(--commit) 20%);color:var(--commit)"
+	default:
+		return "background:var(--surface2);color:var(--text2)"
 	}
-	return "background:color-mix(in srgb,var(--surface2) 80%,var(--commit) 20%);color:var(--commit)"
 }
 
 func ledgerStatusBadgeStyle(status string) string {

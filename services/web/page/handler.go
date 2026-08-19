@@ -829,12 +829,16 @@ func isAccountNegativeBalance(a store.Account) bool {
 	return a.AccountType == "credit" || a.AccountType == "loan" || a.AccountType == "mortgage"
 }
 
-// directionLabel returns "Income" or "Spend".
+// directionLabel returns "Income", "Spend", or "Mixed".
 func directionLabel(d string) string {
-	if d == "income" {
+	switch d {
+	case "income":
 		return "Income"
+	case "spend":
+		return "Spend"
+	default:
+		return "Mixed"
 	}
-	return "Spend"
 }
 
 // entryTypeLabel returns a readable label for entry type.
