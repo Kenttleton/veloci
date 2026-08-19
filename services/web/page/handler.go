@@ -29,6 +29,7 @@ type ShellData struct {
 	PageBadge       string // optional pill shown next to the title in the shell header
 	User            ShellUser
 	EntityRole      string
+	EntityLabel     string // display name of the entity, shown in the sidebar brand area
 	ActiveAccounts  []ShellAccount
 	PassiveAccounts []ShellAccount
 	CurrentPath     string
@@ -179,9 +180,15 @@ func (s *Server) buildShellData(r *http.Request) ShellData {
 		}
 	}
 
+	entityLabel := "Veloci"
+	if lbl, err := s.store.GetEntityLabel(ctx, entityID); err == nil && lbl.Name != "" {
+		entityLabel = lbl.Name
+	}
+
 	return ShellData{
 		User:            shellUser,
 		EntityRole:      middleware.EntityRole(ctx),
+		EntityLabel:     entityLabel,
 		ActiveAccounts:  active,
 		PassiveAccounts: passive,
 		CurrentPath:     r.URL.Path,
