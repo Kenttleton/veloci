@@ -227,7 +227,7 @@ fn merge_by_modal_word(groups: HashMap<String, Vec<UnmatchedTxn>>) -> HashMap<St
 // ---------------------------------------------------------------------------
 
 /// Run Stage 2 for the given unmatched transaction IDs.
-pub async fn run(entity_id: Uuid, unmatched_tx_ids: &[Uuid], pool: &PgPool) -> Result<Stage2Output> {
+pub async fn run(entity_id: Uuid, computed_as_of: chrono::NaiveDate, unmatched_tx_ids: &[Uuid], pool: &PgPool) -> Result<Stage2Output> {
     if unmatched_tx_ids.is_empty() {
         return Ok(Stage2Output { clusters_created: 0 });
     }
@@ -264,7 +264,7 @@ pub async fn run(entity_id: Uuid, unmatched_tx_ids: &[Uuid], pool: &PgPool) -> R
         if score.fitness < MIN_FITNESS {
             continue;
         }
-        persist_cluster(entity_id, &cluster, &score, pool).await?;
+        persist_cluster(entity_id, computed_as_of, &cluster, &score, pool).await?;
         clusters_created += 1;
     }
 
@@ -681,10 +681,11 @@ pub(crate) fn build_conditions(cluster: &Cluster, score: &ClusterScore) -> serde
 }
 
 async fn persist_cluster(
-    entity_id: Uuid,
-    cluster: &Cluster,
-    score: &ClusterScore,
-    pool: &PgPool,
+    entity_id:      Uuid,
+    computed_as_of: chrono::NaiveDate,
+    cluster:        &Cluster,
+    score:          &ClusterScore,
+    pool:           &PgPool,
 ) -> Result<Uuid> {
     let conditions = build_conditions(cluster, score);
 
@@ -712,6 +713,19 @@ async fn persist_cluster(
 
     // Compute next_due_date based on anchor type.
     let next_due_date = compute_next_due_date(anchor.as_deref(), last_tx_date, period_days);
+
+    // If the cluster's signal window has already lapsed, stamp end_date now
+    // and mark alert_type='ended' rather than 'new'. This ensures batch
+    // uploads correctly bound historical patterns at creation time.
+    let tolerance = super::TIMING_VARIANCE_THRESHOLD_DAYS as i64;
+    let end_date = super::eol::compute_end_date_if_lapsed(
+        next_due_date,
+        last_tx_date,
+        period_days,
+        computed_as_of,
+        tolerance,
+    );
+    let alert_type = if end_date.is_some() { "ended" } else { "new" };
 
     // Upsert a label using the merchant name so the entry has a human-readable
     // display name in the ledger.
@@ -747,9 +761,9 @@ async fn persist_cluster(
             "UPDATE entries SET
                direction = $2, entry_type = $3, period_days = $4, next_due_date = $5,
                recurrence_anchor = $6, conditions = $7, projected_rate_per_day = $8,
-               start_date = $9,
-               fitness = $10, merchant_fit = $11, timing_fit = $12,
-               amount_fit = $13, sample_merchants = $14, matched_transaction_count = $15
+               start_date = $9, end_date = $10, alert_type = $11,
+               fitness = $12, merchant_fit = $13, timing_fit = $14,
+               amount_fit = $15, sample_merchants = $16, matched_transaction_count = $17
              WHERE id = $1",
         )
         .bind(id)
@@ -761,6 +775,8 @@ async fn persist_cluster(
         .bind(&conditions)
         .bind(rate_per_day)
         .bind(start_date)
+        .bind(end_date)
+        .bind(alert_type)
         .bind(score.fitness)
         .bind(score.merchant_fit)
         .bind(score.timing_fit)
@@ -776,15 +792,15 @@ async fn persist_cluster(
             "INSERT INTO entries (
                entity_id, label_id, direction, entry_type, period_days, next_due_date,
                recurrence_anchor, conditions, projected_rate_per_day,
-               status, source, start_date, rate_method,
+               status, source, start_date, end_date, rate_method,
                alert_type, fitness, merchant_fit, timing_fit, amount_fit,
                sample_merchants, matched_transaction_count
              ) VALUES (
                $1, $2, $3, $4, $5, $6,
                $7, $8, $9,
-               'pending', 'engine', $10, 'median',
-               'new', $11, $12, $13, $14,
-               $15, $16
+               'pending', 'engine', $10, $11, 'median',
+               $12, $13, $14, $15, $16,
+               $17, $18
              )
              RETURNING id",
         )
@@ -798,6 +814,8 @@ async fn persist_cluster(
         .bind(&conditions)
         .bind(rate_per_day)
         .bind(start_date)
+        .bind(end_date)
+        .bind(alert_type)
         .bind(score.fitness)
         .bind(score.merchant_fit)
         .bind(score.timing_fit)

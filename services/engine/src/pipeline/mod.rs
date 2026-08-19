@@ -23,6 +23,7 @@
 //!   7 — Cash flow projection into `projections`; raises drift/ended alerts on entries for missed expectations
 
 pub mod dirty;
+pub mod eol;
 pub mod stage0;
 pub mod stage1;
 pub mod stage2;
@@ -142,7 +143,8 @@ pub async fn run_import(
     let stage_labels = query_stage_labels(entity_id, &pools.read).await;
 
     let stage0_out = stage0::run(entity_id, job_id, pending_import_id, pools).await?;
-    tracing::info!(%entity_id, imported = stage0_out.imported_count, skipped = stage0_out.skipped_count, computed_as_of = %stage0_out.computed_as_of, "stage 0 complete");
+    let computed_as_of = stage0_out.computed_as_of;
+    tracing::info!(%entity_id, imported = stage0_out.imported_count, skipped = stage0_out.skipped_count, %computed_as_of, "stage 0 complete");
     notify_stage(&pools.write, entity_id, job_id, "import.process", 0, &stage_labels).await;
 
     if stage0_out.imported_count == 0 {
@@ -153,7 +155,7 @@ pub async fn run_import(
     let stage1_out = stage1::run(entity_id, &pools.read).await?;
     tracing::info!(%entity_id, assignments = stage1_out.total_assignments, unmatched = stage1_out.unmatched_tx_ids.len(), "stage 1 complete");
 
-    let stage2_out = stage2::run(entity_id, &stage1_out.unmatched_tx_ids, &pools.read).await?;
+    let stage2_out = stage2::run(entity_id, computed_as_of, &stage1_out.unmatched_tx_ids, &pools.read).await?;
     tracing::info!(%entity_id, clusters = stage2_out.clusters_created, "stage 2 complete");
     notify_stage(&pools.write, entity_id, job_id, "import.process", 2, &stage_labels).await;
 
@@ -162,7 +164,7 @@ pub async fn run_import(
         new_entry_assignments: stage1_out.new_entry_assignments,
     };
 
-    run_from_stage3(entity_id, job_id, "import.process", stage0_out.computed_as_of, Some(dirty_input), &stage_labels, pools).await
+    run_from_stage3(entity_id, job_id, "import.process", computed_as_of, Some(dirty_input), &stage_labels, pools).await
 }
 
 /// Run stages 1 → 7 for an `entries.reprocess` job.
@@ -182,7 +184,7 @@ pub async fn run_entries_reprocess(
     let stage1_out = stage1::run(entity_id, &pools.read).await?;
     tracing::info!(%entity_id, assignments = stage1_out.total_assignments, "stage 1 complete");
 
-    let stage2_out = stage2::run(entity_id, &stage1_out.unmatched_tx_ids, &pools.read).await?;
+    let stage2_out = stage2::run(entity_id, computed_as_of, &stage1_out.unmatched_tx_ids, &pools.read).await?;
     tracing::info!(%entity_id, clusters = stage2_out.clusters_created, "stage 2 complete");
     notify_stage(&pools.write, entity_id, job_id, "entries.reprocess", 2, &stage_labels).await;
 

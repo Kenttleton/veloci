@@ -612,6 +612,7 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 					var dirSel = det.querySelector('.js-direction-sel');
 					var typeSel = det.querySelector('.js-type-sel');
 					var startInp = det.querySelector('.js-start-date');
+					var endInp = det.querySelector('.js-end-date');
 					var periodInp = det.querySelector('.js-period-days');
 					var priorityInp = det.querySelector('.js-priority');
 					var ta = document.querySelector('.js-conditions-ta[data-entry-id="' + entryId + '"]');
@@ -635,11 +636,23 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 								String(d.getMonth() + 1).padStart(2, '0') + '-' +
 								String(d.getDate()).padStart(2, '0');
 						}
+						var endVal = entry.end_date || null;
+						if (endInp) {
+							if (endInp._flatpickr && endInp._flatpickr.selectedDates[0]) {
+								var ed = endInp._flatpickr.selectedDates[0];
+								endVal = ed.getFullYear() + '-' +
+									String(ed.getMonth() + 1).padStart(2, '0') + '-' +
+									String(ed.getDate()).padStart(2, '0');
+							} else {
+								endVal = endInp.value || null;
+							}
+						}
 						var body = Object.assign({}, entry, {
 							label_id: labelId,
 							direction: dirSel ? dirSel.value : entry.direction,
 							entry_type: typeSel ? typeSel.value : entry.entry_type,
 							start_date: startVal || entry.start_date,
+							end_date: endVal,
 							period_days: periodInp && periodInp.value ? parseInt(periodInp.value, 10) : entry.period_days,
 							priority: priorityInp && priorityInp.value !== '' ? parseInt(priorityInp.value, 10) : entry.priority,
 							conditions: conds,
@@ -1020,7 +1033,7 @@ templ ledgerEntryRow(e store.EntryRow) {
 								<option value="variable" selected?={ e.EntryType == "variable" }>Variable</option>
 								</select>
 						</div>
-						<!-- Row 2: Start | Period | Priority -->
+						<!-- Row 2: Start | End | Period | Priority -->
 						<div style="display:flex;gap:12px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
 							<input
 								class="js-start-date js-date-fp"
@@ -1031,6 +1044,25 @@ templ ledgerEntryRow(e store.EntryRow) {
 									disabled
 								}
 								style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:4px 24px 4px 7px;font-size:12px;color:var(--text);outline:none;font-family:inherit;width:108px;box-sizing:border-box"
+							/>
+							<input
+								class="js-end-date js-date-fp"
+								type="text"
+								value={ func() string {
+									if e.EndDate != nil { return e.EndDate.Format("2006-01-02") }
+									return ""
+								}() }
+								placeholder="End date"
+								if e.Source == "system" {
+									disabled
+								}
+								style={ func() string {
+									base := "background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:4px 24px 4px 7px;font-size:12px;outline:none;font-family:inherit;width:108px;box-sizing:border-box"
+									if e.EndDate != nil {
+										return base + ";color:var(--commit)"
+									}
+									return base + ";color:var(--text3)"
+								}() }
 							/>
 							<div style="display:flex;align-items:center;gap:5px">
 								<label style="font-size:11px;color:var(--text3);white-space:nowrap">Period (days)</label>
@@ -1073,6 +1105,9 @@ templ ledgerEntryRow(e store.EntryRow) {
 									}
 									if e.NextDueDate != nil {
 										<span style="font-size:11px;color:var(--text3)">next due <span style="color:var(--text)">{ e.NextDueDate.Format("2006-01-02") }</span></span>
+									}
+									if e.EndDate != nil {
+										<span style="font-size:11px;color:var(--text3)">ends <span style="color:var(--commit)">{ e.EndDate.Format("2006-01-02") }</span></span>
 									}
 								</div>
 							</div>

@@ -31,20 +31,10 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::db::Pools;
+use super::eol;
 
 /// Projection horizon in days.
 const PROJECTION_DAYS: i64 = 90;
-
-/// Returns true when `computed_as_of` has passed `next_due_date` by more than
-/// `tolerance_days`. Called by Phase 1's `detect_ended_entries`.
-/// Pass `super::TIMING_VARIANCE_THRESHOLD_DAYS as i64` for the tolerance.
-pub(crate) fn entry_has_lapsed(
-    next_due:       chrono::NaiveDate,
-    computed_as_of: chrono::NaiveDate,
-    tolerance_days: i64,
-) -> bool {
-    computed_as_of > next_due + chrono::Duration::days(tolerance_days)
-}
 
 // ---------------------------------------------------------------------------
 // Internal types
@@ -306,17 +296,20 @@ fn rate_for_day(
 // EOL detection
 // ---------------------------------------------------------------------------
 
-/// Flag live entries whose signal has lapsed beyond the timing tolerance.
+/// Set `end_date` on non-system entries whose signal has lapsed beyond the
+/// timing tolerance. Covers both `live` and `pending` entries — the engine
+/// stamps the natural window end regardless of review status.
 ///
 /// - **Standing entries** (have `next_due_date`): lapsed when
-///   `computed_as_of > next_due_date + tolerance`. `end_date` is set to
-///   `next_due_date` — the last expected but unfulfilled occurrence.
+///   `computed_as_of > next_due_date + tolerance`. `end_date` = `next_due_date`.
 /// - **Variable / one-off entries** (no `next_due_date`): lapsed when
 ///   `computed_as_of > last_tx_date + period_days + tolerance`. `end_date`
-///   is set to `last_tx_date + period_days` — the natural end of the window.
+///   = `last_tx_date + period_days`.
 ///
-/// Updates `status='pending'`, `alert_type='ended'`, and `end_date` so the
-/// entry surfaces in the review queue. The user can accept, override, or reject.
+/// For `live` entries that lapse, also sets `status='pending'` and
+/// `alert_type='ended'` to surface them in the review queue.
+/// For already-`pending` entries, only `end_date` and `alert_type` are updated
+/// (status stays `pending`).
 /// Only non-system entries with no existing `end_date` are considered.
 pub(crate) async fn detect_ended_entries(
     entity_id:      Uuid,
@@ -326,6 +319,7 @@ pub(crate) async fn detect_ended_entries(
     #[derive(sqlx::FromRow)]
     struct Row {
         id:            Uuid,
+        status:        String,
         period_days:   Option<i32>,
         next_due_date: Option<NaiveDate>,
         last_tx_date:  Option<NaiveDate>,
@@ -334,17 +328,18 @@ pub(crate) async fn detect_ended_entries(
     let candidates: Vec<Row> = sqlx::query_as(
         r#"
         SELECT e.id,
+               e.status,
                e.period_days,
                e.next_due_date,
                MAX(t.date) AS last_tx_date
         FROM entries e
         LEFT JOIN transaction_entry_assignments tea ON tea.entry_id = e.id
         LEFT JOIN transactions t ON t.id = tea.transaction_id AND t.entity_id = $1
-        WHERE e.entity_id    = $1
-          AND e.status       = 'live'
-          AND e.scope        != 'system'
-          AND e.end_date     IS NULL
-        GROUP BY e.id, e.period_days, e.next_due_date
+        WHERE e.entity_id  = $1
+          AND e.status     IN ('live', 'pending')
+          AND e.source     != 'system'
+          AND e.end_date   IS NULL
+        GROUP BY e.id, e.status, e.period_days, e.next_due_date
         "#,
     )
     .bind(entity_id)
@@ -354,28 +349,18 @@ pub(crate) async fn detect_ended_entries(
 
     let tolerance = super::TIMING_VARIANCE_THRESHOLD_DAYS as i64;
 
-    let lapsed: Vec<(Uuid, NaiveDate)> = candidates
+    // (id, computed_end_date, was_live)
+    let lapsed: Vec<(Uuid, NaiveDate, bool)> = candidates
         .into_iter()
         .filter_map(|r| {
-            let end_date = if let Some(next_due) = r.next_due_date {
-                // Standing: lapsed when computed_as_of is past next_due + tolerance.
-                if entry_has_lapsed(next_due, computed_as_of, tolerance) {
-                    Some(next_due)
-                } else {
-                    None
-                }
-            } else {
-                // Variable/one-off: use last_tx_date + period_days as the window end.
-                let last_tx  = r.last_tx_date?;
-                let period   = i64::from(r.period_days.unwrap_or(30));
-                let window_end = last_tx + chrono::Duration::days(period);
-                if entry_has_lapsed(window_end, computed_as_of, tolerance) {
-                    Some(window_end)
-                } else {
-                    None
-                }
-            };
-            end_date.map(|d| (r.id, d))
+            let end_date = eol::compute_end_date_if_lapsed(
+                r.next_due_date,
+                r.last_tx_date,
+                r.period_days.unwrap_or(30),
+                computed_as_of,
+                tolerance,
+            )?;
+            Some((r.id, end_date, r.status == "live"))
         })
         .collect();
 
@@ -383,19 +368,20 @@ pub(crate) async fn detect_ended_entries(
         return Ok(0);
     }
 
-    let ids:       Vec<Uuid>      = lapsed.iter().map(|(id, _)| *id).collect();
-    let end_dates: Vec<NaiveDate> = lapsed.iter().map(|(_, d)| *d).collect();
+    let ids:       Vec<Uuid>      = lapsed.iter().map(|(id, _, _)| *id).collect();
+    let end_dates: Vec<NaiveDate> = lapsed.iter().map(|(_, d, _)| *d).collect();
 
+    // For live entries: flip to pending + alert. For pending entries: only stamp end_date + alert.
     sqlx::query(
         r#"
         UPDATE entries e
-        SET status     = 'pending',
+        SET end_date   = u.end_date,
             alert_type = 'ended',
-            end_date   = u.end_date
+            status     = CASE WHEN e.status = 'live' THEN 'pending' ELSE e.status END
         FROM UNNEST($2::uuid[], $3::date[]) AS u(id, end_date)
         WHERE e.entity_id = $1
           AND e.id        = u.id
-          AND e.status    = 'live'
+          AND e.status    IN ('live', 'pending')
         "#,
     )
     .bind(entity_id)
@@ -1089,28 +1075,3 @@ mod tests {
     }
 }
 
-#[cfg(test)]
-mod lapse_tests {
-    use super::*;
-    use chrono::NaiveDate;
-
-    fn d(s: &str) -> NaiveDate { s.parse().unwrap() }
-
-    #[test]
-    fn on_next_due_not_lapsed() { assert!(!entry_has_lapsed(d("2026-03-15"), d("2026-03-15"), 5)); }
-
-    #[test]
-    fn within_tolerance_not_lapsed() { assert!(!entry_has_lapsed(d("2026-03-15"), d("2026-03-18"), 5)); }
-
-    #[test]
-    fn at_boundary_not_lapsed() { assert!(!entry_has_lapsed(d("2026-03-15"), d("2026-03-20"), 5)); }
-
-    #[test]
-    fn one_past_tolerance_lapsed() { assert!(entry_has_lapsed(d("2026-03-15"), d("2026-03-21"), 5)); }
-
-    #[test]
-    fn far_past_lapsed() { assert!(entry_has_lapsed(d("2026-03-01"), d("2026-04-15"), 5)); }
-
-    #[test]
-    fn before_next_due_not_lapsed() { assert!(!entry_has_lapsed(d("2026-03-15"), d("2026-03-01"), 5)); }
-}
