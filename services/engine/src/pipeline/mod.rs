@@ -344,6 +344,12 @@ async fn run_stage7(
     pools:        &Pools,
 ) -> Result<()> {
     stage7::run(entity_id, job_id, computed_as_of, pools).await?;
+
+    let ended_count = stage7::detect_ended_entries(entity_id, computed_as_of, &pools.write).await?;
+    if ended_count > 0 {
+        tracing::info!(%entity_id, ended_count, "stage 7: flagged lapsed entries for review");
+    }
+
     tracing::info!(%entity_id, %job_id, "pipeline complete");
     notify_stage(&pools.write, entity_id, job_id, job_type, 7, stage_labels).await;
     Ok(())

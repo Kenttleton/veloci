@@ -303,6 +303,112 @@ fn rate_for_day(
 }
 
 // ---------------------------------------------------------------------------
+// EOL detection
+// ---------------------------------------------------------------------------
+
+/// Flag live entries whose signal has lapsed beyond the timing tolerance.
+///
+/// - **Standing entries** (have `next_due_date`): lapsed when
+///   `computed_as_of > next_due_date + tolerance`. `end_date` is set to
+///   `next_due_date` — the last expected but unfulfilled occurrence.
+/// - **Variable / one-off entries** (no `next_due_date`): lapsed when
+///   `computed_as_of > last_tx_date + period_days + tolerance`. `end_date`
+///   is set to `last_tx_date + period_days` — the natural end of the window.
+///
+/// Updates `status='pending'`, `alert_type='ended'`, and `end_date` so the
+/// entry surfaces in the review queue. The user can accept, override, or reject.
+/// Only non-system entries with no existing `end_date` are considered.
+pub(crate) async fn detect_ended_entries(
+    entity_id:      Uuid,
+    computed_as_of: NaiveDate,
+    pool:           &PgPool,
+) -> Result<usize> {
+    #[derive(sqlx::FromRow)]
+    struct Row {
+        id:            Uuid,
+        period_days:   Option<i32>,
+        next_due_date: Option<NaiveDate>,
+        last_tx_date:  Option<NaiveDate>,
+    }
+
+    let candidates: Vec<Row> = sqlx::query_as(
+        r#"
+        SELECT e.id,
+               e.period_days,
+               e.next_due_date,
+               MAX(t.date) AS last_tx_date
+        FROM entries e
+        LEFT JOIN transaction_entry_assignments tea ON tea.entry_id = e.id
+        LEFT JOIN transactions t ON t.id = tea.transaction_id AND t.entity_id = $1
+        WHERE e.entity_id    = $1
+          AND e.status       = 'live'
+          AND e.scope        != 'system'
+          AND e.end_date     IS NULL
+        GROUP BY e.id, e.period_days, e.next_due_date
+        "#,
+    )
+    .bind(entity_id)
+    .fetch_all(pool)
+    .await
+    .context("detect_ended_entries: failed to load candidates")?;
+
+    let tolerance = super::TIMING_VARIANCE_THRESHOLD_DAYS as i64;
+
+    let lapsed: Vec<(Uuid, NaiveDate)> = candidates
+        .into_iter()
+        .filter_map(|r| {
+            let end_date = if let Some(next_due) = r.next_due_date {
+                // Standing: lapsed when computed_as_of is past next_due + tolerance.
+                if entry_has_lapsed(next_due, computed_as_of, tolerance) {
+                    Some(next_due)
+                } else {
+                    None
+                }
+            } else {
+                // Variable/one-off: use last_tx_date + period_days as the window end.
+                let last_tx  = r.last_tx_date?;
+                let period   = i64::from(r.period_days.unwrap_or(30));
+                let window_end = last_tx + chrono::Duration::days(period);
+                if entry_has_lapsed(window_end, computed_as_of, tolerance) {
+                    Some(window_end)
+                } else {
+                    None
+                }
+            };
+            end_date.map(|d| (r.id, d))
+        })
+        .collect();
+
+    if lapsed.is_empty() {
+        return Ok(0);
+    }
+
+    let ids:       Vec<Uuid>      = lapsed.iter().map(|(id, _)| *id).collect();
+    let end_dates: Vec<NaiveDate> = lapsed.iter().map(|(_, d)| *d).collect();
+
+    sqlx::query(
+        r#"
+        UPDATE entries e
+        SET status     = 'pending',
+            alert_type = 'ended',
+            end_date   = u.end_date
+        FROM UNNEST($2::uuid[], $3::date[]) AS u(id, end_date)
+        WHERE e.entity_id = $1
+          AND e.id        = u.id
+          AND e.status    = 'live'
+        "#,
+    )
+    .bind(entity_id)
+    .bind(&ids)
+    .bind(&end_dates)
+    .execute(pool)
+    .await
+    .context("detect_ended_entries: failed to update lapsed entries")?;
+
+    Ok(lapsed.len())
+}
+
+// ---------------------------------------------------------------------------
 // Public entry point
 // ---------------------------------------------------------------------------
 
