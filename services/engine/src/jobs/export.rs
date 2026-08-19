@@ -28,6 +28,10 @@ pub struct ExportMeta {
 pub struct ExportParameters {
     pub date_from: Option<NaiveDate>,
     pub date_to: Option<NaiveDate>,
+    /// "day" | "month" | "year" — controls CSV column values and headers.
+    /// Defaults to "month" when absent.
+    #[serde(default)]
+    pub granularity: String,
 }
 
 // ── Snapshot row fetched from Postgres ───────────────────────────────────────
@@ -85,7 +89,7 @@ async fn generate_report(
         build_filename("report", &meta.parameters, computed_as_of, "csv")
     });
 
-    let (data, size_bytes) = build_csv(&rows)?;
+    let (data, size_bytes) = build_csv(&rows, &meta.parameters.granularity)?;
     let params_json = serde_json::to_value(&meta.parameters)?;
 
     sqlx::query(
@@ -121,10 +125,10 @@ async fn fetch_report_rows(
         r#"
         SELECT
             s.snapshot_date,
-            COALESCE(SUM(CASE WHEN e.direction = 'income' THEN s.actual_rate_per_day ELSE 0 END), 0)                    AS income_rate,
-            COALESCE(SUM(CASE WHEN e.direction = 'spend'  THEN s.actual_rate_per_day ELSE 0 END), 0)                    AS spend_rate,
-            COALESCE(SUM(CASE WHEN e.direction = 'income' THEN s.actual_rate_per_day ELSE -s.actual_rate_per_day END), 0) AS margin_rate,
-            COALESCE(SUM(s.drift_per_day), 0)                                                                            AS drift_rate,
+            COALESCE(SUM(CASE WHEN e.direction = 'income' THEN s.actual_rate_per_day ELSE 0 END), 0)::float8                    AS income_rate,
+            COALESCE(SUM(CASE WHEN e.direction = 'spend'  THEN s.actual_rate_per_day ELSE 0 END), 0)::float8                    AS spend_rate,
+            COALESCE(SUM(CASE WHEN e.direction = 'income' THEN s.actual_rate_per_day ELSE -s.actual_rate_per_day END), 0)::float8 AS margin_rate,
+            COALESCE(SUM(s.drift_per_day), 0)::float8                                                                            AS drift_rate,
             COALESCE(MAX(s.computed_as_of)::date, s.snapshot_date)                                                       AS computed_as_of
         FROM snapshots s
         JOIN entries e ON e.id = s.node_id AND s.node_type = 'entry'
@@ -160,24 +164,42 @@ async fn fetch_report_rows(
 
 // ── CSV generation ────────────────────────────────────────────────────────────
 
-/// Rate per day → approximate monthly value (30.44 days/month).
-#[inline]
-fn to_monthly(rate_per_day: f64) -> f64 {
-    rate_per_day / 100.0 * 30.44
+fn gran_suffix(gran: &str) -> &'static str {
+    match gran {
+        "day"  => "/day",
+        "year" => "/yr",
+        _      => "/mo",
+    }
 }
 
-fn build_csv(rows: &[DaySummaryRow]) -> Result<(Vec<u8>, i64)> {
+/// Convert a cents-per-day rate to the requested granularity, in dollars.
+fn to_rate(rate_per_day: f64, gran: &str) -> f64 {
+    match gran {
+        "day"  => rate_per_day / 100.0,
+        "year" => rate_per_day / 100.0 * 365.0,
+        _      => rate_per_day / 100.0 * 30.44,
+    }
+}
+
+fn build_csv(rows: &[DaySummaryRow], gran: &str) -> Result<(Vec<u8>, i64)> {
+    let sfx = gran_suffix(gran);
     let mut buf = Vec::new();
     {
         let mut w = csv::Writer::from_writer(&mut buf);
-        w.write_record(["Date", "Income/mo", "Spend/mo", "Margin/mo", "Drift/mo"])?;
+        w.write_record([
+            "Date",
+            &format!("Income{sfx}"),
+            &format!("Spend{sfx}"),
+            &format!("Margin{sfx}"),
+            &format!("Drift{sfx}"),
+        ])?;
         for row in rows {
             w.write_record([
                 row.snapshot_date.to_string(),
-                format!("{:.2}", to_monthly(row.income_rate)),
-                format!("{:.2}", to_monthly(row.spend_rate)),
-                format!("{:.2}", to_monthly(row.margin_rate)),
-                format!("{:.2}", to_monthly(row.drift_rate)),
+                format!("{:.2}", to_rate(row.income_rate, gran)),
+                format!("{:.2}", to_rate(row.spend_rate, gran)),
+                format!("{:.2}", to_rate(row.margin_rate, gran)),
+                format!("{:.2}", to_rate(row.drift_rate, gran)),
             ])?;
         }
         w.flush()?;
