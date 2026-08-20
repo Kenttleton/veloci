@@ -37,6 +37,7 @@ pub mod types;
 use std::collections::HashMap;
 
 use anyhow::{Context, Result};
+use chrono::NaiveDate;
 use uuid::Uuid;
 
 use crate::db::Pools;
@@ -159,6 +160,9 @@ pub async fn run_import(
     tracing::info!(%entity_id, clusters = stage2_out.clusters_created, "stage 2 complete");
     notify_stage(&pools.write, entity_id, job_id, "import.process", 2, &stage_labels).await;
 
+    sync_entry_start_dates(entity_id, &pools.read).await?;
+    correct_entry_time_chunks(entity_id, &pools.read).await?;
+
     let dirty_input = dirty::DirtyDetectionInput {
         superseded_entry_ids:  stage0_out.superseded_entry_ids,
         new_entry_assignments: stage1_out.new_entry_assignments,
@@ -187,6 +191,9 @@ pub async fn run_entries_reprocess(
     let stage2_out = stage2::run(entity_id, computed_as_of, &stage1_out.unmatched_tx_ids, &pools.read).await?;
     tracing::info!(%entity_id, clusters = stage2_out.clusters_created, "stage 2 complete");
     notify_stage(&pools.write, entity_id, job_id, "entries.reprocess", 2, &stage_labels).await;
+
+    sync_entry_start_dates(entity_id, &pools.read).await?;
+    correct_entry_time_chunks(entity_id, &pools.read).await?;
 
     // Bypass dirty detection — full re-run from history_start.
     run_from_stage3(entity_id, job_id, "entries.reprocess", computed_as_of, None, &stage_labels, pools).await
@@ -226,6 +233,184 @@ pub async fn run_balance_project(
 // ---------------------------------------------------------------------------
 // Internal stage chains
 // ---------------------------------------------------------------------------
+
+/// Pull every entry's start_date back to the minimum date of its assigned
+/// transactions when that minimum is earlier than the current start_date.
+///
+/// This corrects two cases:
+///   - System entries seeded with a placeholder date (2000-01-01).
+///   - Regular entries that receive older assignments when a new account
+///     with historical data is uploaded.
+///
+/// `correct_entry_time_chunks` runs immediately after to repair any gaps
+/// introduced by this backward extension.
+async fn sync_entry_start_dates(entity_id: Uuid, pool: &sqlx::PgPool) -> Result<()> {
+    sqlx::query(
+        r#"
+        UPDATE entries e
+        SET start_date = LEAST(e.start_date, sub.min_date)
+        FROM (
+            SELECT tea.entry_id, MIN(t.date) AS min_date
+            FROM transaction_entry_assignments tea
+            JOIN transactions t ON t.id = tea.transaction_id
+            WHERE t.entity_id = $1
+            GROUP BY tea.entry_id
+        ) sub
+        WHERE e.id = sub.entry_id
+          AND sub.min_date < e.start_date
+        "#,
+    )
+    .bind(entity_id)
+    .execute(pool)
+    .await
+    .context("failed to sync entry start_dates")?;
+    Ok(())
+}
+
+/// After `sync_entry_start_dates` naively extends start_date, detect
+/// non-system entries whose assigned transactions contain a temporal gap
+/// exceeding `period_days + TIMING_VARIANCE_THRESHOLD_DAYS`.
+///
+/// For each gap found, the transactions before it are split into a new
+/// pending entry (same label and conditions) and the original entry's
+/// start_date is advanced to the post-gap transaction date.  Multiple
+/// gaps in one entry are handled left-to-right, creating one new entry
+/// per prior chunk.
+async fn correct_entry_time_chunks(entity_id: Uuid, pool: &sqlx::PgPool) -> Result<()> {
+    #[derive(sqlx::FromRow)]
+    struct TxRow {
+        entry_id:    Uuid,
+        period_days: i32,
+        label_id:    Uuid,
+        direction:   String,
+        entry_type:  String,
+        conditions:  serde_json::Value,
+        tx_id:       Uuid,
+        tx_date:     NaiveDate,
+    }
+
+    let rows: Vec<TxRow> = sqlx::query_as(
+        r#"
+        SELECT
+            e.id          AS entry_id,
+            e.period_days,
+            e.label_id,
+            e.direction,
+            e.entry_type,
+            e.conditions,
+            t.id          AS tx_id,
+            t.date        AS tx_date
+        FROM entries e
+        JOIN transaction_entry_assignments tea ON tea.entry_id = e.id
+        JOIN transactions t ON t.id = tea.transaction_id
+        WHERE e.entity_id = $1
+          AND e.source != 'system'
+          AND e.period_days IS NOT NULL
+        ORDER BY e.id, t.date
+        "#,
+    )
+    .bind(entity_id)
+    .fetch_all(pool)
+    .await
+    .context("failed to load entry transactions for gap correction")?;
+
+    // Group rows by entry preserving the date-sorted order.
+    let mut by_entry: Vec<(Uuid, Vec<TxRow>)> = Vec::new();
+    for row in rows {
+        if by_entry.last().map(|(id, _)| *id) == Some(row.entry_id) {
+            by_entry.last_mut().unwrap().1.push(row);
+        } else {
+            by_entry.push((row.entry_id, vec![row]));
+        }
+    }
+
+    let tolerance = TIMING_VARIANCE_THRESHOLD_DAYS as i64;
+
+    for (entry_id, txs) in by_entry {
+        let gap_threshold = txs[0].period_days as i64 + tolerance;
+
+        // Locate all gap positions (index of the tx just BEFORE the gap).
+        let gap_indices: Vec<usize> = (0..txs.len().saturating_sub(1))
+            .filter(|&i| {
+                (txs[i + 1].tx_date - txs[i].tx_date).num_days() > gap_threshold
+            })
+            .collect();
+
+        if gap_indices.is_empty() {
+            continue;
+        }
+
+        // Slice boundaries: one chunk per gap, plus the final current chunk.
+        // chunks[k] = txs[starts[k]..=ends[k]]
+        let starts: Vec<usize> = std::iter::once(0)
+            .chain(gap_indices.iter().map(|&i| i + 1))
+            .collect();
+        let ends: Vec<usize> = gap_indices
+            .iter()
+            .copied()
+            .chain(std::iter::once(txs.len() - 1))
+            .collect();
+
+        // All chunks except the last become new pending entries.
+        let prior_count = starts.len() - 1;
+        for k in 0..prior_count {
+            let chunk = &txs[starts[k]..=ends[k]];
+            let chunk_start = chunk.first().unwrap().tx_date;
+            let chunk_end   = chunk.last().unwrap().tx_date;
+            let tx_ids: Vec<Uuid> = chunk.iter().map(|r| r.tx_id).collect();
+
+            let new_entry_id: Uuid = sqlx::query_scalar(
+                r#"
+                INSERT INTO entries (
+                    entity_id, label_id, direction, entry_type, period_days,
+                    conditions, status, source, start_date, end_date,
+                    rate_method, matched_transaction_count
+                ) VALUES (
+                    $1, $2, $3, $4, $5,
+                    $6::jsonb, 'pending', 'engine', $7, $8,
+                    'median', $9
+                ) RETURNING id
+                "#,
+            )
+            .bind(entity_id)
+            .bind(txs[0].label_id)
+            .bind(&txs[0].direction)
+            .bind(&txs[0].entry_type)
+            .bind(txs[0].period_days)
+            .bind(&txs[0].conditions)
+            .bind(chunk_start)
+            .bind(chunk_end)
+            .bind(chunk.len() as i32)
+            .fetch_one(pool)
+            .await
+            .context("failed to create prior-chunk entry")?;
+
+            // Re-assign the chunk's transactions to the new entry.
+            sqlx::query(
+                "UPDATE transaction_entry_assignments
+                 SET entry_id = $1
+                 WHERE entry_id = $2 AND transaction_id = ANY($3::uuid[])",
+            )
+            .bind(new_entry_id)
+            .bind(entry_id)
+            .bind(&tx_ids)
+            .execute(pool)
+            .await
+            .context("failed to re-assign chunk transactions")?;
+        }
+
+        // Advance the original entry's start_date to the first tx of the last chunk.
+        let current_start = txs[*starts.last().unwrap()].tx_date;
+        sqlx::query("UPDATE entries SET start_date = $2 WHERE id = $1")
+            .bind(entry_id)
+            .bind(current_start)
+            .execute(pool)
+            .await
+            .context("failed to update entry start_date after gap correction")?;
+    }
+
+    Ok(())
+}
 
 /// Run stages 3 → 7.
 async fn run_from_stage3(
