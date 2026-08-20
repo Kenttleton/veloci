@@ -587,10 +587,6 @@ func (s *Server) Ledger(c echo.Context) error {
 	ctx := c.Request().Context()
 	entityID := middleware.EntityID(ctx)
 
-	filter := c.QueryParam("filter")
-	if filter == "" {
-		filter = "all"
-	}
 	labelFilter := c.QueryParam("label")
 	dirFilter := c.QueryParam("direction")
 	typeFilter := c.QueryParam("entry_type")
@@ -600,6 +596,15 @@ func (s *Server) Ledger(c echo.Context) error {
 	}
 
 	counts, _ := s.store.CountEntriesByStatus(ctx, entityID)
+
+	filter := c.QueryParam("filter")
+	if filter == "" {
+		if counts.Pending > 0 {
+			filter = "pending"
+		} else {
+			filter = "all"
+		}
+	}
 
 	var entries []store.EntryRow
 	switch filter {

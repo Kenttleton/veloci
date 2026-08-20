@@ -359,31 +359,51 @@ async fn correct_entry_time_chunks(entity_id: Uuid, pool: &sqlx::PgPool) -> Resu
             let chunk_end   = chunk.last().unwrap().tx_date;
             let tx_ids: Vec<Uuid> = chunk.iter().map(|r| r.tx_id).collect();
 
-            let new_entry_id: Uuid = sqlx::query_scalar(
-                r#"
-                INSERT INTO entries (
-                    entity_id, label_id, direction, entry_type, period_days,
-                    conditions, status, source, start_date, end_date,
-                    rate_method, matched_transaction_count
-                ) VALUES (
-                    $1, $2, $3, $4, $5,
-                    $6::jsonb, 'pending', 'engine', $7, $8,
-                    'median', $9
-                ) RETURNING id
-                "#,
+            // Idempotency: reuse an existing entry for this exact chunk window
+            // so repeated pipeline runs don't create duplicate review items.
+            let existing: Option<(Uuid,)> = sqlx::query_as(
+                "SELECT id FROM entries
+                 WHERE entity_id = $1 AND label_id = $2
+                   AND start_date = $3 AND end_date = $4
+                 LIMIT 1",
             )
             .bind(entity_id)
             .bind(txs[0].label_id)
-            .bind(&txs[0].direction)
-            .bind(&txs[0].entry_type)
-            .bind(txs[0].period_days)
-            .bind(&txs[0].conditions)
             .bind(chunk_start)
             .bind(chunk_end)
-            .bind(chunk.len() as i32)
-            .fetch_one(pool)
+            .fetch_optional(pool)
             .await
-            .context("failed to create prior-chunk entry")?;
+            .context("failed to check for existing chunk entry")?;
+
+            let new_entry_id: Uuid = if let Some((id,)) = existing {
+                id
+            } else {
+                sqlx::query_scalar(
+                    r#"
+                    INSERT INTO entries (
+                        entity_id, label_id, direction, entry_type, period_days,
+                        conditions, status, source, start_date, end_date,
+                        rate_method, matched_transaction_count
+                    ) VALUES (
+                        $1, $2, $3, $4, $5,
+                        $6::jsonb, 'pending', 'engine', $7, $8,
+                        'median', $9
+                    ) RETURNING id
+                    "#,
+                )
+                .bind(entity_id)
+                .bind(txs[0].label_id)
+                .bind(&txs[0].direction)
+                .bind(&txs[0].entry_type)
+                .bind(txs[0].period_days)
+                .bind(&txs[0].conditions)
+                .bind(chunk_start)
+                .bind(chunk_end)
+                .bind(chunk.len() as i32)
+                .fetch_one(pool)
+                .await
+                .context("failed to create prior-chunk entry")?
+            };
 
             // Re-assign the chunk's transactions to the new entry.
             sqlx::query(

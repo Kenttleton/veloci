@@ -24,7 +24,7 @@
 //! - cycle: an entry matches whose `label_id` is already in the accumulated set
 //!   (logged, not an error — intentional for mutual/reflexive label references).
 //!
-//! 1. Load entries (`status IN ('live', 'pending')`, `end_date IS NULL`).
+//! 1. Load entries (`status IN ('live', 'pending')`); date-window gate applied per-entry during evaluation.
 //! 2. Pre-compile JSONB conditions — malformed entries are logged and skipped.
 //! 3. Sort compiled entries by `priority ASC`.
 //! 4. Partition entries: transaction-target-only → Pass 1; entry-target → Pass 2+.
@@ -127,6 +127,9 @@ pub struct CompiledEntry {
     pub amount_fit:          Option<f64>,
     pub projected_rate_per_day: Option<f64>,
     pub recurrence_anchor:      Option<String>,
+    /// Active window — transactions outside [start_date, end_date] are never assigned.
+    pub start_date:             NaiveDate,
+    pub end_date:               Option<NaiveDate>,
 }
 
 /// A compiled, recursively-evaluatable condition tree node.
@@ -237,6 +240,8 @@ struct EntryRow {
     amount_fit:          Option<f64>,
     projected_rate_per_day: Option<f64>,
     recurrence_anchor:      Option<String>,
+    start_date:             NaiveDate,
+    end_date:               Option<NaiveDate>,
 }
 
 // ---------------------------------------------------------------------------
@@ -384,10 +389,21 @@ pub(crate) fn evaluate_entry_phases(
     entry: &CompiledEntry,
     txns:  &[TransactionRow],
 ) -> Vec<(Uuid, f64)> {
-    // Phase 1: payee filter
-    let mut candidates: Vec<(&TransactionRow, f64)> = txns
+    // Phase 0: date-window gate — only consider transactions within [start_date, end_date].
+    // This ensures time-chunked entries with an end_date never claim transactions
+    // belonging to a later epoch, and prevents the sync/correct cycle from oscillating.
+    let windowed: Vec<&TransactionRow> = txns
         .iter()
-        .filter_map(|txn| eval_payee_conditions(&entry.conditions, txn).map(|f| (txn, f)))
+        .filter(|txn| {
+            txn.date >= entry.start_date
+                && entry.end_date.map_or(true, |end| txn.date <= end)
+        })
+        .collect();
+
+    // Phase 1: payee filter
+    let mut candidates: Vec<(&TransactionRow, f64)> = windowed
+        .iter()
+        .filter_map(|txn| eval_payee_conditions(&entry.conditions, txn).map(|f| (*txn, f)))
         .collect();
 
     if candidates.is_empty() {
@@ -1059,6 +1075,8 @@ fn compile_entry(row: EntryRow) -> Result<CompiledEntry> {
         amount_fit:          row.amount_fit,
         projected_rate_per_day: row.projected_rate_per_day,
         recurrence_anchor:      row.recurrence_anchor,
+        start_date:             row.start_date,
+        end_date:               row.end_date,
     })
 }
 
@@ -1366,6 +1384,8 @@ async fn load_entries(entity_id: Uuid, pool: &PgPool) -> Result<Vec<EntryRow>> {
         amount_fit:          Option<sqlx::types::BigDecimal>,
         projected_rate_per_day: Option<sqlx::types::BigDecimal>,
         recurrence_anchor:      Option<String>,
+        start_date:             NaiveDate,
+        end_date:               Option<NaiveDate>,
     }
 
     let rows: Vec<Row> = sqlx::query_as(
@@ -1373,11 +1393,11 @@ async fn load_entries(entity_id: Uuid, pool: &PgPool) -> Result<Vec<EntryRow>> {
         SELECT id, label_id, priority, conditions,
                direction, entry_type, period_days, source,
                fitness, merchant_fit, timing_fit, amount_fit,
-               projected_rate_per_day, recurrence_anchor
+               projected_rate_per_day, recurrence_anchor,
+               start_date, end_date
         FROM entries
         WHERE entity_id = $1
           AND status IN ('live', 'pending')
-          AND end_date IS NULL
           AND conditions IS NOT NULL
         ORDER BY priority ASC
         "#,
@@ -1409,6 +1429,8 @@ async fn load_entries(entity_id: Uuid, pool: &PgPool) -> Result<Vec<EntryRow>> {
             projected_rate_per_day: r.projected_rate_per_day
                 .and_then(|v| v.to_string().parse::<f64>().ok()),
             recurrence_anchor:      r.recurrence_anchor,
+            start_date:             r.start_date,
+            end_date:               r.end_date,
         })
         .collect())
 }

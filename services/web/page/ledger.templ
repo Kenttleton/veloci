@@ -65,11 +65,13 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 					>Run Engine</button>
 				</div>
 			</div>
-			<div style="display:grid;grid-template-columns:28px 1fr 80px 70px 90px 110px 140px;padding:5px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
+			<div style="display:grid;grid-template-columns:28px 1fr 80px 80px 80px 70px 90px 110px 140px;padding:5px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
 				<div style="display:flex;align-items:center">
 					<input type="checkbox" class="js-check-all" style="cursor:pointer;accent-color:var(--accent)" title="Select all"/>
 				</div>
 				<div style="font-size:11px;font-weight:600;color:var(--text3)">Entry</div>
+				<div style="font-size:11px;font-weight:600;color:var(--text3)">Start</div>
+				<div style="font-size:11px;font-weight:600;color:var(--text3)">End</div>
 				<div style="font-size:11px;font-weight:600;color:var(--text3)">Type</div>
 				<div style="font-size:11px;font-weight:600;color:var(--text3)">Dir</div>
 				<div style="font-size:11px;font-weight:600;color:var(--text3);text-align:right">Rate/<span class="js-gran-label">day</span></div>
@@ -587,9 +589,24 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 						})
 						.then(function(r) {
 							if (!r || !r.ok) throw new Error('action-failed');
-							if (action === 'approve') { markDirty(); }
 							var row = document.querySelector('.js-entry-details[data-entry-id="'+entryId+'"]');
-							if (row) row.remove();
+							if (action === 'approve') {
+								markDirty();
+								var currentFilter = new URLSearchParams(window.location.search).get('filter') || '';
+								if (currentFilter === 'pending' || currentFilter === '') {
+									if (row) row.remove();
+								} else {
+									var banner = row && row.querySelector('.js-pending-banner');
+									if (banner) banner.remove();
+									var badge = row && row.querySelector('.js-entry-status');
+									if (badge) {
+										badge.textContent = 'Live';
+										badge.style.cssText = 'font-size:11px;font-weight:600;padding:2px 7px;border-radius:4px;white-space:nowrap;justify-self:center;background:color-mix(in srgb,var(--surface2) 70%,var(--income) 30%);color:var(--income)';
+									}
+								}
+							} else {
+								if (row) row.remove();
+							}
 						})
 						.catch(function() {
 							btn.disabled = false;
@@ -938,7 +955,7 @@ templ ledgerEntryRow(e store.EntryRow) {
 		}
 		style="border-bottom:1px solid var(--border)"
 	>
-		<summary style="display:grid;grid-template-columns:28px 1fr 80px 70px 90px 110px 140px;align-items:center;padding:10px 20px;cursor:pointer;list-style:none;user-select:none">
+		<summary style="display:grid;grid-template-columns:28px 1fr 80px 80px 80px 70px 90px 110px 140px;align-items:center;padding:10px 20px;cursor:pointer;list-style:none;user-select:none">
 			<span style="display:flex;align-items:center" onclick="event.stopPropagation()">
 				<input type="checkbox" class="js-entry-check" data-entry-id={ e.ID } style="cursor:pointer;accent-color:var(--accent)"/>
 			</span>
@@ -958,6 +975,14 @@ templ ledgerEntryRow(e store.EntryRow) {
 					}
 				</span>
 			</span>
+			<span style="font-size:12px;color:var(--text3);font-variant-numeric:tabular-nums">{ e.StartDate.Format("Jan '06") }</span>
+			<span style="font-size:12px;color:var(--text3);font-variant-numeric:tabular-nums">
+				if e.EndDate != nil {
+					{ e.EndDate.Format("Jan '06") }
+				} else {
+					<span style="color:var(--text3);opacity:0.4">—</span>
+				}
+			</span>
 			<span style="font-size:12px;color:var(--text3)">{ entryTypeLabel(e.EntryType) }</span>
 			<span style={ "font-size:11px;font-weight:600;padding:2px 6px;border-radius:4px;display:inline-block;" + ledgerDirectionBadgeStyle(e.Direction) }>{ directionLabel(e.Direction) }</span>
 			<span
@@ -967,13 +992,13 @@ templ ledgerEntryRow(e store.EntryRow) {
 				data-fmt-yr={ fmtRateYr(e.ProjectedRatePerDay) }
 				style="font-size:12px;color:var(--text2);text-align:right;font-variant-numeric:tabular-nums"
 			>{ fmtRateDay(e.ProjectedRatePerDay) }</span>
-			<span style={ ledgerStatusBadgeStyle(e.Status) }>{ ledgerStatusLabel(e.Status) }</span>
+			<span class="js-entry-status" style={ ledgerStatusBadgeStyle(e.Status) }>{ ledgerStatusLabel(e.Status) }</span>
 			<span class="js-entry-fitness" style={ "font-size:12px;text-align:right;font-variant-numeric:tabular-nums;color:" + fitColor(e.Fitness) }>{ fitPct(e.Fitness) }</span>
 		</summary>
 		<div>
 			<!-- Pending banner -->
 			if e.Status == "pending" {
-				<div style="display:flex;align-items:center;gap:10px;padding:8px 20px;border-top:1px solid var(--border);background:color-mix(in srgb,var(--surface) 85%,var(--accent) 15%)">
+				<div class="js-pending-banner" style="display:flex;align-items:center;gap:10px;padding:8px 20px;border-top:1px solid var(--border);background:color-mix(in srgb,var(--surface) 85%,var(--accent) 15%)">
 					<span style="font-size:12px;font-weight:600;color:var(--accent);flex:1">Engine review required</span>
 					<button
 						class="js-review-btn"

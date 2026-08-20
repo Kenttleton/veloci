@@ -70,7 +70,7 @@ const entryCols = `
 // excludeJobIDs skips snapshot rows written by in-progress engine jobs so the
 // returned rates stay consistent with the previous completed run during a crawl.
 func (s *Store) ListEntries(ctx context.Context, entityID string, dr DateRange, accountID, statusFilter string, limit int, cursor string, excludeJobIDs []string) ([]EntryRow, error) {
-	statusCond := `e.status = 'live' AND e.source != 'system'`
+	statusCond := `e.status = 'live'`
 	switch statusFilter {
 	case "all":
 		statusCond = `e.source != 'system'`
