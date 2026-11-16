@@ -697,54 +697,64 @@ function makeSummaryUpdater(summaryDiv) {
   })
 }
 
-// ── Save extension ─────────────────────────────────────────────────────────
+// ── Save tracker (shows unsaved state without auto-saving) ────────────────
 
-function makeSaveExtension(entryId, indicator) {
-  let timer = null
+function makeSaveTracker(indicator) {
   return EditorView.updateListener.of((update) => {
     if (!update.docChanged) return
-    clearTimeout(timer)
-
     const text = update.state.doc.toString()
-
     if (!text.trim()) {
       if (indicator) indicator.textContent = ""
       return
     }
-
-    let parsed
-    try {
-      parsed = JSON.parse(text)
-    } catch {
+    try { JSON.parse(text) } catch {
       if (indicator) indicator.textContent = "invalid JSON"
       return
     }
-
     if (indicator) indicator.textContent = "unsaved"
-    timer = setTimeout(() => {
-      if (indicator) indicator.textContent = "saving…"
-      fetch(`/api/entries/${entryId}/conditions`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({ conditions: parsed }),
-      }).then(r => {
-        if (!indicator) return
-        if (r.ok) {
-          indicator.textContent = "saved"
-          setTimeout(() => { indicator.textContent = "" }, 2000)
-          document.dispatchEvent(new CustomEvent("veloci:conditions-saved", {
-            detail: { entryId },
-            bubbles: true,
-          }))
-        } else {
-          indicator.textContent = "error"
-        }
-      }).catch(() => {
-        if (indicator) indicator.textContent = "error"
-      })
-    }, 1500)
   })
+}
+
+// ── Save function (called by the Save Conditions button) ──────────────────
+
+function makeSaveFn(entryId, getView, indicator) {
+  return function save(btn) {
+    const view = getView()
+    if (!view || view === "pending") return
+    const text = view.state.doc.toString()
+    let parsed
+    try {
+      parsed = text.trim() ? JSON.parse(text) : {}
+    } catch {
+      if (indicator) indicator.textContent = "invalid JSON — fix before saving"
+      return
+    }
+    if (btn) { btn.disabled = true; btn.textContent = "Saving…" }
+    if (indicator) indicator.textContent = ""
+    fetch(`/api/entries/${entryId}/conditions`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ conditions: parsed }),
+    }).then(r => {
+      if (btn) { btn.disabled = false; btn.textContent = "Save" }
+      if (!indicator) return
+      if (r.ok) {
+        indicator.style.color = "var(--income)"
+        indicator.textContent = "saved"
+        setTimeout(() => { indicator.textContent = ""; indicator.style.color = "" }, 2000)
+        document.dispatchEvent(new CustomEvent("veloci:conditions-saved", {
+          detail: { entryId },
+          bubbles: true,
+        }))
+      } else {
+        indicator.textContent = "save failed"
+      }
+    }).catch(() => {
+      if (btn) { btn.disabled = false; btn.textContent = "Save" }
+      if (indicator) indicator.textContent = "error"
+    })
+  }
 }
 
 // ── Autocomplete-after-close-quote trigger ────────────────────────────────
@@ -906,7 +916,7 @@ function initEditor(textarea) {
         lintGutter(),
         linter(conditionsLinter, { delay: 600 }),
         EditorView.lineWrapping,
-        ...(textarea.readOnly ? [] : [makeSaveExtension(entryId, indicator)]),
+        ...(textarea.readOnly ? [] : [makeSaveTracker(indicator)]),
         makeSummaryUpdater(summaryDiv),
         makeAutocompleteTrigger(),
         EditorView.editable.of(!textarea.readOnly),
@@ -917,6 +927,9 @@ function initEditor(textarea) {
   })
 
   textarea._cmView = view
+  if (!textarea.readOnly) {
+    textarea._cmSave = makeSaveFn(entryId, () => textarea._cmView, indicator)
+  }
   textarea.parentNode.insertBefore(view.dom, textarea)
   textarea.style.display = "none"
 }

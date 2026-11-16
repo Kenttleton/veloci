@@ -469,21 +469,17 @@ func (h *EntriesHandler) PreviewEntry(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid body")
 	}
 
-	count, ids, err := h.s.PreviewConditions(ctx, entityID, body.Conditions)
+	txns, err := h.s.PreviewConditions(ctx, entityID, body.Conditions)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
-	if ids == nil {
-		ids = []string{}
+	if txns == nil {
+		txns = []store.TransactionPreview{}
 	}
 
 	return c.JSON(http.StatusOK, struct {
-		MatchedCount   int      `json:"matched_count"`
-		TransactionIDs []string `json:"transaction_ids"`
-	}{
-		MatchedCount:   count,
-		TransactionIDs: ids,
-	})
+		Data []store.TransactionPreview `json:"data"`
+	}{Data: txns})
 }
 
 // RegisterEntriesRoutes registers entry endpoints on the given Echo group.

@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -386,52 +388,217 @@ func (s *Store) DeleteEntry(ctx context.Context, entityID, id string) error {
 	return nil
 }
 
-// PreviewConditions returns matching transaction ids for the given conditions JSONB.
-// This is a simplified match on merchant_normalized using the "merchants" field.
-func (s *Store) PreviewConditions(ctx context.Context, entityID string, conditions json.RawMessage) (int, []string, error) {
-	var m map[string]interface{}
-	if err := json.Unmarshal(conditions, &m); err != nil {
-		return 0, nil, nil
+// TransactionPreview is a lightweight transaction row for condition preview.
+type TransactionPreview struct {
+	ID                 string `json:"id"`
+	Date               string `json:"date"`
+	AmountCents        int64  `json:"amount_cents"`
+	MerchantNormalized string `json:"merchant_normalized"`
+	ImportedPayee      string `json:"imported_payee"`
+	SettlementStatus   string `json:"settlement_status"`
+}
+
+// PreviewConditions evaluates Schema B conditions against transactions without
+// persisting any assignments. Mirrors the engine's matching logic — returns up
+// to 50 rows ordered by date DESC. Entry-target conditions (label_matched,
+// entry_direction, etc.) are skipped as they require full engine context.
+func (s *Store) PreviewConditions(ctx context.Context, entityID string, conditions json.RawMessage) ([]TransactionPreview, error) {
+	if len(conditions) == 0 {
+		return nil, nil
+	}
+	var root map[string]interface{}
+	if err := json.Unmarshal(conditions, &root); err != nil {
+		return nil, nil
 	}
 
-	merchants, ok := m["merchants"]
-	if !ok {
-		return 0, []string{}, nil
+	ev := &condEval{args: []interface{}{entityID}}
+	clause := ev.buildNode(root)
+	if clause == "" {
+		clause = "TRUE"
 	}
 
-	var merchantList []string
-	switch v := merchants.(type) {
-	case []interface{}:
-		for _, item := range v {
-			if s, ok := item.(string); ok {
-				merchantList = append(merchantList, s)
-			}
-		}
-	}
+	query := fmt.Sprintf(`
+		SELECT t.id::text, t.date, t.amount_cents, t.merchant_normalized,
+		       t.imported_payee, t.settlement_status
+		FROM transactions t
+		LEFT JOIN accounts a ON a.id = t.account_id
+		WHERE t.entity_id = $1 AND (%s)
+		ORDER BY t.date DESC
+		LIMIT 50
+	`, clause)
 
-	if len(merchantList) == 0 {
-		return 0, []string{}, nil
-	}
-
-	rows, err := s.pool.Query(ctx, `
-		SELECT id::text FROM transactions
-		WHERE entity_id = $1 AND merchant_normalized ILIKE ANY($2)
-		LIMIT 200
-	`, entityID, merchantList)
+	rows, err := s.pool.Query(ctx, query, ev.args...)
 	if err != nil {
-		return 0, nil, err
+		return nil, err
 	}
 	defer rows.Close()
 
-	var ids []string
+	var result []TransactionPreview
 	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return 0, nil, err
+		var p TransactionPreview
+		var date time.Time
+		if err := rows.Scan(&p.ID, &date, &p.AmountCents, &p.MerchantNormalized, &p.ImportedPayee, &p.SettlementStatus); err != nil {
+			return nil, err
 		}
-		ids = append(ids, id)
+		p.Date = date.Format("2006-01-02")
+		result = append(result, p)
 	}
-	return len(ids), ids, rows.Err()
+	return result, rows.Err()
+}
+
+// condEval builds a parameterized SQL WHERE clause from Schema B conditions JSON.
+// $1 is always entityID; additional params are appended via p().
+type condEval struct {
+	args []interface{}
+}
+
+func (e *condEval) p(v interface{}) string {
+	e.args = append(e.args, v)
+	return fmt.Sprintf("$%d", len(e.args))
+}
+
+// buildNode converts a conditions object (all keys AND'd) to a SQL fragment.
+func (e *condEval) buildNode(node map[string]interface{}) string {
+	var clauses []string
+	for k, v := range node {
+		if c := e.buildLeaf(k, v); c != "" {
+			clauses = append(clauses, c)
+		}
+	}
+	switch len(clauses) {
+	case 0:
+		return ""
+	case 1:
+		return clauses[0]
+	default:
+		return "(" + strings.Join(clauses, " AND ") + ")"
+	}
+}
+
+func (e *condEval) buildLeaf(key string, val interface{}) string {
+	switch key {
+	case "payee_contains":
+		s, _ := val.(string)
+		return "t.merchant_normalized ILIKE " + e.p("%"+s+"%")
+	case "payee_exact":
+		s, _ := val.(string)
+		return "t.merchant_normalized ILIKE " + e.p(s)
+	case "payee_starts_with":
+		s, _ := val.(string)
+		return "t.merchant_normalized ILIKE " + e.p(s+"%")
+	case "payee_ends_with":
+		s, _ := val.(string)
+		return "t.merchant_normalized ILIKE " + e.p("%"+s)
+	case "payee_not_contains":
+		s, _ := val.(string)
+		return "t.merchant_normalized NOT ILIKE " + e.p("%"+s+"%")
+	case "payee_regex":
+		s, _ := val.(string)
+		return "t.merchant_normalized ~* " + e.p(s)
+	case "payee_one_of":
+		arr, _ := val.([]interface{})
+		var strs []string
+		for _, item := range arr {
+			if s, ok := item.(string); ok {
+				strs = append(strs, s)
+			}
+		}
+		if len(strs) == 0 {
+			return ""
+		}
+		return "t.merchant_normalized ILIKE ANY(" + e.p(strs) + ")"
+	case "amount_range":
+		obj, _ := val.(map[string]interface{})
+		var parts []string
+		if min, ok := obj["min"].(float64); ok {
+			parts = append(parts, "t.amount_cents >= "+e.p(int64(math.Round(min*100))))
+		}
+		if max, ok := obj["max"].(float64); ok {
+			parts = append(parts, "t.amount_cents <= "+e.p(int64(math.Round(max*100))))
+		}
+		if len(parts) == 0 {
+			return ""
+		}
+		return "(" + strings.Join(parts, " AND ") + ")"
+	case "date_range":
+		obj, _ := val.(map[string]interface{})
+		var parts []string
+		if start, ok := obj["start"].(string); ok {
+			parts = append(parts, "t.date >= "+e.p(start)+"::date")
+		}
+		if end, ok := obj["end"].(string); ok {
+			parts = append(parts, "t.date <= "+e.p(end)+"::date")
+		}
+		if len(parts) == 0 {
+			return ""
+		}
+		return "(" + strings.Join(parts, " AND ") + ")"
+	case "date_day_of_month":
+		obj, _ := val.(map[string]interface{})
+		day, ok := obj["day"].(float64)
+		if !ok {
+			return ""
+		}
+		tol := 0.0
+		if t, ok := obj["tolerance_days"].(float64); ok {
+			tol = t
+		}
+		if tol == 0 {
+			return "EXTRACT(DAY FROM t.date) = " + e.p(int(day))
+		}
+		return "(EXTRACT(DAY FROM t.date) BETWEEN " + e.p(int(day-tol)) + " AND " + e.p(int(day+tol)) + ")"
+	case "account":
+		s, _ := val.(string)
+		if s == "" {
+			return ""
+		}
+		return "t.account_id IN (SELECT id FROM accounts WHERE entity_id = $1 AND LOWER(name) = LOWER(" + e.p(s) + "))"
+	case "institution":
+		s, _ := val.(string)
+		if s == "" {
+			return ""
+		}
+		return "a.institution_id IN (SELECT id FROM institutions WHERE entity_id = $1 AND LOWER(institution_name) = LOWER(" + e.p(s) + "))"
+	case "and":
+		arr, _ := val.([]interface{})
+		return e.buildLogic(arr, "AND")
+	case "or":
+		arr, _ := val.([]interface{})
+		return e.buildLogic(arr, "OR")
+	case "not":
+		child, ok := val.(map[string]interface{})
+		if !ok {
+			return ""
+		}
+		c := e.buildNode(child)
+		if c == "" {
+			return ""
+		}
+		return "NOT (" + c + ")"
+	default:
+		return "" // entry-target or unknown — skip
+	}
+}
+
+func (e *condEval) buildLogic(arr []interface{}, op string) string {
+	var parts []string
+	for _, item := range arr {
+		child, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if c := e.buildNode(child); c != "" {
+			parts = append(parts, c)
+		}
+	}
+	switch len(parts) {
+	case 0:
+		return ""
+	case 1:
+		return parts[0]
+	default:
+		return "(" + strings.Join(parts, " "+op+" ") + ")"
+	}
 }
 
 // UpdateEntryConditions updates the conditions JSON on an entry, releases all

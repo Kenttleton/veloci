@@ -238,27 +238,9 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 						runBtn.textContent = 'Run Engine';
 					}
 				}
-				// Conditions saved → auto-reprocess, then reload the tx panel and entry stats.
-				document.addEventListener('veloci:conditions-saved', function(e) {
-					var entryId = e.detail && e.detail.entryId;
-					fetch('/api/jobs/reprocess', {method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin', body:'{}'})
-						.then(function(r) {
-							if (r.ok) clearDirty();
-							setTimeout(function() {
-								if (!entryId) return;
-								var det = document.querySelector('.js-entry-details[data-entry-id="'+entryId+'"]');
-								if (!det) return;
-								if (det.open) {
-									var txPanel = det.querySelector('.js-tx-panel');
-									if (txPanel) {
-										delete txPanel.dataset.loaded;
-										loadTxPanel(txPanel, entryId, det.dataset.entryStatus || 'live');
-									}
-								}
-								loadEntryStats(entryId, det);
-							}, 2000);
-						})
-						.catch(function() { markDirty(); });
+				// Conditions saved → mark dirty so user knows reprocess is needed.
+				document.addEventListener('veloci:conditions-saved', function() {
+					markDirty();
 				});
 				// Navigate-away warning when dirty.
 				window.addEventListener('beforeunload', function(e) {
@@ -410,6 +392,92 @@ templ LedgerPage(shell ShellData, data LedgerData) {
 							txPanel.innerHTML = '<p style="color:var(--commit);font-size:12px">Failed to load.</p>';
 						});
 				}
+
+				// ── Save Conditions button ─────────────────────────────────────────────
+				document.addEventListener('click', function(e) {
+					var btn = e.target.closest('.js-cond-save-btn');
+					if (!btn) return;
+					var det = btn.closest('.js-entry-details');
+					if (!det) return;
+					var entryId = det.dataset.entryId;
+					var ta = det.querySelector('.js-conditions-ta[data-entry-id="' + entryId + '"]');
+					if (ta && ta._cmSave) ta._cmSave(btn);
+				});
+
+				// ── Preview Transactions button ─────────────────────────────────────────
+				// POSTs current (unsaved) conditions to /api/entries/preview and renders
+				// matching transactions in the tx panel without persisting anything.
+				document.addEventListener('click', function(e) {
+					var btn = e.target.closest('.js-cond-preview-btn');
+					if (!btn) return;
+					var det = btn.closest('.js-entry-details');
+					if (!det) return;
+					var entryId = det.dataset.entryId;
+					var txPanel = det.querySelector('.js-tx-panel');
+					if (!txPanel) return;
+
+					var ta = det.querySelector('.js-conditions-ta[data-entry-id="' + entryId + '"]');
+					var condText = '';
+					if (ta) {
+						condText = (ta._cmView && ta._cmView.state)
+							? ta._cmView.state.doc.toString()
+							: ta.value;
+					}
+					var conditions;
+					try { conditions = condText.trim() ? JSON.parse(condText) : {}; }
+					catch(ex) {
+						var status = det.querySelector('.js-conditions-status');
+						if (status) status.textContent = 'invalid JSON — fix before preview';
+						return;
+					}
+
+					btn.disabled = true;
+					btn.textContent = 'Previewing…';
+					txPanel.innerHTML = '<p style="color:var(--text3);font-size:12px">Loading preview…</p>';
+
+					fetch('/api/entries/preview', {
+						method: 'POST',
+						headers: {'Content-Type': 'application/json'},
+						credentials: 'same-origin',
+						body: JSON.stringify({conditions: conditions}),
+					})
+					.then(function(r) { return r.json(); })
+					.then(function(env) {
+						btn.disabled = false;
+						btn.textContent = 'Preview';
+						var txns = env.data || [];
+						if (!txns.length) {
+							txPanel.innerHTML = '<p style="color:var(--text3);font-size:12px">No transactions matched these conditions.</p>';
+							return;
+						}
+						var rows = txns.map(function(t) {
+							var abs = Math.abs(t.amount_cents);
+							var s = (t.amount_cents < 0 ? '-' : '') + '$' + (abs/100).toFixed(2);
+							var col = t.amount_cents >= 0 ? 'var(--income)' : 'var(--commit)';
+							var merch = t.merchant_normalized || t.imported_payee || '';
+							return '<tr style="border-top:1px solid var(--border)">' +
+								'<td style="padding:5px 8px;font-size:12px;color:var(--text2)">' + t.date + '</td>' +
+								'<td style="padding:5px 8px;font-size:12px;color:var(--text)">' + merch + '</td>' +
+								'<td style="padding:5px 8px;font-size:12px;color:' + col + ';text-align:right;font-variant-numeric:tabular-nums">' + s + '</td>' +
+								'<td style="padding:5px 8px;font-size:12px;color:var(--text3)">' + t.settlement_status + '</td>' +
+								'</tr>';
+						}).join('');
+						var previewNote = '<tr><td colspan="4" style="padding:5px 8px;font-size:11px;color:var(--text3);font-style:italic">Preview — ' + txns.length + ' match' + (txns.length === 1 ? '' : 'es') + '. Save Conditions + Reprocess to make permanent.</td></tr>';
+						txPanel.innerHTML =
+							'<table style="width:100%;border-collapse:collapse">' +
+							'<thead><tr>' +
+							'<th style="padding:5px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:600">Date</th>' +
+							'<th style="padding:5px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:600">Description</th>' +
+							'<th style="padding:5px 8px;text-align:right;font-size:11px;color:var(--text3);font-weight:600">Amount</th>' +
+							'<th style="padding:5px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:600">Status</th>' +
+							'</tr></thead><tbody>' + previewNote + rows + '</tbody></table>';
+					})
+					.catch(function() {
+						btn.disabled = false;
+						btn.textContent = 'Preview';
+						txPanel.innerHTML = '<p style="color:var(--commit);font-size:12px">Preview failed.</p>';
+					});
+				});
 
 				// ── Lazy-load transactions when entry opened ────────────────────────────
 				document.addEventListener('toggle', function(e) {
@@ -1157,7 +1225,16 @@ templ ledgerEntryRow(e store.EntryRow) {
 							spellcheck="false"
 						>{ conditionsFormatted(e.Conditions) }</textarea>
 						if e.Source != "system" {
-							<span class="js-conditions-status" style="font-size:11px;color:var(--text3);margin-top:2px"></span>
+							<div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:4px">
+								<span class="js-conditions-status" style="font-size:11px;color:var(--text3)"></span>
+								<button
+									class="js-cond-preview-btn btn btn--sm"
+									style="background:var(--surface2);border:1px solid var(--accent);color:var(--accent)"
+								>Preview</button>
+								<button
+									class="js-cond-save-btn btn btn--primary btn--sm"
+								>Save</button>
+							</div>
 						}
 						if len(e.SampleMerchants) > 0 {
 							<div style="font-size:11px;color:var(--text3);line-height:1.5">

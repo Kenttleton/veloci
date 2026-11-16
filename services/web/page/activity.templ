@@ -47,28 +47,72 @@ templ ActivityPage(shell ShellData, data ActivityData) {
 		</div>
 		<script>
 			(function () {
-				var now = new Date();
-				var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-				var yesterdayStart = new Date(+todayStart - 86400000);
-				document.querySelectorAll('time[data-fmt="activity"]').forEach(function (el) {
-					var d = new Date(el.getAttribute('datetime'));
-					var dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-					var timeStr = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-					if (+dayStart >= +todayStart) {
-						el.textContent = timeStr;
-					} else if (+dayStart >= +yesterdayStart) {
-						el.textContent = 'Yesterday · ' + timeStr;
-					} else {
-						el.textContent = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' · ' + timeStr;
-					}
+				function formatTimes() {
+					var now = new Date();
+					var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+					var yesterdayStart = new Date(+todayStart - 86400000);
+					document.querySelectorAll('time[data-fmt="activity"]').forEach(function (el) {
+						var d = new Date(el.getAttribute('datetime'));
+						var dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+						var timeStr = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+						if (+dayStart >= +todayStart) {
+							el.textContent = timeStr;
+						} else if (+dayStart >= +yesterdayStart) {
+							el.textContent = 'Yesterday · ' + timeStr;
+						} else {
+							el.textContent = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' · ' + timeStr;
+						}
+					});
+				}
+
+				formatTimes();
+
+				// Track job IDs already rendered so we can detect new ones.
+				var knownJobIds = new Set();
+				document.querySelectorAll('[id^="job-"]').forEach(function (el) {
+					knownJobIds.add(el.id.slice(4));
 				});
 
-				// Live stage label updates for in-progress job cards.
+				var refreshTimer = null;
+				function refreshList() {
+					clearTimeout(refreshTimer);
+					refreshTimer = setTimeout(function () {
+						fetch(window.location.href, { credentials: 'same-origin' })
+							.then(function (r) { return r.text(); })
+							.then(function (html) {
+								var doc = new DOMParser().parseFromString(html, 'text/html');
+								var fresh = doc.querySelector('.page-body--tight');
+								var current = document.querySelector('.page-body--tight');
+								if (fresh && current) {
+									current.innerHTML = fresh.innerHTML;
+									formatTimes();
+									// Re-index known jobs after swap.
+									knownJobIds = new Set();
+									current.querySelectorAll('[id^="job-"]').forEach(function (el) {
+										knownJobIds.add(el.id.slice(4));
+									});
+								}
+							})
+							.catch(function () {});
+					}, 400);
+				}
+
 				document.addEventListener('veloci:job', function (e) {
 					var evt = e.detail;
-					if (!evt.stage_label) return;
-					var el = document.getElementById('stage-' + evt.job_id);
-					if (el) el.textContent = evt.stage_label;
+
+					// Stage label update for in-progress cards.
+					if (evt.stage_label) {
+						var stageEl = document.getElementById('stage-' + evt.job_id);
+						if (stageEl) stageEl.textContent = evt.stage_label;
+					}
+
+					// Refresh the list when a new job appears or a job reaches a terminal state.
+					var isNew = !knownJobIds.has(evt.job_id);
+					var isTerminal = evt.status === 'complete' || evt.status === 'failed';
+					if (isNew || isTerminal) {
+						knownJobIds.add(evt.job_id);
+						refreshList();
+					}
 				});
 			})();
 		</script>
